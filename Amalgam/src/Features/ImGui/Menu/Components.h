@@ -1408,7 +1408,7 @@ namespace ImGui
 		return *pVar1 != flOriginal1 || pVar2 && *pVar2 != flOriginal2;
 	}
 
-	inline bool FToggleSlider(const char* sLabel, bool* pToggleVar, float* pSliderVar, float flMin, float flMax, float flStep = 1.f, const char* fmt = "%g", int iFlags = FSliderEnum::None, bool* pHovered = nullptr)
+	inline bool FToggleSlider(const char* sLabel, bool* pToggleVar, float* pSliderVar, float flMin, float flMax, float flStep = 1.f, const char* fmt = "%g", int iToggleFlags = FToggleEnum::None, int iSliderFlags = FSliderEnum::None, bool* pHovered = nullptr)
 	{
 		auto uHash = FNV1A::Hash32Const(sLabel);
 
@@ -1425,14 +1425,14 @@ namespace ImGui
 			PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
 
 		ImVec2 vSize;
-		bool bFull = !(iFlags & (FSliderEnum::Left | FSliderEnum::Right));
+		bool bFull = !(iSliderFlags & (FSliderEnum::Left | FSliderEnum::Right));
 
 		vSize.x = GetWindowWidth();
 		if (!bFull)
 			vSize.x = vSize.x / 2 - GetStyle().WindowPadding.x * 1.5f;
 		else
 			vSize.x -= GetStyle().WindowPadding.x * 2;
-		if (iFlags & FSliderEnum::Right)
+		if (iSliderFlags & FSliderEnum::Right)
 			SameLine(vSize.x + GetStyle().WindowPadding.x * 2);
 
 		ImVec2 vOriginalPos = GetCursorPos(), vDrawPos = GetDrawPos();
@@ -1445,7 +1445,7 @@ namespace ImGui
 		if (bHoveredCheckbox && IsMouseClicked(ImGuiMouseButton_Left) && !Disabled)
 			*pToggleVar = !*pToggleVar;
 
-		ImColor tColor = *pToggleVar ? (iFlags & FToggleEnum::PlainColor ? F::Render.Active : F::Render.Accent) : F::Render.Inactive;
+		ImColor tColor = *pToggleVar ? (iToggleFlags & FToggleEnum::PlainColor ? F::Render.Active : F::Render.Accent) : F::Render.Inactive;
 		if (*pToggleVar)
 		{
 			pDrawList->AddRectFilled(vBoxMin, vBoxMax, tColor, H::Draw.Scale(3));
@@ -1515,13 +1515,13 @@ namespace ImGui
 						float& pVar = flSVar;
 
 						pVar = sText.length() ? std::stof(sText) : 0.f;
-						if (!(iFlags & FSliderEnum::Precision))
+						if (!(iSliderFlags & FSliderEnum::Precision))
 							pVar = pVar - fnmodf(pVar - flStep / 2, flStep) + flStep / 2;
-						if (iFlags & FSliderEnum::Clamp)
+						if (iSliderFlags & FSliderEnum::Clamp)
 							pVar = std::clamp(pVar, flMin, flMax);
-						else if (iFlags & FSliderEnum::Min)
+						else if (iSliderFlags & FSliderEnum::Min)
 							pVar = std::max(pVar, flMin);
-						else if (iFlags & FSliderEnum::Max)
+						else if (iSliderFlags & FSliderEnum::Max)
 							pVar = std::min(pVar, flMax);
 
 						*pSliderVar = flSVar;
@@ -1602,7 +1602,7 @@ namespace ImGui
 				else
 					mActiveMap[uHash] = false;
 
-				if (iFlags & FSliderEnum::NoAutoUpdate ? !mActiveMap[uHash] : true)
+				if (iSliderFlags & FSliderEnum::NoAutoUpdate ? !mActiveMap[uHash] : true)
 					*pSliderVar = flSVar;
 			}
 		}
@@ -1626,7 +1626,7 @@ namespace ImGui
 		return *pSliderVar != flOriginal || *pToggleVar != bOriginalToggle;
 	}
 
-	inline bool FToggleSlider(const char* sLabel, bool* pToggleVar, int* pSliderVar, int iMin, int iMax, int iStep = 1, const char* fmt = "%i", int iFlags = FSliderEnum::None, bool* pHovered = nullptr)
+	inline bool FToggleSlider(const char* sLabel, bool* pToggleVar, int* pSliderVar, int iMin, int iMax, int iStep = 1, const char* fmt = "%i", int iToggleFlags = FToggleEnum::None, int iSliderFlags = FSliderEnum::None, bool* pHovered = nullptr)
 	{
 		std::string sReplace = fmt;
 		std::string sFrom = "%d", sTo = "%g";
@@ -1646,7 +1646,7 @@ namespace ImGui
 		fmt = sReplace.c_str();
 
 		float flRedir = *pSliderVar;
-		bool bReturn = FToggleSlider(sLabel, pToggleVar, &flRedir, iMin, iMax, iStep, fmt, iFlags, pHovered);
+		bool bReturn = FToggleSlider(sLabel, pToggleVar, &flRedir, iMin, iMax, iStep, fmt, iToggleFlags, iSliderFlags, pHovered);
 		*pSliderVar = flRedir;
 		return bReturn;
 	}
@@ -3179,17 +3179,19 @@ namespace ImGui
 	WRAPPER(FColorPicker, Color_t, VA_LIST(int iFlags = 0, ImVec2 vOffset = {}, ImVec2 vSize = { H::Draw.Scale(12), H::Draw.Scale(12) }, ImVec2 vIconOffset = {}), VA_LIST(&val, iFlags, vOffset, vSize, vIconOffset))
 	WRAPPER(FColorPicker, Gradient_t, VA_LIST(bool bStart = true, int iFlags = 0, ImVec2 vOffset = {}, ImVec2 vSize = { H::Draw.Scale(12), H::Draw.Scale(12) }, ImVec2 vIconOffset = {}), VA_LIST(bStart ? &val.StartColor : &val.EndColor, iFlags, vOffset, vSize, vIconOffset))
 
-	inline bool FToggleSlider(ConfigVar<bool>& toggleVar, ConfigVar<float>& sliderVar, int iFlags = 0, const char* sFormatOverride = nullptr, bool* pHovered = nullptr)
+	inline bool FToggleSlider(ConfigVar<bool>& toggleVar, ConfigVar<float>& sliderVar, int iToggleFlags = FToggleEnum::None, int iSliderFlags = FSliderEnum::None, const char* sFormatOverride = nullptr, bool* pHovered = nullptr)
 	{
-		const char* sLabel = toggleVar.m_vNames.front();
-		int iVarFlags = (toggleVar.m_iFlags | sliderVar.m_iFlags) & ~(VISUAL | NOSAVE | NOBIND | DEBUGVAR);
-		iFlags |= iVarFlags;
+		int iToggleVarFlags = toggleVar.m_iFlags & ~(VISUAL | NOSAVE | NOBIND | DEBUGVAR);
+		iToggleFlags |= iToggleVarFlags;
+		int iSliderVarFlags = sliderVar.m_iFlags & ~(VISUAL | NOSAVE | NOBIND | DEBUGVAR);
+		iSliderFlags |= iSliderVarFlags;
 
 		auto bVal = FGet(toggleVar, true);
 		auto flVal = FGet(sliderVar, true);
 		bool bHovered = false;
 
-		bool bReturn = FToggleSlider(std::format("{}## {}", sLabel, toggleVar.Name()).c_str(), &bVal, &flVal, sliderVar.m_unMin.f, sliderVar.m_unMax.f, sliderVar.m_unStep.f, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iFlags, &bHovered);
+		const char* sLabel = toggleVar.m_vNames.front();
+		bool bReturn = FToggleSlider(std::format("{}## {}", sLabel, toggleVar.Name()).c_str(), &bVal, &flVal, sliderVar.m_unMin.f, sliderVar.m_unMax.f, sliderVar.m_unStep.f, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iToggleFlags, iSliderFlags, &bHovered);
 
 		FSet(toggleVar, bVal);
 		FSet(sliderVar, flVal);
@@ -3212,7 +3214,8 @@ namespace ImGui
 			{
 				std::string sBind = toggleVar.m_vNames.back();
 				std::transform(sBind.begin(), sBind.end(), sBind.begin(), ::tolower);
-				iFlags = iVarFlags;
+				iToggleFlags = iToggleVarFlags;
+				iSliderFlags = iSliderVarFlags;
 				PushTransparent(false);
 				static bool bLastHovered = false;
 				DrawBindInfo(toggleVar, staticVal, StripDoubleHash(sBind.c_str()), bNewPopup, bLastHovered);
@@ -3220,7 +3223,7 @@ namespace ImGui
 
 				float flDummy = flVal;
 				bool bDummy = bVal;
-				FToggleSlider(std::format("{}## Bind", toggleVar.m_vNames.front()).c_str(), &bDummy, &flDummy, sliderVar.m_unMin.f, sliderVar.m_unMax.f, sliderVar.m_unStep.f, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iFlags, &bHovered);
+				FToggleSlider(std::format("{}## Bind", toggleVar.m_vNames.front()).c_str(), &bDummy, &flDummy, sliderVar.m_unMin.f, sliderVar.m_unMax.f, sliderVar.m_unStep.f, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iToggleFlags, iSliderFlags, &bHovered);
 
 				bLastHovered = bLastHovered || bHovered;
 				staticVal = bVal;
@@ -3232,17 +3235,19 @@ namespace ImGui
 		return bReturn;
 	}
 
-	inline bool FToggleSlider(ConfigVar<bool>& toggleVar, ConfigVar<int>& sliderVar, int iFlags = 0, const char* sFormatOverride = nullptr, bool* pHovered = nullptr)
+	inline bool FToggleSlider(ConfigVar<bool>& toggleVar, ConfigVar<int>& sliderVar, int iToggleFlags = FToggleEnum::None, int iSliderFlags = FSliderEnum::None, const char* sFormatOverride = nullptr, bool* pHovered = nullptr)
 	{
-		const char* sLabel = toggleVar.m_vNames.front();
-		int iVarFlags = (toggleVar.m_iFlags | sliderVar.m_iFlags) & ~(VISUAL | NOSAVE | NOBIND | DEBUGVAR);
-		iFlags |= iVarFlags;
+		int iToggleVarFlags = toggleVar.m_iFlags & ~(VISUAL | NOSAVE | NOBIND | DEBUGVAR);
+		iToggleFlags |= iToggleVarFlags;
+		int iSliderVarFlags = sliderVar.m_iFlags & ~(VISUAL | NOSAVE | NOBIND | DEBUGVAR);
+		iSliderFlags |= iSliderVarFlags;
 
 		auto bVal = FGet(toggleVar, true);
 		auto iVal = FGet(sliderVar, true);
 		bool bHovered = false;
 
-		bool bReturn = FToggleSlider(std::format("{}## {}", sLabel, toggleVar.Name()).c_str(), &bVal, &iVal, sliderVar.m_unMin.i, sliderVar.m_unMax.i, sliderVar.m_unStep.i, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iFlags, &bHovered);
+		const char* sLabel = toggleVar.m_vNames.front();
+		bool bReturn = FToggleSlider(std::format("{}## {}", sLabel, toggleVar.Name()).c_str(), &bVal, &iVal, sliderVar.m_unMin.i, sliderVar.m_unMax.i, sliderVar.m_unStep.i, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iToggleFlags, iSliderFlags, &bHovered);
 
 		FSet(toggleVar, bVal);
 		FSet(sliderVar, iVal);
@@ -3265,7 +3270,8 @@ namespace ImGui
 			{
 				std::string sBind = toggleVar.m_vNames.back();
 				std::transform(sBind.begin(), sBind.end(), sBind.begin(), ::tolower);
-				iFlags = iVarFlags;
+				iToggleFlags = iToggleVarFlags;
+				iSliderFlags = iSliderVarFlags;
 				PushTransparent(false);
 				static bool bLastHovered = false;
 				DrawBindInfo(toggleVar, staticVal, StripDoubleHash(sBind.c_str()), bNewPopup, bLastHovered);
@@ -3273,7 +3279,7 @@ namespace ImGui
 
 				int iDummy = iVal;
 				bool bDummy = bVal;
-				FToggleSlider(std::format("{}## Bind", toggleVar.m_vNames.front()).c_str(), &bDummy, &iDummy, sliderVar.m_unMin.i, sliderVar.m_unMax.i, sliderVar.m_unStep.i, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iFlags, &bHovered);
+				FToggleSlider(std::format("{}## Bind", toggleVar.m_vNames.front()).c_str(), &bDummy, &iDummy, sliderVar.m_unMin.i, sliderVar.m_unMax.i, sliderVar.m_unStep.i, sFormatOverride ? sFormatOverride : sliderVar.m_sExtra, iToggleFlags, iSliderFlags, &bHovered);
 
 				bLastHovered = bLastHovered || bHovered;
 				staticVal = bVal;
