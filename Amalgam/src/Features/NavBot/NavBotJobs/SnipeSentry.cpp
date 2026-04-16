@@ -39,15 +39,7 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 		vGoodAreas.push_back({ &area, area.m_vCenter.DistTo(vOrigin) });
 	}
 
-	// Sort based on distance
-	if (F::NavBotCore.m_tSelectedConfig.m_bPreferFar)
-		std::sort(vGoodAreas.begin(), vGoodAreas.end(), [](std::pair<CNavArea*, float> a, std::pair<CNavArea*, float> b) { return a.second > b.second; });
-	else
-		std::sort(vGoodAreas.begin(), vGoodAreas.end(), [](std::pair<CNavArea*, float> a, std::pair<CNavArea*, float> b) { return a.second < b.second; });
-
-	if (std::ranges::any_of(vGoodAreas, [](std::pair<CNavArea*, float> pair) { return F::NavEngine.NavTo(pair.first->m_vCenter, PriorityListEnum::SnipeSentry); }))
-		return true;
-	return false;
+	return NavJobUtils::TryNavToAreaScores(vGoodAreas, PriorityListEnum::SnipeSentry, !F::NavBotCore.m_tSelectedConfig.m_bPreferFar);
 }
 
 bool CNavBotSnipe::Run(CTFPlayer* pLocal)
