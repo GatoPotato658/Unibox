@@ -439,22 +439,16 @@ void CBotUtils::SetSlot(CTFPlayer* pLocal, int iSlot)
 
 void CBotUtils::DoSlowAim(Vec3& vWishAngles, float flSpeed, Vec3 vPreviousAngles)
 {
-	// Yaw
-	if (vPreviousAngles.y != vWishAngles.y)
-	{
-		Vec3 vSlowDelta = vWishAngles - vPreviousAngles;
+	float flAimSpeed = std::max(flSpeed, 1.f);
+	Vec3 vSlowDelta = vWishAngles.DeltaAngle(vPreviousAngles);
 
-		while (vSlowDelta.y > 180)
-			vSlowDelta.y -= 360;
-		while (vSlowDelta.y < -180)
-			vSlowDelta.y += 360;
+	const float flPitchStep = std::clamp(std::fabs(vSlowDelta.x) / (flAimSpeed * 1.35f), 0.1f, std::max(0.35f, 18.f / std::sqrt(flAimSpeed)));
+	const float flYawStep = std::clamp(std::fabs(vSlowDelta.y) / flAimSpeed, 0.15f, std::max(0.5f, 32.f / std::sqrt(flAimSpeed)));
 
-		vSlowDelta /= flSpeed;
-		vWishAngles = vPreviousAngles + vSlowDelta;
-
-		// Clamp as we changed angles
-		Math::ClampAngles(vWishAngles);
-	}
+	vPreviousAngles.x += std::clamp(vSlowDelta.x, -flPitchStep, flPitchStep);
+	vPreviousAngles.y += std::clamp(vSlowDelta.y, -flYawStep, flYawStep);
+	vWishAngles = vPreviousAngles;
+	Math::ClampAngles(vWishAngles);
 }
 
 void CBotUtils::LookAtPath(CUserCmd* pCmd, Vec2 vDest, Vec3 vLocalEyePos, bool bSilent)
@@ -513,6 +507,8 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	Vec3 vEye = pLocal->GetEyePosition();
 	Vec3 vLook = vDest;
 	bool bEnemyLock = false;
+	const int iPreviousTarget = tState.m_iLastTarget;
+	int iTrackedTarget = -1;
 
 	// 1. look at visible enemies
 
@@ -585,11 +581,14 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 			vLook = pBestEnemy->As<CTFPlayer>()->GetEyePosition();
 			// look slightly below head (chest/neck)
 			vLook.z -= 10.f;
+			Vec3 vTargetVelocity = pBestEnemy->GetAbsVelocity();
+			const float flLeadTime = std::clamp(vEye.DistTo(vLook) / 2800.f, 0.015f, 0.08f);
+			vLook += vTargetVelocity * flLeadTime;
 		}
 		else
 			vLook = pBestEnemy->GetCenter();
 
-		tState.m_iLastTarget = pBestEnemy->entindex();
+		iTrackedTarget = pBestEnemy->entindex();
 		tState.m_flLastSeen = I::GlobalVars->curtime;
 		tState.m_vLastPos = vLook;
 		bEnemyLock = true;
@@ -598,6 +597,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	{
 		// look at last known position for a bit
 		vLook = tState.m_vLastPos;
+		iTrackedTarget = iPreviousTarget;
 		bEnemyLock = true;
 	}
 	else
@@ -621,7 +621,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 				float flBestDist = trace.fraction * 500.f;
 				Vec3 vBestForward = vForward;
 
-				for (float flOffset : { -15.f, 15.f, -30.f, 30.f, -45.f, 45.f, -60.f, 60.f, -75.f, 75.f, -90.f, 90.f })
+				for (float flOffset : { -15.f, 15.f, -30.f, 30.f, -45.f, 45.f, -60.f, 60.f, -75.f, 75.f })
 				{
 					Vec3 vTestAngles = Math::CalcAngle(vEye, vLook);
 					vTestAngles.y += flOffset;
@@ -629,10 +629,15 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 					Vec3 vTestForward;
 					Math::AngleVectors(vTestAngles, &vTestForward);
 
+					float flForwardDot = std::clamp(vForward.Dot(vTestForward), -1.f, 1.f);
+					if (flForwardDot < 0.1f)
+						continue;
+
 					SDK::Trace(vEye, vEye + vTestForward * 500.f, MASK_SHOT, &filter, &trace);
-					if (trace.fraction * 500.f > flBestDist)
+					float flTraceScore = trace.fraction * 500.f * Math::RemapVal(flForwardDot, 0.1f, 1.f, 0.55f, 1.f);
+					if (flTraceScore > flBestDist)
 					{
-						flBestDist = trace.fraction * 500.f;
+						flBestDist = flTraceScore;
 						vBestForward = vTestForward;
 					}
 				}
@@ -654,6 +659,8 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		}
 	}
 
+	tState.m_iLastTarget = iTrackedTarget;
+
 	Vec3 vFocus;
 	if (bEnemyLock)
 	{
@@ -672,7 +679,8 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	Math::ClampAngles(vDesired);
 
 	const float flTargetDelta = tState.m_vLastTarget.IsZero() ? FLT_MAX : tState.m_vLastTarget.DistToSqr(vFocus);
-	if (!tState.m_bInitialized || !std::isfinite(flTargetDelta) || flTargetDelta > 4096.f)
+	const float flDesiredDelta = tState.m_bInitialized ? Math::CalcFov(tState.m_vAnchor, vDesired) : FLT_MAX;
+	if (!tState.m_bInitialized || !std::isfinite(flTargetDelta) || !std::isfinite(flDesiredDelta) || flDesiredDelta > 120.f || (!bEnemyLock && flTargetDelta > powf(1200.f, 2)))
 	{
 		tState.m_bInitialized = true;
 		tState.m_vAnchor = vDesired;
@@ -682,11 +690,14 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		tState.m_vGlanceCurrent = {};
 		tState.m_vGlanceGoal = {};
 		tState.m_flNextOffset = SDK::RandomFloat(0.6f, 1.8f);
+		tState.m_flAcquireDuration = SDK::RandomFloat(0.09f, 0.18f);
+		tState.m_flEnemyBlend = bEnemyLock ? 1.f : 0.f;
 		tState.m_flPhase = SDK::RandomFloat(0.f, 6.2831853f);
 		tState.m_flNextGlance = SDK::RandomFloat(1.4f, 3.0f);
 		tState.m_flGlanceDuration = SDK::RandomFloat(0.3f, 0.55f);
 		tState.m_bGlancing = false;
 		tState.m_tOffsetTimer.Update();
+		tState.m_tAcquireTimer.Update();
 		tState.m_tGlanceTimer.Update();
 		tState.m_tGlanceCooldown.Update();
 
@@ -695,6 +706,17 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	}
 	else
 		tState.m_vLastTarget = vFocus;
+
+	if (bEnemyLock && iTrackedTarget != -1 && iTrackedTarget != iPreviousTarget)
+	{
+		tState.m_flAcquireDuration = SDK::RandomFloat(0.09f, 0.18f);
+		tState.m_tAcquireTimer.Update();
+		tState.m_flEnemyBlend = std::min(tState.m_flEnemyBlend, 0.2f);
+	}
+
+	const bool bAcquireComplete = !bEnemyLock || tState.m_tAcquireTimer.Run(tState.m_flAcquireDuration);
+	const float flEnemyBlendGoal = bEnemyLock ? (bAcquireComplete ? 1.f : 0.42f) : 0.f;
+	tState.m_flEnemyBlend = Math::Lerp(tState.m_flEnemyBlend, flEnemyBlendGoal, bEnemyLock ? 0.18f : 0.08f);
 
 	float flAnchorDelta = Math::CalcFov(tState.m_vAnchor, vDesired);
 	if (!std::isfinite(flAnchorDelta) || flAnchorDelta > 120.f)
@@ -705,7 +727,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		if (bEnemyLock)
 		{
 			float flProgressive = std::pow(std::clamp(flAnchorDelta / 30.f, 0.f, 1.f), 1.5f);
-			flAnchorBlend = std::clamp(0.08f + flProgressive * 0.42f, 0.08f, 0.5f);
+			flAnchorBlend = std::clamp((0.08f + flProgressive * 0.42f) * std::clamp(tState.m_flEnemyBlend, 0.2f, 1.f), 0.04f, 0.5f);
 		}
 		tState.m_vAnchor = tState.m_vAnchor.LerpAngle(vDesired, flAnchorBlend);
 	}
@@ -726,7 +748,8 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		tState.m_flNextOffset = SDK::RandomFloat(0.65f, 1.95f);
 	}
 
-	tState.m_vOffset = tState.m_vOffset.LerpAngle(tState.m_vOffsetGoal, 0.1f);
+	float flOffsetBlend = bEnemyLock ? Math::Lerp(0.16f, 0.08f, std::clamp(tState.m_flEnemyBlend, 0.f, 1.f)) : 0.1f;
+	tState.m_vOffset = tState.m_vOffset.LerpAngle(tState.m_vOffsetGoal, flOffsetBlend);
 
 	// Active Scanning for open spaces
 	if (!bEnemyLock && !tState.m_bGlancing && flVelocity2D > 50.f && tState.m_tScanTimer.Run(tState.m_flNextScan))
@@ -737,6 +760,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		vMoveDir.Normalize();
 		Vec3 vMoveAngles = Math::CalcAngle(Vec3(), vMoveDir);
 
+		float flBestTraceScore = 0.f;
 		float flBestTraceDist = 0.f;
 		Vec3 vBestScanDir = {};
 
@@ -749,6 +773,10 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 			Vec3 vForward;
 			Math::AngleVectors(vScanAngles, &vForward);
 
+			float flForwardDot = std::clamp(vMoveDir.Dot(vForward), -1.f, 1.f);
+			if (flForwardDot < 0.2f)
+				continue;
+
 			CGameTrace trace;
 			CTraceFilterHitscan filter(pLocal);
 			SDK::Trace(vEye, vEye + vForward * 1000.f, MASK_SHOT, &filter, &trace);
@@ -756,9 +784,12 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 			if (Vars::Misc::Movement::BotUtils::LookAtPathDebug.Value)
 				G::LineStorage.emplace_back(std::pair<Vec3, Vec3>(vEye, trace.endpos), I::GlobalVars->curtime + 1.f, Color_t{ 255, 255, 255, 100 }, false);
 
-			if (trace.fraction * 1000.f > flBestTraceDist)
+			float flTraceDist = trace.fraction * 1000.f;
+			float flTraceScore = flTraceDist * Math::RemapVal(flForwardDot, 0.2f, 1.f, 0.5f, 1.f);
+			if (flTraceScore > flBestTraceScore)
 			{
-				flBestTraceDist = trace.fraction * 1000.f;
+				flBestTraceScore = flTraceScore;
+				flBestTraceDist = flTraceDist;
 				vBestScanDir = vForward;
 			}
 		}
@@ -770,7 +801,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		{
 			tState.m_vGlanceGoal = Math::CalcAngle(vEye, vEye + vBestScanDir * 500.f);
 			tState.m_bGlancing = true;
-			tState.m_flGlanceDuration = SDK::RandomFloat(2.0f, 3.2f);
+			tState.m_flGlanceDuration = SDK::RandomFloat(1.2f, 2.0f);
 			tState.m_tGlanceTimer.Update();
 		}
 	}
@@ -789,7 +820,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	{
 		tState.m_bGlancing = true;
 		tState.m_flGlanceDuration = SDK::RandomFloat(0.28f, 0.52f);
-		float flYawGlance = SDK::RandomFloat(16.f, 38.f) * (SDK::RandomInt(0, 1) == 0 ? -1.f : 1.f);
+		float flYawGlance = SDK::RandomFloat(10.f, 24.f) * (SDK::RandomInt(0, 1) == 0 ? -1.f : 1.f);
 		tState.m_vGlanceGoal = { SDK::RandomFloat(-3.5f, 4.5f), flYawGlance, 0.f };
 		tState.m_tGlanceTimer.Update();
 	}
@@ -810,8 +841,9 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 
 	if (bEnemyLock)
 	{
-		float flDeltaX = SDK::RandomFloat(-1.f, 1.f) * 0.4f;
-		float flDeltaY = SDK::RandomFloat(-1.f, 1.f) * 0.4f;
+		float flErrorScale = Math::Lerp(0.55f, 0.25f, std::clamp(tState.m_flEnemyBlend, 0.f, 1.f));
+		float flDeltaX = SDK::RandomFloat(-1.f, 1.f) * flErrorScale;
+		float flDeltaY = SDK::RandomFloat(-1.f, 1.f) * flErrorScale;
 		tState.m_flErrorVelocityX += (flDeltaX - tState.m_flErrorX) * 0.12f;
 		tState.m_flErrorVelocityY += (flDeltaY - tState.m_flErrorY) * 0.12f;
 		tState.m_flErrorVelocityX *= 0.82f;
