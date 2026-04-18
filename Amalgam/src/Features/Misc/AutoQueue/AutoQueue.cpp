@@ -277,6 +277,36 @@ void CAutoQueue::Run()
 		}
 	}
 
+	// Auto Competitive queue
+	if (Vars::Misc::Queueing::AutoCompetitiveQueue.Value)
+	{
+		if (!I::TFPartyClient->BInQueueForMatchGroup(k_eTFMatchGroup_Ladder_Default))
+		{
+			bool bInGame = I::EngineClient->IsInGame();
+			bool bIsLoadingMap = I::EngineClient->IsDrawingLoadingImage();
+			bool bIsConnected = I::EngineClient->IsConnected();
+			bool bHasNetChannel = I::ClientState && I::ClientState->m_NetChannel;
+
+			float flQueueDelay = Vars::Misc::Queueing::QueueDelay.Value == 0 ? 20.0f : Vars::Misc::Queueing::QueueDelay.Value * 60.0f;
+
+			static float flLastQueueTimeCompetitive = 0.0f;
+			static bool bQueuedOnceCompetitive = false;
+
+			bool bShouldQueue = !bQueuedOnceCompetitive || (flCurrentTime - flLastQueueTimeCompetitive >= flQueueDelay);
+			if (!bIsConnectedNow && !bIsLoadingMap)
+				bShouldQueue = true;
+
+			bool bStillAttachedToServer = bInGame || bIsConnected || bHasNetChannel;
+
+			if (bShouldQueue && !bStillAttachedToServer && !bIsLoadingMap)
+			{
+				I::TFPartyClient->RequestQueueForMatch(k_eTFMatchGroup_Ladder_Default);
+				flLastQueueTimeCompetitive = flCurrentTime;
+				bQueuedOnceCompetitive = true;
+			}
+		}
+	}
+
 	if (Vars::Misc::Queueing::AutoCasualQueue.Value)
 	{
 		bool bInGame = I::EngineClient->IsInGame();
