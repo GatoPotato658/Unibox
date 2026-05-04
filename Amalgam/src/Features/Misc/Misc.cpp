@@ -6,6 +6,7 @@
 #include "../Players/PlayerUtils.h"
 #include "../Players/SteamProfileCache.h"
 #include "../Aimbot/AutoRocketJump/AutoRocketJump.h"
+#include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../EnginePrediction/EnginePrediction.h"
 #ifdef TEXTMODE
 #include "NamedPipe/NamedPipe.h"
@@ -47,6 +48,7 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 		return;
 
 	AutoJumpbug(pLocal, pCmd);
+	AutoRevJump(pLocal, pCmd);
 	AutoStrafe(pLocal, pCmd);
 	AutoPeek(pLocal, pCmd);
 	BreakJump(pLocal, pCmd);
@@ -86,34 +88,16 @@ void CMisc::AutoJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 	if (auto pWeapon = H::Entities.GetWeapon(); pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_GRAPPLINGHOOK && pWeapon->As<CTFGrapplingHook>()->m_hProjectile())
 		return;
 
-	static bool bStaticJump = false, bStaticGrounded = false, bLastAttempted = false;
-	const bool bLastJump = bStaticJump, bLastGrounded = bStaticGrounded;
-	const bool bCurJump = bStaticJump = pCmd->buttons & IN_JUMP, bCurGrounded = bStaticGrounded = pLocal->m_hGroundEntity();
+	static bool bStaticAttempted = false, bStaticValid = false;
+	const bool bLastAttempted = bStaticAttempted, bLastValid = bStaticValid;
+	const bool bCurrAttempted = bStaticAttempted = G::OriginalCmd.buttons & IN_JUMP, bCurrValid = bStaticValid = pLocal->m_hGroundEntity() && !pLocal->IsDucking();
+	const bool bManual = !(SDK::AttribHookValue(0, "parachute_attribute", pLocal) && !pLocal->InCond(TF_COND_PARACHUTE_ACTIVE) && !(G::OriginalCmd.buttons & IN_DUCK)); // evil we don't want to manual
 
-	if (bCurJump && bLastJump && (bCurGrounded ? !pLocal->IsDucking() : true))
-	{
-		if (!(bCurGrounded && !bLastGrounded))
-			pCmd->buttons &= ~IN_JUMP;
-
-		if (!(pCmd->buttons & IN_JUMP) && bCurGrounded && !bLastAttempted)
-			pCmd->buttons |= IN_JUMP;
-	}
-
-	if (Vars::Misc::Game::AntiCheatCompatibility.Value)
-	{	// prevent more than 9 bhops occurring. if a server has this under that threshold they're retarded anyways
-		static int iJumps = 0;
-		if (bCurGrounded)
-		{
-			if (!bLastGrounded && pCmd->buttons & IN_JUMP)
-				iJumps++;
-			else
-				iJumps = 0;
-
-			if (iJumps > 9)
-				pCmd->buttons &= ~IN_JUMP;
-		}
-	}
-	bLastAttempted = pCmd->buttons & IN_JUMP;
+	if (!bCurrValid || bCurrValid && G::LastUserCmd->buttons & IN_JUMP)
+		pCmd->buttons &= ~IN_JUMP;
+	if (bCurrAttempted && !bLastAttempted && bManual)
+		pCmd->buttons |= IN_JUMP;
+	F::AntiCheatCompatibility.BunnyHop(pCmd, bCurrValid, bLastValid);
 }
 
 void CMisc::AutoJumpbug(CTFPlayer* pLocal, CUserCmd* pCmd)
@@ -463,7 +447,8 @@ void CMisc::AutoFaNJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 
 	if (!Vars::Misc::Movement::AutoFaNJump.Value || !bCanJump
 		|| G::Attacking == 1 || !G::CanPrimaryAttack
-		|| !pLocal->IsAlive() || pLocal->IsAGhost() 
+		|| !pLocal->IsAlive() || pLocal->IsAGhost()
+		|| pLocal->m_bScattergunJump()
 		|| pLocal->m_MoveType() != MOVETYPE_WALK || pLocal->IsSwimming() 
 		|| pLocal->IsTaunting() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
 		return;
@@ -541,6 +526,20 @@ void CMisc::AutoFaNJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 		pCmd->viewangles = vAngles;
 		G::SilentAngles = true;
 	}
+}
+
+void CMisc::AutoRevJump(CTFPlayer* pLocal, CUserCmd* pCmd)
+{
+	if (!Vars::Misc::Movement::AutoRevJump.Value || !pLocal->m_hGroundEntity())
+		return;
+
+	if (auto pWeapon = H::Entities.GetWeapon(); !pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_MINIGUN || pWeapon->As<CTFMinigun>()->m_iWeaponState() != AC_STATE_IDLE)
+		return;
+
+	if (!(pCmd->buttons & IN_ATTACK2) || G::LastUserCmd->buttons & IN_ATTACK2)
+		return;
+
+	pCmd->buttons |= IN_JUMP;
 }
 
 void CMisc::MovementLock(CTFPlayer* pLocal, CUserCmd* pCmd)
@@ -923,7 +922,7 @@ void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 	case 1:
 	{
 		if ((pLocal->IsDucking() ? !Vars::Misc::Movement::DuckSpeed.Value : !Vars::Misc::Movement::FastAccelerate.Value)
-			|| Vars::Misc::Game::AntiCheatCompatibility.Value
+			|| F::AntiCheatCompatibility.Active()
 			|| G::Attacking == 1 || F::Ticks.m_bDoubletap || F::Ticks.m_bSpeedhack || F::Ticks.m_bRecharge || G::AntiAim)
 			return;
 
