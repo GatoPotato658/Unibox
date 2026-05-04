@@ -187,10 +187,8 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 			if (bTeam && (pEntity->As<CBaseObject>()->m_iHealth() >= pEntity->As<CBaseObject>()->m_iMaxHealth() || pEntity->As<CBaseObject>()->m_bBuilding()))
 				continue;
 
-			Vec3 vPos = pEntity->GetCenter();
-			Vec3 vAngleTo = Math::CalcAngle(vLocalPos, vPos);
-			float flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
-			if (flFOVTo > Vars::Aimbot::General::AimFOV.Value)
+			float flFOVTo; Vec3 vPos, vAngleTo;
+			if (!F::AimbotGlobal.EntityCenterInFOV(pEntity, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
 				continue;
 
 			int iPriority = 0;
@@ -235,10 +233,8 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 				if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
 					continue;
 
-				Vec3 vPos = pEntity->GetCenter();
-				Vec3 vAngleTo = Math::CalcAngle(vLocalPos, vPos);
-				float flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
-				if (flFOVTo > Vars::Aimbot::General::AimFOV.Value)
+				float flFOVTo; Vec3 vPos, vAngleTo;
+				if (!F::AimbotGlobal.EntityCenterInFOV(pEntity, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
 					continue;
 
 				float flDistTo = vLocalPos.DistToSqr(vPos);
@@ -254,10 +250,8 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 			if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
 				continue;
 
-			Vec3 vPos = pEntity->GetCenter();
-			Vec3 vAngleTo = Math::CalcAngle(vLocalPos, vPos);
-			float flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
-			if (flFOVTo > Vars::Aimbot::General::AimFOV.Value)
+			float flFOVTo; Vec3 vPos, vAngleTo;
+			if (!F::AimbotGlobal.EntityCenterInFOV(pEntity, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
 				continue;
 
 			float flDistTo = vLocalPos.DistToSqr(vPos);
@@ -1807,6 +1801,8 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 		splash: if (HandleSplash(mSplashHistory)) break;
 	}
 	F::MoveSim.Restore(m_tMoveStorage);
+	if (!F::AimbotGlobal.ShouldAimAtAngle(m_vAngleTo))
+		return false;
 	if (!bUpdate)
 		return m_iResult;
 
