@@ -2,6 +2,7 @@
 
 #include "../../Core/Core.h"
 #include "../../Hooks/Direct3DDevice9.h"
+#include <ranges>
 
 CHook::CHook(const std::string& sName, void* pInitFunc)
 {
@@ -17,14 +18,13 @@ bool CHooks::Initialize()
 	WndProc::Initialize();
 #endif
 
-	for (auto& [_, pHook] : m_mHooks)
+	for (auto& pHook : m_mHooks | std::views::values)
 	{
 		if (!reinterpret_cast<bool(__cdecl*)()>(pHook->m_pInitFunc)())
 			m_bFailed = true;
 	}
 
-	m_bFailed = m_bFailed || MH_EnableHook(MH_ALL_HOOKS) != MH_OK;
-	if (m_bFailed)
+	if (m_bFailed = m_bFailed || MH_EnableHook(MH_ALL_HOOKS) != MH_OK)
 		U::Core.AppendFailText("MinHook failed to enable all hooks!");
 	return !m_bFailed;
 }

@@ -210,10 +210,6 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_END(Menu)
 
 	NAMESPACE_BEGIN(Colors)
-		CVar(FOVCircle, "FOV circle color", Color_t(255, 255, 255, 100), VISUAL);
-		CVar(NoSpread, "Nospread color", Color_t(75, 175, 255, 255), VISUAL);
-		CVar(Local, "Local color", Color_t(255, 255, 255, 0), VISUAL);
-
 		CVar(IndicatorGood, "Indicator good", Color_t(0, 255, 100, 255), NOSAVE | DEBUGVAR);
 		CVar(IndicatorMid, "Indicator mid", Color_t(255, 200, 0, 255), NOSAVE | DEBUGVAR);
 		CVar(IndicatorBad, "Indicator bad", Color_t(255, 0, 0, 255), NOSAVE | DEBUGVAR);
@@ -223,6 +219,11 @@ NAMESPACE_BEGIN(Vars)
 		CVar(IndicatorTextBad, "Indicator text bad", Color_t(255, 150, 150, 255), NOSAVE | DEBUGVAR);
 		CVar(IndicatorTextMisc, "Indicator text misc", Color_t(100, 255, 255, 255), NOSAVE | DEBUGVAR);
 
+		CVar(Local, "Local color", Color_t(255, 255, 255), VISUAL);
+		CVar(FOVCircle, "FOV circle color", Color_t(255, 255, 255, 100), VISUAL);
+		CVar(NoSpread, "Nospread color", Color_t(75, 175, 255, 255), VISUAL);
+		CVar(SpellFootstep, "Spell footstep color", Color_t(255, 255, 255, 255), VISUAL);
+
 		CVar(WorldModulation, VA_LIST("World modulation", "World modulation color"), Color_t(255, 255, 255, 255), VISUAL);
 		CVar(SkyModulation, VA_LIST("Sky modulation", "Sky modulation color"), Color_t(255, 255, 255, 255), VISUAL);
 		CVar(PropModulation, VA_LIST("Prop modulation", "Prop modulation color"), Color_t(255, 255, 255, 255), VISUAL);
@@ -231,19 +232,6 @@ NAMESPACE_BEGIN(Vars)
 
 		CVar(Line, "Line color", Color_t(255, 255, 255, 255), VISUAL);
 		CVar(LineIgnoreZ, "Line ignore Z color", Color_t(255, 255, 255, 0), VISUAL);
-
-		CVar(PlayerPath, "Player path color", Color_t(255, 255, 255, 0), VISUAL);
-		CVar(PlayerPathIgnoreZ, "Player path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
-		CVar(ProjectilePath, "Projectile path color", Color_t(255, 255, 255, 0), VISUAL);
-		CVar(ProjectilePathIgnoreZ, "Projectile path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
-		CVar(TrajectoryPath, "Trajectory path color", Color_t(255, 255, 255, 0), VISUAL);
-		CVar(TrajectoryPathIgnoreZ, "Trajectory path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
-		CVar(ShotPath, "Shot path color", Color_t(255, 255, 255, 0), VISUAL);
-		CVar(ShotPathIgnoreZ, "Shot path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
-		CVar(SplashRadius, "Splash radius color", Color_t(255, 255, 255, 0), VISUAL);
-		CVar(SplashRadiusIgnoreZ, "Splash radius ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
-		CVar(RealPath, "Real path color", Color_t(255, 255, 255, 0), NOSAVE | DEBUGVAR);
-		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
 
 		CVar(BoneHitboxEdge, "Bone hitbox edge color", Color_t(255, 255, 255, 255), VISUAL);
 		CVar(BoneHitboxEdgeIgnoreZ, "Bone hitbox edge ignore Z color", Color_t(255, 255, 255, 0), VISUAL);
@@ -258,7 +246,19 @@ NAMESPACE_BEGIN(Vars)
 		CVar(BoundHitboxFace, "Bound hitbox face color", Color_t(255, 255, 255, 0), VISUAL);
 		CVar(BoundHitboxFaceIgnoreZ, "Bound hitbox face ignore Z color", Color_t(255, 255, 255, 0), VISUAL);
 
-		CVar(SpellFootstep, "Spell footstep color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(PlayerPath, "Player path color", Color_t(255, 255, 255, 0), VISUAL);
+		CVar(PlayerPathIgnoreZ, "Player path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(ProjectilePath, "Projectile path color", Color_t(255, 255, 255, 0), VISUAL);
+		CVar(ProjectilePathIgnoreZ, "Projectile path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(TrajectoryPath, "Trajectory path color", Color_t(255, 255, 255, 0), VISUAL);
+		CVar(TrajectoryPathIgnoreZ, "Trajectory path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(ShotPath, "Shot path color", Color_t(255, 255, 255, 0), VISUAL);
+		CVar(ShotPathIgnoreZ, "Shot path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(SplashRadius, "Splash radius color", Color_t(255, 255, 255, 0), VISUAL);
+		CVar(SplashRadiusIgnoreZ, "Splash radius ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(RealPath, "Real path color", Color_t(255, 255, 255, 0), NOSAVE | DEBUGVAR);
+		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
+
 		CVar(NavbotPath, "Navbot path color", Color_t(255, 255, 0, 255), VISUAL);
 		CVar(NavbotPossiblePath, "Navbot possible path color", Color_t(255, 255, 255, 100), VISUAL);
 		CVar(NavbotWalkablePath, "Navbot walkable path color", Color_t(0, 255, 255, 200), VISUAL);
@@ -291,14 +291,14 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(Target, "Target", 0b0000001, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Players", "Sentries", "Dispensers", "Teleporters", "Stickies", "NPCs", "Bombs"),
 				Players = 1 << 0, Sentry = 1 << 1, Dispenser = 1 << 2, Teleporter = 1 << 3, Stickies = 1 << 4, NPCs = 1 << 5, Bombs = 1 << 6,
-				Building = Sentry | Dispenser | Teleporter);
+				All = Players | Sentry | Dispenser | Teleporter | Stickies | NPCs | Bombs, Building = Sentry | Dispenser | Teleporter);
 			CVarEnum(Ignore, "Ignore", 0b00000001000, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Friends", "Party", "Unprioritized", "Invulnerable", "Invisible", "Unsimulated", "Dead ringer", "Vaccinator", "Disguised", "Taunting", "Team", "Sentry busters"),
 				Friends = 1 << 0, Party = 1 << 1, Unprioritized = 1 << 2, Invulnerable = 1 << 3, Invisible = 1 << 4, Unsimulated = 1 << 5, DeadRinger = 1 << 6, Vaccinator = 1 << 7, Disguised = 1 << 8, Taunting = 1 << 9, Team = 1 << 10, SentryBusters = 1 << 11);
 			CVarEnum(BypassIgnore, "Bypass ignore", 0, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Friends", "Ignored", "Local bots"),
 				Friends = 1 << 0, Ignored = 1 << 1, LocalBots = 1 << 2);
-			CVar(AimFOV, "Aim FOV", 30.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 359.f);
+			CVar(AimFOV, "Aim FOV", 180.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 180.f);
 			CVar(MaxTargets, "Max targets", 2, SLIDER_MIN, 1, 6);
 			CVar(IgnoreInvisible, "Ignore invisible", 50.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(AssistStrength, "Assist strength", 25.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 1.f, "%g%%");
@@ -309,6 +309,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(TickTolerance, "Tick tolerance", 4, SLIDER_CLAMP, 0, 21);
 			CVar(AutoShoot, "Auto shoot", true);
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
+			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
 			CVar(NoSpread, "No spread", false);
 			CVar(PrioritizeNavbot, "Prioritize navbot target", false);
 			CVar(PrioritizeFollowbot, "Prioritize followbot target", false);
@@ -359,9 +360,9 @@ NAMESPACE_BEGIN(Vars)
 				VA_LIST("Auto", "##Divider", "Head", "Body", "Feet", "##Divider", "Bodyaim if lethal", "Prioritize feet"),
 				Auto = 1 << 0, Head = 1 << 1, Body = 1 << 2, Feet = 1 << 3, BodyaimIfLethal = 1 << 4, PrioritizeFeet = 1 << 5);
 			CVarEnum(Modifiers, VA_LIST("Modifiers", "Projectile modifiers"), 0b0010, DROPDOWN_MULTI, nullptr,
-				VA_LIST("Charge weapon", "Cancel charge", "Use arm time", "Air splash", "Lob angles"),
-				ChargeWeapon = 1 << 0, CancelCharge = 1 << 1, UseArmTime = 1 << 2, AirSplash = 1 << 3, LobAngles = 1 << 4);
-			CVar(MaxSimulationTime, "Max simulation time", 2.f, SLIDER_MIN | SLIDER_PRECISION, 0.1f, 2.5f, 0.25f, "%gs");
+				VA_LIST("Charge weapon", "Cancel charge", "Use arm time", "Air splash", "Lob angles", "Target dormant"),
+				ChargeWeapon = 1 << 0, CancelCharge = 1 << 1, UseArmTime = 1 << 2, AirSplash = 1 << 3, LobAngles = 1 << 4, TargetDormant = 1 << 5);
+			CVar(MaxSimulationTime, "Max simulation time", 1.f, SLIDER_MIN | SLIDER_PRECISION, 0.1f, 2.5f, 0.25f, "%gs");
 			CVar(HitChance, "Hit chance", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(AutodetRadius, "Autodet radius", 90.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(SplashRadius, "Splash radius", 90.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
@@ -416,6 +417,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(DirectTraceInterval, "Direct trace interval", 1, NOSAVE | DEBUGVAR | SLIDER_MIN, 1, 20);
 			CVar(SplashTraceInterval, "Splash trace interval", 10, NOSAVE | DEBUGVAR | SLIDER_MIN, 1, 20);
 			CVar(LobTraceInterval, "Lob trace interval", 20, NOSAVE | DEBUGVAR | SLIDER_MIN, 1, 20);
+			CVar(IntervalRetest, "Interval retest", true, NOSAVE | DEBUGVAR);
 
 			CVar(DeltaCount, "Delta count", 5, NOSAVE | DEBUGVAR, 1, 5);
 			CVarEnum(DeltaMode, "Delta mode", 0, NOSAVE | DEBUGVAR, nullptr,
@@ -442,20 +444,28 @@ NAMESPACE_BEGIN(Vars)
 
 		NAMESPACE_BEGIN(Melee)
 			CVar(AutoBackstab, "Auto backstab", true);
-			CVar(IgnoreRazorback, "Ignore razorback", true);
-			CVar(SwingPrediction, "Swing prediction", false);
+			CVar(IgnoreRazorback, "Ignore razorback", false);
+			CVar(SwingPrediction, "Swing prediction", true);
 			CVar(WhipTeam, "Whip team", false);
 
-			CVar(SwingOffset, "Swing offset", -1, NOSAVE | DEBUGVAR, -1, 1);
+			CVar(SwingTicks, "Swing ticks", 13, NOSAVE | DEBUGVAR | SLIDER_MIN, 0, 14);
 			CVar(SwingPredictLag, "Swing predict lag", true, NOSAVE | DEBUGVAR);
-			CVar(BackstabAccountPing, "Backstab account ping", true, NOSAVE | DEBUGVAR);
-			CVar(BackstabDoubleTest, "Backstab double test", true, NOSAVE | DEBUGVAR);
+			CVarEnum(SwingValidateMode, "Swing validate mode", 0, NOSAVE | DEBUGVAR, nullptr,
+				VA_LIST("Both", "Swing", "Simulated"),
+				Both, Swing, Simulated);
+			CVarEnum(BackstabFlags, "Backstab flags", 0b11, NOSAVE | DEBUGVAR | DROPDOWN_MULTI, nullptr,
+				VA_LIST("Account ping", "Double test"),
+				AccountPing = 1 << 0, DoubleTest = 1 << 1);
 		NAMESPACE_END(Melee)
 
 		NAMESPACE_BEGIN(Healing)
-			CVarEnum(HealPriority, "Heal Priority", 0, NONE, nullptr,
+			CVarEnum(HealPriority, "Heal priority", 0, NONE, nullptr,
 				VA_LIST("None", "Prioritize team", "Prioritize friends", "Friends only"),
 				None, PrioritizeTeam, PrioritizeFriends, FriendsOnly);
+			CVarEnum(DangerIgnore, "Danger ignore", 0b1000, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Friends", "Party", "Unprioritized", "Ignored"),
+				Friends = 1 << 0, Party = 1 << 1, Unprioritized = 1 << 2, Ignored = 1 << 3,
+				Shared = Friends | Party | Unprioritized);
 			CVar(AutoHeal, "Auto heal", false);
 			CVar(AutoArrow, "Auto arrow", false);
 			CVar(AutoSwitch, "Auto switch", false);
@@ -477,6 +487,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(ForceCrits, "Force crits", false);
 		CVar(AvoidRandomCrits, "Avoid random crits", false);
 		CVar(AlwaysMeleeCrit, "Always melee crit", false);
+		CVar(CritEffects, "Crit effects", false);
 	NAMESPACE_END(CritHack)
 
 	NAMESPACE_BEGIN(Backtrack)
@@ -519,8 +530,7 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_END(AutoPeek)
 
 	NAMESPACE_BEGIN(Speedhack)
-		CVar(Enabled, VA_LIST("Enabled", "Speedhack enabled"), false);
-		CVar(Amount, VA_LIST("Amount", "SpeedHack amount"), 1, NONE, 1, 50);
+		CVar(Scale, VA_LIST("Scale", "SpeedHack scale"), 1, NONE, 1, 50);
 	NAMESPACE_END(Speedhack)
 
 	NAMESPACE_BEGIN(AntiAim, Antiaim)
@@ -547,9 +557,12 @@ NAMESPACE_BEGIN(Vars)
 		CVar(FakeYawValue, "Fake value", -90.f, SLIDER_CLAMP | SLIDER_PRECISION, -180.f, 180.f, 5.f);
 		CVar(SpinSpeed, "Spin speed", 15.f, SLIDER_PRECISION, -30.f, 30.f);
 		CVar(MinWalk, "Minwalk", true);
+
+		CVar(HidePitchOnShot, "Hide pitch on shot", false);
 		CVar(AntiOverlap, "Anti-overlap", false);
-		CVar(InvalidShootPitch, "Hide pitch on shot", false);
 		CVar(TauntSpin, "Taunt Spin", false);
+		
+		CVar(AntiAimLines, "Antiaim lines", false, NOSAVE);
 	NAMESPACE_END(AntiAim)
 
 	NAMESPACE_BEGIN(Resolver)
@@ -564,21 +577,6 @@ NAMESPACE_BEGIN(Vars)
 		CVar(CycleView, "Cycle view", false);
 		CVar(CycleMinwalk, "Cycle minwalk", false);
 	NAMESPACE_END(Resolver)
-
-	NAMESPACE_BEGIN(CheaterDetection, Cheater Detection)
-		CVarEnum(Methods, "Detection methods", 0b000000, DROPDOWN_MULTI, nullptr,
-			VA_LIST("Invalid pitch", "Packet choking", "Aim flicking", "Duck Speed", "Lagcomp abuse", "Critbucket"),
-			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3, LagCompAbuse = 1 << 4, CritManipulation = 1 << 5);
-		CVar(DetectionsRequired, "Detections required", 10, SLIDER_MIN, 0, 50);
-		CVar(MinimumChoking, "Minimum choking", 20, SLIDER_MIN, 4, 22);
-		CVar(MinimumFlick, "Minimum flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f); // min flick size to suspect
-		CVar(MaximumNoise, "Maximum flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f); // max difference between angles before and after flick
-		CVar(LagCompMinimumDelta, "Lag burst delta", 3, SLIDER_MIN, 2, 8);
-		CVar(LagCompWindow, "Lag burst window", 1.f, SLIDER_PRECISION, 0.25f, 2.f, 0.05f);
-		CVar(LagCompBurstCount, "Lag burst count", 3, SLIDER_MIN, 1, 6);
-		CVar(CritWindow, "Crit window size", 12, SLIDER_MIN, 6, 30);
-		CVar(CritThreshold, "Crit rate threshold", 85.f, SLIDER_PRECISION, 50.f, 100.f, 5.f);
-	NAMESPACE_END(CheaterDetection)
 
 	NAMESPACE_BEGIN(ESP)
 		CVarValues(ActiveGroups, "Active groups", int(0b11111111111111111111111111111111), VISUAL | DROPDOWN_MULTI | DROPDOWN_NOSANITIZATION, nullptr);
@@ -650,8 +648,8 @@ NAMESPACE_BEGIN(Vars)
 		NAMESPACE_END(Effects)
 
 		NAMESPACE_BEGIN(Viewmodel)
-			CVar(CrosshairAim, "Crosshair aim position", false, VISUAL);
-			CVar(ViewmodelAim, "Viewmodel aim position", false, VISUAL);
+			CVar(CrosshairAim, "Crosshair aim", false, VISUAL);
+			CVar(ViewmodelAim, "Viewmodel aim", false, VISUAL);
 			CVar(OffsetX, VA_LIST("Offset X", "Viewmodel offset X"), 0.f, VISUAL | SLIDER_PRECISION, -45.f, 45.f, 5.f);
 			CVar(OffsetY, VA_LIST("Offset Y", "Viewmodel offset Y"), 0.f, VISUAL | SLIDER_PRECISION, -45.f, 45.f, 5.f);
 			CVar(OffsetZ, VA_LIST("Offset Z", "Viewmodel offset Z"), 0.f, VISUAL | SLIDER_PRECISION, -45.f, 45.f, 5.f);
@@ -694,7 +692,7 @@ NAMESPACE_BEGIN(Vars)
 		NAMESPACE_END(Beams)
 
 		NAMESPACE_BEGIN(Line)
-			CVar(Enabled, "Line tracers", false, VISUAL);
+			CVar(TracersEnabled, "Tracers enabled", false, VISUAL);
 			CVar(DrawDuration, VA_LIST("Draw duration", "Line draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 		NAMESPACE_END(Line)
 
@@ -727,9 +725,9 @@ NAMESPACE_BEGIN(Vars)
 			CVarValues(ShotPath, "Shot path", 0, VISUAL, nullptr,
 				"Off", "Line", "Separators", "Spaced", "Arrows", "Boxes");
 			CVarEnum(SplashRadius, "Splash radius", 0b0, VISUAL | DROPDOWN_MULTI, "Off",
-				VA_LIST("Rockets", "Stickies", "Pipes", "Scorch shot", "##Divider", "Trace", "Sphere"),
-				Rockets = 1 << 0, Stickies = 1 << 1, Pipes = 1 << 2, ScorchShot = 1 << 3, Trace = 1 << 4, Sphere = 1 << 5,
-				Enabled = Rockets | Stickies | Pipes | ScorchShot);
+				VA_LIST("Rockets", "Stickies", "Pipes", "Flares", "##Divider", "Trace", "Sphere"),
+				Rockets = 1 << 0, Stickies = 1 << 1, Pipes = 1 << 2, Flares = 1 << 3, Trace = 1 << 4, Sphere = 1 << 5,
+				Enabled = Rockets | Stickies | Pipes | Flares);
 			CVar(ProjectileCamera, "Projectile camera", false, VISUAL);
 			CVar(ProjectileWindow, "Projectile window", WindowBox_t(), VISUAL | NOBIND);
 			CVar(Box, VA_LIST("Box", "Path box"), true, VISUAL);
@@ -796,26 +794,27 @@ I dont think this is a good idea to disable simulations completely:
 			CVarEnum(AutoStrafe, "Auto strafe", 0, NONE, nullptr,
 				VA_LIST("Off", "Legit", "Directional"),
 				Off, Legit, Directional);
-			CVar(AutoStrafeTurnScale, "Auto strafe turn scale", 0.5f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 1.f, 0.1f);
-			CVar(AutoStrafeMaxDelta, "Auto strafe max delta", 180.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 180.f, 5.f);
+			CVar(AutoStrafeTurnScale, VA_LIST("Turn scale", "Auto strafe turn scale"), 0.5f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 1.f, 0.1f);
+			CVar(AutoStrafeMaxDelta, VA_LIST("Max delta", "Auto strafe max delta"), 180.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 180.f, 5.f);
 			CVar(Bunnyhop, "Bunnyhop", false);
 			CVar(EdgeJump, "Edge jump", false);
+			CVar(BreakJump, "Break jump", false);
 			CVar(AutoJumpbug, "Auto jumpbug", false);
 			CVarEnum(AutoEdgebug, "Auto edgebug", 0, NONE, nullptr,
 				VA_LIST("Off", "Legit", "Strafe", "Strafe silent"),
 				Off, Legit, Strafe, StrafeSilent);
-			CVar(NoPush, "No push", false);
 			CVar(AutoRocketJump, "Auto rocket jump", false);
-			CVar(AutoFaNJump, "Auto FaN jump", false);
 			CVar(AutoCTap, "Auto ctap", false);
+			CVar(AutoFaNJump, "Auto FaN jump", false);
+			CVar(AutoRevJump, "Auto rev jump", false);
 			CVar(FastStop, "Fast stop", false);
 			CVar(FastAccelerate, "Fast accelerate", false);
 			CVar(DuckSpeed, "Duck speed", false);
 			CVar(DuckSpeedNavbotCompat, "Duck speed navbot compatibility", false);
 			CVar(DuckSpeedForward, "Duck speed forward", false);
-			CVar(MovementLock, "Movement lock", false);
-			CVar(BreakJump, "Break jump", false);
 			CVar(ShieldTurnRate, "Shield turn rate", false);
+			CVar(NoPush, "No push", false);
+			CVar(MovementLock, "Movement lock", false);
 
 			NAMESPACE_BEGIN(NavEngine)
 				CVar(Enabled, VA_LIST("Enabled", "Nav engine enabled"), false);
@@ -1308,57 +1307,72 @@ I dont think this is a good idea to disable simulations completely:
 		CVar(Lifetime, "Notification time", 5.f, VISUAL, 0.5f, 5.f, 0.5f);
 
 		NAMESPACE_BEGIN(VoteStart, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Vote start log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Vote start log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(VoteStart)
 
 		NAMESPACE_BEGIN(VoteCast, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Vote cast log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Vote cast log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(VoteCast)
 
 		NAMESPACE_BEGIN(ClassChange, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Class change log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Class change log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(ClassChange)
 
 		NAMESPACE_BEGIN(Damage, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Damage log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Damage log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(Damage)
 
 		NAMESPACE_BEGIN(CheatDetection, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Cheat detection log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Cheat detection log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(CheatDetection)
 
 		NAMESPACE_BEGIN(Tags, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Tags log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Tags log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(Tags)
 
 		NAMESPACE_BEGIN(Aliases, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Aliases log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Aliases log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(Aliases)
 
 		NAMESPACE_BEGIN(Resolver, Logging)
-			CVarValues(LogTo, VA_LIST("Log to", "Resolver log to"), 0b000001, DROPDOWN_MULTI, nullptr,
+			CVarValues(LogTo, "Resolver log to", 0b000001, DROPDOWN_MULTI, nullptr,
 				"Toasts", "Chat", "Party", "Console", "Menu", "Debug");
 		NAMESPACE_END(Resolver)
 	NAMESPACE_END(Logging)
+
+	NAMESPACE_BEGIN(CheatDetection, Cheat Detection)
+		CVarEnum(Methods, "Detection methods", 0b000000, DROPDOWN_MULTI, nullptr,
+			VA_LIST("Invalid pitch", "Packet choking", "Aim flicking", "Duck Speed", "Lagcomp abuse", "Critbucket"),
+			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3, LagCompAbuse = 1 << 4, CritManipulation = 1 << 5);
+		CVar(DetectionsRequired, "Detections required", 10, SLIDER_MIN, 0, 50);
+		CVar(MinChoking, "Min choking", 20, SLIDER_MIN, 4, 22);
+		CVar(MinFlick, "Min flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f); // min flick size to suspect
+		CVar(MaxNoise, "Max flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f); // max difference between angles before and after flick
+		CVar(LagCompMinimumDelta, "Lag burst delta", 3, SLIDER_MIN, 2, 8);
+		CVar(LagCompWindow, "Lag burst window", 1.f, SLIDER_PRECISION, 0.25f, 2.f, 0.05f);
+		CVar(LagCompBurstCount, "Lag burst count", 3, SLIDER_MIN, 1, 6);
+		CVar(CritWindow, "Crit window size", 12, SLIDER_MIN, 6, 30);
+		CVar(CritThreshold, "Crit rate threshold", 85.f, SLIDER_PRECISION, 50.f, 100.f, 5.f);
+	NAMESPACE_END(CheatDetection)
 
 	NAMESPACE_BEGIN(Debug)
 		CVar(Info, "Debug info", false, NOSAVE);
 		CVar(Logging, "Debug logging", false, NOSAVE);
 		CVar(Options, "Debug options", false, NOSAVE);
-		CVar(DrawHitboxes, "Show hitboxes", false, NOSAVE);
-		CVar(AntiAimLines, "Antiaim lines", false);
-		CVar(CrashLogging, "Crash logging", true);
+		CVar(CrashLogging, "Crash logging", true, NOBIND);
 
 #ifdef DEBUG_TRACES
 		CVar(VisualizeTraces, "Visualize traces", false, NOSAVE);
 		CVar(VisualizeTraceHits, "Visualize trace hits", false, NOSAVE);
 #endif
+
+		CVar(DrawHitboxes, "Show hitboxes", false, NOSAVE);
 	NAMESPACE_END(Debug)
 NAMESPACE_END(Vars)

@@ -1,21 +1,24 @@
 #include "Visuals.h"
 
-#include "../Aimbot/Aimbot.h"
-#include "../Aimbot/AimbotProjectile/AimbotProjectile.h"
-#include "../Ticks/Ticks.h"
-#include "../Backtrack/Backtrack.h"
-#include "../PacketManip/AntiAim/AntiAim.h"
 #include "../Simulation/ProjectileSimulation/ProjectileSimulation.h"
+#include "../Aimbot/AimbotProjectile/AimbotProjectile.h"
+#include "../Aimbot/Aimbot.h"
 #include "CameraWindow/CameraWindow.h"
-#include "../Players/PlayerUtils.h"
-#include "../Spectate/Spectate.h"
 #include "Groups/Groups.h"
+#include "../Backtrack/Backtrack.h"
+#include "../Spectate/Spectate.h"
+#include "../CritHack/CritHack.h"
+#include "../Ticks/Ticks.h"
+#include "FakeAngle/FakeAngle.h"
 #include "../World/World.h"
 
 MAKE_SIGNATURE(UTIL_PlayerByIndex, "server.dll", "48 83 EC ? 8B D1 85 C9 7E ? 48 8B 05", 0x0);
 MAKE_SIGNATURE(CBaseAnimating_DrawServerHitboxes, "server.dll", "44 88 44 24 ? 53 48 81 EC", 0x0);
 MAKE_SIGNATURE(NDebugOverlay_BoxAngles, "server.dll", "48 83 EC ? 4C 8B D9 48 8B 0D ? ? ? ? 48 85 C9 74 ? 8B 84 24 ? ? ? ? F3 0F 10 84 24 ? ? ? ? 4C 8B 11 F3 0F 11 44 24 ? 89 44 24 ? 8B 84 24 ? ? ? ? 89 44 24 ? 8B 84 24 ? ? ? ? 89 44 24 ? 8B 84 24 ? ? ? ? 89 44 24 ? 4C 89 4C 24", 0x0);
 MAKE_SIGNATURE(CBaseAnimating_DrawServerHitboxes_BoxAngles_Call, "server.dll", "8B 84 24 ? ? ? ? 49 83 C6", 0x0);
+MAKE_SIGNATURE(CTFPlayerShared_UpdateCritBoostEffect, "client.dll", "48 8B C4 48 89 58 ? 48 89 70 ? 48 89 78 ? 41 56 48 81 EC ? ? ? ? 48 89 68", 0x0);
+
+enum ECritBoostUpdateType { kCritBoost_Ignore, kCritBoost_ForceRefresh };
 
 static std::vector<Vec3> SplashTrace(Vec3 vOrigin, float flRadius, Vec3 vNormal = { 0, 0, 1 }, bool bTrace = true, int iSegments = 100)
 {
@@ -131,7 +134,7 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 			break;
 		case TF_WEAPON_FLAREGUN:
 		case TF_WEAPON_FLAREGUN_REVENGE:
-			if (Vars::Visuals::Simulation::SplashRadius.Value & Vars::Visuals::Simulation::SplashRadiusEnum::ScorchShot && pWeapon->As<CTFFlareGun>()->GetFlareGunType() == FLAREGUN_SCORCHSHOT)
+			if (Vars::Visuals::Simulation::SplashRadius.Value & Vars::Visuals::Simulation::SplashRadiusEnum::Flares && pWeapon->As<CTFFlareGun>()->GetFlareGunType() == FLAREGUN_SCORCHSHOT)
 				flRadius = TF_FLARE_DET_RADIUS;
 		}
 
@@ -404,32 +407,6 @@ void CVisuals::Triggers(CTFPlayer* pLocal)
 	}
 }
 
-void CVisuals::DrawAntiAim(CTFPlayer* pLocal)
-{
-	if (!pLocal->IsAlive() || pLocal->IsAGhost() || !I::Input->CAM_IsThirdPerson())
-		return;
-
-	if (F::AntiAim.AntiAimOn() && Vars::Debug::AntiAimLines.Value)
-	{
-		const auto& vOrigin = pLocal->GetAbsOrigin();
-
-		Vec3 vScreen1, vScreen2;
-		if (SDK::W2S(vOrigin, vScreen1))
-		{
-			if (SDK::W2S(vOrigin + Math::RotatePoint({ 50, 0, 0 }, {}, { 0, F::AntiAim.vRealAngles.y, 0 }), vScreen2))
-				H::Draw.Line(vScreen1.x, vScreen1.y, vScreen2.x, vScreen2.y, { 0, 255, 0, 255 });
-			if (SDK::W2S(vOrigin + Math::RotatePoint({ 50, 0, 0 }, {}, { 0, F::AntiAim.vFakeAngles.y, 0 }), vScreen2))
-				H::Draw.Line(vScreen1.x, vScreen1.y, vScreen2.x, vScreen2.y, { 255, 0, 0, 255 });
-		}
-
-		for (auto& vPair : F::AntiAim.vEdgeTrace)
-		{
-			if (SDK::W2S(vPair.first, vScreen1) && SDK::W2S(vPair.second, vScreen2))
-				H::Draw.Line(vScreen1.x, vScreen1.y, vScreen2.x, vScreen2.y, { 255, 255, 255, 255 });
-		}
-	}
-}
-
 #define PAIR(x) { x, #x }
 void CVisuals::DrawDebugInfo(CTFPlayer* pLocal)
 {
@@ -650,12 +627,9 @@ std::vector<DrawBox_t> CVisuals::GetHitboxes(matrix3x4* aBones, CBaseAnimating* 
 
 	std::vector<DrawBox_t> vBoxes = {};
 
-	auto pModel = pEntity->GetModel();
-	if (!pModel) return vBoxes;
-	auto pHDR = I::ModelInfoClient->GetStudiomodel(pModel);
-	if (!pHDR) return vBoxes;
-	auto pSet = pHDR->pHitboxSet(pEntity->m_nHitboxSet());
-	if (!pSet) return vBoxes;
+	auto pSet = pEntity->GetHitboxSet();
+	if (!pSet)
+		return vBoxes;
 
 	if (vHitboxes.empty())
 	{
@@ -666,7 +640,8 @@ std::vector<DrawBox_t> CVisuals::GetHitboxes(matrix3x4* aBones, CBaseAnimating* 
 	for (int nHitbox : vHitboxes)
 	{
 		auto pBox = pSet->pHitbox(nHitbox);
-		if (!pBox) continue;
+		if (!pBox)
+			continue;
 
 		bool bTargeted = nHitbox == iTarget;
 		Vec3 vAngle; Math::MatrixAngles(aBones[pBox->bone], vAngle);
@@ -784,7 +759,7 @@ void CVisuals::DrawEffects()
 
 		H::Draw.RenderTriangle(tTriangle.m_aOrigin[0], tTriangle.m_aOrigin[1], tTriangle.m_aOrigin[2], tTriangle.m_tColor, tTriangle.m_bZBuffer);
 	}
-	if (auto& tPath = F::Aimbot.m_tPath; tPath.m_flTime)
+	for (auto& [tPath, _] :F::Aimbot.m_mRealPaths | std::views::values)
 	{
 		H::Draw.RenderPath(tPath.m_vPath, Vars::Colors::RealPath.Value, true, tPath.m_iStyle, tPath.m_flTime);
 		H::Draw.RenderPath(tPath.m_vPath, Vars::Colors::RealPathIgnoreZ.Value, false, tPath.m_iStyle, tPath.m_flTime);
@@ -1108,7 +1083,7 @@ void CVisuals::Store()
 	Group_t* pGroup;
 
 	{
-		std::unordered_map<CBaseEntity*, bool> mProjectiles = {};
+		std::unordered_mapset<CBaseEntity*> mProjectiles = {};
 
 		for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 		{
@@ -1213,12 +1188,13 @@ void CVisuals::Store()
 				mDots[pOwner] = pEntity->m_vecOrigin();
 		}
 
+		int iLocalIndex = I::EngineClient->GetLocalPlayer();
 		for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerAll))
 		{
 			auto pPlayer = pEntity->As<CTFPlayer>();
-			if (pPlayer->entindex() == I::EngineClient->GetLocalPlayer() ||
-				pPlayer->IsDormant() || !F::Groups.GetGroup(pEntity, pGroup, false) ||
-				!(pGroup->m_iSightlines & SightlinesEnum::Enabled))
+			if (pPlayer->entindex() == iLocalIndex || pPlayer->IsDormant() 
+				|| !F::Groups.GetGroup(pEntity, pGroup, false) 
+				|| !(pGroup->m_iSightlines & SightlinesEnum::Enabled))
 				continue;
 
 			auto pWeapon = pPlayer->m_hActiveWeapon()->As<CTFWeaponBase>();
@@ -1411,12 +1387,20 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		}
 	}
 
-	if (Vars::Visuals::Effects::SpellFootsteps.Value && (F::Ticks.m_bDoubletap || F::Ticks.m_bWarp))
-		pLocal->FireEvent(pLocal->GetAbsOrigin(), QAngle(), 7001, nullptr);
+	bool bEffects = F::CritHack.ShouldForceEffects(pLocal);
+	if (!bEffects && !pLocal->IsCritBoosted() && pLocal->m_pCritBoostSoundLoop())
+		S::CTFPlayerShared_UpdateCritBoostEffect.Call<void>(pLocal->m_Shared(), kCritBoost_Ignore);
+	else if (bEffects && !pLocal->m_pCritBoostSoundLoop())
+	{
+		int iOriginalCond = pLocal->m_nPlayerCondEx();
+		pLocal->AddCond(TF_COND_CRITBOOSTED_USER_BUFF);
+		S::CTFPlayerShared_UpdateCritBoostEffect.Call<void>(pLocal->m_Shared(), kCritBoost_Ignore);
+		pLocal->m_nPlayerCondEx() = iOriginalCond;
+	}
 	
-	static uint32_t iOldMedigunBeam = 0, iOldMedigunCharge = 0;
-	uint32_t iNewMedigunBeam = FNV1A::Hash32(Vars::Visuals::Effects::MedigunBeam.Value.c_str()), iNewMedigunCharge = FNV1A::Hash32(Vars::Visuals::Effects::MedigunCharge.Value.c_str());
-	if (iOldMedigunBeam != iNewMedigunBeam || iOldMedigunCharge != iNewMedigunCharge)
+	static uint32_t uOldHashBeam = 0, uOldHashCharge = 0;
+	auto uHashBeam = FNV1A::Hash32(Vars::Visuals::Effects::MedigunBeam.Value.c_str()), uHashCharge = FNV1A::Hash32(Vars::Visuals::Effects::MedigunCharge.Value.c_str());
+	if (uOldHashBeam != uHashBeam || uOldHashCharge != uHashCharge)
 	{
 		if (pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN)
 		{
@@ -1426,16 +1410,11 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			pMedigun->ManageChargeEffect();
 		}
 
-		iOldMedigunBeam = iNewMedigunBeam;
-		iOldMedigunCharge = iNewMedigunCharge;
+		uOldHashBeam = uHashBeam, uOldHashCharge = uHashCharge;
 	}
 
-	static auto r_aspectratio = H::ConVars.FindVar("r_aspectratio");
-	static float flStaticRatio = 0.f;
-	float flOldRatio = flStaticRatio;
-	float flNewRatio = flStaticRatio = Vars::Visuals::UI::AspectRatio.Value;
-	if (flNewRatio != flOldRatio)
-		r_aspectratio->SetValue(flNewRatio);
+	if (Vars::Visuals::Effects::SpellFootsteps.Value && (F::Ticks.m_bDoubletap || F::Ticks.m_bWarp))
+		pLocal->FireEvent(pLocal->GetAbsOrigin(), QAngle(), 7001, nullptr);
 
 	DrawHitboxes(2);
 	
@@ -1484,6 +1463,32 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		}
 	}
 #endif
+}
+
+void CVisuals::LocalAnimations(CTFPlayer* pLocal, CUserCmd* pCmd)
+{
+	m_vAngles.push_back(pCmd->viewangles);
+
+	auto pAnimState = pLocal->m_PlayerAnimState();
+	if (!G::SendPacket || !pAnimState)
+		return;
+
+	float flOldFrametime = I::GlobalVars->frametime;
+	float flOldCurtime = I::GlobalVars->curtime;
+	I::GlobalVars->frametime = TICK_INTERVAL;
+	I::GlobalVars->curtime = TICKS_TO_TIME(pLocal->m_nTickBase());
+	for (auto& vAngle : m_vAngles)
+	{
+		if (pLocal->IsTaunting() && pLocal->m_bAllowMoveDuringTaunt())
+			pLocal->m_flTauntYaw() = vAngle.y;
+		pAnimState->Update(pAnimState->m_flEyeYaw = vAngle.y, vAngle.x);
+		pLocal->FrameAdvance(TICK_INTERVAL);
+	}
+	I::GlobalVars->frametime = flOldFrametime;
+	I::GlobalVars->curtime = flOldCurtime;
+	m_vAngles.clear();
+
+	F::FakeAngle.Run(pLocal);
 }
 
 #ifdef DEBUG_UNI

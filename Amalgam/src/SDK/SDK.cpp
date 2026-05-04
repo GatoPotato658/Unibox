@@ -11,8 +11,8 @@
 
 #pragma warning (disable : 6385)
 
-MAKE_SIGNATURE(CAttributeManager_AttribHookFloat, "client.dll", "4C 8B DC 49 89 5B ? 49 89 6B ? 56 57 41 54 41 56 41 57 48 83 EC ? 48 8B 3D ? ? ? ? 4C 8D 35", 0x0);
 MAKE_SIGNATURE(CM_TransformedBoxTrace, "engine.dll", "48 8B C4 48 89 58 ? 55 56 57 48 8D 68 ? 48 81 EC ? ? ? ? F3 0F 10 41", 0x0);
+MAKE_SIGNATURE(CAttributeManager_AttribHookValue_Float, "client.dll", "4C 8B DC 49 89 5B ? 49 89 6B ? 56 57 41 54 41 56 41 57 48 83 EC ? 48 8B 3D ? ? ? ? 4C 8D 35", 0x0);
 
 static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 {
@@ -375,32 +375,32 @@ std::string SDK::GetTime()
 	return buffer;
 }
 
-std::wstring SDK::ConvertUtf8ToWide(const std::string& source)
+std::wstring SDK::ConvertUtf8ToWide(const std::string& sSource)
 {
-	if (source.empty())
+	if (sSource.empty())
 		return L"";
 
-	int size = MultiByteToWideChar(CP_UTF8, 0, source.data(), -1, nullptr, 0);
-	if (size <= 0)
+	int iSize = MultiByteToWideChar(CP_UTF8, 0, sSource.data(), -1, nullptr, 0);
+	if (iSize <= 0)
 		return L"";
 
-	std::wstring result(size, 0);
-	MultiByteToWideChar(CP_UTF8, 0, source.data(), -1, result.data(), size);
-	result.pop_back(); return result;
+	std::wstring sResult(iSize, 0);
+	MultiByteToWideChar(CP_UTF8, 0, sSource.data(), -1, sResult.data(), iSize);
+	sResult.pop_back(); return sResult;
 }
 
-std::string SDK::ConvertWideToUTF8(const std::wstring& source)
+std::string SDK::ConvertWideToUTF8(const std::wstring& sSource)
 {
-	if (source.empty())
+	if (sSource.empty())
 		return "";
 
-	int size = WideCharToMultiByte(CP_UTF8, 0, source.data(), -1, nullptr, 0, nullptr, nullptr);
-	if (size <= 0)
+	int iSize = WideCharToMultiByte(CP_UTF8, 0, sSource.data(), -1, nullptr, 0, nullptr, nullptr);
+	if (iSize <= 0)
 		return "";
 
-	std::string result(size, 0);
-	WideCharToMultiByte(CP_UTF8, 0, source.data(), -1, result.data(), size, nullptr, nullptr);
-	result.pop_back(); return result;
+	std::string sResult(iSize, 0);
+	WideCharToMultiByte(CP_UTF8, 0, sSource.data(), -1, sResult.data(), iSize, nullptr, nullptr);
+	sResult.pop_back(); return sResult;
 }
 
 HWND SDK::GetTeamFortressWindow()
@@ -977,7 +977,7 @@ float SDK::MaxSpeed(CTFPlayer* pPlayer, bool bIncludeCrouch, bool bIgnoreSpecial
 
 float SDK::AttribHookValue(float value, const char* name, void* econent, void* buffer, bool isGlobalConstString)
 {
-	return S::CAttributeManager_AttribHookFloat.Call<float>(value, name, econent, buffer, isGlobalConstString);
+	return S::CAttributeManager_AttribHookValue_Float.Call<float>(value, name, econent, buffer, isGlobalConstString);
 }
 
 void SDK::FixMovement(CUserCmd* pCmd, const Vec3& vCurAngle, const Vec3& vTargetAngle)

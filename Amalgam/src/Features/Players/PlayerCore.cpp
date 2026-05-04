@@ -23,6 +23,8 @@ void CPlayerlistCore::SavePlayerlist()
 	if (!F::PlayerUtils.m_bSave || F::PlayerUtils.m_bLoad) // terrible if we end up saving while loading
 		return;
 
+	F::PlayerUtils.m_bSave = false;
+
 	try
 	{
 		boost::property_tree::ptree tWrite;
@@ -79,7 +81,6 @@ void CPlayerlistCore::SavePlayerlist()
 
 		write_json(F::Configs.m_sCorePath + "Players.json", tWrite);
 
-		F::PlayerUtils.m_bSave = false;
 		SDK::Output("Amalgam", "Saved playerlist", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
 	}
 	catch (...)
@@ -180,13 +181,13 @@ void CPlayerlistCore::LoadPlayerlist()
 		else
 			SDK::Output("Amalgam", "Playerlist aliases not found", ALTERNATE_COLOR, OUTPUT_CONSOLE | OUTPUT_MENU | OUTPUT_DEBUG);
 
-		F::PlayerUtils.m_bLoad = false;
 		SDK::Output("Amalgam", "Loaded playerlist", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
 	}
 	catch (...)
 	{
 		SDK::Output("Amalgam", "Load playerlist failed", ALTERNATE_COLOR, OUTPUT_CONSOLE | OUTPUT_MENU | OUTPUT_DEBUG);
 	}
+	F::PlayerUtils.m_bLoad = false;
 }
 
 void CPlayerlistCore::SaveCheaterlist()
@@ -248,4 +249,5 @@ void CPlayerlistCore::LoadCheaterlist()
 	{
 		SDK::Output("Amalgam", "Load cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 	}
+	F::PlayerUtils.m_bCheaterLoad = false;
 }
