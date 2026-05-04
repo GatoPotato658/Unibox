@@ -64,6 +64,8 @@ public:
 
 	bool WeaponCanCrit(CTFWeaponBase* pWeapon, bool bWeaponOnly = false);
 	int PredictCmdNum(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	bool ShouldForceEffects(CTFPlayer* pLocal);
+	
 	bool m_bForce = false;
 
 	float GetCritDamage() { return m_iCritDamage; }
