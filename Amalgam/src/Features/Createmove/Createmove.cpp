@@ -13,6 +13,7 @@
 #include "../Visuals/Visuals.h"
 #include "../Visuals/FakeAngle/FakeAngle.h"
 #include "../Spectate/Spectate.h"
+#include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../NavBot/NavEngine/Controllers/Controller.h"
 #include "../NavBot/NavBotCore.h"
 #include "../NavBot/NavEngine/NavEngine.h"
@@ -63,7 +64,7 @@ void CCreateMove::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd
 				G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
 				if (bWeaponChanged)
 				{
-					G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->GetWeaponInfo() ? pWeaponInSlot->GetWeaponInfo()->iMaxClip1 : 0;
+					G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->m_pWeaponInfo()->iMaxClip1 : 0;
 					G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = SDK::GetWeaponMaxReserveAmmo(iWeaponID, iDefIndex);
 					G::AmmoInSlot[iActualWeaponSlot].m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIndex);
 				}
@@ -167,101 +168,6 @@ void CCreateMove::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd
 	G::CanHeadshot = pWeapon->CanHeadshot() || pWeapon->AmbassadorCanHeadshot(TICKS_TO_TIME(pLocal->m_nTickBase()));
 }
 
-#ifndef TEXTMODE
-void CCreateMove::LocalAnimations(CTFPlayer* pLocal, CUserCmd* pCmd)
-{
-	static std::vector<Vec3> vAngles = {};
-	vAngles.push_back(pCmd->viewangles);
-	auto pAnimState = pLocal->m_PlayerAnimState();
-	if (G::SendPacket && pAnimState)
-	{
-		float flOldFrametime = I::GlobalVars->frametime;
-		float flOldCurtime = I::GlobalVars->curtime;
-		I::GlobalVars->frametime = TICK_INTERVAL;
-		I::GlobalVars->curtime = TICKS_TO_TIME(pLocal->m_nTickBase());
-		for (auto& vAngle : vAngles)
-		{
-			if (pLocal->IsTaunting() && pLocal->m_bAllowMoveDuringTaunt())
-				pLocal->m_flTauntYaw() = vAngle.y;
-			pAnimState->Update(pAnimState->m_flEyeYaw = vAngle.y, vAngle.x);
-			pLocal->FrameAdvance(TICK_INTERVAL);
-		}
-		I::GlobalVars->frametime = flOldFrametime;
-		I::GlobalVars->curtime = flOldCurtime;
-		vAngles.clear();
-
-		F::FakeAngle.Run(pLocal);
-	}
-}
-#endif
-
-
-#define MATH_EPSILON (1.f / 16)
-#define PSILENT_EPSILON (1.f - MATH_EPSILON)
-#define REAL_EPSILON (0.1f + MATH_EPSILON)
-#define SNAP_SIZE_EPSILON (10.f - MATH_EPSILON)
-#define SNAP_NOISE_EPSILON (0.5f + MATH_EPSILON)
-
-void CCreateMove::AntiCheatCompatibility(CUserCmd* pCmd)
-{
-	if (!Vars::Misc::Game::AntiCheatCompatibility.Value)
-		return;
-
-	Math::ClampAngles(pCmd->viewangles); // shouldn't happen, but failsafe
-
-	static std::deque<CmdHistory_t> vHistory;
-	vHistory.emplace_front(pCmd->viewangles, pCmd->buttons & IN_ATTACK, pCmd->buttons & IN_ATTACK2, G::SendPacket);
-	if (vHistory.size() > 5)
-		vHistory.pop_back();
-
-	if (vHistory.size() < 3)
-		return;
-
-	// prevent trigger checks, though this shouldn't happen ordinarily
-	if (!vHistory[0].m_bAttack1 && vHistory[1].m_bAttack1 && !vHistory[2].m_bAttack1)
-		pCmd->buttons |= IN_ATTACK;
-	if (!vHistory[0].m_bAttack2 && vHistory[1].m_bAttack2 && !vHistory[2].m_bAttack2)
-		pCmd->buttons |= IN_ATTACK2;
-
-	// don't care if we are actually attacking or not, a miss is less important than a detection
-	if (vHistory[0].m_bAttack1 || vHistory[1].m_bAttack1 || vHistory[2].m_bAttack1)
-	{
-		// prevent silent aim checks
-		if (Math::CalcFov(vHistory[0].m_vAngle, vHistory[1].m_vAngle) > PSILENT_EPSILON
-			&& Math::CalcFov(vHistory[0].m_vAngle, vHistory[2].m_vAngle) < REAL_EPSILON)
-		{
-			pCmd->viewangles = vHistory[1].m_vAngle.LerpAngle(vHistory[0].m_vAngle, 0.5f);
-			if (Math::CalcFov(pCmd->viewangles, vHistory[2].m_vAngle) < REAL_EPSILON)
-				pCmd->viewangles = vHistory[0].m_vAngle + Vec3(0.f, REAL_EPSILON * 2);
-			vHistory[0].m_vAngle = pCmd->viewangles;
-			vHistory[0].m_bSendingPacket = G::SendPacket = vHistory[1].m_bSendingPacket;
-		}
-
-		// prevent aim snap checks
-		if (vHistory.size() == 5)
-		{
-			float flDelta01 = Math::CalcFov(vHistory[0].m_vAngle, vHistory[1].m_vAngle);
-			float flDelta12 = Math::CalcFov(vHistory[1].m_vAngle, vHistory[2].m_vAngle);
-			float flDelta23 = Math::CalcFov(vHistory[2].m_vAngle, vHistory[3].m_vAngle);
-			float flDelta34 = Math::CalcFov(vHistory[3].m_vAngle, vHistory[4].m_vAngle);
-
-			if ((
-				flDelta12 > SNAP_SIZE_EPSILON && flDelta23 < SNAP_NOISE_EPSILON && vHistory[2].m_vAngle != vHistory[3].m_vAngle
-				|| flDelta23 > SNAP_SIZE_EPSILON && flDelta12 < SNAP_NOISE_EPSILON && vHistory[1].m_vAngle != vHistory[2].m_vAngle
-				)
-				&& flDelta01 < SNAP_NOISE_EPSILON && vHistory[0].m_vAngle != vHistory[1].m_vAngle
-				&& flDelta34 < SNAP_NOISE_EPSILON && vHistory[3].m_vAngle != vHistory[4].m_vAngle)
-			{
-				pCmd->viewangles.y += SNAP_NOISE_EPSILON * 2;
-				vHistory[0].m_vAngle = pCmd->viewangles;
-				vHistory[0].m_bSendingPacket = G::SendPacket = vHistory[1].m_bSendingPacket;
-			}
-		}
-	}
-}
-
-
-
 void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 {
 	{
@@ -297,11 +203,11 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 	F::GameObjectiveController.Update();
 	F::BotUtils.Run(pLocal, pWeapon, pCmd);
 	F::AutoVote.Run(pLocal);
+	F::Backtrack.CreateMove(pLocal, pWeapon, pCmd);
 
 	F::Ticks.Start(pLocal, pCmd);
 	{
 		F::Aimbot.Run(pLocal, pWeapon, pCmd);
-		F::Backtrack.CreateMove(pLocal, pWeapon, pCmd);
 	}
 	F::Ticks.End(pLocal, pCmd);
 	{
@@ -311,24 +217,20 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::BotUtils.HandleSmartJump(pLocal, pCmd);
 		F::CritHack.Run(pLocal, pWeapon, pCmd);
 		F::NoSpread.Run(pLocal, pWeapon, pCmd);
-		F::Resolver.CreateMove();
 		F::Misc.RunPost(pLocal, pCmd);
 		F::Misc.AutoFaNJump(pLocal, pWeapon, pCmd);
 		F::PacketManip.Run(pLocal, pWeapon, pCmd);
-#ifndef TEXTMODE
-		F::Visuals.CreateMove(pLocal, pWeapon);
-#endif
 		F::Ticks.CreateMove(pLocal, pWeapon, pCmd);
 		F::AntiAim.Run(pLocal, pWeapon, pCmd);
-		F::NoSpreadHitscan.AskForPlayerPerf();
+		F::AntiCheatCompatibility.CreateMove(pCmd);
+		
+#ifndef TEXTMODE
+		F::Visuals.CreateMove(pLocal, pWeapon);
+		F::Visuals.LocalAnimations(pLocal, pCmd);
+#endif
 	}
 	F::EnginePrediction.End(pLocal, pCmd);
-
-	AntiCheatCompatibility(pCmd);
-#ifndef TEXTMODE
-	LocalAnimations(pLocal, pCmd);
-#endif
-
-	G::Choking = !G::SendPacket;
-	G::LastUserCmd = pCmd;
+		F::Resolver.CreateMove();
+		F::NoSpreadHitscan.AskForPlayerPerf();
+	G::Choking = !G::SendPacket, G::LastUserCmd = pCmd;
 }

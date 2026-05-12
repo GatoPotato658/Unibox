@@ -1111,6 +1111,7 @@
     <ClCompile Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoHeal\AutoHeal.cpp" />
+    <ClCompile Include="src\Features\AntiCheatCompatibility\AntiCheatCompatibility.cpp" />
     <ClCompile Include="src\Features\AutoJoin\AutoJoin.cpp" />
     <ClCompile Include="src\Features\Createmove\Createmove.cpp" />
     <ClCompile Include="src\Features\FollowBot\FollowBot.cpp" />
@@ -1206,6 +1207,7 @@
     <ClCompile Include="src\Hooks\CHudItemEffectMeter_Weapon_C_TFWeaponBase_IsEnabled.cpp" />
     <ClCompile Include="src\Hooks\CHudTournamentSetup_OnTick.cpp" />
     <ClCompile Include="src\Hooks\CBasePlayer_CalcObserverView.cpp" />
+    <ClCompile Include="src\Hooks\CEngineClient_GetScreenAspectRatio.cpp" />
     <ClCompile Include="src\Hooks\CHLTVCamera_CalcView.cpp" />
     <ClCompile Include="src\Hooks\CInput_ValidateUserCmd.cpp" />
     <ClCompile Include="src\Hooks\CTFGCClientSystem_SOCreated.cpp" />
@@ -1470,6 +1472,7 @@
     <ClInclude Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.h" />
     <ClInclude Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.h" />
     <ClInclude Include="src\Features\Aimbot\AutoHeal\AutoHeal.h" />
+    <ClInclude Include="src\Features\AntiCheatCompatibility\AntiCheatCompatibility.h" />
     <ClInclude Include="src\Features\AutoJoin\AutoJoin.h" />
     <ClInclude Include="src\Features\Createmove\Createmove.h" />
     <ClInclude Include="src\Features\FollowBot\FollowBot.h" />

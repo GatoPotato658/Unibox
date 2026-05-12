@@ -1,6 +1,7 @@
 #include "CritHack.h"
 
 #include "../Ticks/Ticks.h"
+#include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 
 #define WEAPON_RANDOM_RANGE				10000
 #define TF_DAMAGE_CRIT_MULTIPLIER		3.0f
@@ -359,7 +360,7 @@ void CCritHack::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	if (iRequest == CritRequestEnum::Any)
 		return;
 
-	if (!Vars::Misc::Game::AntiCheatCompatibility.Value)
+	if (!F::AntiCheatCompatibility.Active())
 	{
 		if (int iCommand = GetCritCommand(pWeapon, pCmd->command_number, iRequest == CritRequestEnum::Crit))
 		{
@@ -382,7 +383,7 @@ int CCritHack::PredictCmdNum(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd
 {
 	auto fGetCmdNum = [&](int iCommandNumber)
 	{
-		if (!pWeapon || !pLocal->IsAlive() || !I::EngineClient->IsInGame() || Vars::Misc::Game::AntiCheatCompatibility.Value
+		if (!pWeapon || !pLocal->IsAlive() || !I::EngineClient->IsInGame() || F::AntiCheatCompatibility.Active()
 			|| pLocal->IsCritBoosted() || pWeapon->m_flCritTime() > I::GlobalVars->curtime || !WeaponCanCrit(pWeapon))
 			return iCommandNumber;
 
@@ -659,6 +660,7 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 
 		if (m_flDamage > 0)
 		{
+			float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
 			if (pLocal->IsCritBoosted())
 			{
 				leftText = "Crit Boosted";
@@ -667,9 +669,9 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 				barColor = { 100, 255, 255, 255 };
 				targetProgress = 1.0f;
 			}
-			else if (pWeapon->m_flCritTime() > I::GlobalVars->curtime)
+			else if (pWeapon->m_flCritTime() > flTickBase)
 			{
-				const float flTime = pWeapon->m_flCritTime() - I::GlobalVars->curtime;
+				const float flTime = pWeapon->m_flCritTime() - flTickBase;
 				leftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
 				rightText = "STREAMING";
 				rightColor = { 100, 255, 255, 255 };
@@ -679,9 +681,9 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 			else if (!m_bCritBanned || iSlot == SLOT_MELEE)
 			{
 				leftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
-				if (bRapidFire && TICKS_TO_TIME(pLocal->m_nTickBase()) < pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
+				if (bRapidFire && flTickBase < pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
 				{
-					const float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - TICKS_TO_TIME(pLocal->m_nTickBase());
+					const float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - flTickBase;
 					if (flTime > 0.0001f)
 					{
 						rightText = std::format("WAIT {:.2f}s", flTime);
@@ -752,6 +754,6 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 	if (!rightText.empty())
 		H::Draw.String(fFont, x + boxWidth - 5, y + (textBoxHeight / 2), rightColor, ALIGN_RIGHT, rightText.c_str());
 
-	if (Vars::Misc::Game::AntiCheatCompatibility.Value)
+	if (F::AntiCheatCompatibility.Active())
 		H::Draw.String(fFont, x + boxWidth / 2, y - fFont.m_nTall - 2, Vars::Colors::IndicatorTextBad.Value, ALIGN_CENTER, "Anti-cheat compatibility");
 }
