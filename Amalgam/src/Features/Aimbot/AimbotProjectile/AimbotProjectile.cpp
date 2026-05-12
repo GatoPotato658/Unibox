@@ -9,6 +9,7 @@
 #include "../../NavBot/BotUtils.h"
 #include "../../NavBot/NavEngine/Controllers/PasstimeController/PasstimeController.h"
 #include <array>
+#include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include <numeric>
 
 //#define SPLASH_DEBUG1 // trace splash visualization
@@ -133,9 +134,13 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 			break;
 		}
 
+		int iFunctionFlags = ShouldIgnoreEnum::Dormant | ShouldIgnoreEnum::Ignored;
+		if (Vars::Aimbot::Projectile::Modifiers.Value & Vars::Aimbot::Projectile::ModifiersEnum::TargetDormant)
+			iFunctionFlags &= ~ShouldIgnoreEnum::Dormant;
+
 		for (auto pEntity : H::Entities.GetGroup(eGroup))
 		{
-			if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
+			if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon, iFunctionFlags))
 				continue;
 
 			bool bTeam = pEntity->m_iTeamNum() == pLocal->m_iTeamNum();
@@ -490,18 +495,15 @@ Directs_t CAimbotProjectile::GetDirects()
 		case BOUNDS_HEAD:
 			if (tTarget.m_nAimedHitbox == HITBOX_HEAD)
 			{
-				auto pHitboxInfos = F::Backtrack.GetHitboxInfos(tTarget.m_pEntity);
-				if (!pHitboxInfos)
-					break;
-
-				auto tHeadHitboxInfo = pHitboxInfos->at(HITBOX_HEAD);
-				if (tHeadHitboxInfo.m_nHitbox != HITBOX_HEAD) // this is dumb
+				auto aBones = F::Backtrack.GetBones(tTarget.m_pEntity);
+				if (!aBones)
 					break;
 
 				//Vec3 vOff = tTarget.m_pEntity->As<CBaseAnimating>()->GetHitboxOrigin(aBones, HITBOX_HEAD) - tTarget.m_pEntity->m_vecOrigin();
 
 				// https://www.youtube.com/watch?v=_PSGD-pJUrM, might be better??
-				Vec3 vOff = tHeadHitboxInfo.m_vCenter + (tHeadHitboxInfo.m_vMin + tHeadHitboxInfo.m_vMax) / 2 - tTarget.m_pEntity->m_vecOrigin();
+				Vec3 vCenter, vBBoxMins, vBBoxMaxs; tTarget.m_pEntity->As<CBaseAnimating>()->GetHitboxInfo(aBones, HITBOX_HEAD, &vCenter, &vBBoxMins, &vBBoxMaxs);
+				Vec3 vOff = vCenter + (vBBoxMins + vBBoxMaxs) / 2 - tTarget.m_pEntity->m_vecOrigin();
 
 				float flLow = 0.f;
 				Vec3 vDelta = tTarget.m_vPos + m_tInfo.m_vTargetEye - m_tInfo.m_vLocalEye;
@@ -1460,19 +1462,28 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 					|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
 					|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Assistive))
 				{	// loop and see if closest hitbox is head
-					auto pHitboxInfos = F::Backtrack.GetHitboxInfos(tTarget.m_pEntity);
-					if (!pHitboxInfos)
+					auto aBones = F::Backtrack.GetBones(tTarget.m_pEntity);
+					if (!aBones)
+						break;
+
+					auto pSet = tTarget.m_pEntity->As<CTFPlayer>()->GetHitboxSet();
+					if (!pSet)
 						break;
 
 					Vec3 vOffset = tOriginal.m_vOrigin - tTarget.m_vPos;
 					Vec3 vPos = trace.endpos + F::ProjSim.GetVelocity().Normalized() * 16 + vOffset;
 
 					float flLowestDistance = std::numeric_limits<float>::max(); int iClosest = -1;
-					for (auto& tHitboxInfo : *pHitboxInfos)
+					for (int nHitbox = 0; nHitbox < pSet->numhitboxes; ++nHitbox)
 					{
-						const float flDistance = vPos.DistToSqr(tHitboxInfo.m_vCenter);
+						auto pBox = pSet->pHitbox(nHitbox);
+						if (!pBox) continue;
+
+						Vec3 vCenter; Math::VectorTransform({}, aBones[pBox->bone], vCenter);
+
+						const float flDistance = vPos.DistToSqr(vCenter);
 						if (flDistance < flLowestDistance)
-							iClosest = tHitboxInfo.m_nHitbox, flLowestDistance = flDistance;
+							iClosest = nHitbox, flLowestDistance = flDistance;
 					}
 					if (iClosest != HITBOX_HEAD)
 						break;
@@ -1848,9 +1859,9 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 bool CAimbotProjectile::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& vOut)
 {
 	/*
-	if (Vec3* pDoubletapAngle = F::Ticks.GetShootAngle())
+	if (Vec3* pHoldAngle = F::Ticks.GetShootAngle())
 	{
-		vOut = *pDoubletapAngle;
+		vOut = *pHoldAngle;
 		return true;
 	}
 	*/
@@ -1875,14 +1886,15 @@ bool CAimbotProjectile::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& v
 	case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		Vec3 vMouseDelta = G::CurrentUserCmd->viewangles.DeltaAngle(G::LastUserCmd->viewangles);
 		Vec3 vTargetDelta = vToAngle.DeltaAngle(G::LastUserCmd->viewangles);
-		float flMouseDelta = vMouseDelta.Length2D(), flTargetDelta = vTargetDelta.Length2D();
-		vTargetDelta = vTargetDelta.Normalized() * std::min(flMouseDelta, flTargetDelta);
+
+		float flMouseDelta = vMouseDelta.Length2DSqr(), flTargetDelta = vTargetDelta.Length2DSqr();
+		vTargetDelta = vTargetDelta.Normalized() * sqrtf(std::min(flMouseDelta, flTargetDelta));
 		vOut = vCurAngle - vMouseDelta + vMouseDelta.LerpAngle(vTargetDelta, F::Aimbot.GetSmoothStrength(vCurAngle, vToAngle));
 		bReturn = true;
 		break;
 	}
 
-	if (m_iMethod != Vars::Aimbot::General::AimTypeEnum::Silent || Vars::Misc::Game::AntiCheatCompatibility.Value)
+	if (m_iMethod != Vars::Aimbot::General::AimTypeEnum::Silent || F::AntiCheatCompatibility.Active())
 		Math::ClampAngles(vOut);
 	return bReturn;
 }

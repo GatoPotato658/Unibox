@@ -3,6 +3,7 @@
 #include "../PacketManip/AntiAim/AntiAim.h"
 #include "../EnginePrediction/EnginePrediction.h"
 #include "../Aimbot/AutoRocketJump/AutoRocketJump.h"
+#include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../Backtrack/Backtrack.h"
 #include "../Createmove/Createmove.h"
 
@@ -88,7 +89,7 @@ void CTicks::Doubletap(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CTicks::Speedhack()
 {
-	m_bSpeedhack = Vars::Speedhack::Enabled.Value;
+	m_bSpeedhack = Vars::Speedhack::Scale.Value != 1;
 	if (!m_bSpeedhack)
 		return;
 
@@ -313,7 +314,7 @@ void CTicks::Move(float accumulated_extra_samples, bool bFinalTick)
 
 	if (m_bSpeedhack)
 	{
-		m_iShiftedTicks = Vars::Speedhack::Amount.Value;
+		m_iShiftedTicks = Vars::Speedhack::Scale.Value;
 		m_iShiftedGoal = 0;
 	}
 
@@ -375,7 +376,7 @@ void CTicks::MoveManage()
 
 	static auto sv_maxusrcmdprocessticks = H::ConVars.FindVar("sv_maxusrcmdprocessticks");
 	m_iMaxUsrCmdProcessTicks = sv_maxusrcmdprocessticks->GetInt();
-	if (Vars::Misc::Game::AntiCheatCompatibility.Value)
+	if (F::AntiCheatCompatibility.Active())
 		m_iMaxUsrCmdProcessTicks = std::min(m_iMaxUsrCmdProcessTicks, 8);
 	m_iMaxShift = m_iMaxUsrCmdProcessTicks - std::max(m_iMaxUsrCmdProcessTicks - Vars::Doubletap::RechargeLimit.Value, 0) - (F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0);
 	m_iMaxShift = std::max(m_iMaxShift, 1);
@@ -525,14 +526,14 @@ void CTicks::SaveShootAngle(CUserCmd* pCmd)
 	static auto sv_maxusrcmdprocessticks_holdaim = H::ConVars.FindVar("sv_maxusrcmdprocessticks_holdaim");
 
 	if (G::SendPacket)
-		m_bShootAngle = false;
-	else if (!m_bShootAngle && G::Attacking == 1 && sv_maxusrcmdprocessticks_holdaim->GetBool())
-		m_vShootAngle = pCmd->viewangles, m_bShootAngle = true;
+		m_vShootAngle = std::nullopt;
+	else if (!m_vShootAngle && G::Attacking == 1 && sv_maxusrcmdprocessticks_holdaim->GetBool())
+		m_vShootAngle = pCmd->viewangles;
 }
 Vec3* CTicks::GetShootAngle()
 {
-	if (m_bShootAngle && I::ClientState->chokedcommands)
-		return &m_vShootAngle;
+	if (m_vShootAngle && I::ClientState->chokedcommands)
+		return &m_vShootAngle.value();
 	return nullptr;
 }
 
@@ -550,10 +551,8 @@ void CTicks::Draw(CTFPlayer* pLocal)
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 
 	if (m_bSpeedhack)
-	{
-		H::Draw.StringOutlined(fFont, dtPos.x, dtPos.y + 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("Speedhack x{}", Vars::Speedhack::Amount.Value).c_str());
-		return;
-	}
+		return H::Draw.StringOutlined(fFont, dtPos.x, dtPos.y + 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("Speedhack x{}", Vars::Speedhack::Scale.Value).c_str());;
+
 	int iAntiAimTicks = F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0;
 	int iTicks = std::clamp(m_iShiftedTicks + std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0), 0, m_iMaxUsrCmdProcessTicks);
 	int iMax = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
