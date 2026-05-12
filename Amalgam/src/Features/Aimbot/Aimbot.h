@@ -1,15 +1,18 @@
 #pragma once
 #include "../../SDK/SDK.h"
 
+struct RealPath_t
+{
+	DrawPath_t m_tPath = {};
+	size_t m_iSize = 0;
+};
+
 class CAimbot
 {
 private:
 	bool ShouldRun(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void RunAimbot(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, bool bSecondaryType = false);
-
-	size_t m_iSize = 0;
-	int m_iPlayer = 0;
 
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -21,7 +24,7 @@ public:
 	EWeaponType m_eRanType = EWeaponType::UNKNOWN;
 	bool m_bRunningSecondary = false;
 
-	DrawPath_t m_tPath = {};
+	std::unordered_map<int, RealPath_t> m_mRealPaths = {};
 };
 
 ADD_FEATURE(CAimbot, Aimbot);
