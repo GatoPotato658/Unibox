@@ -7,7 +7,7 @@ private:
 	void Begin();
 	void End();
 
-	void DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext* pRenderContext, float flDistance, bool bTwoModels = true);
+	void DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext* pRenderContext, bool bTwoModels = true);
 
 	void RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 	void RenderFakeAngle(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
@@ -25,7 +25,7 @@ private:
 	float m_flOriginalBlend = 1.f;
 	IMaterial* m_pOriginalMaterial = nullptr;
 	OverrideType_t m_iOriginalOverride = OVERRIDE_NORMAL;
-	ChamsMaterial_t m_tCurrentMaterial = {};
+	float m_flCurrentDistance = -1.f;
 
 	int m_iFlags = false;
 

@@ -16,7 +16,7 @@ static inline bool GetDistanceThing(float flDistance, const ChamsMaterial_t& tMa
 		if (tMaterial.flStart)
 			tColorOut.a = Math::RemapVal(flDistance, tMaterial.flStart + 256.f, tMaterial.flStart, tColorOut.a, 0.f);
 	}
-	return true;
+	return tColorOut.a;
 }
 
 void CChams::Begin()
@@ -32,7 +32,7 @@ void CChams::End()
 	I::ModelRender->ForcedMaterialOverride(m_pOriginalMaterial, m_iOriginalOverride);
 }
 
-void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext* pRenderContext, float flDistance, bool bTwoModels)
+void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext* pRenderContext, bool bTwoModels)
 {
 	const auto& vVisibleMaterials = !tChams.Visible.empty() ? tChams.Visible : std::vector<std::pair<std::string, ChamsMaterial_t>> { { "None", {} } };
 	const auto& vOccludedMaterials = !tChams.Occluded.empty() ? tChams.Occluded : std::vector<std::pair<std::string, ChamsMaterial_t>> { { "None", {} } };
@@ -54,7 +54,7 @@ void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext*
 	for (auto& [sName, tMaterial] : vVisibleMaterials)
 	{
 		Color_t tColor = tMaterial.tColor;
-		if (!m_iFlags && !GetDistanceThing(flDistance, tMaterial, tColor))
+		if (m_flCurrentDistance > -1.f && !GetDistanceThing(m_flCurrentDistance, tMaterial, tColor))
 			continue;
 
 		auto pMaterial = F::Materials.GetMaterial(FNV1A::Hash32(sName.c_str()));
@@ -64,13 +64,9 @@ void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext*
 		if (pMaterial && pMaterial->m_bInvertCull)
 			pRenderContext->CullMode(MATERIAL_CULLMODE_CW);
 
-		m_tCurrentMaterial = tMaterial;
-
 		m_bRendering = true;
 		pEntity->DrawModel(STUDIO_RENDER);
 		m_bRendering = false;
-
-		m_tCurrentMaterial = {};
 
 		if (pMaterial && pMaterial->m_bInvertCull)
 			pRenderContext->CullMode(MATERIAL_CULLMODE_CCW);
@@ -90,7 +86,7 @@ void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext*
 		for (auto& [sName, tMaterial] : vOccludedMaterials)
 		{
 			Color_t tColor = tMaterial.tColor;
-			if (!m_iFlags && !GetDistanceThing(flDistance, tMaterial, tColor))
+			if (m_flCurrentDistance > -1.f && !GetDistanceThing(m_flCurrentDistance, tMaterial, tColor))
 				continue;
 
 			auto pMaterial = F::Materials.GetMaterial(FNV1A::Hash32(sName.c_str()));
@@ -100,13 +96,9 @@ void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext*
 			if (pMaterial && pMaterial->m_bInvertCull)
 				pRenderContext->CullMode(MATERIAL_CULLMODE_CW);
 
-			m_tCurrentMaterial = tMaterial;
-
 			m_bRendering = true;
 			pEntity->DrawModel(STUDIO_RENDER);
 			m_bRendering = false;
-
-			m_tCurrentMaterial = {};
 
 			if (pMaterial && pMaterial->m_bInvertCull)
 				pRenderContext->CullMode(MATERIAL_CULLMODE_CCW);
@@ -128,18 +120,22 @@ void CChams::Store(CTFPlayer* pLocal)
 	if (!pLocal || !F::Groups.GroupsActive())
 		return;
 
+	Vector vLocalOrigin = pLocal->m_vecOrigin();
+	int iLocalTeam = pLocal->m_iTeamNum();
 	for (auto& [pEntity, pGroup] : F::Groups.GetGroup())
 	{
 		if (pEntity->IsDormant() || !pEntity->ShouldDraw())
 			continue;
 
-		bool bWearableOrViewmodel = pEntity->IsBaseCombatWeapon() || pEntity->IsWearable();
 		Vector vEntOrigin = pEntity->m_vecOrigin();
+		bool bWearableOrViewmodel = pEntity->IsBaseCombatWeapon() || pEntity->IsWearable();
 		if (bWearableOrViewmodel && pEntity->m_hOwnerEntity().Get())
 			vEntOrigin = pEntity->m_hOwnerEntity().Get()->m_vecOrigin();
+
+		float flDistance = vLocalOrigin.DistTo(vEntOrigin);
 		if (pGroup->m_tChams()
 			&& SDK::IsOnScreen(pEntity, bWearableOrViewmodel))
-			m_vEntities.emplace_back(pEntity, pGroup->m_tChams, Vector(pLocal->m_vecOrigin() - vEntOrigin).Length());
+			m_vEntities.emplace_back(pEntity, pGroup->m_tChams, flDistance);
 
 		if (pEntity->IsPlayer() && pEntity != pLocal && pGroup->m_iBacktrack & BacktrackEnum::Enabled && !pGroup->m_vBacktrackChams.empty()
 			&& (F::Backtrack.GetFakeLatency() || F::Backtrack.GetFakeInterp() > G::Lerp || F::Backtrack.GetWindow()))
@@ -153,8 +149,9 @@ void CChams::Store(CTFPlayer* pLocal)
 				else if (pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN)
 					bShowFriendly = true, bShowEnemy = false;
 
-				if (bShowEnemy && pEntity->m_iTeamNum() != pLocal->m_iTeamNum() || bShowFriendly && pEntity->m_iTeamNum() == pLocal->m_iTeamNum())
-					m_vEntities.emplace_back(pEntity, Chams_t(pGroup->m_vBacktrackChams, {}), Vector(pLocal->m_vecOrigin() - vEntOrigin).Length(), pGroup->m_iBacktrack);
+				bool bIsTeammate = pEntity->m_iTeamNum() == iLocalTeam;
+				if (bShowEnemy && !bIsTeammate || bShowFriendly && bIsTeammate)
+					m_vEntities.emplace_back(pEntity, Chams_t(pGroup->m_vBacktrackChams, {}), flDistance, pGroup->m_iBacktrack);
 			}
 		}
 	}
@@ -175,8 +172,9 @@ void CChams::RenderMain()
 
 	for (auto& tInfo : m_vEntities)
 	{
+		m_flCurrentDistance = tInfo.m_flDistance;
 		if (!tInfo.m_iFlags)
-			DrawModel(tInfo.m_pEntity, tInfo.m_tChams, pRenderContext, tInfo.m_flDistance);
+			DrawModel(tInfo.m_pEntity, tInfo.m_tChams, pRenderContext);
 		else
 		{
 			m_iFlags = tInfo.m_iFlags;
@@ -184,7 +182,7 @@ void CChams::RenderMain()
 			auto pPlayer = tInfo.m_pEntity->As<CTFPlayer>();
 			const float flOldInvisibility = pPlayer->m_flInvisibility();
 			pPlayer->m_flInvisibility() = 0.f;
-			DrawModel(tInfo.m_pEntity, tInfo.m_tChams, pRenderContext, tInfo.m_flDistance, false);
+			DrawModel(tInfo.m_pEntity, tInfo.m_tChams, pRenderContext, false);
 			pPlayer->m_flInvisibility() = flOldInvisibility;
 
 			m_iFlags = false;
@@ -213,27 +211,6 @@ void CChams::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderIn
 	bool bDrawFirst = m_iFlags & BacktrackEnum::First;
 
 	pRenderContext->DepthRange(0.f, m_iFlags & BacktrackEnum::IgnoreZ ? 0.2f : 1.f);
-	
-	float flDistance = -1.f;
-	auto pLocal = H::Entities.GetLocal();
-	if (pLocal && pLocal->IsAlive())
-	{
-		flDistance = Vector(pLocal->m_vecOrigin() - pEntity->m_vecOrigin()).Length();
-		if (flDistance < m_tCurrentMaterial.flStart || flDistance > m_tCurrentMaterial.flEnd)
-			return;
-	}
-	
-	auto getBlend = [&](float flBlend)
-		{
-			float flBlendOut = flBlend;
-			if (flDistance != -1.f && m_tCurrentMaterial.bSmoothAlpha)
-			{
-				flBlendOut = Math::RemapVal(flDistance, m_tCurrentMaterial.flEnd - 256.f, m_tCurrentMaterial.flEnd, flBlendOut, 0.f);
-				if (m_tCurrentMaterial.flStart)
-					flBlendOut = Math::RemapVal(flDistance, m_tCurrentMaterial.flStart + 256.f, m_tCurrentMaterial.flStart, flBlendOut, 0.f);
-			}
-			return flBlendOut;
-		};
 
 	float flOriginalBlend = I::RenderView->GetBlend();
 	auto fDrawModel = [&](Vec3& vOrigin, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld, float flBlend)
@@ -245,11 +222,13 @@ void CChams::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderIn
 		static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
 		IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, pBoneToWorld);
 	};
+
+	Vector vEntityOrigin = pEntity->GetAbsOrigin();
 	if (!bDrawLast && !bDrawFirst)
 	{
 		for (auto pRecord : vRecords)
 		{
-			if (float flBlend = Math::RemapVal(pEntity->GetAbsOrigin().DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
 				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
 		}
 	}
@@ -258,17 +237,16 @@ void CChams::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderIn
 		if (bDrawLast)
 		{
 			auto pRecord = vRecords.back();
-			if (float flBlend = Math::RemapVal(pEntity->GetAbsOrigin().DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
 				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
 		}
 		if (bDrawFirst)
 		{
 			auto pRecord = vRecords.front();
-			if (float flBlend = Math::RemapVal(pEntity->GetAbsOrigin().DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
 				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
 		}
 	}
-	I::RenderView->SetBlend(flOriginalBlend);
 
 	pRenderContext->DepthRange(0.f, 1.f);
 }

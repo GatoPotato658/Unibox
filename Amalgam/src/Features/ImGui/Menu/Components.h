@@ -2701,7 +2701,7 @@ namespace ImGui
 				ImVec2 vOriginalPos2 = GetCursorPos();
 				if (bFlagActive) // do here so as to not sink input
 				{
-					SetCursorPos(vOriginalPos2 + ImVec2(vSize.x - H::Draw.Scale(31), H::Draw.Scale(5)));
+					SetCursorPos(vOriginalPos2 + ImVec2(vSize.x - H::Draw.Scale(31), -H::Draw.Scale(5)));
 					FMaterialWindow(sEntry.c_str(), &it->second->second);
 					SetCursorPos(vOriginalPos2);
 				}

@@ -41,7 +41,7 @@ private:
 	struct GlowInfo_t
 	{
 		CBaseEntity* m_pEntity;
-		Color_t m_cColor;
+		Color_t m_tColor;
 		int m_iFlags = 0;
 	};
 	std::unordered_map<Glow_t, std::vector<GlowInfo_t>, GlowHasher_t> m_mEntities = {};

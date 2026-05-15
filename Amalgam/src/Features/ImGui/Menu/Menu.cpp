@@ -902,7 +902,7 @@ void CMenu::MenuVisuals(int iTab)
 						FMDropdown("Material", &tGroup.m_vBacktrackChams, FDropdownEnum::Left);
 						SetCursorPos({ GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, GetCursorPosY() - H::Draw.Scale(32) });
 
-						FToggle("Ignore Z", &tGroup.m_iBacktrack, BacktrackEnum::IgnoreZ, FToggleEnum::Left);
+						FToggle("Materials ignore Z", &tGroup.m_iBacktrack, BacktrackEnum::IgnoreZ, FToggleEnum::Left);
 
 						SetCursorPosY(GetCursorPosY() + H::Draw.Scale(8));
 						PushTransparent(!tGroup.m_tBacktrackGlow.Stencil);

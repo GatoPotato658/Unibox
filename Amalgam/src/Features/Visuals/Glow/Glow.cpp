@@ -5,6 +5,20 @@
 #include "../FakeAngle/FakeAngle.h"
 #include "../../Backtrack/Backtrack.h"
 
+static inline bool GetDistanceThing(float flDistance, const Glow_t& tGlow, Color_t& tColorOut)
+{
+	if (flDistance < tGlow.Start || flDistance > tGlow.End)
+		return false;
+
+	if (tGlow.SmoothAlpha)
+	{
+		tColorOut.a = Math::RemapVal(flDistance, tGlow.End - 256.f, tGlow.End, tColorOut.a, 0.f);
+		if (tGlow.Start)
+			tColorOut.a = Math::RemapVal(flDistance, tGlow.Start + 256.f, tGlow.Start, tColorOut.a, 0.f);
+	}
+	return tColorOut.a;
+}
+
 void CGlow::Begin()
 {
 	m_tOriginalColor = I::RenderView->GetColorModulation();
@@ -129,36 +143,28 @@ void CGlow::Store(CTFPlayer* pLocal)
 	if (!pLocal || !F::Groups.GroupsActive())
 		return;
 
+	Vector vLocalOrigin = pLocal->m_vecOrigin();
+	int iLocalTeam = pLocal->m_iTeamNum();
 	for (auto& [pEntity, pGroup] : F::Groups.GetGroup())
 	{
 		if (pEntity->IsDormant() || !pEntity->ShouldDraw())
 			continue;
 
 		Vector vEntOrigin = pEntity->m_vecOrigin();
-		if (pEntity->IsBaseCombatWeapon() || pEntity->IsWearable())
-		{
-			if (pEntity->m_hOwnerEntity().Get())
-				vEntOrigin = pEntity->m_hOwnerEntity().Get()->m_vecOrigin();
-		}
-		
-		float flDistance = pLocal->m_vecOrigin().DistTo(vEntOrigin);
+		bool bWearableOrViewmodel = pEntity->IsBaseCombatWeapon() || pEntity->IsWearable();
+		if (bWearableOrViewmodel && pEntity->m_hOwnerEntity().Get())
+			vEntOrigin = pEntity->m_hOwnerEntity().Get()->m_vecOrigin();
+
+		float flDistance = vLocalOrigin.DistTo(vEntOrigin);
 
 		Color_t tColor = F::Groups.GetColor(pEntity, pGroup);
-		if (flDistance >= pGroup->m_tGlow.Start && flDistance <= pGroup->m_tGlow.End)
-		{
-			if (pGroup->m_tGlow.SmoothAlpha)
-			{
-				tColor.a = Math::RemapVal(flDistance, pGroup->m_tGlow.End - 256.f, pGroup->m_tGlow.End, tColor.a, 0.f);
-				if (pGroup->m_tGlow.Start)
-					tColor.a = Math::RemapVal(flDistance, pGroup->m_tGlow.Start + 256.f, pGroup->m_tGlow.Start, tColor.a, 0.f);
-			}
-
-			if (pGroup->m_tGlow()
-				&& SDK::IsOnScreen(pEntity, pEntity->IsBaseCombatWeapon() || pEntity->IsWearable()))
-				m_mEntities[pGroup->m_tGlow].emplace_back(pEntity, tColor, 0);
-		}
+		Color_t tBacktrackColor = tColor;
+		if (pGroup->m_tGlow()
+			&& GetDistanceThing(flDistance, pGroup->m_tGlow, tColor) && SDK::IsOnScreen(pEntity, pEntity->IsBaseCombatWeapon() || pEntity->IsWearable()))
+			m_mEntities[pGroup->m_tGlow].emplace_back(pEntity, tColor);
 
 		if (pEntity->IsPlayer() && pEntity != pLocal && pGroup->m_iBacktrack & BacktrackEnum::Enabled && pGroup->m_tBacktrackGlow()
+			&& GetDistanceThing(flDistance, pGroup->m_tBacktrackGlow, tBacktrackColor)
 			&& (F::Backtrack.GetFakeLatency() || F::Backtrack.GetFakeInterp() > G::Lerp || F::Backtrack.GetWindow()))
 		{
 			auto pWeapon = H::Entities.GetWeapon();
@@ -170,8 +176,9 @@ void CGlow::Store(CTFPlayer* pLocal)
 				else if (pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN)
 					bShowFriendly = true, bShowEnemy = false;
 
-				if (bShowEnemy && pEntity->m_iTeamNum() != pLocal->m_iTeamNum() || bShowFriendly && pEntity->m_iTeamNum() == pLocal->m_iTeamNum())
-					m_mEntities[pGroup->m_tBacktrackGlow].emplace_back(pEntity, tColor, pGroup->m_iBacktrack);
+				bool bIsTeammate = pEntity->m_iTeamNum() == iLocalTeam;
+				if (bShowEnemy && !bIsTeammate || bShowFriendly && bIsTeammate)
+					m_mEntities[pGroup->m_tBacktrackGlow].emplace_back(pEntity, tBacktrackColor, pGroup->m_iBacktrack);
 			}
 		}
 	}
@@ -215,8 +222,8 @@ void CGlow::RenderSecond()
 		SecondBegin(pRenderContext, w, h);
 		for (auto& tInfo : vInfo)
 		{
-			I::RenderView->SetColorModulation(tInfo.m_cColor);
-			I::RenderView->SetBlend(tInfo.m_cColor.a / 255.f);
+			I::RenderView->SetColorModulation(tInfo.m_tColor);
+			I::RenderView->SetBlend(tInfo.m_tColor.a / 255.f);
 
 			m_iFlags = tInfo.m_iFlags;
 			DrawModel(tInfo.m_pEntity);
@@ -241,46 +248,24 @@ void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInf
 
 	bool bDrawLast = m_iFlags & BacktrackEnum::Last;
 	bool bDrawFirst = m_iFlags & BacktrackEnum::First;
-	
-	float flBlend = I::RenderView->GetBlend();
-	if (flBlend)
-	{
-		if (auto pLocal = H::Entities.GetLocal())
-		{
-			if (pLocal->IsAlive())
-			{
-				Group_t* pGroup;
-				if (F::Groups.GetGroup(pEntity, pGroup))
-				{
-					float flDistance = pLocal->m_vecOrigin().DistTo(pEntity->m_vecOrigin());
-					if (flDistance < pGroup->m_tBacktrackGlow.Start || flDistance > pGroup->m_tBacktrackGlow.End)
-						return;
-					if (pGroup->m_tBacktrackGlow.SmoothAlpha)
-					{
-						flBlend = Math::RemapVal(flDistance, pGroup->m_tBacktrackGlow.End - 256.f, pGroup->m_tBacktrackGlow.End, flBlend, 0.f);
-						if (pGroup->m_tBacktrackGlow.Start)
-							flBlend = Math::RemapVal(flDistance, pGroup->m_tBacktrackGlow.Start + 256.f, pGroup->m_tBacktrackGlow.Start, flBlend, 0.f);
-					}
-				}
-			}
-		}
-	}
 
-	//float flOriginalBlend = I::RenderView->GetBlend();
+	float flOriginalBlend = I::RenderView->GetBlend();
 	auto fDrawModel = [&](Vec3& vOrigin, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld, float flBlend)
 	{
 		if (!SDK::IsOnScreen(pEntity, vOrigin))
 			return;
 
-		//I::RenderView->SetBlend(flBlend * flOriginalBlend);
+		I::RenderView->SetBlend(flBlend * flOriginalBlend);
 		static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
 		IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, pBoneToWorld);
 	};
+
+	Vector vEntityOrigin = pEntity->GetAbsOrigin();
 	if (!bDrawLast && !bDrawFirst)
 	{
 		for (auto pRecord : vRecords)
 		{
-			if (float flBlend = Math::RemapVal(pEntity->GetAbsOrigin().DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
 				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
 		}
 	}
@@ -289,17 +274,16 @@ void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInf
 		if (bDrawLast)
 		{
 			auto pRecord = vRecords.back();
-			if (float flBlend = Math::RemapVal(pEntity->GetAbsOrigin().DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
 				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
 		}
 		if (bDrawFirst)
 		{
 			auto pRecord = vRecords.front();
-			if (float flBlend = Math::RemapVal(pEntity->GetAbsOrigin().DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
 				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
 		}
 	}
-	//I::RenderView->SetBlend(flOriginalBlend);
 }
 void CGlow::RenderFakeAngle(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
 {
