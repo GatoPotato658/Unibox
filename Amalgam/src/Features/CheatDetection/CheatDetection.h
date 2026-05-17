@@ -50,7 +50,7 @@ struct PlayerInfo
 	} m_CritTracker;
 };
 
-class CCheaterDetection
+class CCheatDetection
 {
 private:
 	bool ShouldScan();
@@ -75,4 +75,4 @@ public:
 	void Reset();
 };
 
-ADD_FEATURE(CCheaterDetection, CheaterDetection);
+ADD_FEATURE(CCheatDetection, CheatDetection);
