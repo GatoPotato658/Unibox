@@ -109,12 +109,12 @@ void CMovementSimulation::Store()
 	{
 		auto pPlayer = pEntity->As<CTFPlayer>();
 		auto& vRecords = m_mRecords[pPlayer->entindex()];
-		if (pPlayer->IsDormant() || !pPlayer->IsAlive() || pPlayer->IsAGhost() || pPlayer->m_vecVelocity().IsZero())
+		if (!pPlayer->IsAlive() || pPlayer->IsAGhost() || pPlayer->m_vecVelocity().IsZero())
 		{
 			vRecords.clear();
 			continue;
 		}
-		else if (pPlayer->entindex() == iLocalIdx || !H::Entities.GetDeltaTime(pPlayer->entindex()))
+		else if (pPlayer->entindex() == iLocalIdx || !H::Entities.GetDeltaTime(pPlayer->entindex()) && !pPlayer->IsDormant())
 			continue;
 
 		Vec3 vVelocity = pPlayer->m_vecVelocity();
@@ -234,6 +234,11 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 
 	// setup move data
 	SetupMoveData(tMoveStorage);
+	if (I::GameMovement->player = pPlayer, I::GameMovement->mv = &tMoveStorage.m_MoveData; I::GameMovement->CheckStuck())
+	{
+		tMoveStorage.m_bFailed = true;
+		return true;
+	}
 
 	// calculate strafe if desired
 	if (bStrafe)
