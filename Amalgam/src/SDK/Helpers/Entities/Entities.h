@@ -7,8 +7,8 @@
 Enum(Entity,
 	PlayerAll, PlayerEnemy, PlayerTeam,
 	BuildingAll, BuildingEnemy, BuildingTeam,
-	PickupHealth, PickupAmmo, PickupMoney, PickupPowerup, PickupSpellbook, PickupGargoyle,
-	WorldProjectile, WorldObjective, WorldNPC, WorldBomb,
+	/*PickupHealth, PickupAmmo, PickupMoney, PickupPowerup, PickupSpellbook, PickupGargoyle,*/
+	WorldProjectile,  WorldNPC, WorldBomb, /*WorldObjective,*/
 	LocalStickies, LocalFlares, SniperDots,
 	Invalid, GroupsMax
 )

@@ -6,12 +6,15 @@
 class CAutoHeal
 {
 private:
-	void AutoHeal(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* pCmd);
-	void Activate(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* pCmd);
-	void AutoVaccinator(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* pCmd);
+	void AutoHeal(CUserCmd* pCmd);
+	void Activate(CUserCmd* pCmd);
+	void AutoVaccinator(CUserCmd* pCmd);
 	void GetDangers(CTFPlayer* pTarget, bool bVaccinator, float& flBulletDanger, float& flBlastDanger, float& flFireDanger);
 	void SwapResistType(CUserCmd* pCmd, int iType);
 	void ActivateResistType(CUserCmd* pCmd, int iType);
+
+	CTFPlayer* m_pLocal = nullptr;
+	CWeaponMedigun* m_pWeapon = nullptr;
 
 	int m_iResistType = -1;
 	float m_flChargeLevel = 0.f;
@@ -24,7 +27,7 @@ private:
 	float m_flDamagedTime = 0.f;
 
 #ifdef DEBUG_VACCINATOR
-	std::vector<std::pair<float, int>> vResistDangers = {};
+	std::array<float, MEDIGUN_NUM_RESISTS> vResistDangers = {};
 #endif
 
 public:
@@ -37,7 +40,7 @@ public:
 	float m_flAutoSwitchExpireTime = 0.f;
 	int m_iAutoSwitch = 0;
 	int m_iTargetIdx = -1;
-	std::unordered_map<int, bool> m_mMedicCallers = {};
+	std::unordered_mapset<int> m_mMedicCallers = {};
 };
 
 ADD_FEATURE(CAutoHeal, AutoHeal);
