@@ -120,7 +120,7 @@ int CNavBotReload::GetReloadWeaponSlot(CTFPlayer* pLocal, ClosestEnemy_t tCloses
 	bool bWeaponCantReload = false;
 	if (bCheckPrimary && pPrimaryWeapon)
 	{
-		pWeaponInfo = pPrimaryWeapon->GetWeaponInfo();
+		pWeaponInfo = pPrimaryWeapon->m_pWeaponInfo();
 		bWeaponCantReload = (!pWeaponInfo || pWeaponInfo->iMaxClip1 < 0 || !pLocal->GetAmmoCount(pPrimaryWeapon->m_iPrimaryAmmoType())) && G::SavedWepIds[SLOT_PRIMARY] != TF_WEAPON_PARTICLE_CANNON && G::SavedWepIds[SLOT_PRIMARY] != TF_WEAPON_DRG_POMSON;
 		if (pWeaponInfo && !bWeaponCantReload && G::AmmoInSlot[SLOT_PRIMARY].m_iClip < (pWeaponInfo->iMaxClip1 / flDivider))
 			return SLOT_PRIMARY;
@@ -129,7 +129,7 @@ int CNavBotReload::GetReloadWeaponSlot(CTFPlayer* pLocal, ClosestEnemy_t tCloses
 	bool bFoundPrimaryWepInfo = pWeaponInfo;
 	if (bCheckSecondary && pSecondaryWeapon && (bFoundPrimaryWepInfo || !bCheckPrimary))
 	{
-		pWeaponInfo = pSecondaryWeapon->GetWeaponInfo();
+		pWeaponInfo = pSecondaryWeapon->m_pWeaponInfo();
 		bWeaponCantReload = (!pWeaponInfo || pWeaponInfo->iMaxClip1 < 0 || !pLocal->GetAmmoCount(pSecondaryWeapon->m_iPrimaryAmmoType())) && G::SavedWepIds[SLOT_SECONDARY] != TF_WEAPON_RAYGUN;
 		if (pWeaponInfo && !bWeaponCantReload && G::AmmoInSlot[SLOT_SECONDARY].m_iClip < (pWeaponInfo->iMaxClip1 / flDivider))
 			return SLOT_SECONDARY;

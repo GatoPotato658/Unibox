@@ -730,6 +730,7 @@ static inline void DrawVisuals(CTFPlayer* pLocal, Target_t& tTarget, int nWeapon
 	}
 }
 
+// There's probably a better way of doing this
 CAimbotHitscan::CrosshairRecordInfo_t CAimbotHitscan::GetCrosshairRecord(const Vec3 vAngles, const Vec3 vPos, std::vector<TickRecord*> vRecords, const std::vector<const mstudiobbox_t*> vHitboxes)
 {
 	float flMinFov = 45.f;

@@ -22,7 +22,6 @@ struct TickRecord
 	Vec3 m_vOrigin = {};
 	Vec3 m_vMins = {};
 	Vec3 m_vMaxs = {};
-	std::vector<HitboxInfo_t> m_vHitboxInfos = {};
 	bool m_bOnShot = false;
 	bool m_bInvalid = false;
 	matrix3x4 m_aBones[MAXSTUDIOBONES];
@@ -48,19 +47,7 @@ private:
 	float m_flFakeLatency = 0.f;
 	float m_flFakeInterp = 0.015f;
 
-	struct CrosshairRecordInfo_t
-	{
-		float m_flMinDist{ -1.f };
-		float m_flFov{ -1.f };
-
-		// If our shoot pos is inside this record its the one that is most likely to be hit
-		// Fun fact: hitting this backtrack record at a right angle might send our target flying
-		bool m_bInsideThisRecord{ false };
-	};
-	std::optional<TickRecord> GetHitRecord(CBaseEntity* pEntity, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CrosshairRecordInfo_t& InfoOut, const Vec3 vAngles, const Vec3 vPos);
-	void BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	bool m_bSettingUpBones = false;
-
 public:
 	void Store();
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -71,7 +58,6 @@ public:
 	bool GetRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn);
 	std::vector<TickRecord*> GetValidRecords(std::vector<TickRecord*>& vRecords, CTFPlayer* pLocal = nullptr, bool bDistance = false, float flTimeMod = 0.f);
 	matrix3x4* GetBones(CBaseEntity* pEntity);
-	std::vector<HitboxInfo_t>* GetHitboxInfos(CBaseEntity* pEntity);
 
 	float GetReal(int iFlow = MAX_FLOWS, bool bNoFake = true);
 	float GetWishFake();
