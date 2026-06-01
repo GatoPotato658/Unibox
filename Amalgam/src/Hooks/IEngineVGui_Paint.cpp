@@ -20,6 +20,7 @@
 #include "../Features/NavBot/NavBotCore.h"
 #include "../Features/Aimbot/AutoHeal/AutoHeal.h"
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
+#include "../Features/Visuals/Materials/Materials.h"
 
 MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	void* rcx, int iMode)
@@ -29,9 +30,11 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	if (G::Unload)
 		return CALL_ORIGINAL(rcx, iMode);
 
-	F::AutoQueue.Run();
+	const bool bInGame = iMode & PAINT_INGAMEPANELS && I::EngineClient->IsInGame();
+	if (bInGame)
+		F::AutoQueue.Run();
 
-	if (iMode & PAINT_INGAMEPANELS && !SDK::CleanScreenshot())
+	if (bInGame && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateW2SMatrix();
@@ -64,7 +67,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 
 	CALL_ORIGINAL(rcx, iMode);
 
-	if (iMode & PAINT_UIPANELS && !SDK::CleanScreenshot())
+	if (iMode & PAINT_UIPANELS && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateKeyStrings();

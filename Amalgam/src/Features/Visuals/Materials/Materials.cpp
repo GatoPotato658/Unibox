@@ -195,7 +195,8 @@ void CMaterials::LoadMaterials()
 
 	S::InitializeStandardMaterials.Call<void>();
 	auto pMaterial = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(S::Wireframe()));
-	pMaterial->SetMaterialVarFlag(MATERIAL_VAR_VERTEXALPHA, true);
+	if (pMaterial)
+		pMaterial->SetMaterialVarFlag(MATERIAL_VAR_VERTEXALPHA, true);
 
 	static std::unordered_map<std::string, int> mSkyboxes = {};
 	static std::vector<const char*> vFaces = { "rt.vmt", "lf.vmt", "bk.vmt", "ft.vmt", "up.vmt", "dn.vmt" };

@@ -170,6 +170,12 @@ void CWorld::CacheBoxBrushes()
 
 	SDK::Output(__FUNCTION__, "Cache start", {}, OUTPUT_DEBUG);
 
+	if (!I::BSPData || I::BSPData->numbrushes <= 0 || I::BSPData->numboxbrushes <= 0)
+	{
+		SDK::Output(__FUNCTION__, "BSP not ready, skipping", {}, OUTPUT_DEBUG);
+		return;
+	}
+
 	m_iNeedsCache &= ~FaceTypeEnum::BoxBrush;
 
 	for (int iBrush = 0; iBrush < I::BSPData->numbrushes; iBrush++)
@@ -178,7 +184,11 @@ void CWorld::CacheBoxBrushes()
 		if (!pBrush->IsBox())
 			continue;
 
-		cboxbrush_t* pBoxBrush = &I::BSPData->map_boxbrushes[pBrush->GetBox()];
+		const int iBoxIdx = pBrush->GetBox();
+		if (iBoxIdx < 0 || iBoxIdx >= I::BSPData->numboxbrushes)
+			continue;
+
+		cboxbrush_t* pBoxBrush = &I::BSPData->map_boxbrushes[iBoxIdx];
 
 		Vec3 aVertices[8];
 		for (int i = 0; i != 8; i++)
@@ -198,7 +208,10 @@ void CWorld::CacheBoxBrushes()
 
 		for (int i = 0; i < 6; i++)
 		{
-			if (I::BSPData->map_surfaces[pBoxBrush->surfaceIndex[i]].flags & SURF_SKY)
+			const int iSurfIdx = pBoxBrush->surfaceIndex[i];
+			if (iSurfIdx == 0xFFFF)
+				continue;
+			if (I::BSPData->map_surfaces[iSurfIdx].flags & SURF_SKY)
 				continue;
 
 			std::vector<Vec3> vVertices;
@@ -227,6 +240,12 @@ void CWorld::CachePlaneBrushes()
 
 	SDK::Output(__FUNCTION__, "Cache start", {}, OUTPUT_DEBUG);
 
+	if (!I::BSPData || I::BSPData->numbrushes <= 0 || I::BSPData->numbrushsides <= 0)
+	{
+		SDK::Output(__FUNCTION__, "BSP not ready, skipping", {}, OUTPUT_DEBUG);
+		return;
+	}
+
 	m_iNeedsCache &= ~FaceTypeEnum::PlaneBrush;
 
 	for (int iBrush = 0; iBrush < I::BSPData->numbrushes; iBrush++)
@@ -238,13 +257,25 @@ void CWorld::CachePlaneBrushes()
 		std::vector<Plane_t> vPlanes = {}; vPlanes.reserve(pBrush->numsides);
 		for (int iSide = 0; iSide != pBrush->numsides; iSide++)
 		{
-			cbrushside_t* pBrushSide = &I::BSPData->map_brushsides[pBrush->firstbrushside + iSide];
-			if (I::BSPData->map_surfaces[pBrushSide->surfaceIndex].flags & SURF_SKY)
+			const int iSideIdx = pBrush->firstbrushside + iSide;
+			if (iSideIdx < 0 || iSideIdx >= I::BSPData->numbrushsides)
+				continue;
+
+			cbrushside_t* pBrushSide = &I::BSPData->map_brushsides[iSideIdx];
+			const int iSurfIdx = pBrushSide->surfaceIndex;
+			if (iSurfIdx == 0xFFFF)
+				continue;
+			if (I::BSPData->map_surfaces[iSurfIdx].flags & SURF_SKY)
 				continue;
 
 			cplane_t* pPlane = pBrushSide->plane;
+			if (!pPlane)
+				continue;
 			vPlanes.emplace_back(pPlane->normal, pPlane->dist);
 		}
+		if (vPlanes.empty())
+			continue;
+
 		CPhysConvex* pConvex = I::PhysicsCollision->ConvexFromPlanes(reinterpret_cast<float*>(vPlanes.data()), int(vPlanes.size()), 0.f);
 		if (!pConvex)
 			continue;
@@ -263,6 +294,12 @@ void CWorld::CacheProps()
 
 	SDK::Output(__FUNCTION__, "Cache start", {}, OUTPUT_DEBUG);
 
+	if (!I::MDLCache || !I::MDLCache->m_bConnected)
+	{
+		SDK::Output(__FUNCTION__, "MDLCache not ready, skipping", {}, OUTPUT_DEBUG);
+		return;
+	}
+
 	m_iNeedsCache &= ~FaceTypeEnum::Prop;
 
 	for (int i = I::MDLCache->m_MDLDict.First(); i != I::MDLCache->m_MDLDict.InvalidIndex(); i = I::MDLCache->m_MDLDict.Next(i))
@@ -273,6 +310,9 @@ void CWorld::CacheProps()
 
 		vcollide_t* pCollide = &pStudioData->m_VCollisionData;
 		if (m_mFaceCache.contains(pCollide))
+			continue;
+
+		if (pCollide->solidCount <= 0)
 			continue;
 
 		for (int iSolid = 0; iSolid < pCollide->solidCount; iSolid++)
@@ -295,12 +335,21 @@ void CWorld::CacheEntities()
 
 	SDK::Output(__FUNCTION__, "Cache start", {}, OUTPUT_DEBUG);
 
+	if (!I::BSPData || I::BSPData->numcmodels <= 0)
+	{
+		SDK::Output(__FUNCTION__, "BSP not ready, skipping", {}, OUTPUT_DEBUG);
+		return;
+	}
+
 	m_iNeedsCache &= ~FaceTypeEnum::Entity;
 
 	for (int iCModel = 0; iCModel < I::BSPData->numcmodels; iCModel++)
 	{
 		cmodel_t* pCModel = &I::BSPData->map_cmodels[iCModel];
 		vcollide_t* pCollide = &pCModel->vcollisionData;
+
+		if (pCollide->solidCount <= 0)
+			continue;
 
 		for (int iSolid = 0; iSolid < pCollide->solidCount; iSolid++)
 		{
@@ -332,11 +381,10 @@ void CWorld::UncacheBoxBrushes()
 	if (m_iNeedsCache & FaceTypeEnum::BoxBrush)
 		return;
 
-	for (auto& [pKey, vFaces] : m_mFaceCache)
+	std::erase_if(m_mFaceCache, [](const auto& pair)
 	{
-		if (vFaces.front().m_iType == FaceTypeEnum::BoxBrush)
-			m_mFaceCache.erase(pKey);
-	}
+		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::BoxBrush;
+	});
 
 	m_iNeedsCache |= FaceTypeEnum::BoxBrush;
 }
@@ -346,11 +394,10 @@ void CWorld::UncachePlaneBrushes()
 	if (m_iNeedsCache & FaceTypeEnum::PlaneBrush)
 		return;
 
-	for (auto& [pKey, vFaces] : m_mFaceCache)
+	std::erase_if(m_mFaceCache, [](const auto& pair)
 	{
-		if (vFaces.front().m_iType == FaceTypeEnum::PlaneBrush)
-			m_mFaceCache.erase(pKey);
-	}
+		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::PlaneBrush;
+	});
 
 	m_iNeedsCache |= FaceTypeEnum::PlaneBrush;
 }
@@ -360,11 +407,10 @@ void CWorld::UncacheProps()
 	if (m_iNeedsCache & FaceTypeEnum::Prop)
 		return;
 
-	for (auto& [pKey, vFaces] : m_mFaceCache)
+	std::erase_if(m_mFaceCache, [](const auto& pair)
 	{
-		if (vFaces.front().m_iType == FaceTypeEnum::Prop)
-			m_mFaceCache.erase(pKey);
-	}
+		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::Prop;
+	});
 
 	m_iNeedsCache |= FaceTypeEnum::Prop;
 }
@@ -374,11 +420,10 @@ void CWorld::UncacheEntities()
 	if (m_iNeedsCache & FaceTypeEnum::Entity)
 		return;
 
-	for (auto& [pKey, vFaces] : m_mFaceCache)
+	std::erase_if(m_mFaceCache, [](const auto& pair)
 	{
-		if (vFaces.front().m_iType == FaceTypeEnum::Entity)
-			m_mFaceCache.erase(pKey);
-	}
+		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::Entity;
+	});
 
 	m_iNeedsCache |= FaceTypeEnum::Entity;
 }
@@ -454,7 +499,9 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 		CEntityEnumerator tEnumerator; I::SpatialPartition->EnumerateElementsInBox(I::EngineTrace->SpatialPartitionMask(), vMins, vMaxs, false, &tEnumerator);
 		for (auto pHandleEntity : tEnumerator.m_vEntities)
 		{
-			if (!pFilter->ShouldHitEntity(pHandleEntity, iMask))
+			if (!pHandleEntity)
+				continue;
+			if (pFilter && !pFilter->ShouldHitEntity(pHandleEntity, iMask))
 				continue;
 
 			bool bProp = I::StaticPropMgr->IsStaticProp(pHandleEntity);

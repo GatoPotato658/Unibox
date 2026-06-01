@@ -664,7 +664,7 @@ void CDraw::RenderTriangle(const Vector& vPoint1, const Vector& vPoint2, const V
 
 void CDraw::RenderSphere(const Vector& vCenter, float flRadius, int nTheta, int nPhi, Color_t tColor, IMaterial* pMaterial)
 {
-	if (!tColor.a)
+	if (!tColor.a || !pMaterial)
 		return;
 
 	S::RenderSphere.Call<void>(std::ref(vCenter), flRadius, nTheta, nPhi, tColor, pMaterial);
