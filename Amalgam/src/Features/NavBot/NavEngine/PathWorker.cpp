@@ -18,11 +18,10 @@ namespace PathWorker
 
 	void CPathWorker::Stop()
 	{
-		if (m_bRunning.exchange(false))
-		{
-			m_cvPending.notify_all();
-			if (m_tWorker.joinable()) m_tWorker.join();
-		}
+		m_bRunning.store(false, std::memory_order_release);
+		m_cvPending.notify_all();
+		if (m_tWorker.joinable())
+			m_tWorker.join();
 
 		{
 			std::lock_guard lock(m_mPending);
@@ -33,6 +32,7 @@ namespace PathWorker
 			std::lock_guard lock(m_mCompleted);
 			m_vCompleted.clear();
 		}
+		m_pMap = nullptr;
 	}
 
 	CancellationToken CPathWorker::Submit(PathRequest tRequest)

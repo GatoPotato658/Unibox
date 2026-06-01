@@ -8,6 +8,7 @@
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Spectate/Spectate.h"
+#include "../Features/NavBot/NavEngine/NavEngine.h"
 #include "../SDK/Events/Events.h"
 #ifdef TEXTMODE
 #include "../Features/Misc/NamedPipe/NamedPipe.h"
@@ -196,6 +197,7 @@ void CCore::Unload()
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
 	U::BytePatches.Unload();
 	H::Events.Unload();
+	F::NavEngine.shutdown();
 
 	if (F::Menu.m_bIsOpen)
 		I::MatSystemSurface->SetCursorAlwaysVisible(false);

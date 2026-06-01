@@ -697,6 +697,11 @@ void CNavEngine::Reset(bool bForced)
 	}
 }
 
+void CNavEngine::shutdown()
+{
+	if (m_pPathWorker) m_pPathWorker->Stop();
+}
+
 bool CNavEngine::IsReady(bool bRoundCheck)
 {
 	static Timer tRestartTimer{};
