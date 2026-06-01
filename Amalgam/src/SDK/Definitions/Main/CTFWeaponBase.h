@@ -200,7 +200,7 @@ public:
 	NETVAR_OFF(m_flLastRapidFireCritCheckTime, float, "CTFWeaponBase", "m_flLastCritCheckTime", 12);
 	NETVAR_OFF(m_pWeaponInfo, CTFWeaponInfo*, "CTFWeaponBase", "m_flReloadPriorNextFire", 4);
 	NETVAR_OFF(m_flSmackTime, float, "CTFWeaponBase", "m_nInspectStage", 28);
-	
+
 	inline void* m_pMeter()
 	{
 		static int nOffset = U::NetVars.GetNetVar("CTFWeaponBase", "m_flEffectBarRegenTime") + -40;

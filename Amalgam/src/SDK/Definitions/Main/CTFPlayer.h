@@ -209,7 +209,6 @@ public:
 		static int nOffset = U::NetVars.GetNetVar("CTFPlayer", "m_nStreaks");
 		return (&(*reinterpret_cast<int*>(uintptr_t(this) + nOffset)))[index];
 	}
-
 	VIRTUAL(GetMaxHealth, int, 107, this);
 	VIRTUAL(ThirdPersonSwitch, void, 256, this);
 

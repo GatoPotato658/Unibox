@@ -348,9 +348,10 @@ void CMenu::MenuAimbot(int iTab)
 					Divider();
 					FText("Crithack");
 					Divider();
-					FToggle(Vars::CritHack::ForceCrits);
-					FToggle(Vars::CritHack::AvoidRandomCrits, FToggleEnum::Left);
-					FToggle(Vars::CritHack::AlwaysMeleeCrit, FToggleEnum::Right);
+					FToggle(Vars::CritHack::ForceCrits, FToggleEnum::Left);
+					FToggle(Vars::CritHack::AvoidRandomCrits, FToggleEnum::Right);
+					FToggle(Vars::CritHack::AlwaysMeleeCrit, FToggleEnum::Left);
+					FToggle(Vars::CritHack::CritEffects, FToggleEnum::Right);
 
 					Divider();
 					FText("Misc");
@@ -381,13 +382,6 @@ void CMenu::MenuAimbot(int iTab)
 					FSlider(Vars::Backtrack::Interp, FSliderEnum::Right);
 					FSlider(Vars::Backtrack::Window);
 					//FToggle(Vars::Backtrack::PreferOnShot, FToggleEnum::Right);
-				} EndSection();
-				if (Section("Crit Hack", 8))
-				{
-					FToggle(Vars::CritHack::ForceCrits, FToggleEnum::Left);
-					FToggle(Vars::CritHack::AvoidRandomCrits, FToggleEnum::Right);
-					FToggle(Vars::CritHack::AlwaysMeleeCrit, FToggleEnum::Left);
-					FToggle(Vars::CritHack::CritEffects, FToggleEnum::Right);
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -437,37 +431,6 @@ void CMenu::MenuAimbot(int iTab)
 						}
 					} EndSection();
 				}
-				if (Section("Melee", 8))
-				{
-					FToggle(Vars::Aimbot::Melee::AutoBackstab, FToggleEnum::Left);
-					FToggle(Vars::Aimbot::Melee::IgnoreRazorback, FToggleEnum::Right);
-					FToggle(Vars::Aimbot::Melee::SwingPrediction, FToggleEnum::Left);
-					FToggle(Vars::Aimbot::Melee::WhipTeam, FToggleEnum::Right);
-				} EndSection();
-				if (Vars::Debug::Options.Value)
-				{
-					if (Section("##Debug Melee"))
-					{
-						FText("Debug", { 5, 5 });
-						if (FPopupButton("Debug", { 0, -5 }))
-						{
-							FSlider(Vars::Aimbot::Melee::SwingTicks, FSliderEnum::Left);
-							FToggle(Vars::Aimbot::Melee::SwingPredictLag, FToggleEnum::Right);
-							FDropdown(Vars::Aimbot::Melee::SwingValidateMode, FDropdownEnum::Left);
-							FDropdown(Vars::Aimbot::Melee::BackstabFlags, FDropdownEnum::Right);
-
-							EndPopup();
-						}
-					} EndSection();
-				}
-				if (Section("Auto Engie", 8))
-				{
-					FDropdown(Vars::Aimbot::AutoEngie::AutoRepair);
-					FDropdown(Vars::Aimbot::AutoEngie::AutoUpgrade);
-					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeSentryLVL);
-					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeDispenserLVL);
-					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeTeleporterLVL);
-				} EndSection();
 			}
 
 			/* Column 2 */
@@ -648,6 +611,14 @@ void CMenu::MenuAimbot(int iTab)
 						}
 					} EndSection();
 				}
+				if (Section("Auto Engie", 8))
+				{
+					FDropdown(Vars::Aimbot::AutoEngie::AutoRepair);
+					FDropdown(Vars::Aimbot::AutoEngie::AutoUpgrade);
+					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeSentryLVL);
+					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeDispenserLVL);
+					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeTeleporterLVL);
+				} EndSection();
 			}
 			EndTable();
 		}
