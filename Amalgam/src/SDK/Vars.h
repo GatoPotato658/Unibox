@@ -1148,8 +1148,8 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(NoiseSpam, "Noise spam", false);
 			CVar(CallVoteSpam, "Callvote spam", false);
 			CVarEnum(VoiceCommandSpam, "Voice command spam", 0, NONE, nullptr,
-				VA_LIST("Off", "Random", "Medic", "Thanks", "Nice Shot", "Cheers", "Jeers", "Go Go Go", "Move Up", "Go Left", "Go Right", "Yes", "No", "Incoming", "Spy", "Sentry Ahead", "Need Teleporter", "Pootis", "Need Sentry", "Activate Charge", "Help", "Battle Cry"),
-				Off, Random, Medic, Thanks, NiceShot, Cheers, Jeers, GoGoGo, MoveUp, GoLeft, GoRight, Yes, No, Incoming, Spy, Sentry, NeedTeleporter, Pootis, NeedSentry, ActivateCharge, Help, BattleCry);
+				VA_LIST("Off", "Random", "Medic", "Thanks", "Nice Shot", "Cheers", "Jeers", "Go Go Go", "Move Up", "Go Left", "Go Right", "Yes", "No", "Incoming", "Spy", "Sentry Ahead", "Need Teleporter", "Pootis", "Need Sentry", "Activate Charge", "Help", "Battle Cry", "Good Job"),
+				Off, Random, Medic, Thanks, NiceShot, Cheers, Jeers, GoGoGo, MoveUp, GoLeft, GoRight, Yes, No, Incoming, Spy, Sentry, NeedTeleporter, Pootis, NeedSentry, ActivateCharge, Help, BattleCry, GoodJob);
 			CVar(AutoVoteMap, "Auto vote map", true);
 			CVar(AutoVoteMapOption, "", 2, SLIDER_CLAMP, 0, 2, 1, "%i");
 			CVar(AutoReport, "Auto report players", false);

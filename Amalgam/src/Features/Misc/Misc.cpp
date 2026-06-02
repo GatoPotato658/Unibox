@@ -1501,6 +1501,9 @@ void CMisc::VoiceCommandSpam(CTFPlayer* pLocal)
 		case Vars::Misc::Automation::VoiceCommandSpamEnum::BattleCry:
 			I::EngineClient->ClientCmd_Unrestricted("voicemenu 2 1");
 			break;
+		case Vars::Misc::Automation::VoiceCommandSpamEnum::GoodJob:
+			I::EngineClient->ClientCmd_Unrestricted("voicemenu 2 7");
+			break;
 		}
 	}
 }
