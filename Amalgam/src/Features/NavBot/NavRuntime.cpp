@@ -38,7 +38,7 @@ namespace NavRuntime
 			return false;
 
 		const int iState = pWeapon->As<CTFMinigun>()->m_iWeaponState();
-		return iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (pCmd && (pCmd->buttons & IN_ATTACK2));
+		return iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (G::LastUserCmd->buttons & IN_ATTACK2);
 	}
 
 	auto CanIssueNavJump(CTFWeaponBase* pWeapon, CUserCmd* pCmd) -> bool
