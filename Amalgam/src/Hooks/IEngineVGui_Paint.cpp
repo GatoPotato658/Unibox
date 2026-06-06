@@ -30,11 +30,9 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	if (G::Unload)
 		return CALL_ORIGINAL(rcx, iMode);
 
-	const bool bInGame = iMode & PAINT_INGAMEPANELS && I::EngineClient->IsInGame();
-	if (bInGame)
-		F::AutoQueue.Run();
+	F::AutoQueue.Run();
 
-	if (bInGame && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
+	if (iMode & PAINT_INGAMEPANELS && I::EngineClient->IsInGame() && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateW2SMatrix();

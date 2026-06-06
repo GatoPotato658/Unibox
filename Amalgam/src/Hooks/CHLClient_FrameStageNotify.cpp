@@ -25,10 +25,10 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 {
 	DEBUG_RETURN(CHLClient_FrameStageNotify, rcx, curStage);
 
-	if (G::Unload)
-		return CALL_ORIGINAL(rcx, curStage);
-
 	CALL_ORIGINAL(rcx, curStage);
+
+	if (G::Unload) 
+		return;
 
 	switch (curStage)
 	{
