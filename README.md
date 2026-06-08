@@ -50,7 +50,7 @@
     - Automatically follows specified targets
     - Utilizes `Nav engine` if specified
   - Namedpipe
-    - Implements communication with [neptune botpanel](https://github.com/mlemlody/neptune)
+    - Implements communication with [unibox botpanel](https://github.com/pupnoodle/unibox-botbox)
     - Sends client info such as localplayer's health, class, server name and map name
   - Textmode builds ([TextModeTF2](https://github.com/pupnoodle/TextmodeTF2) compatibility)
     - Disables game visuals to decrease CPU usage
