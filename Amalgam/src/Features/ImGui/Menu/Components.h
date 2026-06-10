@@ -3167,7 +3167,7 @@ namespace ImGui
 				iSliderFlags = iSliderVarFlags;
 				PushTransparent(false);
 				static bool bLastHovered = false;
-				DrawBindInfo(tToggleVar, bStaticVal, NULL, StripDoubleHash(sBind.c_str()), bNewPopup, bLastHovered);
+				DrawBindInfo(tToggleVar, bStaticVal, "FToggleSlider", StripDoubleHash(sBind.c_str()), bNewPopup, bLastHovered);
 				bVal = bStaticVal;
 
 				float flDummy = flVal;
@@ -3223,7 +3223,7 @@ namespace ImGui
 				iSliderFlags = iSliderVarFlags;
 				PushTransparent(false);
 				static bool bLastHovered = false;
-				DrawBindInfo(tToggleVar, bStaticVal, NULL, StripDoubleHash(sBind.c_str()), bNewPopup, bLastHovered);
+				DrawBindInfo(tToggleVar, bStaticVal, "FToggleSlider", StripDoubleHash(sBind.c_str()), bNewPopup, bLastHovered);
 				bVal = bStaticVal;
 
 				int iDummy = iVal;
