@@ -583,6 +583,7 @@ void CMenu::MenuAimbot(int iTab)
 							FSlider(Vars::Aimbot::Projectile::DeltaCount, FSliderEnum::Left);
 							FDropdown(Vars::Aimbot::Projectile::DeltaMode, FDropdownEnum::Right);
 							FDropdown(Vars::Aimbot::Projectile::MovesimFrictionFlags);
+							FToggle(Vars::Aimbot::Projectile::AutodetAccountPing);
 
 							EndPopup();
 						}
