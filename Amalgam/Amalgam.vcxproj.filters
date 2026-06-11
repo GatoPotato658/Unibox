@@ -82,7 +82,6 @@
     <ClCompile Include="src\Hooks\bf_read_ReadString.cpp" />
     <ClCompile Include="src\Hooks\CAchievementMgr_CheckAchievementsEnabled.cpp" />
     <ClCompile Include="src\Hooks\CAttributeManager_AttribHookValue.cpp" />
-    <ClCompile Include="src\Hooks\CIKContext_CountRules.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_Interpolate.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_MaintainSequenceTransitions.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_SetSequence.cpp" />
