@@ -29,49 +29,6 @@ static LPVOID s_lpParam;
 static std::unordered_mapset<LPVOID> s_mAddresses = {};
 static int s_iExceptions = 0;
 
-struct SkipEntry_t
-{
-	const char* m_sModule;
-	const char* m_sSigPattern;
-	mutable uintptr_t m_uResolved = 0;
-};
-
-static const SkipEntry_t s_vSkipList[] =
-{
-	{ "materialsystem.dll", "48 8B 01 FF 90 ? ? ? ? 84 C0 75 ? 48 8D 94 24" },
-};
-
-static bool IsOnSkipList(uintptr_t uAddress)
-{
-	if (!uAddress)
-		return false;
-
-	static thread_local int s_iDepth = 0;
-	if (s_iDepth > 0)
-		return false;
-	++s_iDepth;
-
-	bool bResult = false;
-	for (const auto& entry : s_vSkipList)
-	{
-		if (!entry.m_uResolved)
-		{
-			const uintptr_t uFound = U::Memory.FindSignature(entry.m_sModule, entry.m_sSigPattern);
-			entry.m_uResolved = uFound ? uFound : 1;
-		}
-		if (entry.m_uResolved == 1)
-			continue;
-
-		if (uAddress == entry.m_uResolved)
-		{
-			bResult = true;
-			break;
-		}
-	}
-	--s_iDepth;
-	return bResult;
-}
-
 static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 {
 	std::deque<Frame_t> vTrace = {};
@@ -162,9 +119,6 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	if (s_mAddresses.contains(ExceptionInfo->ExceptionRecord->ExceptionAddress)
 		|| !Vars::Debug::CrashLogging.Value
 		|| s_iExceptions && GetAsyncKeyState(VK_SHIFT) & 0x8000 && GetAsyncKeyState(VK_RETURN) & 0x8000)
-		return EXCEPTION_EXECUTE_HANDLER;
-
-	if (IsOnSkipList(uintptr_t(ExceptionInfo->ExceptionRecord->ExceptionAddress)))
 		return EXCEPTION_EXECUTE_HANDLER;
 	s_mAddresses[ExceptionInfo->ExceptionRecord->ExceptionAddress];
 
