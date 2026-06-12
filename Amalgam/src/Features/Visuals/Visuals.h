@@ -105,7 +105,7 @@ public:
 	void Modulate();
 	void RestoreWorldModulation();
 
-	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
+	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	
 	void LocalAnimations(CTFPlayer* pLocal, CUserCmd* pCmd);
 	

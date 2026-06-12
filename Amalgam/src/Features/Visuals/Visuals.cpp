@@ -82,7 +82,9 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 		return;
 
 	CGameTrace trace = {};
-	CTraceFilterCollideable filter(pPlayer);
+	CBaseEntity* pSkip = tProjInfo.m_uType == FNV1A::Hash32Const("models/buildables/sentry3_rockets.mdl") ? tProjInfo.m_pOwner->GetObjectOfType(OBJ_SENTRYGUN)->As<CBaseEntity>() : tProjInfo.m_pOwner;
+	CTraceFilterCollideable filter(pSkip);
+
 	int nMask = MASK_SOLID;
 	F::ProjSim.SetupTrace(filter, nMask, pWeapon, 0, bInterp);
 	Vec3* pNormal = nullptr;
@@ -121,6 +123,7 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 		case TF_WEAPON_ROCKETLAUNCHER:
 		case TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT:
 		case TF_WEAPON_PARTICLE_CANNON:
+		case TF_WEAPON_LASER_POINTER:
 			if (Vars::Visuals::Simulation::SplashRadius.Value & Vars::Visuals::Simulation::SplashRadiusEnum::Rockets)
 				flRadius = TF_ROCKET_RADIUS;
 			break;
@@ -1145,7 +1148,8 @@ void CVisuals::Store()
 					continue;
 
 				CGameTrace trace = {};
-				CTraceFilterCollideable filter(tProjInfo.m_pOwner);
+				CBaseEntity* pSkip = tProjInfo.m_uType == FNV1A::Hash32Const("models/buildables/sentry3_rockets.mdl") ? tProjInfo.m_pOwner->GetObjectOfType(OBJ_SENTRYGUN)->As<CBaseEntity>() : tProjInfo.m_pOwner;
+				CTraceFilterCollideable filter(pSkip);
 				int nMask = MASK_SOLID;
 				F::ProjSim.SetupTrace(filter, nMask, pEntity);
 
@@ -1371,12 +1375,16 @@ public:
 };
 #endif
 
-void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	if (Vars::Visuals::Simulation::ShotPath.Value && G::Attacking == 1 && F::Aimbot.m_eRanType != EWeaponType::PROJECTILE)
 	{
 		switch (pWeapon->GetWeaponID())
 		{
+		case TF_WEAPON_LASER_POINTER:
+			if (pCmd->buttons & IN_ATTACK2 && G::CanSecondaryAttack)
+				F::Visuals.ProjectileTrace(pLocal, pWeapon, false);
+			break;
 		case TF_WEAPON_BAT_WOOD:
 		case TF_WEAPON_BAT_GIFTWRAP:
 			if (!G::Throwing)

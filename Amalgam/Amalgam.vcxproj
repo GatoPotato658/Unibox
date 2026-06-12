@@ -1530,7 +1530,6 @@
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
     <ClInclude Include="src\Features\Visuals\Groups\Groups.h" />
-    <ClInclude Include="src\Features\Visuals\Images.h" />
     <ClInclude Include="src\Features\Visuals\PlayerConditions\PlayerConditions.h" />
     <ClInclude Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.h" />
     <ClInclude Include="src\Features\Visuals\SpectatorList\SpectatorList.h" />

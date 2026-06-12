@@ -239,11 +239,7 @@ void CMaterials::UnloadMaterials()
 	F::CameraWindow.Unload();
 
 	for (auto& tMaterial : m_mMaterials | std::views::values)
-	{
-		RemoveVars(tMaterial);
 		Remove(tMaterial.m_pMaterial);
-		tMaterial.m_pMaterial = nullptr;
-	}
 	m_mMaterials.clear();
 	m_mMatList.clear();
 }

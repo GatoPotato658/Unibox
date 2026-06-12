@@ -143,6 +143,7 @@ private:
 	Vec3 m_vAngleTo = {};
 	Vec3 m_vPredicted = {};
 	Vec3 m_vTarget = {};
+	Vec3 m_vShootPos = {};
 
 	int m_iWeaponID = -1;
 	int m_iMethod = -1;
@@ -171,7 +172,8 @@ private:
 		}
 	} m_tGrappleInfo;
 	CTFGrapplingHook* m_pGrapplingHook = nullptr;
-	
+	CObjectSentrygun* m_pSentryGun = nullptr;
+
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -183,6 +185,7 @@ public:
 	bool HandlePasstimeThrowInput(CUserCmd* pCmd, const Vec3& vAngle, int iTargetEnt);
 
 	int m_iLastTickCancel = 0;
+	int m_iSentryGunLock = 0;
 };
 
 ADD_FEATURE(CAimbotProjectile, AimbotProjectile);

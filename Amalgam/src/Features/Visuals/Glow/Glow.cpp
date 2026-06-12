@@ -439,10 +439,27 @@ void CGlow::Unload()
 		m_pMatGlowColor = nullptr;
 	}
 
-	m_pMatBlurX = nullptr;
-	m_pMatBlurY = nullptr;
-	m_pMatHaloAddToScreen = nullptr;
-	m_pBloomAmount = nullptr;
+	if (m_pMatBlurX)
+	{
+		m_pMatBlurX->DecrementReferenceCount();
+		m_pMatBlurX->DeleteIfUnreferenced();
+		m_pMatBlurX = nullptr;
+	}
+
+	if (m_pMatBlurY)
+	{
+		m_pMatBlurY->DecrementReferenceCount();
+		m_pMatBlurY->DeleteIfUnreferenced();
+		m_pMatBlurY = nullptr;
+		m_pBloomAmount = nullptr;
+	}
+
+	if (m_pMatHaloAddToScreen)
+	{
+		m_pMatHaloAddToScreen->DecrementReferenceCount();
+		m_pMatHaloAddToScreen->DeleteIfUnreferenced();
+		m_pMatHaloAddToScreen = nullptr;
+	}
 
 	if (m_pRenderBuffer1)
 	{

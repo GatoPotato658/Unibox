@@ -143,6 +143,7 @@ namespace G
 	inline int Throwing = false;
 	inline float Lerp = 0.015f;
 	inline float FOV = 90.f;
+	inline float WranglerSecondFireTime = 0.f;
 
 	inline EWeaponType PrimaryWeaponType = {}, SecondaryWeaponType = {};
 

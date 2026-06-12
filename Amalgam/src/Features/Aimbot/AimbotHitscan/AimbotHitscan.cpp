@@ -152,18 +152,8 @@ std::vector<HitscanHitbox_t> CAimbotHitscan::GetHitboxes(CTFPlayer* pLocal, CTFW
 
 	if (pWeapon->GetWeaponID() == TF_WEAPON_LASER_POINTER)
 	{
-		int iLocalIndex = I::EngineClient->GetLocalPlayer();
-		CObjectSentrygun* pSentry = nullptr;
-		for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
-		{
-			if (pEntity->IsSentrygun() && pEntity->As<CBaseObject>()->m_hBuilder().GetEntryIndex() == iLocalIndex)
-			{
-				pSentry = pEntity->As<CObjectSentrygun>();
-				break;
-			}
-		}
-		if (!pSentry)
-			return vHitboxes;
+		auto pSentry = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+		if (!pSentry) return vHitboxes;
 
 		Vec3 vOrigin = pTarget->m_vecOrigin();
 		{
@@ -912,7 +902,7 @@ void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pC
 					pCmd->buttons &= ~IN_ATTACK;
 				break;
 			case TF_WEAPON_LASER_POINTER:
-				pCmd->buttons |= IN_ATTACK | IN_ATTACK2;
+				pCmd->buttons |= IN_ATTACK;
 				break;
 			default:
 				pCmd->buttons |= IN_ATTACK;

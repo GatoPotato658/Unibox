@@ -369,6 +369,10 @@ void CEntities::Store()
 				case ETFClassID::CTFAmmoPack:
 					m_aGroups[EntityEnum::PickupAmmo].push_back(pEntity);
 					break;
+				case ETFClassID::CLaserDot:
+					if (pEntity->As<CSniperDot>()->m_hOwnerEntity().GetEntryIndex() == nLocalIndex)
+						m_pLocalLaserDot = pEntity->As<CSniperDot>();
+					break;
 				case ETFClassID::CSniperDot:
 					m_aGroups[EntityEnum::SniperDots].push_back(pEntity);
 					break;
@@ -391,6 +395,7 @@ void CEntities::Clear(bool bShutdown)
 {
 	m_pLocal = nullptr;
 	m_pLocalWeapon = nullptr;
+	m_pLocalLaserDot = nullptr;
 	m_pPlayerResource = nullptr;
 	m_pObjectiveResource = nullptr;
 	m_aGroups = {};
@@ -576,6 +581,7 @@ bool CEntities::IsSpellbook(uint32_t uHash)
 
 CTFPlayer* CEntities::GetLocal() { return m_pLocal; }
 CTFWeaponBase* CEntities::GetWeapon() { return m_pLocalWeapon; }
+CSniperDot* CEntities::GetLaserDot() { return m_pLocalLaserDot; }
 CTFPlayerResource* CEntities::GetResource() { return m_pPlayerResource; }
 CBaseTeamObjectiveResource* CEntities::GetObjectiveResource( ) { return m_pObjectiveResource; }
 

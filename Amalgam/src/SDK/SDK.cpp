@@ -711,6 +711,19 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 		case TF_WEAPON_BAT_GIFTWRAP:
 			if (pWeapon->HasPrimaryAmmoForShot())
 				*pSecondaryType = EWeaponType::PROJECTILE;
+			break;
+		case TF_WEAPON_LASER_POINTER:
+		{
+			auto pOwner = pWeapon->m_hOwner().Get()->As<CTFPlayer>();
+			if (pOwner && pOwner->IsPlayer())
+			{
+				auto pSentryGun = pOwner->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+				if (pSentryGun && pSentryGun->m_bPlayerControlled() && !pSentryGun->IsDisabled() && pSentryGun->m_iUpgradeLevel() > 2 && pSentryGun->m_iAmmoRockets() != 0)
+					*pSecondaryType = EWeaponType::PROJECTILE;
+			}
+			
+			break;
+		}
 		}
 	}
 
@@ -930,6 +943,7 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 		else if (G::CanSecondaryAttack && pCmd->buttons & IN_ATTACK2)
 			return 1;
 		break;
+	case TF_WEAPON_LASER_POINTER:
 	case TF_WEAPON_MECHANICAL_ARM:
 		if (G::CanSecondaryAttack && pCmd->buttons & IN_ATTACK2)
 			return 1;

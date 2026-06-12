@@ -122,8 +122,40 @@ void CCreateMove::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd
 			break;
 		case TF_WEAPON_MEDIGUN:
 		case TF_WEAPON_BUILDER:
-		case TF_WEAPON_LASER_POINTER:
 			break;
+		case TF_WEAPON_LASER_POINTER:
+		{
+			auto pSentry = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+			if (!pSentry || !pSentry->m_bPlayerControlled() || pSentry->IsDisabled())
+			{
+				G::CanPrimaryAttack = G::CanSecondaryAttack = false;
+				break;
+			}
+			if (G::WranglerSecondFireTime + 2.25f < I::GlobalVars->curtime)
+			{
+				int iLocalTeam = pLocal->m_iTeamNum();
+				Vec3 vSentryPos = pSentry->GetAbsOrigin();
+				for (auto pRocket : H::Entities.GetGroup(EntityEnum::WorldProjectile))
+				{
+					if (pRocket->m_iTeamNum() == iLocalTeam &&
+						pRocket->m_hOwnerEntity().Get() == pSentry &&
+						pRocket->GetAbsOrigin().DistTo(vSentryPos) <= 1000.f)
+					{
+						G::WranglerSecondFireTime = I::GlobalVars->curtime;
+						break;
+					}
+				}
+			}
+			if (pSentry->m_iAmmoShells() <= 0) G::CanPrimaryAttack = false;
+			if (pSentry->m_iUpgradeLevel() <= 2 || pSentry->m_iAmmoRockets() <= 0)
+			{
+				G::CanSecondaryAttack = false;
+				G::WranglerSecondFireTime = 0.f;
+			}
+			else G::CanSecondaryAttack = I::GlobalVars->curtime - G::WranglerSecondFireTime > 2.25f;
+
+			break;
+		}
 		case TF_WEAPON_PARTICLE_CANNON:
 		{
 			float flChargeBeginTime = pWeapon->As<CTFParticleCannon>()->m_flChargeBeginTime();
@@ -225,7 +257,7 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::AntiCheatCompatibility.CreateMove(pCmd);
 		
 #ifndef TEXTMODE
-		F::Visuals.CreateMove(pLocal, pWeapon);
+		F::Visuals.CreateMove(pLocal, pWeapon, pCmd);
 		F::Visuals.LocalAnimations(pLocal, pCmd);
 #endif
 	}

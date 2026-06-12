@@ -313,6 +313,7 @@ float CAimbotProjectile::GetSplashRadius(CTFWeaponBase* pWeapon, CTFPlayer* pPla
 	case TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT:
 	case TF_WEAPON_PARTICLE_CANNON:
 	case TF_WEAPON_PIPEBOMBLAUNCHER:
+	case TF_WEAPON_LASER_POINTER:
 		flRadius = TF_ROCKET_RADIUS;
 		break;
 	case TF_WEAPON_FLAREGUN:
@@ -1209,6 +1210,8 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 		tOut.m_iCalculated = CalculateResultEnum::Bad;
 		return;
 	}
+	if (m_iWeaponID == TF_WEAPON_LASER_POINTER)
+		m_tProjInfo.m_vAng = { flPitch, flYaw, 0 };
 
 	{	// calculate trajectory from projectile origin
 		if (!GetAngle(m_tProjInfo.m_vPos, vTargetPos, iFlags, m_tInfo, tOut.m_flPitch, tOut.m_flYaw, tOut.m_flTime))
@@ -1296,13 +1299,16 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	s_mTraceCount[std::format(__FUNCTION__": setup clip ({}, {})", iType, iFlags)]++;
 #endif
 	m_tProjInfo = {};
-	if (!F::ProjSim.GetInfo(pLocal, pWeapon, vAngles, m_tProjInfo, iSimFlags)
-		|| !F::ProjSim.Initialize(m_tProjInfo))
-		return false;
+	if (!F::ProjSim.GetInfo(pLocal, pWeapon, vAngles, m_tProjInfo, iSimFlags)) return false;
+	if (m_iWeaponID == TF_WEAPON_LASER_POINTER) m_tProjInfo.m_vAng = Math::CalcAngle(m_tInfo.m_vLocalEye, vPoint);
+	if (!F::ProjSim.Initialize(m_tProjInfo)) return false;
 
 	CGameTrace trace = {};
-	CTraceFilterCollideable filter(iType == PointTypeEnum::Direct ? pLocal : tTarget.m_pEntity);
+	bool bWrangler = m_iWeaponID == TF_WEAPON_LASER_POINTER;
+	CBaseEntity* pSkip = (iType == PointTypeEnum::Direct ? (bWrangler ? m_pSentryGun->As<CBaseEntity>() : pLocal) : tTarget.m_pEntity);
+	CTraceFilterCollideable filter(pSkip);
 	filter.m_iPlayer = iType == PointTypeEnum::Direct ? PLAYER_DEFAULT : PLAYER_NONE;
+	filter.m_iObject = iType != PointTypeEnum::Direct && bWrangler ? OBJECT_NONE : OBJECT_ALL;
 	filter.m_bMisc = iType == PointTypeEnum::Direct;
 	int nMask = MASK_SOLID;
 	if (iType == PointTypeEnum::Direct && F::AimbotGlobal.FriendlyFire())
@@ -1521,8 +1527,18 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType, uint8_t iFlags)
 {
 	bool bReturn = false;
+	if (m_iWeaponID == TF_WEAPON_LASER_POINTER) // Check if we can even laser point there
+	{
+		CGameTrace trace;
+		CTraceFilterHitscan filter(H::Entities.GetLocal());
+		SDK::Trace(m_vShootPos, vPoint, MASK_SHOT, &filter, &trace);
 
-	Vec3 vAngles; Aim(G::CurrentUserCmd->viewangles, { flPitch, flYaw, 0.f }, vAngles);
+		if (trace.m_pEnt != m_tInfo.m_pTarget->m_pEntity && trace.endpos.DistTo(vPoint) > 70.f)
+			return false;
+	}
+
+	Vec3 vPlainAngles = { flPitch, flYaw, 0.f };
+	Vec3 vAngles; Aim(G::CurrentUserCmd->viewangles, vPlainAngles, vAngles);
 	m_tInfo.m_pTarget->m_vPos = vOrigin;
 
 	int iOriginalSimTime = iSimTime;
@@ -1551,7 +1567,6 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 			[[fallthrough]];
 		case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		{
-			Vec3 vPlainAngles = { flPitch, flYaw, 0.f };
 			if (TestAngle(vPoint, vPlainAngles, iSimTime, iType, true))
 				bReturn = m_iResult = 2;
 		}
@@ -1560,7 +1575,23 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 
 	if (bReturn && m_bUpdate)
 	{
-		m_vAngleTo = vAngles, m_vTarget = vPoint, m_vPredicted = vOrigin;
+		// We need to align the laser beam so we can hit airborne targets
+		if (m_iWeaponID == TF_WEAPON_LASER_POINTER)
+		{
+			CGameTrace trace;
+			CTraceFilterCollideable filter(m_pSentryGun);
+			filter.m_iPlayer = PLAYER_NONE;
+			
+			Vec3 vForward; Math::AngleVectors(m_tProjInfo.m_vAng, &vForward);
+			SDK::Trace(m_tInfo.m_vLocalEye, m_tInfo.m_vLocalEye + vForward * 10000.f, MASK_SHOT, &filter, &trace);
+
+			m_vAngleTo = Math::CalcAngle(m_vShootPos, trace.endpos);
+		}
+		else m_vAngleTo = vAngles;
+
+		m_vTarget = vPoint;
+		m_vPredicted = vOrigin;
+
 		m_vPlayerPath.clear(), m_vProjectilePath = m_tProjInfo.m_vPath;
 		if (m_tMoveStorage.m_vPath.empty())
 			return true;
@@ -1673,7 +1704,9 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 		return false;
 
 	m_tInfo = { pLocal, pWeapon, &tTarget };
-	m_tInfo.m_vLocalEye = pLocal->GetShootPos();
+	m_vShootPos = pLocal->GetShootPos();
+	// The sentrygun's rocket firing position is fixed based on its current angles, so its not quite correct when testing with different angles
+	m_tInfo.m_vLocalEye = m_iWeaponID == TF_WEAPON_LASER_POINTER ? m_tProjInfo.m_vPos : m_vShootPos; 
 	m_tInfo.m_vTargetEye = tTarget.m_pEntity->As<CTFPlayer>()->GetViewOffset();
 	m_tInfo.m_flLatency = F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke());
 	tTarget.m_vPos = tTarget.m_pEntity->m_vecOrigin();
@@ -1697,6 +1730,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	case TF_WEAPON_ROCKETLAUNCHER:
 	case TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT:
 	case TF_WEAPON_PARTICLE_CANNON:
+	case TF_WEAPON_LASER_POINTER:
 		m_tInfo.m_flNormalOffset = 1.f;
 	}
 	m_tInfo.m_bIgnoreTiming = Vars::Aimbot::Projectile::LobAnglesUnderpredict.Value && m_tInfo.m_flRadius;
@@ -1916,7 +1950,7 @@ void CAimbotProjectile::Aim(CUserCmd* pCmd, Vec3& vAngles)
 		I::EngineClient->SetViewAngles(vAngles);
 		break;
 	case Vars::Aimbot::General::AimTypeEnum::Silent:
-		if (G::Attacking == 1 || bUnsure || m_iWeaponID == TF_WEAPON_FLAMETHROWER)
+		if (G::Attacking == 1 || bUnsure || m_iWeaponID == TF_WEAPON_FLAMETHROWER || m_iWeaponID == TF_WEAPON_LASER_POINTER)
 		{
 			SDK::FixMovement(pCmd, vAngles);
 			pCmd->viewangles = vAngles;
@@ -2033,6 +2067,9 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 
 	switch (m_iWeaponID)
 	{
+	case TF_WEAPON_LASER_POINTER:
+		if (!G::CanPrimaryAttack)
+			return false;
 	case TF_WEAPON_COMPOUND_BOW:
 	case TF_WEAPON_PIPEBOMBLAUNCHER:
 	case TF_WEAPON_CANNON:
@@ -2161,6 +2198,9 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 			case TF_WEAPON_LUNCHBOX:
 				pCmd->buttons |= IN_ATTACK2, pCmd->buttons &= ~IN_ATTACK;
 				break;
+			case TF_WEAPON_LASER_POINTER:
+				pCmd->buttons &= ~IN_ATTACK2; // We are not ready to fire yet
+				break;
 			case TF_WEAPON_PASSTIME_GUN:
 				HandlePasstimeThrowInput(pCmd, tTarget.m_vAngleTo, tTarget.m_pEntity->entindex());
 				break;
@@ -2181,7 +2221,7 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 				pCmd->buttons |= IN_ATTACK;
 			}
 		}
-		if (G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
+		if (G::Attacking = m_iWeaponID == TF_WEAPON_LASER_POINTER ? 1 : SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
 		{
 			F::Aimbot.m_eRanType = EWeaponType::PROJECTILE;
 			if (F::AutoHeal.m_iAutoSwitch == 1)
@@ -2195,6 +2235,7 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 			switch (m_iWeaponID)
 			{
 			case TF_WEAPON_FLAMETHROWER: // angles show up anyways
+			case TF_WEAPON_LASER_POINTER:
 			case TF_WEAPON_CLEAVER: // can't psilent with these weapons, they use SetContextThink
 			case TF_WEAPON_JAR:
 			case TF_WEAPON_JAR_MILK:
@@ -2212,7 +2253,10 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 
 void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	if (m_iSentryGunLock != 0)
+		m_iSentryGunLock--;
 	m_iWeaponID = pWeapon->GetWeaponID();
+	m_pSentryGun = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
 	if (m_iWeaponID != TF_WEAPON_PASSTIME_GUN || !pLocal->m_bHasPasstimeBall())
 		m_tPasstimeThrow.Reset();
 
@@ -2228,6 +2272,21 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 	{
 		pCmd->buttons &= ~IN_ATTACK;
 		m_tPasstimeThrow.Reset(I::GlobalVars->curtime + kPasstimeThrowCooldown);
+	}
+	if (bSuccess && m_iWeaponID == TF_WEAPON_LASER_POINTER)
+	{
+		m_iSentryGunLock = 2;
+		
+		if (m_pSentryGun)
+		{
+			if (m_pSentryGun->m_hAutoAimTarget().Get())
+			{
+				if (m_vTarget.DistTo(m_tInfo.m_pTarget->m_pEntity->GetCenter()) < 100.f)
+					pCmd->buttons |= IN_ATTACK2;
+			}
+			else if (auto pLaserDot = H::Entities.GetLaserDot(); pLaserDot->GetAbsOrigin().DistTo(m_vTarget) < 50.f)
+				pCmd->buttons |= IN_ATTACK2;
+		}
 	}
 
 	if (F::AutoHeal.m_iAutoSwitch != 0)

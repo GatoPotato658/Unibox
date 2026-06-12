@@ -238,7 +238,6 @@
     <ClCompile Include="src\Hooks\CTFPlayer_GetMinFOV.cpp" />
     <ClCompile Include="src\Hooks\CWeaponMedigun_PrimaryAttack.cpp" />
     <ClCompile Include="src\Hooks\IMaterialSystem_FindTexture.cpp" />
-    <ClCompile Include="include\Zydis\Zydis.c" />
     <ClCompile Include="src\Hooks\CBaseViewModel_Interpolate.cpp" />
     <ClCompile Include="src\SDK\Definitions\Misc\CUtlBuffer.cpp" />
     <ClCompile Include="src\SDK\Definitions\Misc\CUtlCharConversion.cpp" />
@@ -676,8 +675,6 @@
     <ClInclude Include="src\SDK\Definitions\Main\CFuncRespawnRoom.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CFuncRespawnRoomShim.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CEntityMapData.h" />
-    <ClInclude Include="include\Zydis\Zydis.h" />
-    <ClInclude Include="src\Features\Visuals\Images.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CCollisionBSPData.h" />
     <ClInclude Include="src\SDK\Definitions\Misc\CUtlCharConversion.h" />
     <ClInclude Include="src\SDK\Definitions\Misc\CUtlIntrusiveList.h" />

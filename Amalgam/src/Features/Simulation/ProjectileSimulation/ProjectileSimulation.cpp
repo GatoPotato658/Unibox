@@ -139,6 +139,23 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 		tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 0.f, 0.f, 0.f }, flSpeed, 0.f };
 		return true;
 	}
+	case TF_WEAPON_LASER_POINTER:
+	{
+		auto pSentryGun = pPlayer->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+		if (pSentryGun && !pSentryGun->IsDormant() && pSentryGun->GetAttachment(pSentryGun->LookupAttachment("rocket_l"), vPos))
+		{
+			auto uType = FNV1A::Hash32Const("models/buildables/sentry3_rockets.mdl");
+			float flSpeed = pPlayer->InCond(TF_COND_RUNE_PRECISION) ? 3000.f : SDK::AttribHookValue(1100.f, "mult_projectile_speed", pWeapon);
+
+			if (auto pEnemy = pSentryGun->m_hAutoAimTarget().Get()) vAngle = Math::CalcAngle(vPos, pEnemy->GetCenter());
+			else if (auto pLaserDot = H::Entities.GetLaserDot()) vAngle = Math::CalcAngle(vPos, pLaserDot->GetAbsOrigin());
+			else break;
+
+			tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 0.f, 0.f, 0.f }, flSpeed, 0.f };
+			return true;
+		}
+		break;
+	}
 	case TF_WEAPON_PARTICLE_CANNON:
 	case TF_WEAPON_RAYGUN:
 	case TF_WEAPON_DRG_POMSON:
@@ -404,6 +421,9 @@ bool CProjectileSimulation::GetInfo(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, 
 
 	if (!bReturn || !bInitCheck)
 		return bReturn;
+
+	if (tProjInfo.m_uType == FNV1A::Hash32Const("models/buildables/sentry3_rockets.mdl"))
+		return true;
 
 	CGameTrace trace = {};
 	CTraceFilterWorldAndPropsOnly filter(pPlayer);

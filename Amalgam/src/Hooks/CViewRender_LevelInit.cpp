@@ -37,5 +37,7 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::BotUtils.Reset();
 	F::FollowBot.Reset();
 
+	G::WranglerSecondFireTime = 0.f;
+
 	CALL_ORIGINAL(rcx);
 }

@@ -37,6 +37,7 @@ private:
 
 	CTFPlayer* m_pLocal = nullptr;
 	CTFWeaponBase* m_pLocalWeapon = nullptr;
+	CSniperDot* m_pLocalLaserDot = nullptr;
 	CTFPlayerResource* m_pPlayerResource = nullptr;
 	CBaseTeamObjectiveResource* m_pObjectiveResource = nullptr;
 
@@ -76,6 +77,7 @@ public:
 
 	CTFPlayer* GetLocal();
 	CTFWeaponBase* GetWeapon();
+	CSniperDot* GetLaserDot();
 	CTFPlayerResource* GetResource();
 	CBaseTeamObjectiveResource* GetObjectiveResource();
 
