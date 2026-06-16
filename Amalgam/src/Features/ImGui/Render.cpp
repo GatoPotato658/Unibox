@@ -1,6 +1,8 @@
 #ifndef TEXTMODE
 #include "Render.h"
 
+#include <array>
+
 #include "../../Hooks/Direct3DDevice9.h"
 #include <ImGui/imgui_impl_win32.h>
 #include "Fonts/MaterialDesign/MaterialIcons.h"
@@ -9,6 +11,23 @@
 #include "Fonts/Roboto/RobotoMedium.h"
 #include "Fonts/Roboto/RobotoBlack.h"
 #include "Menu/Menu.h"
+
+namespace
+{
+	template <size_t t_size>
+	ImFont* load_font_with_fallback(ImFontAtlas* p_font_atlas, const std::array<const char*, t_size>& v_font_paths, float fl_size_pixels, ImFontConfig t_font_config)
+	{
+		for (const char* s_font_path : v_font_paths)
+		{
+			if (ImFont* p_font = p_font_atlas->AddFontFromFileTTF(s_font_path, fl_size_pixels, &t_font_config))
+				return p_font;
+		}
+
+		ImFontConfig t_fallback_config = t_font_config;
+		t_fallback_config.SizePixels = fl_size_pixels;
+		return p_font_atlas->AddFontDefault(&t_fallback_config);
+	}
+}
 
 void CRender::Render(IDirect3DDevice9* pDevice)
 {
@@ -94,12 +113,64 @@ void CRender::LoadFonts()
 
 	ImFontConfig tFontConfig;
 	tFontConfig.OversampleH = 2;
+	tFontConfig.Flags |= ImFontFlags_NoLoadError;
 #ifndef AMALGAM_CUSTOM_FONTS
-	FontSmall = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\verdana.ttf)", H::Draw.Scale(11), &tFontConfig);
-	FontRegular = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\verdana.ttf)", H::Draw.Scale(13), &tFontConfig);
-	FontBold = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\verdanab.ttf)", H::Draw.Scale(13), &tFontConfig);
-	FontLarge = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\verdana.ttf)", H::Draw.Scale(14), &tFontConfig);
-	FontMono = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\cour.ttf)", H::Draw.Scale(16), &tFontConfig); // windows mono font installed by default
+#ifdef _WIN32
+	constexpr std::array<const char*, 5> v_regular_font_paths =
+	{
+		R"(C:\Windows\Fonts\verdana.ttf)",
+		R"(C:\Windows\Fonts\segoeui.ttf)",
+		R"(C:\Windows\Fonts\arial.ttf)",
+		R"(C:\Windows\Fonts\tahoma.ttf)",
+		R"(C:\Windows\Fonts\calibri.ttf)"
+	};
+	constexpr std::array<const char*, 5> v_bold_font_paths =
+	{
+		R"(C:\Windows\Fonts\verdanab.ttf)",
+		R"(C:\Windows\Fonts\segoeuib.ttf)",
+		R"(C:\Windows\Fonts\arialbd.ttf)",
+		R"(C:\Windows\Fonts\tahomabd.ttf)",
+		R"(C:\Windows\Fonts\calibrib.ttf)"
+	};
+	constexpr std::array<const char*, 5> v_mono_font_paths =
+	{
+		R"(C:\Windows\Fonts\consola.ttf)",
+		R"(C:\Windows\Fonts\cascadiamono.ttf)",
+		R"(C:\Windows\Fonts\lucon.ttf)",
+		R"(C:\Windows\Fonts\cour.ttf)",
+		R"(C:\Windows\Fonts\consolab.ttf)"
+	};
+#else
+	constexpr std::array<const char*, 5> v_regular_font_paths =
+	{
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+		"/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+		"/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+		"/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+		"/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf"
+	};
+	constexpr std::array<const char*, 5> v_bold_font_paths =
+	{
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+		"/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+		"/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+		"/usr/share/fonts/opentype/noto/NotoSans-Bold.ttf"
+	};
+	constexpr std::array<const char*, 5> v_mono_font_paths =
+	{
+		"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+		"/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
+		"/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+		"/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+		"/usr/share/fonts/opentype/noto/NotoSansMono-Regular.ttf"
+	};
+#endif
+	FontSmall = load_font_with_fallback(io.Fonts, v_regular_font_paths, H::Draw.Scale(11), tFontConfig);
+	FontRegular = load_font_with_fallback(io.Fonts, v_regular_font_paths, H::Draw.Scale(13), tFontConfig);
+	FontBold = load_font_with_fallback(io.Fonts, v_bold_font_paths, H::Draw.Scale(13), tFontConfig);
+	FontLarge = load_font_with_fallback(io.Fonts, v_regular_font_paths, H::Draw.Scale(14), tFontConfig);
+	FontMono = load_font_with_fallback(io.Fonts, v_mono_font_paths, H::Draw.Scale(16), tFontConfig);
 #else
 	FontSmall = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, H::Draw.Scale(12), &tFontConfig);
 	FontRegular = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, H::Draw.Scale(13), &tFontConfig);
@@ -113,6 +184,7 @@ void CRender::LoadFonts()
 	IconFont = io.Fonts->AddFontFromMemoryCompressedTTF(MaterialIcons_compressed_data, MaterialIcons_compressed_size, H::Draw.Scale(16), &tIconConfig);
 
 	io.Fonts->Build();
+	io.FontDefault = FontRegular;
 	io.ConfigDebugHighlightIdConflicts = false;
 }
 
