@@ -24,7 +24,6 @@ private:
 	IMaterial* m_pMatHaloAddToScreen;
 	IMaterial* m_pMatBlurX;
 	IMaterial* m_pMatBlurY;
-	IMaterialVar* m_pBloomAmount;
 
 	struct GlowHasher_t
 	{

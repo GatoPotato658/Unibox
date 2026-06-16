@@ -72,7 +72,8 @@ void CGlow::SecondEnd(Glow_t tGlow, IMatRenderContext* pRenderContext, int w, in
 
 	if (tGlow.Blur)
 	{
-		m_pBloomAmount->SetFloatValue(tGlow.Blur);
+		if (auto pBloomAmount = m_pMatBlurY ? m_pMatBlurY->FindVar("$bloomamount", nullptr) : nullptr)
+			pBloomAmount->SetFloatValue(tGlow.Blur);
 
 		pRenderContext->PushRenderTargetAndViewport();
 		{
@@ -426,7 +427,6 @@ void CGlow::Initialize()
 		KeyValues* kv = new KeyValues("BlurFilterY");
 		kv->SetString("$basetexture", "RenderBuffer2");
 		m_pMatBlurY = F::Materials.Create("MatBlurY", kv);
-		m_pBloomAmount = m_pMatBlurY->FindVar("$bloomamount", nullptr);
 	}
 }
 
@@ -451,7 +451,6 @@ void CGlow::Unload()
 		m_pMatBlurY->DecrementReferenceCount();
 		m_pMatBlurY->DeleteIfUnreferenced();
 		m_pMatBlurY = nullptr;
-		m_pBloomAmount = nullptr;
 	}
 
 	if (m_pMatHaloAddToScreen)
