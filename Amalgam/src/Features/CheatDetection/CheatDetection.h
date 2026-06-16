@@ -10,7 +10,7 @@ struct AngleHistory_t
 struct PlayerInfo
 {
 	uint32_t m_uAccountID = 0;
-	const char* m_sName = "";
+	std::string m_sName = "";
 
 	int m_iDetections = 0;
 

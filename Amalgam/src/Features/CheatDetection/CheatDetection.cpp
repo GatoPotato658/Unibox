@@ -178,7 +178,7 @@ void CCheatDetection::Infract(CTFPlayer* pEntity, const char* sReason)
 		bMark = mData[pEntity].m_iDetections >= Vars::CheatDetection::DetectionsRequired.Value;
 	}
 
-	F::Output.CheatDetection(mData[pEntity].m_sName, bMark ? "marked" : "infracted", sReason);
+	F::Output.CheatDetection(mData[pEntity].m_sName.c_str(), bMark ? "marked" : "infracted", sReason);
 	if (bMark)
 	{
 		const int iDetections = std::max(mData[pEntity].m_iDetections, Vars::CheatDetection::DetectionsRequired.Value);
@@ -187,7 +187,7 @@ void CCheatDetection::Infract(CTFPlayer* pEntity, const char* sReason)
 			mData[pEntity].m_uAccountID,
 			F::PlayerUtils.TagToIndex(CHEATER_TAG),
 			true,
-			mData[pEntity].m_sName,
+			mData[pEntity].m_sName.c_str(),
 			sReason,
 			iDetections,
 			true);
