@@ -1,6 +1,7 @@
 #include "KeyValues.h"
 
 #include "../../SDK.h"
+#include <vector>
 
 #define Q_ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
 
@@ -22,6 +23,12 @@ static int UTF8ToUnicode(const char* ansi, wchar_t* unicode, int unicodeBufferSi
 	int chars = MultiByteToWideChar(CP_UTF8, 0, ansi, -1, unicode, unicodeBufferSizeInBytes / sizeof(wchar_t));
 	unicode[(unicodeBufferSizeInBytes / sizeof(wchar_t)) - 1] = 0;
 	return chars;
+}
+
+static inline void FreeKeyValuesString(void* pMemory)
+{
+	if (pMemory)
+		I::MemAlloc->Free(pMemory);
 }
 
 
@@ -235,18 +242,16 @@ const wchar_t* KeyValues::GetWString(const char* keyName, const wchar_t* default
 		case TYPE_STRING:
 		{
 			const auto bufSize = strlen(dat->m_sValue) + 1;
-			wchar_t* pWBuf = new wchar_t[bufSize];
-			const int result = UTF8ToUnicode(dat->m_sValue, pWBuf, static_cast<int>(bufSize) * sizeof(wchar_t));
+			std::vector<wchar_t> wbuf(bufSize);
+			const int result = UTF8ToUnicode(dat->m_sValue, wbuf.data(), static_cast<int>(bufSize) * sizeof(wchar_t));
 			if (result >= 0)
 			{
-				SetWString(keyName, pWBuf);
+				SetWString(keyName, wbuf.data());
 			}
 			else
 			{
-				delete[] pWBuf;
 				return defaultValue;
 			}
-			delete[] pWBuf;
 			break;
 		}
 		default:
@@ -349,9 +354,10 @@ void KeyValues::SetWString(const char* keyName, const wchar_t* value)
 	KeyValues* dat = FindKey(keyName, true);
 	if (dat)
 	{
-		delete[] dat->m_wsValue;
-		delete[] dat->m_sValue;
+		FreeKeyValuesString(dat->m_wsValue);
+		FreeKeyValuesString(dat->m_sValue);
 		dat->m_sValue = NULL;
+		dat->m_wsValue = NULL;
 
 		if (!value)
 		{
@@ -359,7 +365,9 @@ void KeyValues::SetWString(const char* keyName, const wchar_t* value)
 		}
 
 		int len = int(wcslen(value));
-		dat->m_wsValue = new wchar_t[len + 1];
+		dat->m_wsValue = static_cast<wchar_t*>(I::MemAlloc->Alloc((len + 1) * sizeof(wchar_t)));
+		if (!dat->m_wsValue)
+			return;
 		memcpy(dat->m_wsValue, value, (len + 1) * sizeof(wchar_t));
 
 		dat->m_iDataType = TYPE_WSTRING;
@@ -377,9 +385,10 @@ void KeyValues::SetString(const char* keyName, const char* value)
 			return;
 		}
 
-		delete[] dat->m_sValue;
-		delete[] dat->m_wsValue;
+		FreeKeyValuesString(dat->m_sValue);
+		FreeKeyValuesString(dat->m_wsValue);
 		dat->m_wsValue = NULL;
+		dat->m_sValue = NULL;
 
 		if (!value)
 		{
@@ -387,7 +396,9 @@ void KeyValues::SetString(const char* keyName, const char* value)
 		}
 
 		int len = int(strlen(value));
-		dat->m_sValue = new char[len + 1];
+		dat->m_sValue = static_cast<char*>(I::MemAlloc->Alloc(len + 1));
+		if (!dat->m_sValue)
+			return;
 		memcpy(dat->m_sValue, value, len + 1);
 
 		dat->m_iDataType = TYPE_STRING;
@@ -400,6 +411,10 @@ void KeyValues::SetInt(const char* keyName, int value)
 
 	if (dat)
 	{
+		FreeKeyValuesString(dat->m_sValue);
+		FreeKeyValuesString(dat->m_wsValue);
+		dat->m_sValue = NULL;
+		dat->m_wsValue = NULL;
 		dat->m_iValue = value;
 		dat->m_iDataType = TYPE_INT;
 	}
@@ -411,11 +426,14 @@ void KeyValues::SetUint64(const char* keyName, uint64_t value)
 
 	if (dat)
 	{
-		delete[] dat->m_sValue;
-		delete[] dat->m_wsValue;
+		FreeKeyValuesString(dat->m_sValue);
+		FreeKeyValuesString(dat->m_wsValue);
 		dat->m_wsValue = NULL;
+		dat->m_sValue = NULL;
 
-		dat->m_sValue = new char[sizeof(uint64_t)];
+		dat->m_sValue = static_cast<char*>(I::MemAlloc->Alloc(sizeof(uint64_t)));
+		if (!dat->m_sValue)
+			return;
 		*((uint64_t*)dat->m_sValue) = value;
 		dat->m_iDataType = TYPE_UINT64;
 	}
@@ -427,6 +445,10 @@ void KeyValues::SetFloat(const char* keyName, float value)
 
 	if (dat)
 	{
+		FreeKeyValuesString(dat->m_sValue);
+		FreeKeyValuesString(dat->m_wsValue);
+		dat->m_sValue = NULL;
+		dat->m_wsValue = NULL;
 		dat->m_flValue = value;
 		dat->m_iDataType = TYPE_FLOAT;
 	}
@@ -438,6 +460,10 @@ void KeyValues::SetPtr(const char* keyName, void* value)
 
 	if (dat)
 	{
+		FreeKeyValuesString(dat->m_sValue);
+		FreeKeyValuesString(dat->m_wsValue);
+		dat->m_sValue = NULL;
+		dat->m_wsValue = NULL;
 		dat->m_pValue = value;
 		dat->m_iDataType = TYPE_PTR;
 	}
@@ -449,6 +475,10 @@ void KeyValues::SetColor(const char* keyName, Color_t value)
 
 	if (dat)
 	{
+		FreeKeyValuesString(dat->m_sValue);
+		FreeKeyValuesString(dat->m_wsValue);
+		dat->m_sValue = NULL;
+		dat->m_wsValue = NULL;
 		dat->m_iDataType = TYPE_COLOR;
 		dat->m_Color[0] = value.r;
 		dat->m_Color[1] = value.g;
@@ -464,6 +494,10 @@ void KeyValues::SetBool(const char* keyName, bool value)
 
 void KeyValues::Clear()
 {
+	FreeKeyValuesString(m_sValue);
+	FreeKeyValuesString(m_wsValue);
+	m_sValue = NULL;
+	m_wsValue = NULL;
 	delete m_pSub;
 	m_pSub = NULL;
 	m_iDataType = TYPE_NONE;
