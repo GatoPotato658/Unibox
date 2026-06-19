@@ -26,16 +26,16 @@ struct CachedAvatar_t
 	bool bLoggedCreateSuccess = false;
 };
 
-static std::unordered_map<uint32_t, CachedAvatar_t> g_mCheaterAvatars;
+static std::unordered_map<uint32_t, CachedAvatar_t> g_mAvatarTextures;
 
-static void ResetCheaterAvatar(uint32_t uAccountID)
+static void ResetAvatarTexture(uint32_t uAccountID)
 {
 	if (!uAccountID)
 		return;
-	g_mCheaterAvatars.erase(uAccountID);
+	g_mAvatarTextures.erase(uAccountID);
 }
 
-static ImTextureID GetCheaterAvatarTexture(uint32_t uAccountID)
+static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 {
 	if (!uAccountID)
 		return static_cast<ImTextureID>(0);
@@ -44,7 +44,7 @@ static ImTextureID GetCheaterAvatarTexture(uint32_t uAccountID)
 	if (!pDevice)
 		return static_cast<ImTextureID>(0);
 
-	auto& tCache = g_mCheaterAvatars[uAccountID];
+	auto& tCache = g_mAvatarTextures[uAccountID];
 	if (tCache.pTexture)
 		return reinterpret_cast<ImTextureID>(tCache.pTexture.Get());
 
@@ -2015,6 +2015,55 @@ void CMenu::MenuAnticheat(int iTab)
 {
 	using namespace ImGui;
 
+	auto fPopupSelectable = [&](const std::string& sIdBase, int& iPopupRow, const std::string& sLabel, const char* sIcon, const ImVec4& tColor, auto&& fn)
+	{
+		const std::string sId = std::format("##{}{}{}", sIdBase, sLabel, iPopupRow++);
+		ImVec2 vContentMin = GetWindowContentRegionMin();
+		ImVec2 vContentMax = GetWindowContentRegionMax();
+		float flRowWidth = std::max(0.f, vContentMax.x - vContentMin.x);
+		if (flRowWidth <= 0.f)
+			flRowWidth = GetContentRegionAvail().x;
+		if (flRowWidth <= 0.f)
+			flRowWidth = H::Draw.Scale(140);
+		const float flRowHeight = H::Draw.Scale(32);
+		const float flIconSlot = H::Draw.Scale(22);
+		const ImVec2 vRowSize = { flRowWidth, flRowHeight };
+
+		PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+		PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+		PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+		bool bActivated = Selectable(sId.c_str(), false, ImGuiSelectableFlags_None, vRowSize);
+		PopStyleColor(3);
+
+		ImVec2 vMin = GetItemRectMin();
+		ImVec2 vMax = GetItemRectMax();
+		const bool bHovered = IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+		ImDrawList* pDrawList = GetWindowDrawList();
+
+		const auto Tint = [&](float flAlpha) -> ImU32
+		{
+			ImVec4 tTint = tColor;
+			tTint.w = flAlpha;
+			return ColorConvertFloat4ToU32(tTint);
+		};
+
+		ImVec2 vIconMin = { vMin.x + H::Draw.Scale(8), vMin.y + (flRowHeight - flIconSlot) / 2 };
+		ImVec2 vIconMax = { vIconMin.x + flIconSlot, vIconMin.y + flIconSlot };
+		float flIconAlpha = bHovered ? 0.35f : 0.2f;
+		pDrawList->AddRectFilled(vIconMin, vIconMax, Tint(flIconAlpha), H::Draw.Scale(6));
+
+		const float flIconFontSize = F::Render.IconFont->LegacySize;
+		const ImVec2 vIconSize = F::Render.IconFont->CalcTextSizeA(flIconFontSize, FLT_MAX, 0.f, sIcon);
+		const ImVec2 vIconPos = { vIconMin.x + (flIconSlot - vIconSize.x) / 2, vIconMin.y + (flIconSlot - vIconSize.y) / 2 };
+		pDrawList->AddText(F::Render.IconFont, flIconFontSize, vIconPos, ColorConvertFloat4ToU32(tColor), sIcon);
+
+		const ImVec2 vTextPos = { vIconMax.x + H::Draw.Scale(8), vMin.y + (flRowHeight - GetTextLineHeight()) / 2 };
+		pDrawList->AddText(vTextPos, GetColorU32(ImGuiCol_Text), sLabel.c_str());
+
+		if (bActivated)
+			fn();
+	};
+
 	switch (iTab)
 	{
 	// Cheaters
@@ -2156,7 +2205,7 @@ void CMenu::MenuAnticheat(int iTab)
 						pDrawList->AddRect(vDrawPos, { vDrawPos.x + flWidth, vDrawPos.y + flHeight }, uBorderColor, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 
 						ImVec2 vAvatarPos = { vOriginalPos.x + flPadding, vOriginalPos.y + (flHeight - flAvatarSize) / 2 };
-						if (ImTextureID pAvatar = GetCheaterAvatarTexture(tEntry.first))
+						if (ImTextureID pAvatar = GetAvatarTexture(tEntry.first))
 						{
 							SetCursorPos(vAvatarPos);
 							Image(pAvatar, { flAvatarSize, flAvatarSize });
@@ -2289,7 +2338,7 @@ void CMenu::MenuAnticheat(int iTab)
 							});
 							PopupSelectable("Refetch profile", ICON_MD_SYNC, tAccent, [&]
 							{
-								ResetCheaterAvatar(tEntry.first);
+								ResetAvatarTexture(tEntry.first);
 								F::SteamProfileCache.Invalidate(tEntry.first);
 								F::SteamProfileCache.TouchAvatar(tEntry.first);
 								const auto uSteamID64 = CSteamID(tEntry.first, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
@@ -2398,6 +2447,55 @@ void CMenu::MenuAnticheat(int iTab)
 void CMenu::MenuLogs(int iTab)
 {
 	using namespace ImGui;
+
+	auto fPopupSelectable = [&](const std::string& sIdBase, int& iPopupRow, const std::string& sLabel, const char* sIcon, const ImVec4& tColor, auto&& fn)
+	{
+		const std::string sId = std::format("##{}{}{}", sIdBase, sLabel, iPopupRow++);
+		ImVec2 vContentMin = GetWindowContentRegionMin();
+		ImVec2 vContentMax = GetWindowContentRegionMax();
+		float flRowWidth = std::max(0.f, vContentMax.x - vContentMin.x);
+		if (flRowWidth <= 0.f)
+			flRowWidth = GetContentRegionAvail().x;
+		if (flRowWidth <= 0.f)
+			flRowWidth = H::Draw.Scale(140);
+		const float flRowHeight = H::Draw.Scale(32);
+		const float flIconSlot = H::Draw.Scale(22);
+		const ImVec2 vRowSize = { flRowWidth, flRowHeight };
+
+		PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+		PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+		PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+		bool bActivated = Selectable(sId.c_str(), false, ImGuiSelectableFlags_None, vRowSize);
+		PopStyleColor(3);
+
+		ImVec2 vMin = GetItemRectMin();
+		ImVec2 vMax = GetItemRectMax();
+		const bool bHovered = IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+		ImDrawList* pDrawList = GetWindowDrawList();
+
+		const auto Tint = [&](float flAlpha) -> ImU32
+		{
+			ImVec4 tTint = tColor;
+			tTint.w = flAlpha;
+			return ColorConvertFloat4ToU32(tTint);
+		};
+
+		ImVec2 vIconMin = { vMin.x + H::Draw.Scale(8), vMin.y + (flRowHeight - flIconSlot) / 2 };
+		ImVec2 vIconMax = { vIconMin.x + flIconSlot, vIconMin.y + flIconSlot };
+		float flIconAlpha = bHovered ? 0.35f : 0.2f;
+		pDrawList->AddRectFilled(vIconMin, vIconMax, Tint(flIconAlpha), H::Draw.Scale(6));
+
+		const float flIconFontSize = F::Render.IconFont->LegacySize;
+		const ImVec2 vIconSize = F::Render.IconFont->CalcTextSizeA(flIconFontSize, FLT_MAX, 0.f, sIcon);
+		const ImVec2 vIconPos = { vIconMin.x + (flIconSlot - vIconSize.x) / 2, vIconMin.y + (flIconSlot - vIconSize.y) / 2 };
+		pDrawList->AddText(F::Render.IconFont, flIconFontSize, vIconPos, ColorConvertFloat4ToU32(tColor), sIcon);
+
+		const ImVec2 vTextPos = { vIconMax.x + H::Draw.Scale(8), vMin.y + (flRowHeight - GetTextLineHeight()) / 2 };
+		pDrawList->AddText(vTextPos, GetColorU32(ImGuiCol_Text), sLabel.c_str());
+
+		if (bActivated)
+			fn();
+	};
 
 	switch (iTab)
 	{
@@ -3093,6 +3191,216 @@ void CMenu::MenuLogs(int iTab)
 				iLabels++;
 			}
 			SetCursorPos({ 0, H::Draw.Scale(116 + 36 * std::max(iPriorities, iLabels)) }); DebugDummy({ 0, H::Draw.Scale(28) });
+		} EndSection();
+		if (Section("Marked Players"))
+		{
+			auto vMarkedPlayers = F::PlayerUtils.GetMarkedPlayers();
+			if (vMarkedPlayers.empty())
+			{
+				SetCursorPos({ H::Draw.Scale(15), H::Draw.Scale(40) });
+				FText("Nothings here...");
+				DebugDummy({ 0, H::Draw.Scale(8) });
+			}
+			else
+			{
+				auto drawMarkedPlayer = [&](const MarkedPlayer_t& tEntry, int x, int y)
+				{
+					const std::string sCardId = std::format("MarkedPlayer{}", tEntry.m_uAccountID);
+					PushID(sCardId.c_str());
+
+					F::SteamProfileCache.TouchAvatar(tEntry.m_uAccountID);
+
+					const Color_t tCardColor = tEntry.m_tRole.m_tColor;
+					const ImColor tFillColor = ColorToVec(tCardColor.Lerp(Vars::Menu::Theme::Background.Value, 0.55f, LerpEnum::NoAlpha));
+					const ImColor tBorderColor = ColorToVec(tCardColor);
+					const ImU32 uFillColor = ImGui::ColorConvertFloat4ToU32(tFillColor.Value);
+					const ImU32 uBorderColor = ImGui::ColorConvertFloat4ToU32(tBorderColor.Value);
+					const float flAvatarSize = H::Draw.Scale(40);
+					const float flPadding = H::Draw.Scale(8);
+					const float flTextOffset = flPadding * 2 + flAvatarSize;
+
+					ImVec2 vOriginalPos = { !x ? GetStyle().WindowPadding.x : GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(35 + 64 * y) };
+					float flWidth = GetWindowWidth() / 2 - GetStyle().WindowPadding.x * 1.5f;
+					float flHeight = H::Draw.Scale(56);
+					ImVec2 vDrawPos = GetDrawPos() + vOriginalPos;
+					auto pDrawList = GetWindowDrawList();
+					pDrawList->AddRectFilled(vDrawPos, { vDrawPos.x + flWidth, vDrawPos.y + flHeight }, uFillColor, H::Draw.Scale(4));
+					pDrawList->AddRect(vDrawPos, { vDrawPos.x + flWidth, vDrawPos.y + flHeight }, uBorderColor, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
+
+					ImVec2 vAvatarPos = { vOriginalPos.x + flPadding, vOriginalPos.y + (flHeight - flAvatarSize) / 2 };
+					if (ImTextureID pAvatar = GetAvatarTexture(tEntry.m_uAccountID))
+					{
+						SetCursorPos(vAvatarPos);
+						Image(pAvatar, { flAvatarSize, flAvatarSize });
+					}
+					else
+					{
+						ImVec2 vAvatarDrawPos = GetDrawPos() + vAvatarPos;
+						ImVec2 vAvatarDrawEnd = { vAvatarDrawPos.x + flAvatarSize, vAvatarDrawPos.y + flAvatarSize };
+						const ImColor tAvatarBg = ColorToVec(Vars::Menu::Theme::Background.Value.Lerp(tCardColor, 0.25f, LerpEnum::NoAlpha));
+						pDrawList->AddRectFilled(vAvatarDrawPos, vAvatarDrawEnd, ImGui::ColorConvertFloat4ToU32(tAvatarBg.Value), H::Draw.Scale(4));
+						char cInitial = '?';
+						for (char cChar : tEntry.m_sDisplayName)
+						{
+							if (std::isalpha(static_cast<unsigned char>(cChar)))
+							{
+								cInitial = static_cast<char>(std::toupper(static_cast<unsigned char>(cChar)));
+								break;
+							}
+						}
+						const std::string sInitial(1, cInitial);
+						const ImVec2 vTextSize = F::Render.FontBold->CalcTextSizeA(F::Render.FontBold->LegacySize, FLT_MAX, 0.f, sInitial.c_str());
+						const ImVec2 vTextPos = { vAvatarDrawPos.x + (flAvatarSize - vTextSize.x) / 2, vAvatarDrawPos.y + (flAvatarSize - vTextSize.y) / 2 };
+						const auto tBg = Vars::Menu::Theme::Background.Value;
+						const float flLuma = 0.2126f * (tBg.r / 255.f) + 0.7152f * (tBg.g / 255.f) + 0.0722f * (tBg.b / 255.f);
+						const ImU32 uInitialColor = flLuma < 0.5f ? IM_COL32(240, 240, 240, 230) : IM_COL32(20, 20, 20, 230);
+						pDrawList->AddText(F::Render.FontBold, F::Render.FontBold->LegacySize, vTextPos, uInitialColor, sInitial.c_str());
+					}
+
+					const float flAvailableWidth = flWidth - flTextOffset - H::Draw.Scale(28);
+					SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(6) });
+					FText(TruncateText(tEntry.m_sDisplayName, flAvailableWidth, F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
+					SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(24) });
+					PushStyleColor(ImGuiCol_Text, ColorToVec(tCardColor));
+					FText(TruncateText(std::format("Role: {}", tEntry.m_sRoleName.empty() ? "Unmarked" : tEntry.m_sRoleName), flAvailableWidth).c_str());
+					PopStyleColor();
+					SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(38) });
+					PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
+					FText(TruncateText(std::format("Alias: {}", tEntry.m_sAlias.empty() ? "none" : tEntry.m_sAlias), flAvailableWidth).c_str());
+					PopStyleColor();
+
+					SetCursorPos({ vOriginalPos.x + flWidth - H::Draw.Scale(24), vOriginalPos.y + H::Draw.Scale(4) });
+					const bool bClearRole = IconButton(ICON_MD_DELETE);
+
+					SetCursorPos(vOriginalPos);
+					Button(std::format("##Marked{}", tEntry.m_uAccountID).c_str(), { flWidth, flHeight });
+					const bool bCardHovered = IsItemHovered();
+
+					if (bClearRole)
+					{
+						F::PlayerUtils.SetPlayerRole(tEntry.m_uAccountID, -1, true, tEntry.m_sDisplayName.c_str());
+						PopID();
+						return;
+					}
+
+					if (bCardHovered && IsMouseReleased(ImGuiMouseButton_Right))
+						OpenPopup(std::format("MarkedMenu{}", tEntry.m_uAccountID).c_str());
+
+					if (FBeginPopup(std::format("MarkedMenu{}", tEntry.m_uAccountID).c_str()))
+					{
+						PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(12), H::Draw.Scale(8) });
+						PushStyleVar(ImGuiStyleVar_WindowRounding, H::Draw.Scale(8));
+						PushStyleVar(ImGuiStyleVar_ItemSpacing, { H::Draw.Scale(4), H::Draw.Scale(4) });
+						PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.0f);
+						PushStyleColor(ImGuiCol_PopupBg, F::Render.Background0.Value);
+						PushStyleColor(ImGuiCol_Border, F::Render.Background2.Value);
+						PushStyleColor(ImGuiCol_Header, F::Render.Background1.Value);
+
+						const ImVec4 tAccent = F::Render.Accent.Value;
+						const ImVec4 tDanger = ColorToVec(Color_t{ 255, 120, 120, 255 });
+						int iPopupRow = 0;
+
+						PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
+						TextUnformatted("Steam");
+						PopStyleColor();
+
+						fPopupSelectable(std::format("Marked{}", tEntry.m_uAccountID), iPopupRow, "Profile", ICON_MD_PERSON, tAccent, [&]
+						{
+							I::SteamFriends->ActivateGameOverlayToUser("steamid", CSteamID(tEntry.m_uAccountID, k_EUniversePublic, k_EAccountTypeIndividual));
+						});
+						fPopupSelectable(std::format("Marked{}", tEntry.m_uAccountID), iPopupRow, "History", ICON_MD_HISTORY, tAccent, [&]
+						{
+							I::SteamFriends->ActivateGameOverlayToWebPage(std::format("https://steamhistory.net/id/{}", CSteamID(tEntry.m_uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64()).c_str());
+						});
+						fPopupSelectable(std::format("Marked{}", tEntry.m_uAccountID), iPopupRow, "Refetch profile", ICON_MD_SYNC, tAccent, [&]
+						{
+							ResetAvatarTexture(tEntry.m_uAccountID);
+							F::SteamProfileCache.Invalidate(tEntry.m_uAccountID);
+							F::SteamProfileCache.TouchAvatar(tEntry.m_uAccountID);
+							const auto uSteamID64 = CSteamID(tEntry.m_uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
+							SDK::Output("steamwebapi", std::format("Queued profile refetch for {}", uSteamID64).c_str(), { 175, 150, 255, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+						});
+
+						Dummy({ 0, H::Draw.Scale(4) });
+						PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
+						TextUnformatted("Alias");
+						PopStyleColor();
+
+						static std::unordered_map<uint32_t, std::string> sAliasBuffers;
+						auto& sAliasBuffer = sAliasBuffers[tEntry.m_uAccountID];
+						if (sAliasBuffer.empty())
+							sAliasBuffer = tEntry.m_sAlias;
+						bool bAliasSubmit = FInputText("Alias...", sAliasBuffer, H::Draw.Scale(284), ImGuiInputTextFlags_EnterReturnsTrue);
+						if (!IsItemFocused() && !IsItemActive())
+							sAliasBuffer = tEntry.m_sAlias;
+						if (bAliasSubmit)
+						{
+							auto bHasAlias = F::PlayerUtils.m_mPlayerAliases.contains(tEntry.m_uAccountID);
+							if (sAliasBuffer.empty())
+							{
+								if (bHasAlias)
+								{
+									F::Output.AliasChanged(tEntry.m_sDisplayName.c_str(), "Removed", F::PlayerUtils.m_mPlayerAliases[tEntry.m_uAccountID].c_str());
+									F::PlayerUtils.m_mPlayerAliases.erase(tEntry.m_uAccountID);
+									F::PlayerUtils.m_bSave = true;
+								}
+							}
+							else
+							{
+								F::PlayerUtils.m_mPlayerAliases[tEntry.m_uAccountID] = sAliasBuffer;
+								F::PlayerUtils.m_bSave = true;
+								F::Output.AliasChanged(tEntry.m_sDisplayName.c_str(), bHasAlias ? "Changed" : "Added", sAliasBuffer.c_str());
+							}
+						}
+
+						Dummy({ 0, H::Draw.Scale(4) });
+						PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
+						TextUnformatted("Role");
+						PopStyleColor();
+
+						fPopupSelectable(std::format("MarkedRole{}", tEntry.m_uAccountID), iPopupRow, "Clear role", ICON_MD_DELETE, tDanger, [&]
+						{
+							F::PlayerUtils.SetPlayerRole(tEntry.m_uAccountID, -1, true, tEntry.m_sDisplayName.c_str());
+						});
+
+						for (int iID = 0; iID < F::PlayerUtils.m_vTags.size(); iID++)
+						{
+							auto& tTag = F::PlayerUtils.m_vTags[iID];
+							if (!tTag.m_bAssignable || tTag.m_bLabel)
+								continue;
+
+							std::string sLabel = tTag.m_sName;
+							if (std::find(tEntry.m_vRoleTags.begin(), tEntry.m_vRoleTags.end(), iID) != tEntry.m_vRoleTags.end() && tEntry.m_tRole.m_sName == tTag.m_sName)
+								sLabel += " (current)";
+
+							fPopupSelectable(std::format("MarkedRole{}", tEntry.m_uAccountID), iPopupRow, sLabel, ICON_MD_LABEL, ColorToVec(tTag.m_tColor), [&]
+							{
+								F::PlayerUtils.SetPlayerRole(tEntry.m_uAccountID, iID, true, tEntry.m_sDisplayName.c_str());
+							});
+						}
+
+						PopStyleColor(3);
+						PopStyleVar(4);
+						EndPopup();
+					}
+
+					PopID();
+				};
+
+				int iBlu = 0, iRed = 0;
+				for (size_t i = 0; i < vMarkedPlayers.size(); i++)
+				{
+					int x = int(i % 2);
+					int y = int(i / 2);
+					drawMarkedPlayer(vMarkedPlayers[i], x, y);
+					if (!x)
+						iBlu++;
+					else
+						iRed++;
+				}
+				SetCursorPos({ 0, H::Draw.Scale(36 + 64 * std::max(iBlu, iRed)) });
+				DebugDummy({ 0, H::Draw.Scale(8) });
+			}
 		} EndSection();
 		{
 			PushDisabled(F::PlayerUtils.m_bLoad);

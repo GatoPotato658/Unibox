@@ -653,13 +653,13 @@ void CPlayerlistUtils::Store()
 	}
 }
 
-std::string CPlayerlistUtils::ResolveAccountName(uint32_t uAccountID) const
+std::string CPlayerlistUtils::ResolveAccountName(uint32_t uAccountID, const std::string& sAlias) const
 {
 	if (!uAccountID)
 		return "";
 
-	if (auto it = m_mPlayerAliases.find(uAccountID); it != m_mPlayerAliases.end() && !it->second.empty())
-		return it->second;
+	if (!sAlias.empty())
+		return sAlias;
 
 	if (auto pResource = H::Entities.GetResource())
 	{
@@ -686,6 +686,179 @@ std::string CPlayerlistUtils::ResolveAccountName(uint32_t uAccountID) const
 	F::SteamProfileCache.Touch(uAccountID);
 
 	return std::format("{}", CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64());
+}
+
+std::string CPlayerlistUtils::ResolveAccountName(uint32_t uAccountID) const
+{
+	std::string sAlias;
+	{
+		std::shared_lock tLock(m_tMutex);
+		if (auto it = m_mPlayerAliases.find(uAccountID); it != m_mPlayerAliases.end())
+			sAlias = it->second;
+	}
+	return ResolveAccountName(uAccountID, sAlias);
+}
+
+std::vector<MarkedPlayer_t> CPlayerlistUtils::GetMarkedPlayers()
+{
+	std::vector<std::pair<uint32_t, std::vector<int>>> vTaggedAccounts = {};
+	std::unordered_map<uint32_t, std::string> mAliases = {};
+	{
+		std::shared_lock tLock(m_tMutex);
+		vTaggedAccounts.reserve(m_mPlayerTags.size());
+		for (const auto& [uAccountID, vTags] : m_mPlayerTags)
+		{
+			if (!vTags.empty())
+				vTaggedAccounts.emplace_back(uAccountID, vTags);
+		}
+		mAliases = m_mPlayerAliases;
+	}
+
+	std::vector<MarkedPlayer_t> vMarkedPlayers = {};
+	vMarkedPlayers.reserve(vTaggedAccounts.size());
+
+	auto getRoleTag = [&](const std::vector<int>& vTags, uint32_t uAccountID) -> PriorityLabel_t
+	{
+		std::vector<PriorityLabel_t*> vRoles = {};
+		std::vector<PriorityLabel_t*> vLabels = {};
+		if (std::ranges::find(vTags, TagToIndex(IGNORED_TAG)) != vTags.end())
+			return m_vTags[TagToIndex(IGNORED_TAG)];
+
+		for (int iID : vTags)
+		{
+			if (auto pTag = GetTag(iID))
+			{
+				if (pTag->m_bLabel)
+					vLabels.push_back(pTag);
+				else
+					vRoles.push_back(pTag);
+			}
+		}
+
+		if (H::Entities.IsFriend(uAccountID))
+		{
+			auto pTag = &m_vTags[TagToIndex(FRIEND_TAG)];
+			if (pTag->m_bLabel)
+				vLabels.push_back(pTag);
+			else
+				vRoles.push_back(pTag);
+		}
+		if (H::Entities.InParty(uAccountID))
+		{
+			auto pTag = &m_vTags[TagToIndex(PARTY_TAG)];
+			if (pTag->m_bLabel)
+				vLabels.push_back(pTag);
+			else
+				vRoles.push_back(pTag);
+		}
+		if (H::Entities.IsF2P(uAccountID))
+		{
+			auto pTag = &m_vTags[TagToIndex(F2P_TAG)];
+			if (pTag->m_bLabel)
+				vLabels.push_back(pTag);
+			else
+				vRoles.push_back(pTag);
+		}
+
+		auto compare_tag = [](const PriorityLabel_t* a, const PriorityLabel_t* b) -> bool
+		{
+			if (a->m_iPriority != b->m_iPriority)
+				return a->m_iPriority > b->m_iPriority;
+			return a->m_sName < b->m_sName;
+		};
+
+		if (!vRoles.empty())
+		{
+			std::sort(vRoles.begin(), vRoles.end(), compare_tag);
+			return *vRoles.front();
+		}
+		if (!vLabels.empty())
+		{
+			std::sort(vLabels.begin(), vLabels.end(), compare_tag);
+			return *vLabels.front();
+		}
+		return {};
+	};
+
+	for (const auto& [uAccountID, vTags] : vTaggedAccounts)
+	{
+		MarkedPlayer_t tPlayer = {};
+		tPlayer.m_uAccountID = uAccountID;
+		if (auto it = mAliases.find(uAccountID); it != mAliases.end())
+			tPlayer.m_sAlias = it->second;
+		tPlayer.m_sDisplayName = ResolveAccountName(uAccountID, tPlayer.m_sAlias);
+
+		tPlayer.m_vRoleTags.reserve(vTags.size());
+		tPlayer.m_vLabelTags.reserve(vTags.size());
+		for (int iID : vTags)
+		{
+			if (auto pTag = GetTag(iID))
+			{
+				if (pTag->m_bLabel)
+					tPlayer.m_vLabelTags.push_back(iID);
+				else
+					tPlayer.m_vRoleTags.push_back(iID);
+			}
+		}
+
+		tPlayer.m_tRole = getRoleTag(vTags, uAccountID);
+		tPlayer.m_sRoleName = tPlayer.m_tRole.m_sName;
+		vMarkedPlayers.emplace_back(std::move(tPlayer));
+	}
+
+	std::sort(vMarkedPlayers.begin(), vMarkedPlayers.end(), [](const MarkedPlayer_t& a, const MarkedPlayer_t& b) -> bool
+	{
+		if (a.m_tRole.m_iPriority != b.m_tRole.m_iPriority)
+			return a.m_tRole.m_iPriority > b.m_tRole.m_iPriority;
+		if (a.m_tRole.m_sName != b.m_tRole.m_sName)
+			return a.m_tRole.m_sName < b.m_tRole.m_sName;
+		if (a.m_sDisplayName != b.m_sDisplayName)
+			return a.m_sDisplayName < b.m_sDisplayName;
+		return a.m_uAccountID < b.m_uAccountID;
+	});
+
+	return vMarkedPlayers;
+}
+
+bool CPlayerlistUtils::SetPlayerRole(uint32_t uAccountID, int iID, bool bSave, const char* sName)
+{
+	if (!uAccountID)
+		return false;
+
+	std::vector<int> vRoleTags = {};
+	{
+		auto it = m_mPlayerTags.find(uAccountID);
+		if (it != m_mPlayerTags.end())
+		{
+			for (int iTag : it->second)
+			{
+				if (auto pTag = GetTag(iTag); pTag && !pTag->m_bLabel)
+					vRoleTags.push_back(iTag);
+			}
+		}
+	}
+
+	bool bChanged = false;
+	for (int iTag : vRoleTags)
+	{
+		RemoveTag(uAccountID, iTag, bSave, sName);
+		bChanged = true;
+	}
+
+	if (iID >= 0)
+	{
+		auto pTag = GetTag(iID);
+		if (pTag && pTag->m_bAssignable && !pTag->m_bLabel)
+		{
+			if (!HasTag(uAccountID, iID))
+			{
+				AddTag(uAccountID, iID, bSave, sName);
+				bChanged = true;
+			}
+		}
+	}
+
+	return bChanged;
 }
 
 void CPlayerlistUtils::UpdateCheaterRecord(uint32_t uAccountID, const char* sName, const char* sReason, int iDetections, bool bAuto)

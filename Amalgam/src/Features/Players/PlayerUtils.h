@@ -56,6 +56,17 @@ struct PriorityLabel_t
 	bool m_bLocked = false; // don't allow it to be removed
 };
 
+struct MarkedPlayer_t
+{
+	uint32_t m_uAccountID = 0;
+	std::string m_sDisplayName = "";
+	std::string m_sAlias = "";
+	std::string m_sRoleName = "";
+	PriorityLabel_t m_tRole = {};
+	std::vector<int> m_vRoleTags = {};
+	std::vector<int> m_vLabelTags = {};
+};
+
 Enum(NameType, None = 0, Local = 1 << 0, Friend = 1 << 1, Party = 1 << 2, Player = 1 << 3, Custom = 1 << 4, Privacy = Local | Friend | Party | Player);
 
 class CPlayerlistUtils
@@ -85,6 +96,7 @@ public:
 	mutable std::shared_mutex m_tMutex;
 private:
 	std::vector<int> m_vDummy = {};
+	std::string ResolveAccountName(uint32_t uAccountID, const std::string& sAlias) const;
 	std::string ResolveAccountName(uint32_t uAccountID) const;
 
 public:
@@ -151,6 +163,8 @@ public:
 
 	std::vector<int>& GetPlayerTags(uint32_t uAccountID) { return m_mPlayerTags.contains(uAccountID) ? m_mPlayerTags[uAccountID] : m_vDummy; }
 	std::string* GetPlayerAlias(uint32_t uAccountID) { return m_mPlayerAliases.contains(uAccountID) ? &m_mPlayerAliases[uAccountID] : nullptr; }
+	std::vector<MarkedPlayer_t> GetMarkedPlayers();
+	bool SetPlayerRole(uint32_t uAccountID, int iID, bool bSave = true, const char* sName = nullptr);
 	const CheaterRecord_t* GetCheaterRecord(uint32_t uAccountID) const { return m_mCheaterRecords.contains(uAccountID) ? &m_mCheaterRecords.at(uAccountID) : nullptr; }
 	bool HasCheaterRecord(uint32_t uAccountID) const { return m_mCheaterRecords.contains(uAccountID); }
 	void UpdateCheaterRecord(uint32_t uAccountID, const char* sName, const char* sReason, int iDetections, bool bAuto);
