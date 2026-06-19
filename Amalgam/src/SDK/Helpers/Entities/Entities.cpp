@@ -209,7 +209,11 @@ void CEntities::Store()
 
 	m_bIsSpectated = false;
 	m_pLocal = pLocalEntity->As<CTFPlayer>();
-	m_pLocalWeapon = m_pLocal->m_hActiveWeapon()->As<CTFWeaponBase>();
+	if (!m_pLocal)
+		return;
+
+	auto pLocalWeapon = m_pLocal->m_hActiveWeapon().Get();
+	m_pLocalWeapon = pLocalWeapon ? pLocalWeapon->As<CTFWeaponBase>() : nullptr;
 
 	int iLocalTeam = m_pLocal->m_iTeamNum();
 
@@ -225,7 +229,11 @@ void CEntities::Store()
 
 	for (int n = 1; n <= nHighestEntity; n++)
 	{
-		auto pEntity = I::ClientEntityList->GetClientEntity(n)->As<CBaseEntity>();
+		auto pEntityHandle = I::ClientEntityList->GetClientEntity(n);
+		if (!pEntityHandle)
+			continue;
+
+		auto pEntity = pEntityHandle->As<CBaseEntity>();
 		if (!pEntity)
 			continue;
 
@@ -432,7 +440,11 @@ void CEntities::ManualNetwork(const StartSoundParams_t& params)
 	if (n <= 0 || n > MAX_EDICTS - 1 || !params.origin || n == I::EngineClient->GetLocalPlayer())
 		return;
 
-	auto pEntity = I::ClientEntityList->GetClientEntity(n)->As<CBaseEntity>();
+	auto pEntityHandle = I::ClientEntityList->GetClientEntity(n);
+	if (!pEntityHandle)
+		return;
+
+	auto pEntity = pEntityHandle->As<CBaseEntity>();
 	if (!pEntity || !pEntity->IsDormant())
 		return;
 

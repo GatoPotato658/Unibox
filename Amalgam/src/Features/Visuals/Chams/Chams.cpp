@@ -196,7 +196,11 @@ void CChams::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderIn
 	if (!pRenderContext)
 		return;
 
-	auto pEntity = I::ClientEntityList->GetClientEntity(pInfo.entity_index)->As<CTFPlayer>();
+	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+	if (!pEntityBase)
+		return;
+
+	auto pEntity = pEntityBase->As<CTFPlayer>();
 	if (!pEntity || !pEntity->IsPlayer())
 		return;
 

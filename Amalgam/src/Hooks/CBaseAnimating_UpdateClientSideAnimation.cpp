@@ -11,6 +11,9 @@ MAKE_HOOK(CBaseAnimating_UpdateClientSideAnimation, S::CBaseAnimating_UpdateClie
 
 	auto pLocal = H::Entities.GetLocal();
 	auto pPlayer = reinterpret_cast<CTFPlayer*>(rcx);
+	if (!pPlayer)
+		return CALL_ORIGINAL(rcx);
+
 	if ((Vars::Visuals::Removals::Interpolation.Value || F::Resolver.GetAngles(pPlayer)) && !G::UpdatingAnims
 		|| pPlayer == pLocal && !pLocal->InCond(TF_COND_HALLOWEEN_KART) && !I::EngineClient->IsPlayingDemo())
 		return;

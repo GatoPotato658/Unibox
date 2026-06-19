@@ -236,8 +236,12 @@ void CGlow::RenderSecond()
 
 void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
 {
-	auto pEntity = I::ClientEntityList->GetClientEntity(pInfo.entity_index)->As<CTFPlayer>();
-	if (!pEntity || !pEntity->IsPlayer())
+	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+	if (!pEntityBase)
+		return;
+
+	auto pEntity = pEntityBase->As<CTFPlayer>();
+	if (!pEntity->IsPlayer())
 		return;
 
 	std::vector<TickRecord*> vRecords = {};
