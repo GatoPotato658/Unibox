@@ -5,14 +5,34 @@
 #include "../../Configs/Configs.h"
 #include "../../Binds/Binds.h"
 #include "../Groups/Groups.h"
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 
 IMaterial* CMaterials::Create(char const* szName, KeyValues* pKV)
 {
 	IMaterial* pMaterial = I::MaterialSystem->CreateMaterial(szName, pKV);
+	if (!pMaterial)
+		return nullptr;
+
 	m_mMatList[pMaterial];
 	return pMaterial;
+}
+
+IMaterial* CMaterials::create_from_vmt(const char* name, const std::string& vmt)
+{
+	KeyValues* kv = new KeyValues(name);
+	if (!kv)
+		return nullptr;
+
+	if (!kv->LoadFromBuffer(name, vmt.c_str()))
+	{
+		kv->DeleteThis();
+		return nullptr;
+	}
+
+	return Create(name, kv);
 }
 
 void CMaterials::Remove(IMaterial* pMaterial)
@@ -68,20 +88,48 @@ static inline void RemoveVars(Material_t& tMaterial)
 	tMaterial.m_bInvertCull = false;
 }
 
-static inline void ModifyKeyValues(KeyValues* pKV)
+static inline std::string to_lower(std::string value)
 {
-	pKV->SetString("$model", "1"); // prevent wacko chams
+	std::ranges::transform(value, value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	return value;
+}
 
-	if (!pKV->FindKey("$cloakfactor"))
-	{
-		pKV->SetString("$cloakpassenabled", "1");
-		auto sName = pKV->GetName();
-		if (sName && FNV1A::Hash32(sName) == FNV1A::Hash32Const("VertexLitGeneric"))
-		{
-			if (auto pProxies = pKV->FindKey("Proxies", true))
-				pProxies->FindKey("invis", true);
-		}
-	}
+static inline bool has_material_key(const std::string& vmt, const char* key)
+{
+	return to_lower(vmt).find(to_lower(key)) != std::string::npos;
+}
+
+static inline bool is_vertex_lit_generic(const std::string& vmt)
+{
+	const std::string lower = to_lower(vmt);
+	const size_t body = lower.find('{');
+	const size_t shader = lower.find("vertexlitgeneric");
+	return shader != std::string::npos && (body == std::string::npos || shader < body);
+}
+
+static inline std::string modify_vmt(const std::string& vmt)
+{
+	const size_t insert_pos = vmt.find_last_of('}');
+	if (insert_pos == std::string::npos)
+		return vmt;
+
+	std::string modified = vmt;
+	std::string append;
+	const bool has_cloak_factor = has_material_key(vmt, "$cloakfactor");
+
+	if (!has_material_key(vmt, "$model"))
+		append += "\n\t$model \"1\"";
+
+	if (!has_cloak_factor && !has_material_key(vmt, "$cloakpassenabled"))
+		append += "\n\t$cloakpassenabled \"1\"";
+
+	if (!has_cloak_factor && is_vertex_lit_generic(vmt) && !has_material_key(vmt, "proxies"))
+		append += "\n\tProxies\n\t{\n\t\tinvis\n\t\t{\n\t\t}\n\t}";
+
+	if (!append.empty())
+		modified.insert(insert_pos, append);
+
+	return modified;
 }
 
 
@@ -181,12 +229,8 @@ void CMaterials::LoadMaterials()
 	// create materials
 	for (auto& tMaterial : m_mMaterials | std::views::values)
 	{
-		KeyValues* kv = new KeyValues(tMaterial.m_sName.c_str());
-		if (!kv->LoadFromBuffer(tMaterial.m_sName.c_str(), tMaterial.m_sVMT.c_str()))
-			continue;
-
-		ModifyKeyValues(kv);
-		tMaterial.m_pMaterial = Create(tMaterial.m_sName.c_str(), kv);
+		const std::string material_vmt = modify_vmt(tMaterial.m_sVMT);
+		tMaterial.m_pMaterial = create_from_vmt(tMaterial.m_sName.c_str(), material_vmt);
 		//StoreVars(tMaterial);
 	}
 
@@ -306,12 +350,11 @@ void CMaterials::AddMaterial(const char* sName)
 		);
 	auto& tMaterial = m_mMaterials[uHash];
 
-	KeyValues* kv = new KeyValues(sName);
-	if (!kv->LoadFromBuffer(sName, tMaterial.m_sVMT.c_str()))
+	const std::string material_vmt = modify_vmt(tMaterial.m_sVMT);
+	tMaterial.m_pMaterial = create_from_vmt(sName, material_vmt);
+	if (!tMaterial.m_pMaterial)
 		return;
 
-	ModifyKeyValues(kv);
-	tMaterial.m_pMaterial = Create(sName, kv);
 	//StoreVars(tMaterial);
 
 	std::ofstream outStream(F::Configs.m_sMaterialsPath + sName + ".vmt");
@@ -335,12 +378,14 @@ void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 		RemoveVars(tMaterial);
 		tMaterial.m_sVMT = sVMT;
 
-		KeyValues* kv = new KeyValues(sName);
-		if (!kv->LoadFromBuffer(sName, sVMT))
+		const std::string material_vmt = modify_vmt(sVMT);
+		tMaterial.m_pMaterial = create_from_vmt(sName, material_vmt);
+		if (!tMaterial.m_pMaterial)
+		{
+			m_bLoaded = true;
 			return;
+		}
 
-		ModifyKeyValues(kv);
-		tMaterial.m_pMaterial = Create(sName, kv);
 		//StoreVars(tMaterial);
 
 		std::ofstream outStream(F::Configs.m_sMaterialsPath + sName + ".vmt");

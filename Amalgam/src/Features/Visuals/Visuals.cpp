@@ -1246,30 +1246,43 @@ void CVisuals::OverrideWorldTextures()
 		return;
 	}
 
+	std::string texture_name;
+	std::string extra_vmt;
+	switch (uHash)
+	{
+	case FNV1A::Hash32Const("Dev"):
+		texture_name = "dev/dev_measuregeneric01b";
+		break;
+	case FNV1A::Hash32Const("Camo"):
+		texture_name = "patterns/paint_strokes";
+		break;
+	case FNV1A::Hash32Const("Black"):
+		texture_name = "patterns/combat/black";
+		break;
+	case FNV1A::Hash32Const("White"):
+		texture_name = "patterns/combat/white";
+		break;
+	case FNV1A::Hash32Const("Gray"):
+		texture_name = "vgui/white_additive";
+		extra_vmt = "\n\t$color2 \"[0.12 0.12 0.15]\"";
+		break;
+	default:
+		texture_name = Vars::Visuals::World::WorldTexture.Value;
+	}
+
+	std::string vmt =
+		"\"LightmappedGeneric\""
+		"\n{"
+		"\n\t$basetexture \"" + texture_name + "\"" + extra_vmt +
+		"\n}";
 	KeyValues* kv = new KeyValues("LightmappedGeneric");
 	if (!kv)
 		return;
 
-	switch (uHash)
+	if (!kv->LoadFromBuffer("LightmappedGeneric", vmt.c_str()))
 	{
-	case FNV1A::Hash32Const("Dev"):
-		kv->SetString("$basetexture", "dev/dev_measuregeneric01b");
-		break;
-	case FNV1A::Hash32Const("Camo"):
-		kv->SetString("$basetexture", "patterns/paint_strokes");
-		break;
-	case FNV1A::Hash32Const("Black"):
-		kv->SetString("$basetexture", "patterns/combat/black");
-		break;
-	case FNV1A::Hash32Const("White"):
-		kv->SetString("$basetexture", "patterns/combat/white");
-		break;
-	case FNV1A::Hash32Const("Gray"):
-		kv->SetString("$basetexture", "vgui/white_additive");
-		kv->SetString("$color2", "[0.12 0.12 0.15]");
-		break;
-	default:
-		kv->SetString("$basetexture", Vars::Visuals::World::WorldTexture.Value.c_str());
+		kv->DeleteThis();
+		return;
 	}
 
 	for (auto h = I::MaterialSystem->FirstMaterial(); h != I::MaterialSystem->InvalidMaterial(); h = I::MaterialSystem->NextMaterial(h))
@@ -1287,6 +1300,8 @@ void CVisuals::OverrideWorldTextures()
 
 		pMaterial->SetShaderAndParams(kv);
 	}
+
+	kv->DeleteThis();
 }
 
 static inline void ApplyModulation(Color_t tColor, bool bSky = false)

@@ -23,6 +23,7 @@ public:
 	void ReloadMaterials();
 
 	IMaterial* Create(char const* szName, KeyValues* pKV);
+	IMaterial* create_from_vmt(const char* name, const std::string& vmt);
 	void Remove(IMaterial* pMaterial);
 	void StoreStruct(const std::string& sName, const std::string& sVMT, bool bLocked = false);
 

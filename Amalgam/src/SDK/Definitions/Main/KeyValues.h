@@ -38,7 +38,6 @@ private:
 	KeyValues* m_pPeer;
 	KeyValues* m_pSub;
 	KeyValues* m_pChain;
-	void* m_pSomething;
 
 public:
 	class AutoDelete
@@ -93,5 +92,7 @@ public:
 	void Clear();
 	void DeleteThis();
 };
+
+static_assert(sizeof(KeyValues) == 0x40);
 
 typedef KeyValues::AutoDelete KeyValuesAD;

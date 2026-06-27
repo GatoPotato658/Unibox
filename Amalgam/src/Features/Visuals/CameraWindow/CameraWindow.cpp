@@ -67,9 +67,11 @@ void CCameraWindow::Initialize()
 {
 	if (!m_pCameraMaterial)
 	{
-		KeyValues* kv = new KeyValues("UnlitGeneric");
-		kv->SetString("$basetexture", "m_pCameraTexture");
-		m_pCameraMaterial = F::Materials.Create("CameraMaterial", kv);
+		m_pCameraMaterial = F::Materials.create_from_vmt("CameraMaterial",
+			"\"UnlitGeneric\""
+			"\n{"
+			"\n\t$basetexture \"m_pCameraTexture\""
+			"\n}");
 	}
 
 	if (!m_pCameraTexture)

@@ -413,24 +413,30 @@ void CGlow::Initialize()
 
 	if (!m_pMatHaloAddToScreen)
 	{
-		KeyValues* kv = new KeyValues("UnlitGeneric");
-		kv->SetString("$basetexture", "RenderBuffer1");
-		kv->SetString("$additive", "1");
-		m_pMatHaloAddToScreen = F::Materials.Create("MatHaloAddToScreen", kv);
+		m_pMatHaloAddToScreen = F::Materials.create_from_vmt("MatHaloAddToScreen",
+			"\"UnlitGeneric\""
+			"\n{"
+			"\n\t$basetexture \"RenderBuffer1\""
+			"\n\t$additive \"1\""
+			"\n}");
 	}
 
 	if (!m_pMatBlurX)
 	{
-		KeyValues* kv = new KeyValues("BlurFilterX");
-		kv->SetString("$basetexture", "RenderBuffer1");
-		m_pMatBlurX = F::Materials.Create("MatBlurX", kv);
+		m_pMatBlurX = F::Materials.create_from_vmt("MatBlurX",
+			"\"BlurFilterX\""
+			"\n{"
+			"\n\t$basetexture \"RenderBuffer1\""
+			"\n}");
 	}
 
 	if (!m_pMatBlurY)
 	{
-		KeyValues* kv = new KeyValues("BlurFilterY");
-		kv->SetString("$basetexture", "RenderBuffer2");
-		m_pMatBlurY = F::Materials.Create("MatBlurY", kv);
+		m_pMatBlurY = F::Materials.create_from_vmt("MatBlurY",
+			"\"BlurFilterY\""
+			"\n{"
+			"\n\t$basetexture \"RenderBuffer2\""
+			"\n}");
 	}
 }
 
