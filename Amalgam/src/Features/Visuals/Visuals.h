@@ -52,6 +52,7 @@ private:
 	std::vector<Sightline_t> m_vSightLines = {};
 	std::vector<PickupData_t> m_vPickups = {};
 	std::vector<Vec3> m_vAngles = {};
+	std::vector<KeyValues*> m_v_world_texture_key_values = {};
 
 #ifdef DEBUG_TEXT
 	std::vector<DebugText_t> m_vDebugText = {};

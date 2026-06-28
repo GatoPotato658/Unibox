@@ -1275,15 +1275,7 @@ void CVisuals::OverrideWorldTextures()
 		"\n{"
 		"\n\t$basetexture \"" + texture_name + "\"" + extra_vmt +
 		"\n}";
-	KeyValues* kv = new KeyValues("LightmappedGeneric");
-	if (!kv)
-		return;
-
-	if (!kv->LoadFromBuffer("LightmappedGeneric", vmt.c_str()))
-	{
-		kv->DeleteThis();
-		return;
-	}
+	m_v_world_texture_key_values.reserve(m_v_world_texture_key_values.size() + I::MaterialSystem->GetNumMaterials());
 
 	for (auto h = I::MaterialSystem->FirstMaterial(); h != I::MaterialSystem->InvalidMaterial(); h = I::MaterialSystem->NextMaterial(h))
 	{
@@ -1298,7 +1290,18 @@ void CVisuals::OverrideWorldTextures()
 			|| sName.find("water") != std::string_view::npos)
 			continue;
 
+		KeyValues* kv = new KeyValues("LightmappedGeneric");
+		if (!kv)
+			continue;
+
+		if (!kv->LoadFromBuffer("LightmappedGeneric", vmt.c_str()))
+		{
+			kv->DeleteThis();
+			continue;
+		}
+
 		pMaterial->SetShaderAndParams(kv);
+		m_v_world_texture_key_values.push_back(kv);
 	}
 
 }
