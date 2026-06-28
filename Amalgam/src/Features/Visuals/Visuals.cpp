@@ -1276,6 +1276,7 @@ void CVisuals::OverrideWorldTextures()
 		"\n\t$basetexture \"" + texture_name + "\"" + extra_vmt +
 		"\n}";
 	m_v_world_texture_key_values.reserve(m_v_world_texture_key_values.size() + I::MaterialSystem->GetNumMaterials());
+	MaterialLock_t material_lock = I::MaterialSystem->Lock();
 
 	for (auto h = I::MaterialSystem->FirstMaterial(); h != I::MaterialSystem->InvalidMaterial(); h = I::MaterialSystem->NextMaterial(h))
 	{
@@ -1304,6 +1305,7 @@ void CVisuals::OverrideWorldTextures()
 		m_v_world_texture_key_values.push_back(kv);
 	}
 
+	I::MaterialSystem->Unlock(material_lock);
 }
 
 static inline void ApplyModulation(Color_t tColor, bool bSky = false)

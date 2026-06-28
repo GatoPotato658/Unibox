@@ -19,6 +19,8 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 {
 	DEBUG_RETURN(CViewRender_LevelInit, rcx);
 
+	CALL_ORIGINAL(rcx);
+
 #ifndef TEXTMODE
 	F::Materials.ReloadMaterials();
 	F::Visuals.OverrideWorldTextures();
@@ -38,6 +40,4 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::FollowBot.Reset();
 
 	G::WranglerSecondFireTime = 0.f;
-
-	CALL_ORIGINAL(rcx);
 }
