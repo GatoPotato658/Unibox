@@ -1301,7 +1301,6 @@ void CVisuals::OverrideWorldTextures()
 		pMaterial->SetShaderAndParams(kv);
 	}
 
-	kv->DeleteThis();
 }
 
 static inline void ApplyModulation(Color_t tColor, bool bSky = false)
