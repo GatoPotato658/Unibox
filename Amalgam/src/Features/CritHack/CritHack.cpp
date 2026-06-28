@@ -444,7 +444,10 @@ void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
 		if (m_mHealthHistory.contains(iVictim))
 		{
 			auto& tHistory = m_mHealthHistory[iVictim];
-			auto pVictim = I::ClientEntityList->GetClientEntity(iVictim)->As<CTFPlayer>();
+			CTFPlayer* pVictim = nullptr;
+			auto pVictimEntity = iVictim > 0 && iVictim <= I::EngineClient->GetMaxClients() ? I::ClientEntityList->GetClientEntity(iVictim) : nullptr;
+			if (uintptr_t(pVictimEntity) > 0x10000 && pVictimEntity->GetClassID() == ETFClassID::CTFPlayer)
+				pVictim = pVictimEntity->As<CTFPlayer>();
 
 			if (!iHealth)
 			{
@@ -546,7 +549,11 @@ void CCritHack::Store()
 {
 	for (int n = 1; n <= I::EngineClient->GetMaxClients(); n++)
 	{
-		auto pPlayer = I::ClientEntityList->GetClientEntity(n)->As<CTFPlayer>();
+		CTFPlayer* pPlayer = nullptr;
+		auto pEntity = I::ClientEntityList->GetClientEntity(n);
+		if (uintptr_t(pEntity) > 0x10000 && pEntity->GetClassID() == ETFClassID::CTFPlayer)
+			pPlayer = pEntity->As<CTFPlayer>();
+
 		if (pPlayer && pPlayer->IsAlive() && !pPlayer->IsAGhost())
 			StoreHealthHistory(n, pPlayer->m_iHealth(), pPlayer);
 	}
