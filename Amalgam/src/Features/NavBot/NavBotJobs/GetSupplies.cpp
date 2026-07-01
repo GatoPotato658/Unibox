@@ -1,30 +1,27 @@
 #include "NavBotJobs.h"
 
-namespace
+inline void SortSuppliesByDistance(std::vector<SupplyData_t>& vSupplies, const Vector& vLocalOrigin)
 {
-	void SortSuppliesByDistance(std::vector<SupplyData_t>& vSupplies, const Vector& vLocalOrigin)
-	{
-		std::sort(vSupplies.begin(), vSupplies.end(), [&](const SupplyData_t& a, const SupplyData_t& b) -> bool
-			{
-				return a.m_vOrigin.DistTo(vLocalOrigin) < b.m_vOrigin.DistTo(vLocalOrigin);
-			});
-	}
+	std::sort(vSupplies.begin(), vSupplies.end(), [&](const SupplyData_t& a, const SupplyData_t& b) -> bool
+		{
+			return a.m_vOrigin.DistTo(vLocalOrigin) < b.m_vOrigin.DistTo(vLocalOrigin);
+		});
+}
 
-	auto GetSupplyPriority(int iFlags) -> PriorityListEnum::PriorityListEnum
-	{
-		if (iFlags & GetSupplyEnum::Health)
-			return iFlags & GetSupplyEnum::LowPrio ? PriorityListEnum::LowPrioGetHealth : PriorityListEnum::GetHealth;
+inline PriorityListEnum::PriorityListEnum GetSupplyPriority(int iFlags)
+{
+	if (iFlags & GetSupplyEnum::Health)
+		return iFlags & GetSupplyEnum::LowPrio ? PriorityListEnum::LowPrioGetHealth : PriorityListEnum::GetHealth;
 
-		return PriorityListEnum::GetAmmo;
-	}
+	return PriorityListEnum::GetAmmo;
+}
 
-	auto BuildRememberedDispenser(const Vector& vOrigin) -> SupplyData_t
-	{
-		SupplyData_t tRemembered{};
-		tRemembered.m_bDispenser = true;
-		tRemembered.m_vOrigin = vOrigin;
-		return tRemembered;
-	}
+inline SupplyData_t BuildRememberedDispenser(const Vector& vOrigin)
+{
+	SupplyData_t tRemembered{};
+	tRemembered.m_bDispenser = true;
+	tRemembered.m_vOrigin = vOrigin;
+	return tRemembered;
 }
 
 bool CNavBotSupplies::GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bool bIsAmmo)

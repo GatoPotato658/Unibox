@@ -1120,7 +1120,12 @@ struct ChamsMaterial_t
 
 struct Chams_t
 {
-	std::vector<std::pair<std::string, ChamsMaterial_t>> Visible = { { "Original", ChamsMaterial_t()}};
+private:
+	static inline const std::vector<std::pair<std::string, ChamsMaterial_t>> s_vNone = std::vector<std::pair<std::string, ChamsMaterial_t>>{ { "None", ChamsMaterial_t() } };
+	static inline const std::vector<std::pair<std::string, ChamsMaterial_t>> s_vOriginal = std::vector<std::pair<std::string, ChamsMaterial_t>>{ { "Original", ChamsMaterial_t() } };
+
+public:
+	std::vector<std::pair<std::string, ChamsMaterial_t>> Visible = { { "Original", ChamsMaterial_t() } };
 	std::vector<std::pair<std::string, ChamsMaterial_t>> Occluded = {};
 
 	inline bool operator==(const Chams_t& t) const
@@ -1133,9 +1138,19 @@ struct Chams_t
 		return Visible != t.Visible || Occluded != t.Occluded;
 	}
 
-	inline bool operator()(bool bVisibleOnly = false) const
+	inline bool operator()(bool bDefault = true) const
 	{
-		return Visible != std::vector<std::pair<std::string, ChamsMaterial_t>>{ { "Original", ChamsMaterial_t() } } || !bVisibleOnly && !Occluded.empty();
+		return (bDefault ? Visible != s_vOriginal : !Visible.empty()) || !Occluded.empty();
+	}
+
+	const std::vector<std::pair<std::string, ChamsMaterial_t>>& GetVisible() const
+	{
+		return !Visible.empty() ? Visible : s_vNone;
+	}
+
+	const std::vector<std::pair<std::string, ChamsMaterial_t>>& GetOccluded() const
+	{
+		return !Occluded.empty() ? Occluded : s_vNone;
 	}
 };
 

@@ -31,13 +31,11 @@ MAKE_HOOK(CClientModeShared_DoPostScreenSpaceEffects, U::Memory.GetVirtual(I::Cl
 	F::FollowBot.Render();
 	F::Visuals.Triggers(pLocal);
 	F::Visuals.DrawEffects();
-	F::Chams.m_mEntities.clear();
 	if (I::EngineVGui->IsGameUIVisible() || !F::Materials.m_bLoaded)
 		return CALL_ORIGINAL(rcx, pSetup);
 
 	F::Chams.RenderMain();
 	F::Glow.RenderFirst();
-
 	return CALL_ORIGINAL(rcx, pSetup);
 #endif
 }
@@ -49,7 +47,6 @@ MAKE_HOOK(CViewRender_DrawViewModels, S::CViewRender_DrawViewModels(), void,
 
 #ifndef TEXTMODE
 	CALL_ORIGINAL(rcx, viewRender, F::Spectate.HasTarget() && !I::EngineClient->IsHLTV() ? false : drawViewmodel);
-
 	if (SDK::CleanScreenshot() || F::CameraWindow.m_bDrawing || I::EngineVGui->IsGameUIVisible() || !F::Materials.m_bLoaded)
 		return;
 

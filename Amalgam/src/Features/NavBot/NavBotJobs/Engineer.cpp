@@ -3,33 +3,30 @@
 #include "../NavEngine/Controllers/CPController/CPController.h"
 #include "../NavEngine/Controllers/PLController/PLController.h"
 
-namespace
+inline bool IsBuildSpotFailed(const std::vector<Vector>& vFailedSpots, const Vector& vPos)
 {
-	bool IsBuildSpotFailed(const std::vector<Vector>& vFailedSpots, const Vector& vPos)
+	for (const auto& vFailed : vFailedSpots)
 	{
-		for (const auto& vFailed : vFailedSpots)
-		{
-			if (vFailed.DistTo(vPos) < 1.f)
-				return true;
-		}
+		if (vFailed.DistTo(vPos) < 1.f)
+			return true;
+	}
 
+	return false;
+}
+
+static bool CanBuildAtPosition(CTFPlayer* pLocal, const Vector& vPos)
+{
+	CGameTrace trace;
+	CTraceFilterNavigation filter(pLocal);
+	const Vector vMins(-30.f, -30.f, 0.f);
+	const Vector vMaxs(30.f, 30.f, 66.f);
+
+	SDK::TraceHull(vPos + Vector(0, 0, 5), vPos + Vector(0, 0, 5), vMins, vMaxs, MASK_PLAYERSOLID, &filter, &trace);
+	if (trace.DidHit())
 		return false;
-	}
 
-	bool CanBuildAtPosition(CTFPlayer* pLocal, const Vector& vPos)
-	{
-		CGameTrace trace;
-		CTraceFilterNavigation filter(pLocal);
-		const Vector vMins(-30.f, -30.f, 0.f);
-		const Vector vMaxs(30.f, 30.f, 66.f);
-
-		SDK::TraceHull(vPos + Vector(0, 0, 5), vPos + Vector(0, 0, 5), vMins, vMaxs, MASK_PLAYERSOLID, &filter, &trace);
-		if (trace.DidHit())
-			return false;
-
-		SDK::Trace(vPos + Vector(0, 0, 10), vPos - Vector(0, 0, 10), MASK_PLAYERSOLID, &filter, &trace);
-		return trace.DidHit();
-	}
+	SDK::Trace(vPos + Vector(0, 0, 10), vPos - Vector(0, 0, 10), MASK_PLAYERSOLID, &filter, &trace);
+	return trace.DidHit();
 }
 
 bool CNavBotEngineer::BuildingNeedsToBeSmacked(CBaseObject* pBuilding)
@@ -210,10 +207,10 @@ bool CNavBotEngineer::GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestE
 	Vector vLocalOrigin = pLocal->GetAbsOrigin();
 
 	bool bSet = false;
-	FocusPoint_t tFocus{bDefensive, false, I::GlobalVars->curtime};
+	FocusPoint_t tFocus{ bDefensive, false, I::GlobalVars->curtime };
 	if (bDefensive)
 	{
-		if (F::FlagController.GetSpawnPosition(iLocalTeam, tFocus.m_vPos) 
+		if (F::FlagController.GetSpawnPosition(iLocalTeam, tFocus.m_vPos)
 			|| F::CPController.GetClosestControlPoint(vLocalOrigin, iEnemyTeam, tFocus.m_vPos))
 			bSet = true;
 		else if (auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, iEnemyTeam))
@@ -252,7 +249,7 @@ bool CNavBotEngineer::GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestE
 	auto vTeammates = H::Entities.GetGroup(EntityEnum::PlayerTeam);
 	if (tFocus.m_bBack && vTeammates.size() - 1 > 0)
 	{
-		std::vector<std::pair<CTFPlayer*,float>> vTeammatesSorted;
+		std::vector<std::pair<CTFPlayer*, float>> vTeammatesSorted;
 		for (auto pTeammate : vTeammates)
 		{
 			int iTeammateIdx = pTeammate->entindex();

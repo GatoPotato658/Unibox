@@ -1,6 +1,5 @@
 #include "../SDK/SDK.h"
 
-#include "../Features/Visuals/Notifications/Notifications.h"
 #include "../Features/Visuals/ESP/ESP.h"
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
 #include "../Features/Visuals/CameraWindow/CameraWindow.h"
@@ -15,12 +14,12 @@
 #include "../Features/Visuals/ESP/ESP.h"
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
 #include "../Features/Visuals/CameraWindow/CameraWindow.h"
-#include "../Features/Visuals/Notifications/Notifications.h"
 #include "../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../Features/NavBot/NavBotCore.h"
 #include "../Features/Aimbot/AutoHeal/AutoHeal.h"
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
 #include "../Features/Visuals/Materials/Materials.h"
+#include "../Features/Debug/Debug.h"
 
 MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	void* rcx, int iMode)
@@ -32,7 +31,14 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 
 	F::AutoQueue.Run();
 
-	if (iMode & PAINT_INGAMEPANELS && I::EngineClient->IsInGame() && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
+	if (iMode & PAINT_UIPANELS)
+	{
+		H::Draw.UpdateKeyStrings();
+#ifdef DEBUG_UNI
+		F::Visuals.DrawUni();
+#endif
+	}
+	else if (iMode & PAINT_INGAMEPANELS && !SDK::CleanScreenshot())
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateW2SMatrix();
@@ -58,25 +64,13 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 			F::CritHack.Draw(pLocal);
 			F::NavBotCore.Draw(pLocal);
 			F::Ticks.Draw(pLocal);
-			F::Visuals.DrawDebugInfo(pLocal);
+
+#ifdef DEBUG_INFO
+			F::Debug.Draw(pLocal);
+#endif
 		}
 		H::Draw.End();
 	}
 
 	CALL_ORIGINAL(rcx, iMode);
-
-	if (iMode & PAINT_UIPANELS && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
-	{
-		H::Draw.UpdateScreenSize();
-		H::Draw.UpdateKeyStrings();
-
-		H::Draw.Start();
-		{
-			F::Notifications.Draw();
-#ifdef DEBUG_UNI
-			F::Visuals.DrawUni();
-#endif
-		}
-		H::Draw.End();
-	}
 }

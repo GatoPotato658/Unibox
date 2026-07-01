@@ -3,28 +3,25 @@
 #include "../NavEngine/Controllers/FlagController/FlagController.h"
 #include "../NavEngine/Controllers/Controller.h"
 
-namespace
+inline bool IsHighDangerReason(BlacklistReasonEnum::BlacklistReasonEnum eReason)
 {
-	bool IsHighDangerReason(BlacklistReasonEnum::BlacklistReasonEnum eReason)
-	{
-		return eReason == BlacklistReasonEnum::Sentry || eReason == BlacklistReasonEnum::Sticky || eReason == BlacklistReasonEnum::EnemyInvuln;
-	}
+	return eReason == BlacklistReasonEnum::Sentry || eReason == BlacklistReasonEnum::Sticky || eReason == BlacklistReasonEnum::EnemyInvuln;
+}
 
-	bool IsMediumDangerReason(BlacklistReasonEnum::BlacklistReasonEnum eReason)
-	{
-		return eReason == BlacklistReasonEnum::SentryMedium || eReason == BlacklistReasonEnum::EnemyNormal;
-	}
+inline bool IsMediumDangerReason(BlacklistReasonEnum::BlacklistReasonEnum eReason)
+{
+	return eReason == BlacklistReasonEnum::SentryMedium || eReason == BlacklistReasonEnum::EnemyNormal;
+}
 
-	bool CanUseDangerArea(BlacklistReasonEnum::BlacklistReasonEnum eReason, bool bHasTarget, bool bLowHealth)
-	{
-		if (IsHighDangerReason(eReason))
-			return false;
+inline bool CanUseDangerArea(BlacklistReasonEnum::BlacklistReasonEnum eReason, bool bHasTarget, bool bLowHealth)
+{
+	if (IsHighDangerReason(eReason))
+		return false;
 
-		if (IsMediumDangerReason(eReason))
-			return bHasTarget && !bLowHealth;
+	if (IsMediumDangerReason(eReason))
+		return bHasTarget && !bLowHealth;
 
-		return true;
-	}
+	return true;
 }
 
 bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)

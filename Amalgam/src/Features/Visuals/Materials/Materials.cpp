@@ -78,6 +78,10 @@ static inline void StoreVars(Material_t& tMaterial)
 	auto $invertcull = tMaterial.m_pMaterial->FindVar("$invertcull", &bFound, false);
 	if (bFound && $invertcull && $invertcull->GetIntValueInternal())
 		tMaterial.m_bInvertCull = true;
+	
+	auto $blockoccluded = tMaterial.m_pMaterial->FindVar("$blockoccluded", &bFound, false);
+	if (bFound && $blockoccluded && $blockoccluded->GetIntValueInternal())
+		tMaterial.m_bBlockOccluded = true;
 }
 
 static inline void RemoveVars(Material_t& tMaterial)
@@ -86,6 +90,7 @@ static inline void RemoveVars(Material_t& tMaterial)
 	tMaterial.m_phongtint = nullptr;
 	tMaterial.m_envmaptint = nullptr;
 	tMaterial.m_bInvertCull = false;
+	tMaterial.m_bBlockOccluded = false;
 }
 
 static inline std::string to_lower(std::string value)
@@ -432,7 +437,8 @@ void CMaterials::RemoveMaterial(const char* sName)
 		{
 			fRemoveFromVal(tGroup.m_tChams.Visible);
 			fRemoveFromVal(tGroup.m_tChams.Occluded);
-			fRemoveFromVal(tGroup.m_vBacktrackChams);
+			fRemoveFromVal(tGroup.m_tBacktrackChams.Visible);
+			fRemoveFromVal(tGroup.m_tBacktrackChams.Occluded);
 		}
 	}
 

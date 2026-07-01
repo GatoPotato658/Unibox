@@ -1,18 +1,15 @@
 #include "CPController.h"
 
-namespace
+template <typename TContainer>
+static int FindIgnoredControlPointIndex(const std::string& sLevelName, const TContainer& aIgnorePoints)
 {
-	template <typename TContainer>
-	int FindIgnoredControlPointIndex(const std::string& sLevelName, const TContainer& aIgnorePoints)
+	for (const auto& tIgnore : aIgnorePoints)
 	{
-		for (const auto& tIgnore : aIgnorePoints)
-		{
-			if (sLevelName.find(tIgnore.m_sMapName) != std::string::npos)
-				return tIgnore.m_iPointIdx;
-		}
-
-		return -1;
+		if (sLevelName.find(tIgnore.m_sMapName) != std::string::npos)
+			return tIgnore.m_iPointIdx;
 	}
+
+	return -1;
 }
 
 void CCPController::UpdateObjectiveResource()

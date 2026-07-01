@@ -10,8 +10,8 @@
 #include <format>
 #pragma comment(lib, "imagehlp.lib")
 
-#define STATUS_RUNTIME_ERROR ((DWORD)0xE06D7363)
-#define MS_VC_EXCEPTION ((DWORD)0x406D1388)
+#define STATUS_RUNTIME_ERROR             ((DWORD   )0xE06D7363L)
+#define DBG_THREAD_NAMING                ((DWORD   )0x406D1388L)
 
 struct Frame_t
 {
@@ -26,7 +26,6 @@ struct Frame_t
 
 static PVOID s_pHandle;
 static LPVOID s_lpParam;
-static std::unordered_mapset<LPVOID> s_mAddresses = {};
 static int s_iExceptions = 0;
 
 static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
@@ -110,17 +109,15 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	case STATUS_ACCESS_VIOLATION: sError = "ACCESS VIOLATION"; break;
 	case STATUS_STACK_OVERFLOW: sError = "STACK OVERFLOW"; break;
 	case STATUS_HEAP_CORRUPTION: sError = "HEAP CORRUPTION"; break;
-	case STATUS_RUNTIME_ERROR: sError = "RUNTIME ERROR"; break;
-	case MS_VC_EXCEPTION:
+	case STATUS_RUNTIME_ERROR:
+	case EXCEPTION_BREAKPOINT:
 	case DBG_PRINTEXCEPTION_C:
-	case DBG_PRINTEXCEPTION_WIDE_C: return EXCEPTION_EXECUTE_HANDLER;
+	case DBG_PRINTEXCEPTION_WIDE_C:
+	case DBG_THREAD_NAMING: return EXCEPTION_CONTINUE_SEARCH;
 	}
 
-	if (s_mAddresses.contains(ExceptionInfo->ExceptionRecord->ExceptionAddress)
-		|| !Vars::Debug::CrashLogging.Value
-		|| s_iExceptions && GetAsyncKeyState(VK_SHIFT) & 0x8000 && GetAsyncKeyState(VK_RETURN) & 0x8000)
-		return EXCEPTION_EXECUTE_HANDLER;
-	s_mAddresses[ExceptionInfo->ExceptionRecord->ExceptionAddress];
+	if (!Vars::Debug::CrashLogging.Value)
+		return EXCEPTION_CONTINUE_SEARCH;
 
 	std::stringstream ssErrorStream;
 	ssErrorStream << std::format("Error: {} (0x{:X}) ({})\n", sError, ExceptionInfo->ExceptionRecord->ExceptionCode, ++s_iExceptions);
@@ -187,11 +184,11 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	case STATUS_ACCESS_VIOLATION:
 	case STATUS_STACK_OVERFLOW:
 	case STATUS_HEAP_CORRUPTION:
-		SDK::Output("Unhandled exception", ssErrorStream.str().c_str(), {}, OUTPUT_DEBUG, MB_OK | MB_ICONERROR);
+		SDK::Output("Unhandled exception", ssErrorStream.str().c_str(), {}, OUTPUT_DEBUG, nullptr, MB_OK | MB_ICONERROR);
 	}
 #endif
 
-	return EXCEPTION_EXECUTE_HANDLER;
+	return EXCEPTION_CONTINUE_SEARCH;
 }
 
 void CExceptionHandler::Initialize(LPVOID lpParam)

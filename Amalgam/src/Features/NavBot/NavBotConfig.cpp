@@ -1,11 +1,10 @@
 #include "NavBotConfig.h"
 
 #include "NavBotJobs/NavBotJobs.h"
-#include "../../SDK/SDK.h"
 
 namespace NavBotConfig
 {
-	auto Select(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> NavBotClassConfig_t
+	NavBotClassConfig_t Select(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	{
 		if (!pLocal)
 			return CONFIG_MID_RANGE;

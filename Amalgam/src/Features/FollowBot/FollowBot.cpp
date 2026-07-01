@@ -4,51 +4,48 @@
 #include "../NavBot/BotUtils.h"
 #include "../NavBot/NavEngine/NavEngine.h"
 
-namespace
+static bool HasManualMovementInput(CUserCmd* pCmd)
 {
-	bool HasManualMovementInput(CUserCmd* pCmd)
-	{
-		return pCmd && (pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT)) && !F::Misc.m_bAntiAFK;
-	}
+	return pCmd && (pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT)) && !F::Misc.m_bAntiAFK;
+}
 
-	void SyncBestSlot(CTFPlayer* pLocal)
-	{
-		if (F::BotUtils.m_iCurrentSlot != F::BotUtils.m_iBestSlot)
-			F::BotUtils.SetSlot(pLocal, Vars::Misc::Movement::BotUtils::WeaponSlot.Value ? F::BotUtils.m_iBestSlot : -1);
-	}
+static void SyncBestSlot(CTFPlayer* pLocal)
+{
+	if (F::BotUtils.m_iCurrentSlot != F::BotUtils.m_iBestSlot)
+		F::BotUtils.SetSlot(pLocal, Vars::Misc::Movement::BotUtils::WeaponSlot.Value ? F::BotUtils.m_iBestSlot : -1);
+}
 
-	bool CanUseNavToTarget(const FollowTarget_t& tTarget)
-	{
-		if (!Vars::Misc::Movement::FollowBot::UseNav.Value || !F::NavEngine.IsNavMeshLoaded() || tTarget.m_vLastKnownPos.IsZero())
-			return false;
+static bool CanUseNavToTarget(const FollowTarget_t& tTarget)
+{
+	if (!Vars::Misc::Movement::FollowBot::UseNav.Value || !F::NavEngine.IsNavMeshLoaded() || tTarget.m_vLastKnownPos.IsZero())
+		return false;
 
-		if (!tTarget.m_bDormant)
-			return Vars::Misc::Movement::FollowBot::UseNav.Value;
+	if (!tTarget.m_bDormant)
+		return Vars::Misc::Movement::FollowBot::UseNav.Value;
 
-		return Vars::Misc::Movement::FollowBot::UseNav.Value == Vars::Misc::Movement::FollowBot::UseNavEnum::Dormant;
-	}
+	return Vars::Misc::Movement::FollowBot::UseNav.Value == Vars::Misc::Movement::FollowBot::UseNavEnum::Dormant;
+}
 
-	bool ShouldCancelFollowNav(const FollowTarget_t& tTarget, const Vec3& vLocalOrigin)
-	{
-		if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::Followbot)
-			return false;
+static bool ShouldCancelFollowNav(const FollowTarget_t& tTarget, const Vec3& vLocalOrigin)
+{
+	if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::Followbot)
+		return false;
 
-		const bool bClose = vLocalOrigin.DistTo(tTarget.m_vLastKnownPos) < Vars::Misc::Movement::FollowBot::FollowDistance.Value + 150.f;
-		if (!tTarget.m_bNew && bClose)
-			return true;
+	const bool bClose = vLocalOrigin.DistTo(tTarget.m_vLastKnownPos) < Vars::Misc::Movement::FollowBot::FollowDistance.Value + 150.f;
+	if (!tTarget.m_bNew && bClose)
+		return true;
 
-		return !tTarget.m_vLastKnownPos.IsZero() && F::NavEngine.IsPathing() &&
-			tTarget.m_vLastKnownPos.DistTo(F::NavEngine.GetCrumbs()->back().m_vPos) >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value;
-	}
+	return !tTarget.m_vLastKnownPos.IsZero() && F::NavEngine.IsPathing() &&
+		tTarget.m_vLastKnownPos.DistTo(F::NavEngine.GetCrumbs()->back().m_vPos) >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value;
+}
 
-	bool ShouldStartFollowNav(const FollowTarget_t& tTarget, size_t nCurrentPathSize)
-	{
-		return tTarget.m_bUnreachable ||
-			tTarget.m_bDormant ||
-			(tTarget.m_bNew && tTarget.m_flDistance >= Vars::Misc::Movement::FollowBot::FollowDistance.Value) ||
-			tTarget.m_flDistance >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value ||
-			nCurrentPathSize >= Vars::Misc::Movement::FollowBot::MaxNodes.Value;
-	}
+static bool ShouldStartFollowNav(const FollowTarget_t& tTarget, size_t nCurrentPathSize)
+{
+	return tTarget.m_bUnreachable ||
+		tTarget.m_bDormant ||
+		(tTarget.m_bNew && tTarget.m_flDistance >= Vars::Misc::Movement::FollowBot::FollowDistance.Value) ||
+		tTarget.m_flDistance >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value ||
+		nCurrentPathSize >= Vars::Misc::Movement::FollowBot::MaxNodes.Value;
 }
 
 void CFollowBot::UpdateTargets(CTFPlayer* pLocal)
@@ -375,7 +372,7 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 	{
 		std::deque<Vec3> vCurrentAngles;
 		if (!pCurrentAngles || Vars::Misc::Movement::FollowBot::LookAtPathMode.Value >= Vars::Misc::Movement::FollowBot::LookAtPathModeEnum::CopyImmediate)
-		{ 
+		{
 			Vector vAngles = m_vLastTargetAngles;
 			if (m_tLockedTarget.m_pPlayer)
 			{

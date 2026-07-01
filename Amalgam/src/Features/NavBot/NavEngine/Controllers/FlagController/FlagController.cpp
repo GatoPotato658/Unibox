@@ -1,14 +1,11 @@
 #include "FlagController.h"
 
-namespace
+inline FlagInfo BuildFlagInfo(CCaptureFlag* pFlag)
 {
-	auto BuildFlagInfo(CCaptureFlag* pFlag) -> FlagInfo
-	{
-		FlagInfo tFlag{};
-		tFlag.m_pFlag = pFlag;
-		tFlag.m_iTeam = pFlag ? pFlag->m_iTeamNum() : 0;
-		return tFlag;
-	}
+	FlagInfo tFlag{};
+	tFlag.m_pFlag = pFlag;
+	tFlag.m_iTeam = pFlag ? pFlag->m_iTeamNum() : 0;
+	return tFlag;
 }
 
 FlagInfo CFlagController::GetFlag(int iTeam)

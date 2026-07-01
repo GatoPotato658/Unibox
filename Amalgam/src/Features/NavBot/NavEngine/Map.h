@@ -1,9 +1,7 @@
 #pragma once
 #include "FileReader/CNavFile.h"
 #include <boost/container_hash/hash.hpp>
-#include <limits>
 #include <queue>
-#include <unordered_set>
 #include <mutex>
 
 #define PLAYER_WIDTH				49.0f

@@ -103,7 +103,7 @@ void CAutoQueue::Run()
 			if (bShouldAbandon && !m_bMapPopularizingAbandonTriggered)
 			{
 				m_bMapPopularizingAbandonTriggered = true;
-				SDK::Output("AutoQueue", std::format("Map Popularizing: {}, abandoning match", sAbandonReason).c_str(), { 255, 100, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+				SDK::Output("AutoQueue", std::format("Map Popularizing: {}, abandoning match", sAbandonReason).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 				I::TFGCClientSystem->AbandonCurrentMatch();
 				bWasInGame = false;
 				bWasDisconnected = true;
@@ -145,7 +145,7 @@ void CAutoQueue::Run()
 						bHasLoaded = true;
 					}
 
-					SDK::Output("AutoQueue", "Loading screen for over 6 minutes, requeueing", { 255, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+					SDK::Output("AutoQueue", "Loading screen for over 6 minutes, requeueing", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 					I::TFPartyClient->RequestQueueForMatch(k_eTFMatchGroup_Casual_Default);
 					flLastQueueTime = flCurrentTime;
 					bQueuedOnce = true;
@@ -185,7 +185,7 @@ void CAutoQueue::Run()
 			if ((flCurrentTime - m_flNavmeshAbandonStartTime) >= 10.0f)
 			{
 				m_bNavmeshAbandonTriggered = true;
-				SDK::Output("AutoQueue", "No navmesh available for current map after 10 seconds, abandoning match", { 255, 100, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+				SDK::Output("AutoQueue", "No navmesh available for current map after 10 seconds, abandoning match", WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_WARNING);
 				I::TFGCClientSystem->AbandonCurrentMatch();
 				bWasInGame = false;
 				bWasDisconnected = true;
@@ -225,7 +225,7 @@ void CAutoQueue::Run()
 							tResult.m_uSkippedComma,
 							tResult.m_uAvatarsSaved,
 							tResult.m_uAvatarMissed,
-							tResult.m_uAvatarFailed).c_str(), { 255, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+							tResult.m_uAvatarFailed).c_str(), SUCCESS_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_CHECK);
 						I::TFGCClientSystem->AbandonCurrentMatch();
 						bWasInGame = false;
 						bWasDisconnected = true;
@@ -318,7 +318,7 @@ void CAutoQueue::Run()
 		if (bIsLoadingMap && bIsQueued && Vars::Misc::Queueing::RQLTM.Value)
 		{
 			I::TFPartyClient->CancelMatchQueueRequest(k_eTFMatchGroup_Casual_Default);
-			SDK::Output("AutoQueue", "Loading screen active, canceling casual queue", { 255, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+			SDK::Output("AutoQueue", "Loading screen active, canceling casual queue", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 			bQueuedFromRQif = false;
 			flLastQueueTime = flCurrentTime;
 			bIsQueued = false;
@@ -379,7 +379,7 @@ void CAutoQueue::Run()
 			if (!bMaintainQueue)
 			{
 				I::TFPartyClient->CancelMatchQueueRequest(k_eTFMatchGroup_Casual_Default);
-				SDK::Output("AutoQueue", "RQif conditions cleared, canceling casual queue", { 255, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+				SDK::Output("AutoQueue", "RQif conditions cleared, canceling casual queue", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 				bQueuedFromRQif = false;
 				flLastQueueTime = flCurrentTime;
 				bIsQueued = false;
@@ -495,7 +495,7 @@ void CAutoQueue::SearchCommunityServers()
 	if (!I::SteamMatchmakingServers || m_bSearchingServers)
 		return;
 
-	SDK::Output("AutoQueue", "Searching for community servers...", { 100, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+	SDK::Output("AutoQueue", "Searching for community servers...", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 	CleanupServerList();
 
 	std::vector<MatchMakingKeyValuePair_t> vFilters;
@@ -538,7 +538,7 @@ void CAutoQueue::ConnectToServer(const gameserveritem_t* pServer)
 
 	char msg[256];
 	snprintf(msg, sizeof(msg), "Connecting to server: %s (%s)", pServer->GetName(), sServerAddress.c_str());
-	SDK::Output("AutoQueue", msg, { 100, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+	SDK::Output("AutoQueue", msg, INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 
 	std::string sConnectCmd = std::string("connect ") + sServerAddress;
 	I::EngineClient->ClientCmd_Unrestricted(sConnectCmd.c_str());
@@ -642,7 +642,7 @@ void CAutoQueue::CleanupServerList()
 
 void CAutoQueue::HandleDisconnect()
 {
-	SDK::Output("AutoQueue", "Disconnected from community server, searching for new one...", { 255, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+	SDK::Output("AutoQueue", "Disconnected from community server, searching for new one...", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 
 	m_bConnectedToCommunityServer = false;
 	m_sCurrentServerIP.clear();
@@ -657,7 +657,7 @@ void CAutoQueue::CheckServerTimeout()
 
 	if (I::GlobalVars->realtime - m_flServerJoinTime >= flMaxTime)
 	{
-		SDK::Output("AutoQueue", "Max time on server reached, disconnecting...", { 255, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+		SDK::Output("AutoQueue", "Max time on server reached, disconnecting...", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 		I::EngineClient->ClientCmd_Unrestricted("disconnect");
 	}
 }
@@ -686,7 +686,7 @@ void CAutoQueue::RefreshComplete(HServerListRequest hRequest, EMatchMakingServer
 
 	char msg[128];
 	snprintf(msg, sizeof(msg), "Found %zu valid community servers", m_vCommunityServers.size());
-	SDK::Output("AutoQueue", msg, { 100, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+	SDK::Output("AutoQueue", msg, INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_INFO);
 
 	if (!m_vCommunityServers.empty())
 	{
@@ -705,7 +705,7 @@ void CAutoQueue::RefreshComplete(HServerListRequest hRequest, EMatchMakingServer
 		ConnectToServer(m_vCommunityServers[0]);
 	}
 	else
-		SDK::Output("AutoQueue", "No valid community servers found", { 255, 100, 100 }, OUTPUT_CONSOLE | OUTPUT_TOAST, -1);
+		SDK::Output("AutoQueue", "No valid community servers found", WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_WARNING);
 
 	CleanupServerList();
 }

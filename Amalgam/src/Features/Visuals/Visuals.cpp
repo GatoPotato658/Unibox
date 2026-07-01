@@ -410,149 +410,6 @@ void CVisuals::Triggers(CTFPlayer* pLocal)
 	}
 }
 
-#define PAIR(x) { x, #x }
-void CVisuals::DrawDebugInfo(CTFPlayer* pLocal)
-{
-#ifdef DEBUG_TEXT
-	if (!Vars::Debug::Info.Value && m_vDebugText.empty())
-		return;
-#else
-	if (!Vars::Debug::Info.Value)
-		return;
-#endif
-
-	int x = 10, y = 10;
-	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
-	y -= nTall;
-
-	if (Vars::Debug::Info.Value)
-	{
-		auto pWeapon = H::Entities.GetWeapon();
-		auto pCmd = !I::EngineClient->IsPlayingDemo() ? G::LastUserCmd : I::Input->GetUserCmd(I::ClientState->lastoutgoingcommand);
-
-		if (pCmd)
-		{
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("View: ({:.3f}, {:.3f}, {:.3f})", pCmd->viewangles.x, pCmd->viewangles.y, pCmd->viewangles.z).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Move: ({}, {}, {})", pCmd->forwardmove, pCmd->sidemove, pCmd->upmove).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Buttons: {:#034b} ({})", pCmd->buttons,
-				[&]()
-				{
-					std::string sReturn = "";
-					if (pCmd->buttons)
-					{
-						static std::vector<std::pair<int, const char*>> vFlags = {
-							PAIR(IN_ATTACK),
-							PAIR(IN_ATTACK2),
-							PAIR(IN_ATTACK3),
-							PAIR(IN_FORWARD),
-							PAIR(IN_BACK),
-							PAIR(IN_MOVELEFT),
-							PAIR(IN_MOVERIGHT),
-							PAIR(IN_JUMP),
-							PAIR(IN_DUCK),
-							PAIR(IN_RELOAD),
-							PAIR(IN_LEFT),
-							PAIR(IN_RIGHT),
-							PAIR(IN_SCORE),
-							/*
-							PAIR(IN_USE),
-							PAIR(IN_CANCEL),
-							PAIR(IN_RUN),
-							PAIR(IN_ALT1),
-							PAIR(IN_ALT2),
-							PAIR(IN_SPEED),
-							PAIR(IN_WALK),
-							PAIR(IN_ZOOM),
-							PAIR(IN_WEAPON1),
-							PAIR(IN_WEAPON2),
-							PAIR(IN_BULLRUSH),
-							PAIR(IN_GRENADE1),
-							PAIR(IN_GRENADE2),
-							*/
-						};
-
-						for (int i = 0; i < vFlags.size(); i++)
-						{
-							auto& paFlag = vFlags[i];
-							if (pCmd->buttons & paFlag.first)
-							{
-								if (!sReturn.empty())
-									sReturn += " | ";
-								sReturn += paFlag.second;
-							}
-						}
-					}
-					return sReturn.empty() ? "NONE" : sReturn;
-				}()
-				).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Tickcount: {}, Command: {}", pCmd->tick_count, pCmd->command_number).c_str());
-		}
-		Vec3 vOrigin = pLocal->m_vecOrigin();
-		H::Draw.StringOutlined(fFont, x, y += nTall * 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Origin: ({:.3f}, {:.3f}, {:.3f})", vOrigin.x, vOrigin.y, vOrigin.z).c_str());
-		Vec3 vVelocity = pLocal->m_vecVelocity();
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Velocity: {:.3f}, {:.3f} ({:.3f}, {:.3f}, {:.3f})", vVelocity.Length(), vVelocity.Length2D(), vVelocity.x, vVelocity.y, vVelocity.z).c_str());
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Ground entity: {}", pLocal->m_hGroundEntity() ? pLocal->m_hGroundEntity()->GetClientClass()->m_pNetworkName : "none").c_str());
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Tickbase: {}", pLocal->m_nTickBase()).c_str());
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Choke: {}, {}", G::Choking, I::ClientState->chokedcommands).c_str());
-		//H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Ticks: {}, {}", F::Ticks.m_iShiftedTicks, F::Ticks.m_iShiftedGoal).c_str());
-		//H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Round state: {}, {}, {}", SDK::GetRoundState(), SDK::GetWinningTeam(), I::EngineClient->IsPlayingDemo()).c_str());
-		//H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Entities: {} ({}, {})", I::ClientEntityList->GetMaxEntities(), I::ClientEntityList->GetHighestEntityIndex(), I::ClientEntityList->NumberOfEntities(false)).c_str());
-	
-		/*
-		if (pWeapon)
-		{
-
-			float flTime = TICKS_TO_TIME(pLocal->m_nTickBase());
-			float flPrimaryAttack = pWeapon->m_flNextPrimaryAttack();
-			float flSecondaryAttack = pWeapon->m_flNextSecondaryAttack();
-			float flAttack = pLocal->m_flNextAttack();
-
-			y += nTall;
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Weapon: {}, {}", pWeapon->GetSlot(), pWeapon->GetWeaponID()).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Attacking: {}", G::Attacking).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("CanPrimaryAttack: {} ([{:.3f} | {:.3f}] <= {:.3f})", G::CanPrimaryAttack, flPrimaryAttack, flAttack, flTime).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("CanSecondaryAttack: {} ([{:.3f} | {:.3f}] <= {:.3f})", G::CanSecondaryAttack, flSecondaryAttack, flAttack, flTime).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Attack: {:.3f}, {:.3f}; {:.3f}", flTime - flPrimaryAttack, flTime - flSecondaryAttack, flTime - flAttack).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Reload: {} ({} || {} != 0)", G::Reloading, pWeapon->m_bInReload(), pWeapon->m_iReloadMode()).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Throw: {}, Smack: {}", G::Throwing, pWeapon->m_flSmackTime()).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, SDK::WeaponDoesNotUseAmmo(pWeapon) ? "Ammo: not used" : std::format("Ammo: {} ({} {})", pWeapon->HasAmmo(), pWeapon->m_iClip1(), pWeapon->GetWeaponInfo() ? pWeapon->GetWeaponInfo()->iMaxClip1 : -1).c_str());
-			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Res ammo: {} ({})", pLocal->GetAmmoCount(pWeapon->m_iPrimaryAmmoType()),SDK::GetWeaponMaxReserveAmmo(pWeapon->GetWeaponID(), pWeapon->m_iItemDefinitionIndex())).c_str());
-			//auto pViewModel = pLocal->m_hViewModel( ).Get( )->As<CBaseAnimating>( );
-			//if ( pViewModel )
-			//{
-			//	H::Draw.StringOutlined( fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format( "Viewmodel m_flPoseParameter: {:.3f}", pViewModel->m_flPoseParameter( )[0] ).c_str( ) );
-			//	H::Draw.StringOutlined( fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format( "Viewmodel m_nSequence: {}", pViewModel->m_nSequence( ) ).c_str( ) );
-			//	H::Draw.StringOutlined( fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format( "Viewmodel m_flAnimTime: {}", pViewModel->m_flAnimTime( ) ).c_str( ) );
-			//	H::Draw.StringOutlined( fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format( "Viewmodel m_flCycle: {}", pViewModel->m_flCycle( ) ).c_str( ) );
-			//	H::Draw.StringOutlined( fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format( "Viewmodel m_bClientSideFrameReset: {}", pViewModel->m_bClientSideFrameReset( ) ).c_str( ) );
-			//	H::Draw.StringOutlined( fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format( "Viewmodel m_bClientSideAnimation: {}", pViewModel->m_bClientSideAnimation( ) ).c_str( ) );
-			//}
-		}
-		*/
-	}
-
-#ifdef DEBUG_TEXT
-	if (!m_vDebugText.empty())
-	{
-		if (Vars::Debug::Info.Value)
-			y += nTall;
-		for (auto& [sString, tColor, vPosition2D, vPosition3D] : m_vDebugText)
-		{
-			if (vPosition3D)
-			{
-				if (Vec3 vScreen; SDK::W2S(*vPosition3D, vScreen))
-					H::Draw.StringOutlined(fFont, vScreen.x, vScreen.y, tColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, sString.c_str());
-			}
-			else if (vPosition2D)
-				H::Draw.StringOutlined(fFont, vPosition2D->x, vPosition2D->y, tColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, sString.c_str());
-			else
-				H::Draw.StringOutlined(fFont, x, y += nTall, tColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, sString.c_str());
-		}
-	}
-#endif
-}
-
 #ifdef DEBUG_UNI
 void CVisuals::DrawUni()
 {
@@ -574,52 +431,26 @@ void CVisuals::DrawUni()
 		m_pCurrentUniTexture = pTextureInfo;
 	}
 
-	if (!m_pCurrentUniTexture)
+	if (!m_pCurrentUniTexture || SDK::CleanScreenshot())
 		return;
 
-	float flScale = std::clamp(I::GlobalVars->curtime - flStartDrawTime, 0.f, 1.f);
-	I::MatSystemSurface->DrawSetColor(Color_t(255, 255, 255, Math::RemapVal(flScale, 0.1f, 1.f, 255, 13)));
-	I::MatSystemSurface->DrawSetTexture(m_pCurrentUniTexture->m_iTextureID);
+	H::Draw.Start();
+	{
+		float flScale = std::clamp(I::GlobalVars->curtime - flStartDrawTime, 0.f, 1.f);
+		I::MatSystemSurface->DrawSetColor(Color_t(255, 255, 255, Math::RemapVal(flScale, 0.1f, 1.f, 255, 13)));
+		I::MatSystemSurface->DrawSetTexture(m_pCurrentUniTexture->m_iTextureID);
 
-	int iImageHalfW = m_pCurrentUniTexture->m_iWidth / 2;
-	int iScreenHalfW = H::Draw.m_nScreenW / 2;
-	int iImageHalfH = m_pCurrentUniTexture->m_iHeight / 2;
-	int iScreenHalfH = H::Draw.m_nScreenH / 2;
-	int iResizeW = flScale * iScreenHalfW;
-	int iResizeH = flScale * iScreenHalfH;
-	I::MatSystemSurface->DrawTexturedRect(iScreenHalfW - iImageHalfW - iResizeW, iScreenHalfH - iImageHalfH - iResizeH, iScreenHalfW + iImageHalfW + iResizeW, iScreenHalfH + iImageHalfH + iResizeH);
+		int iImageHalfW = m_pCurrentUniTexture->m_iWidth / 2;
+		int iScreenHalfW = H::Draw.m_nScreenW / 2;
+		int iImageHalfH = m_pCurrentUniTexture->m_iHeight / 2;
+		int iScreenHalfH = H::Draw.m_nScreenH / 2;
+		int iResizeW = flScale * iScreenHalfW;
+		int iResizeH = flScale * iScreenHalfH;
+		I::MatSystemSurface->DrawTexturedRect(iScreenHalfW - iImageHalfW - iResizeW, iScreenHalfH - iImageHalfH - iResizeH, iScreenHalfW + iImageHalfW + iResizeW, iScreenHalfH + iImageHalfH + iResizeH);
+	}
+	H::Draw.End();
 }
 #endif
-
-#ifdef DEBUG_TEXT
-void CVisuals::AddDebugText(const DebugText_t& sText)
-{
-	m_vDebugText.push_back(sText);
-}
-
-void CVisuals::AddDebugText(const std::string& sString, Color_t tColor)
-{
-	m_vDebugText.emplace_back(sString, tColor, std::nullopt, std::nullopt);
-}
-
-void CVisuals::AddDebugText(const std::string& sString, const Vec2& vPosition, Color_t tColor)
-{
-	m_vDebugText.emplace_back(sString, tColor, vPosition, std::nullopt);
-}
-
-void CVisuals::AddDebugText(const std::string& sString, const Vec3& vPosition, Color_t tColor)
-{
-	m_vDebugText.emplace_back(sString, tColor, std::nullopt, vPosition);
-}
-
-void CVisuals::ClearDebugText()
-{
-	m_vDebugText.clear();
-}
-#endif
-
-#undef PAIR
-
 
 
 std::vector<DrawBox_t> CVisuals::GetHitboxes(matrix3x4* aBones, CBaseAnimating* pEntity, std::vector<int> vHitboxes, int iTarget)
@@ -1492,9 +1323,11 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 #endif
 }
 
-void CVisuals::LocalAnimations(CTFPlayer* pLocal, CUserCmd* pCmd)
+void CVisuals::LocalAnimations(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	m_vAngles.push_back(pCmd->viewangles);
+	if (pWeapon)
+		pWeapon->UpdateAllViewmodelAddons();
 
 	auto pAnimState = pLocal->m_PlayerAnimState();
 	if (!G::SendPacket || !pAnimState)

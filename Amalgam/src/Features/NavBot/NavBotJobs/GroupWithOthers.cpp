@@ -1,17 +1,14 @@
 #include "NavBotJobs.h"
 #include "../../Misc/NamedPipe/NamedPipe.h"
 
-namespace
+static Vector NormalizePlanar(Vector vDirection)
 {
-	Vector NormalizePlanar(Vector vDirection)
-	{
-		vDirection.z = 0.f;
-		const float flLength = vDirection.Length();
-		if (flLength <= 0.001f)
-			return {};
+	vDirection.z = 0.f;
+	const float flLength = vDirection.Length();
+	if (flLength <= 0.001f)
+		return {};
 
-		return vDirection / flLength;
-	}
+	return vDirection / flLength;
 }
 
 bool CNavBotGroup::GetFormationOffset(CTFPlayer* pLocal, int iPositionIndex, Vector& vOut)

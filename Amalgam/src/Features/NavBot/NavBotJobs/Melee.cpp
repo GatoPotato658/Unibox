@@ -1,18 +1,15 @@
 #include "NavBotJobs.h"
 
-namespace
+static bool ApproachMeleeTarget(CUserCmd* pCmd, CTFPlayer* pLocal, const Vector& vTargetOrigin)
 {
-	bool ApproachMeleeTarget(CUserCmd* pCmd, CTFPlayer* pLocal, const Vector& vTargetOrigin)
-	{
-		// Crouch if we are standing on someone
-		if (pLocal->m_hGroundEntity().Get() && pLocal->m_hGroundEntity().Get()->IsPlayer())
-			pCmd->buttons |= IN_DUCK;
+	// Crouch if we are standing on someone
+	if (pLocal->m_hGroundEntity().Get() && pLocal->m_hGroundEntity().Get()->IsPlayer())
+		pCmd->buttons |= IN_DUCK;
 
-		SDK::WalkTo(pCmd, pLocal, vTargetOrigin);
-		F::NavEngine.CancelPath();
-		F::NavEngine.m_eCurrentPriority = PriorityListEnum::MeleeAttack;
-		return true;
-	}
+	SDK::WalkTo(pCmd, pLocal, vTargetOrigin);
+	F::NavEngine.CancelPath();
+	F::NavEngine.m_eCurrentPriority = PriorityListEnum::MeleeAttack;
+	return true;
 }
 
 bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnemy_t tClosestEnemy)

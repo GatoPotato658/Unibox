@@ -2,7 +2,6 @@
 #include "BotUtils.h"
 #include "NavBotJobs/NavBotJobs.h"
 #include "NavBotConfig.h"
-#include "NavBotDebug.h"
 
 class CNavArea;
 class CNavBotCore
@@ -19,7 +18,6 @@ public:
 	void Draw(CTFPlayer* pLocal);
 
 private:
-	friend void NavBotDebug::Draw(CTFPlayer* pLocal);
 
 	Timer m_tIdleTimer = {};
 	Timer m_tAntiStuckTimer = {};

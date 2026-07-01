@@ -17,39 +17,37 @@ float CMap::GetBlacklistPenalty(const BlacklistReason_t& tReason) const
 	}
 }
 
-namespace
+
+static float GetAreaVerticalOutside(const CNavArea& tArea, const Vector& vPos)
 {
-	float GetAreaVerticalOutside(const CNavArea& tArea, const Vector& vPos)
-	{
-		const float flBelow = std::max(tArea.m_flMinZ - vPos.z, 0.0f);
-		const float flAbove = std::max(vPos.z - tArea.m_flMaxZ, 0.0f);
-		return flBelow + flAbove;
-	}
+	const float flBelow = std::max(tArea.m_flMinZ - vPos.z, 0.0f);
+	const float flAbove = std::max(vPos.z - tArea.m_flMaxZ, 0.0f);
+	return flBelow + flAbove;
+}
 
-	float GetNearestAreaScore(const CNavArea& tArea, const Vector& vPos, bool bLocalOrigin, bool* pIsTightOverlap = nullptr)
-	{
-		const float flNearestX = std::clamp(vPos.x, tArea.m_vNwCorner.x, tArea.m_vSeCorner.x);
-		const float flNearestY = std::clamp(vPos.y, tArea.m_vNwCorner.y, tArea.m_vSeCorner.y);
-		const float flNearestZ = tArea.GetZ(flNearestX, flNearestY);
-		const float flVerticalToSurface = std::fabs(flNearestZ - vPos.z);
-		const float flVerticalOutside = GetAreaVerticalOutside(tArea, vPos);
+static float GetNearestAreaScore(const CNavArea& tArea, const Vector& vPos, bool bLocalOrigin, bool* pIsTightOverlap = nullptr)
+{
+	const float flNearestX = std::clamp(vPos.x, tArea.m_vNwCorner.x, tArea.m_vSeCorner.x);
+	const float flNearestY = std::clamp(vPos.y, tArea.m_vNwCorner.y, tArea.m_vSeCorner.y);
+	const float flNearestZ = tArea.GetZ(flNearestX, flNearestY);
+	const float flVerticalToSurface = std::fabs(flNearestZ - vPos.z);
+	const float flVerticalOutside = GetAreaVerticalOutside(tArea, vPos);
 
-		const float flDx = flNearestX - vPos.x;
-		const float flDy = flNearestY - vPos.y;
-		const float flPlanarDistSqr = flDx * flDx + flDy * flDy;
+	const float flDx = flNearestX - vPos.x;
+	const float flDy = flNearestY - vPos.y;
+	const float flPlanarDistSqr = flDx * flDx + flDy * flDy;
 
-		const bool bOverlapping = tArea.IsOverlapping(vPos);
-		const bool bTightOverlap = bOverlapping && flVerticalOutside <= 18.0f;
-		if (pIsTightOverlap) *pIsTightOverlap = bTightOverlap;
+	const bool bOverlapping = tArea.IsOverlapping(vPos);
+	const bool bTightOverlap = bOverlapping && flVerticalOutside <= 18.0f;
+	if (pIsTightOverlap) *pIsTightOverlap = bTightOverlap;
 
-		float flScore = flPlanarDistSqr + (flVerticalToSurface * flVerticalToSurface * 6.0f) + (flVerticalOutside * flVerticalOutside * (bLocalOrigin ? 18.0f : 10.0f));
-		if (bOverlapping) flScore *= bLocalOrigin ? 0.45f : 0.7f;
-		if (bTightOverlap) flScore *= 0.15f;
-		else if (bLocalOrigin && bOverlapping && flVerticalOutside > PLAYER_JUMP_HEIGHT)
-			flScore += flVerticalOutside * flVerticalOutside * 8.0f;
+	float flScore = flPlanarDistSqr + (flVerticalToSurface * flVerticalToSurface * 6.0f) + (flVerticalOutside * flVerticalOutside * (bLocalOrigin ? 18.0f : 10.0f));
+	if (bOverlapping) flScore *= bLocalOrigin ? 0.45f : 0.7f;
+	if (bTightOverlap) flScore *= 0.15f;
+	else if (bLocalOrigin && bOverlapping && flVerticalOutside > PLAYER_JUMP_HEIGHT)
+		flScore += flVerticalOutside * flVerticalOutside * 8.0f;
 
-		return flScore;
-	}
+	return flScore;
 }
 
 int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std::vector<CNavArea*>& vOutPath, float* pflCost)
@@ -76,7 +74,7 @@ int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std:
 		return 2;
 
 	m_bSkipSpawn = !(pStart->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE))
-				&& !(pEnd->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
+		&& !(pEnd->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
 
 	PathNode_t& tStart = m_vPathNodes[uStartIdx];
 	tStart.m_g = 0.f;
@@ -165,10 +163,10 @@ SolveContext CMap::BuildSolveContext()
 {
 	SolveContext tCtx{};
 	auto pLocal = H::Entities.GetLocal();
-	tCtx.m_iTeam          = pLocal ? pLocal->m_iTeamNum() : 0;
-	tCtx.m_iTickcount     = I::GlobalVars ? I::GlobalVars->tickcount : 0;
+	tCtx.m_iTeam = pLocal ? pLocal->m_iTeamNum() : 0;
+	tCtx.m_iTickcount = I::GlobalVars ? I::GlobalVars->tickcount : 0;
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
-	tCtx.m_bIgnoreTraces  = F::NavEngine.m_bIgnoreTraces;
+	tCtx.m_bIgnoreTraces = F::NavEngine.m_bIgnoreTraces;
 	F::Hazards.SnapshotCosts(tCtx.m_mHazardCosts);
 	return tCtx;
 }
@@ -178,16 +176,16 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 	if (!pCurrentArea) return;
 
 	const int iTeam = tCtx.m_iTeam;
-	const int iNow  = tCtx.m_iTickcount;
+	const int iNow = tCtx.m_iTickcount;
 	const float flTickInterval = I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.f);
 	const int iCacheExpiry = iNow + static_cast<int>(static_cast<float>(tCtx.m_iVischeckCacheSeconds) / flTickInterval);
 	const int iUnreachableCacheExpiry = iNow + static_cast<int>(90.f / flTickInterval);
 
 	auto LookupHazard = [&](CNavArea* pArea) -> float
-	{
-		auto it = tCtx.m_mHazardCosts.find(pArea);
-		return it == tCtx.m_mHazardCosts.end() ? 0.f : it->second;
-	};
+		{
+			auto it = tCtx.m_mHazardCosts.find(pArea);
+			return it == tCtx.m_mHazardCosts.end() ? 0.f : it->second;
+		};
 
 	for (NavConnect_t& tConnection : pCurrentArea->m_vConnections)
 	{
@@ -343,7 +341,7 @@ DropdownHint_t CMap::HandleDropdown(const Vector& vCurrentPos, const Vector& vNe
 		flAdvance = std::min(flAdvance, flHorizontalLength * 0.95f);
 		const float flMinAdvance = std::min(flHorizontalLength * 0.95f,
 			std::max(PLAYER_WIDTH * (bIsOneWay ? 0.5f : 0.75f),
-					 flHorizontalLength * (bIsOneWay ? 0.35f : 0.5f)));
+			flHorizontalLength * (bIsOneWay ? 0.35f : 0.5f)));
 		flAdvance = std::clamp(flAdvance, flMinAdvance, flHorizontalLength * 0.95f);
 
 		tHint.m_flApproachDistance = flAdvance;
@@ -387,9 +385,9 @@ bool CMap::HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const
 float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown, int iTeam) const
 {
 	auto HorizontalDistance = [](const Vector& a, const Vector& b)
-	{
-		Vector d = b - a; d.z = 0.f; return d.Length();
-	};
+		{
+			Vector d = b - a; d.z = 0.f; return d.Length();
+		};
 
 	const float flForward = std::max(HorizontalDistance(tPoints.m_vCurrent, tPoints.m_vNext), 1.f);
 	const float flDeviationStart = HorizontalDistance(tPoints.m_vCurrent, tPoints.m_vCenter);

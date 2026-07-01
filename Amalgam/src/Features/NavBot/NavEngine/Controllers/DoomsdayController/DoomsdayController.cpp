@@ -2,24 +2,19 @@
 #include "../FlagController/FlagController.h"
 #include "../CPController/CPController.h"
 #include "../../NavEngine.h"
-#include <string_view>
-#include <format>
 
-namespace
+static Vector AdjustObjectivePosToNav(Vector vPos)
 {
-	Vector AdjustObjectivePosToNav(Vector vPos)
-	{
-		if (!F::NavEngine.IsNavMeshLoaded())
-			return vPos;
+	if (!F::NavEngine.IsNavMeshLoaded())
+		return vPos;
 
-		CNavArea* pArea = F::NavEngine.FindClosestNavArea(vPos, false);
-		if (!pArea)
-			return vPos;
+	CNavArea* pArea = F::NavEngine.FindClosestNavArea(vPos, false);
+	if (!pArea)
+		return vPos;
 
-		Vector vCorrected = pArea->GetNearestPoint(vPos.Get2D());
-		vCorrected.z = pArea->GetZ(vCorrected.x, vCorrected.y);
-		return vCorrected;
-	}
+	Vector vCorrected = pArea->GetNearestPoint(vPos.Get2D());
+	vCorrected.z = pArea->GetZ(vCorrected.x, vCorrected.y);
+	return vCorrected;
 }
 
 CCaptureFlag* CDoomsdayController::GetFlag()

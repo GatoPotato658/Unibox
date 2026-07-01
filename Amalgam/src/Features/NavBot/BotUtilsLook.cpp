@@ -1,17 +1,14 @@
 #include "BotUtils.h"
 #include "../Aimbot/AimbotGlobal/AimbotGlobal.h"
 
-namespace
+static bool SmoothAimHasPriority()
 {
-	bool SmoothAimHasPriority()
-	{
-		const auto iAimType = Vars::Aimbot::General::AimType.Value;
-		if (iAimType != Vars::Aimbot::General::AimTypeEnum::Smooth
-			&& iAimType != Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
-			&& iAimType != Vars::Aimbot::General::AimTypeEnum::Assistive)
-			return false;
-		return G::AimbotSteering;
-	}
+	const auto iAimType = Vars::Aimbot::General::AimType.Value;
+	if (iAimType != Vars::Aimbot::General::AimTypeEnum::Smooth
+		&& iAimType != Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
+		&& iAimType != Vars::Aimbot::General::AimTypeEnum::Assistive)
+		return false;
+	return G::AimbotSteering;
 }
 
 void CBotUtils::DoSlowAim(Vec3& vWishAngles, float flSpeed, Vec3 vPreviousAngles)

@@ -2,18 +2,15 @@
 #include "../BotUtils.h"
 #include "../NavEngine/NavEngine.h"
 
-namespace
+inline float GetPlayerDangerRadius(int iClass)
 {
-	float GetPlayerDangerRadius(int iClass)
+	switch (iClass)
 	{
-		switch (iClass)
-		{
-		case TF_CLASS_SCOUT:
-		case TF_CLASS_HEAVY:
-		case TF_CLASS_ENGINEER:  return 350.f;
-		case TF_CLASS_SNIPER:    return 600.f;
-		default:                 return 500.f;
-		}
+	case TF_CLASS_SCOUT:
+	case TF_CLASS_HEAVY:
+	case TF_CLASS_ENGINEER:  return 350.f;
+	case TF_CLASS_SNIPER:    return 600.f;
+	default:                 return 500.f;
 	}
 }
 
@@ -156,8 +153,8 @@ float CHazards::GetCost(CNavArea* pArea) const
 	const auto& tHazard = it->second;
 	if (m_bIgnoreSentries
 		&& (tHazard.m_eKind == HazardKind::Sentry
-			|| tHazard.m_eKind == HazardKind::SentryMedium
-			|| tHazard.m_eKind == HazardKind::SentryLow))
+		|| tHazard.m_eKind == HazardKind::SentryMedium
+		|| tHazard.m_eKind == HazardKind::SentryLow))
 		return 0.f;
 
 	if (tHazard.m_ePolicy == HazardPolicy::HardBlock || tHazard.m_ePolicy == HazardPolicy::TempForbid)
@@ -183,8 +180,8 @@ void CHazards::SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const
 	{
 		if (m_bIgnoreSentries
 			&& (tHazard.m_eKind == HazardKind::Sentry
-				|| tHazard.m_eKind == HazardKind::SentryMedium
-				|| tHazard.m_eKind == HazardKind::SentryLow))
+			|| tHazard.m_eKind == HazardKind::SentryMedium
+			|| tHazard.m_eKind == HazardKind::SentryLow))
 			continue;
 
 		if (tHazard.m_ePolicy == HazardPolicy::HardBlock || tHazard.m_ePolicy == HazardPolicy::TempForbid)
@@ -215,13 +212,13 @@ void CHazards::ExpireStale()
 	const int iNow = I::GlobalVars->tickcount;
 
 	std::erase_if(m_mAreaHazards, [&](const auto& e)
-	{
-		const auto& tHazard = e.second;
-		const bool bExpiredByTick = tHazard.m_iExpireTick && tHazard.m_iExpireTick < iNow;
-		const bool bStale = std::abs(iNow - tHazard.m_iLastUpdateTick) > TIME_TO_TICKS(2.0f);
-		if (bExpiredByTick || bStale) { bAnyChange = true; return true; }
-		return false;
-	});
+		{
+			const auto& tHazard = e.second;
+			const bool bExpiredByTick = tHazard.m_iExpireTick && tHazard.m_iExpireTick < iNow;
+			const bool bStale = std::abs(iNow - tHazard.m_iLastUpdateTick) > TIME_TO_TICKS(2.0f);
+			if (bExpiredByTick || bStale) { bAnyChange = true; return true; }
+			return false;
+		});
 
 	if (bAnyChange) ++m_iGenerationId;
 }
@@ -263,8 +260,8 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 		const bool bInvuln = pPlayer->InCond(TF_COND_INVULNERABLE) || pPlayer->InCond(TF_COND_PHASE);
 
 		HazardKind eKind = bInvuln ? HazardKind::EnemyInvuln
-						 : bDormant ? HazardKind::EnemyDormant
-						 : HazardKind::EnemyNormal;
+			: bDormant ? HazardKind::EnemyDormant
+			: HazardKind::EnemyNormal;
 		float flBaseScore = CostForKind(eKind);
 
 		// Snipers are more dangerous when active.
@@ -363,8 +360,8 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 
 			HazardKind eKind = HazardKind::SentryLow;
 			float flScore = HAZARD_COST_SENTRY_LOW;
-			if (flDist <= flHighRadius)         { eKind = HazardKind::Sentry;       flScore = flBaseScore; }
-			else if (flDist <= flMedRadius)     { eKind = HazardKind::SentryMedium; flScore = HAZARD_COST_SENTRY_MEDIUM; }
+			if (flDist <= flHighRadius) { eKind = HazardKind::Sentry;       flScore = flBaseScore; }
+			else if (flDist <= flMedRadius) { eKind = HazardKind::SentryMedium; flScore = HAZARD_COST_SENTRY_MEDIUM; }
 			else if (bStrongClass)              continue; // strong classes ignore outer ring
 
 			bAnyChange |= RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flScore, vOrigin, 0);

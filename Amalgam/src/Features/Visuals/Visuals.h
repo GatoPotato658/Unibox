@@ -6,10 +6,6 @@
 #include "Images.h"
 #endif
 
-#include <map>
-
-//#define DEBUG_TEXT
-
 struct Projectile_t
 {
 	std::vector<Vec3> m_vPath = {};
@@ -35,16 +31,6 @@ struct PickupData_t
 	Vec3 m_vLocation = {};
 };
 
-#ifdef DEBUG_TEXT
-struct DebugText_t
-{
-	std::string m_sText = "";
-	Color_t m_tColor = {};
-	std::optional<Vec2> vPosition2D = std::nullopt;
-	std::optional<Vec3> vPosition3D = std::nullopt;
-};
-#endif
-
 class CVisuals
 {
 private:
@@ -54,9 +40,6 @@ private:
 	std::vector<Vec3> m_vAngles = {};
 	std::vector<KeyValues*> m_v_world_texture_key_values = {};
 
-#ifdef DEBUG_TEXT
-	std::vector<DebugText_t> m_vDebugText = {};
-#endif
 
 #ifdef DEBUG_UNI
 	struct ImageArrayInfo_t
@@ -85,16 +68,6 @@ public:
 	void DrawPickupTimers();
 	void Triggers(CTFPlayer* pLocal);
 
-	void DrawDebugInfo(CTFPlayer* pLocal);
-
-#ifdef DEBUG_TEXT
-	void AddDebugText(const DebugText_t& sText);
-	void AddDebugText(const std::string& sString, Color_t tColor = Vars::Menu::Theme::Active.Value);
-	void AddDebugText(const std::string& sString, const Vec2& vPosition, Color_t tColor = Vars::Menu::Theme::Active.Value);
-	void AddDebugText(const std::string& sString, const Vec3& vPosition, Color_t tColor = Vars::Menu::Theme::Active.Value);
-	void ClearDebugText();
-#endif
-
 	std::vector<DrawBox_t> GetHitboxes(matrix3x4* aBones, CBaseAnimating* pEntity, std::vector<int> vHitboxes = {}, int iTarget = -1);
 	void DrawEffects();
 	void DrawHitboxes(int iStore = 0);
@@ -106,15 +79,14 @@ public:
 	void Modulate();
 	void RestoreWorldModulation();
 
-	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
-	
-	void LocalAnimations(CTFPlayer* pLocal, CUserCmd* pCmd);
-	
 #ifdef DEBUG_UNI
 	void DrawUni();
 	void RemoveUni();
 	bool m_bUniDraw = true;
 #endif
+
+	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	void LocalAnimations(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 };
 
 ADD_FEATURE(CVisuals, Visuals);

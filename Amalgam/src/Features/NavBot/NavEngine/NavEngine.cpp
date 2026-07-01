@@ -11,95 +11,92 @@
 #include "../NavRuntime.h"
 #include "../../FollowBot/FollowBot.h"
 
-namespace
+static Vector GetNearestPointOnArea(CNavArea* pArea, const Vector& vPos)
 {
-	Vector GetNearestPointOnArea(CNavArea* pArea, const Vector& vPos)
+	if (!pArea) return vPos;
+	const float flX = std::clamp(vPos.x, pArea->m_vNwCorner.x, pArea->m_vSeCorner.x);
+	const float flY = std::clamp(vPos.y, pArea->m_vNwCorner.y, pArea->m_vSeCorner.y);
+	return { flX, flY, pArea->GetZ(flX, flY) };
+}
+
+static float GetAreaVerticalOutside(CNavArea* pArea, const Vector& vPos)
+{
+	if (!pArea) return FLT_MAX;
+	const float flBelow = std::max(pArea->m_flMinZ - vPos.z, 0.0f);
+	const float flAbove = std::max(vPos.z - pArea->m_flMaxZ, 0.0f);
+	return flBelow + flAbove;
+}
+
+static float GetAreaLocalScore(CNavArea* pArea, const Vector& vPos)
+{
+	if (!pArea) return FLT_MAX;
+	const Vector vNearest = GetNearestPointOnArea(pArea, vPos);
+	Vector vPlanar = vNearest - vPos; vPlanar.z = 0.0f;
+	const float flSurfaceDelta = std::fabs(vNearest.z - vPos.z);
+	const float flOutside = GetAreaVerticalOutside(pArea, vPos);
+	float flScore = vPlanar.LengthSqr() + (flSurfaceDelta * flSurfaceDelta * 6.0f) + (flOutside * flOutside * 18.0f);
+	if (pArea->IsOverlapping(vPos)) flScore *= 0.45f;
+	if (pArea->IsOverlapping(vPos) && flOutside <= 18.0f) flScore *= 0.15f;
+	return flScore;
+}
+
+static bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrigin)
+{
+	if (!pLocal || F::GameObjectiveController.m_eGameMode != TF_GAMETYPE_ESCORT)
+		return false;
+	if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::Capture)
+		return false;
+
+	static std::array<Vector, 2> aLastPayloadPos{};
+	static std::array<float, 2> aLastPayloadMoveTime{};
+	static std::array<bool, 2> aSeenPayload{};
+	static std::string sLastLevelName{};
+
+	const std::string sLevelName = SDK::GetLevelName();
+	if (sLastLevelName != sLevelName)
 	{
-		if (!pArea) return vPos;
-		const float flX = std::clamp(vPos.x, pArea->m_vNwCorner.x, pArea->m_vSeCorner.x);
-		const float flY = std::clamp(vPos.y, pArea->m_vNwCorner.y, pArea->m_vSeCorner.y);
-		return { flX, flY, pArea->GetZ(flX, flY) };
+		aLastPayloadPos = {};
+		aLastPayloadMoveTime = {};
+		aSeenPayload = {};
+		sLastLevelName = sLevelName;
 	}
 
-	float GetAreaVerticalOutside(CNavArea* pArea, const Vector& vPos)
+	auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, pLocal->m_iTeamNum());
+	if (!pPayload) return false;
+
+	constexpr float flEscortRadius = 120.0f;
+	constexpr float flMaxHeight = PLAYER_JUMP_HEIGHT + 24.0f;
+	constexpr float flMoveThreshold = 4.0f;
+	constexpr float flMoveGrace = 0.35f;
+
+	Vector vPayloadPos = pPayload->GetAbsOrigin();
+	if (std::fabs(vPayloadPos.z - vLocalOrigin.z) > flMaxHeight) return false;
+	if (vPayloadPos.DistTo2DSqr(vLocalOrigin) > flEscortRadius * flEscortRadius) return false;
+
+	const int iIdx = pLocal->m_iTeamNum() - TF_TEAM_RED;
+	if (iIdx < 0 || iIdx >= static_cast<int>(aLastPayloadPos.size())) return false;
+
+	if (aSeenPayload[iIdx])
 	{
-		if (!pArea) return FLT_MAX;
-		const float flBelow = std::max(pArea->m_flMinZ - vPos.z, 0.0f);
-		const float flAbove = std::max(vPos.z - pArea->m_flMaxZ, 0.0f);
-		return flBelow + flAbove;
+		if (vPayloadPos.DistToSqr(aLastPayloadPos[iIdx]) >= flMoveThreshold * flMoveThreshold)
+			aLastPayloadMoveTime[iIdx] = I::GlobalVars->curtime;
 	}
-
-	float GetAreaLocalScore(CNavArea* pArea, const Vector& vPos)
+	else
 	{
-		if (!pArea) return FLT_MAX;
-		const Vector vNearest = GetNearestPointOnArea(pArea, vPos);
-		Vector vPlanar = vNearest - vPos; vPlanar.z = 0.0f;
-		const float flSurfaceDelta = std::fabs(vNearest.z - vPos.z);
-		const float flOutside = GetAreaVerticalOutside(pArea, vPos);
-		float flScore = vPlanar.LengthSqr() + (flSurfaceDelta * flSurfaceDelta * 6.0f) + (flOutside * flOutside * 18.0f);
-		if (pArea->IsOverlapping(vPos)) flScore *= 0.45f;
-		if (pArea->IsOverlapping(vPos) && flOutside <= 18.0f) flScore *= 0.15f;
-		return flScore;
+		aSeenPayload[iIdx] = true;
 	}
+	aLastPayloadPos[iIdx] = vPayloadPos;
 
-	bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrigin)
-	{
-		if (!pLocal || F::GameObjectiveController.m_eGameMode != TF_GAMETYPE_ESCORT)
-			return false;
-		if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::Capture)
-			return false;
+	return I::GlobalVars->curtime - aLastPayloadMoveTime[iIdx] <= flMoveGrace;
+}
 
-		static std::array<Vector, 2> aLastPayloadPos{};
-		static std::array<float, 2> aLastPayloadMoveTime{};
-		static std::array<bool, 2> aSeenPayload{};
-		static std::string sLastLevelName{};
-
-		const std::string sLevelName = SDK::GetLevelName();
-		if (sLastLevelName != sLevelName)
-		{
-			aLastPayloadPos = {};
-			aLastPayloadMoveTime = {};
-			aSeenPayload = {};
-			sLastLevelName = sLevelName;
-		}
-
-		auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, pLocal->m_iTeamNum());
-		if (!pPayload) return false;
-
-		constexpr float flEscortRadius = 120.0f;
-		constexpr float flMaxHeight = PLAYER_JUMP_HEIGHT + 24.0f;
-		constexpr float flMoveThreshold = 4.0f;
-		constexpr float flMoveGrace = 0.35f;
-
-		Vector vPayloadPos = pPayload->GetAbsOrigin();
-		if (std::fabs(vPayloadPos.z - vLocalOrigin.z) > flMaxHeight) return false;
-		if (vPayloadPos.DistTo2DSqr(vLocalOrigin) > flEscortRadius * flEscortRadius) return false;
-
-		const int iIdx = pLocal->m_iTeamNum() - TF_TEAM_RED;
-		if (iIdx < 0 || iIdx >= static_cast<int>(aLastPayloadPos.size())) return false;
-
-		if (aSeenPayload[iIdx])
-		{
-			if (vPayloadPos.DistToSqr(aLastPayloadPos[iIdx]) >= flMoveThreshold * flMoveThreshold)
-				aLastPayloadMoveTime[iIdx] = I::GlobalVars->curtime;
-		}
-		else
-		{
-			aSeenPayload[iIdx] = true;
-		}
-		aLastPayloadPos[iIdx] = vPayloadPos;
-
-		return I::GlobalVars->curtime - aLastPayloadMoveTime[iIdx] <= flMoveGrace;
-	}
-
-	bool CanJumpIfScoped(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
-	{
-		if (pLocal->m_fFlags() & FL_INWATER) return true;
-		const auto iWeaponID = pWeapon->GetWeaponID();
-		return iWeaponID == TF_WEAPON_SNIPERRIFLE_CLASSIC
-			? !pWeapon->As<CTFSniperRifleClassic>()->m_bCharging()
-			: !pLocal->InCond(TF_COND_ZOOMED);
-	}
+static bool CanJumpIfScoped(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+{
+	if (pLocal->m_fFlags() & FL_INWATER) return true;
+	const auto iWeaponID = pWeapon->GetWeaponID();
+	return iWeaponID == TF_WEAPON_SNIPERRIFLE_CLASSIC
+		? !pWeapon->As<CTFSniperRifleClassic>()->m_bCharging()
+		: !pLocal->InCond(TF_COND_ZOOMED);
 }
 
 CNavEngine::CNavEngine()
@@ -127,7 +124,7 @@ bool CNavEngine::IsSetupTime()
 			if (pGameRules->m_iRoundState() == GR_STATE_PREROUND) return bSetupTime = true;
 			if (pLocal->m_iTeamNum() == TF_TEAM_BLUE
 				&& (pGameRules->m_bInSetup()
-					|| (pGameRules->m_bInWaitingForPlayers() && (sLevelName.starts_with("pl_") || sLevelName.starts_with("cp_")))))
+				|| (pGameRules->m_bInWaitingForPlayers() && (sLevelName.starts_with("pl_") || sLevelName.starts_with("cp_")))))
 				return bSetupTime = true;
 			bSetupTime = false;
 		}
@@ -219,20 +216,20 @@ void CNavEngine::EmitConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo)
 		vApproachDir = {};
 
 	auto Push = [&](const Vector& vPos, const Vector& vDir, CNavArea* pArea, bool bDrop, float flDropH, float flApproach, const Vector& vDropDir)
-	{
-		if (!m_vCrumbs.empty() && m_vCrumbs.back().m_vPos.DistToSqr(vPos) < 1.0f)
-			return;
-		Crumb_t tCrumb{};
-		tCrumb.m_pNavArea = pArea;
-		tCrumb.m_vPos = vPos;
-		tCrumb.m_vApproachDir = vDir;
-		tCrumb.m_bRequiresDrop = bDrop;
-		tCrumb.m_flDropHeight = flDropH;
-		tCrumb.m_flApproachDistance = flApproach;
-		if (bDrop && vDropDir.LengthSqr() > 0.f)
-			tCrumb.m_vApproachDir = vDropDir;
-		m_vCrumbs.push_back(tCrumb);
-	};
+		{
+			if (!m_vCrumbs.empty() && m_vCrumbs.back().m_vPos.DistToSqr(vPos) < 1.0f)
+				return;
+			Crumb_t tCrumb{};
+			tCrumb.m_pNavArea = pArea;
+			tCrumb.m_vPos = vPos;
+			tCrumb.m_vApproachDir = vDir;
+			tCrumb.m_bRequiresDrop = bDrop;
+			tCrumb.m_flDropHeight = flDropH;
+			tCrumb.m_flApproachDistance = flApproach;
+			if (bDrop && vDropDir.LengthSqr() > 0.f)
+				tCrumb.m_vApproachDir = vDropDir;
+			m_vCrumbs.push_back(tCrumb);
+		};
 
 	Push(tPoints.m_vCenter, vApproachDir, pFrom,
 		tDrop.m_bRequiresDrop, tDrop.m_flDropHeight, tDrop.m_flApproachDistance, tDrop.m_vApproachDir);
@@ -261,9 +258,9 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 	m_sLastFailureReason = "";
 
 	if (F::Ticks.m_bWarp || F::Ticks.m_bDoubletap) { m_sLastFailureReason = "Warping/Doubletapping"; return false; }
-	if (!IsReady())                                 { m_sLastFailureReason = "Not ready"; return false; }
-	if (ePriority < m_eCurrentPriority)             { m_sLastFailureReason = "Priority too low"; return false; }
-	if (!GetLocalNavArea())                         { m_sLastFailureReason = "No local nav area"; return false; }
+	if (!IsReady()) { m_sLastFailureReason = "Not ready"; return false; }
+	if (ePriority < m_eCurrentPriority) { m_sLastFailureReason = "Priority too low"; return false; }
+	if (!GetLocalNavArea()) { m_sLastFailureReason = "No local nav area"; return false; }
 
 	CNavArea* pDestArea = FindClosestNavArea(vDestination, false);
 	if (!pDestArea) { m_sLastFailureReason = "No destination nav area"; return false; }
@@ -285,21 +282,21 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 		return true;
 
 	PathWorker::PathRequest tReq{};
-	tReq.m_uRequestId         = ++m_uNextRequestId;
-	tReq.m_uWorldGeneration   = m_uWorldGeneration;
-	tReq.m_uHazardGeneration  = uHazardGen;
-	tReq.m_pStartArea         = m_pLocalArea;
-	tReq.m_pDestArea          = pDestArea;
-	tReq.m_vDestination       = vDestination;
-	tReq.m_ePriority          = ePriority;
-	tReq.m_bIgnoreTraces      = bIgnoreTraces;
-	tReq.m_bNavToLocal        = bNavToLocal;
-	tReq.m_tCtx               = CMap::BuildSolveContext();
+	tReq.m_uRequestId = ++m_uNextRequestId;
+	tReq.m_uWorldGeneration = m_uWorldGeneration;
+	tReq.m_uHazardGeneration = uHazardGen;
+	tReq.m_pStartArea = m_pLocalArea;
+	tReq.m_pDestArea = pDestArea;
+	tReq.m_vDestination = vDestination;
+	tReq.m_ePriority = ePriority;
+	tReq.m_bIgnoreTraces = bIgnoreTraces;
+	tReq.m_bNavToLocal = bNavToLocal;
+	tReq.m_tCtx = CMap::BuildSolveContext();
 
 	m_pPathWorker->Submit(std::move(tReq));
-	m_uPendingRequestId       = m_uNextRequestId;
-	m_uHazardGenerationSeen   = uHazardGen;
-	m_iLastSubmitTick         = iNow;
+	m_uPendingRequestId = m_uNextRequestId;
+	m_uHazardGenerationSeen = uHazardGen;
+	m_iLastSubmitTick = iNow;
 	return true;
 }
 
@@ -765,7 +762,7 @@ void CNavEngine::AbandonPath(const std::string& sReason)
 	{
 		m_bRepathRequested = true;
 		const float flDelay = (sReason.find("Blacklisted") != std::string::npos
-							 || sReason.find("Stuck") != std::string::npos) ? 0.45f : 0.2f;
+			|| sReason.find("Stuck") != std::string::npos) ? 0.45f : 0.2f;
 		m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(flDelay));
 		m_bRepathOnFail = false;
 	}
@@ -905,10 +902,10 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	}
 
 	if ((m_eCurrentPriority == PriorityListEnum::Engineer
-			&& ((!Vars::Aimbot::AutoEngie::AutoRepair.Value && !Vars::Aimbot::AutoEngie::AutoUpgrade.Value)
-				|| pLocal->m_iClass() != TF_CLASS_ENGINEER))
+		&& ((!Vars::Aimbot::AutoEngie::AutoRepair.Value && !Vars::Aimbot::AutoEngie::AutoUpgrade.Value)
+		|| pLocal->m_iClass() != TF_CLASS_ENGINEER))
 		|| (m_eCurrentPriority == PriorityListEnum::Capture
-			&& !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives)))
+		&& !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives)))
 	{
 		CancelPath();
 		return;
@@ -1018,9 +1015,9 @@ void CNavEngine::DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& v
 
 	const auto eLook = Vars::Misc::Movement::NavEngine::LookAtPath.Value;
 	const bool bSilent = eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Silent
-					 || eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;
+		|| eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;
 	const bool bLegit = eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Legit
-					 || eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;
+		|| eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;
 
 	if (eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Off
 		|| (bSilent && G::AntiAim))
@@ -1261,7 +1258,8 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		const bool bCanJump = pWeapon && m_pLocalArea
 			&& !(m_pLocalArea->m_iAttributeFlags & (NAV_MESH_NO_JUMP | NAV_MESH_STAIRS))
 			&& (m_vCrumbs.size() < 2 || m_vCrumbs[0].m_vPos.z - m_vCrumbs[1].m_vPos.z > -PLAYER_JUMP_HEIGHT)
-			&& [&] {
+			&& [&]
+			{
 				const auto iWeaponID = pWeapon->GetWeaponID();
 				if (iWeaponID == TF_WEAPON_SNIPERRIFLE
 					|| iWeaponID == TF_WEAPON_SNIPERRIFLE_CLASSIC

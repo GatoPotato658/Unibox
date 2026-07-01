@@ -1,11 +1,8 @@
 #include "PLController.h"
 
-namespace
+inline int GetPayloadTeamIndex(int iTeam)
 {
-	int GetPayloadTeamIndex(int iTeam)
-	{
-		return iTeam - TF_TEAM_RED;
-	}
+	return iTeam - TF_TEAM_RED;
 }
 
 void CPLController::Init()

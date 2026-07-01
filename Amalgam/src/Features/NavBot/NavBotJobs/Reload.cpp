@@ -1,24 +1,21 @@
 #include "NavBotJobs.h"
 #include "../NavAreaUtils.h"
 
-namespace
+inline bool HasReloadTask(int iReloadSlot)
 {
-	bool HasReloadTask(int iReloadSlot)
-	{
-		return G::Reloading || (iReloadSlot >= SLOT_PRIMARY && iReloadSlot <= SLOT_SECONDARY);
-	}
+	return G::Reloading || (iReloadSlot >= SLOT_PRIMARY && iReloadSlot <= SLOT_SECONDARY);
+}
 
-	bool TryNavToHiddenSpot(CNavArea* pLocalArea, const Vector& vVischeckPoint, PriorityListEnum::PriorityListEnum ePriority)
-	{
-		if (!pLocalArea)
-			return false;
+static bool TryNavToHiddenSpot(CNavArea* pLocalArea, const Vector& vVischeckPoint, PriorityListEnum::PriorityListEnum ePriority)
+{
+	if (!pLocalArea)
+		return false;
 
-		std::pair<CNavArea*, int> tBestSpot;
-		if (!NavAreaUtils::FindClosestHidingSpot(pLocalArea, vVischeckPoint, 5, tBestSpot))
-			return false;
+	std::pair<CNavArea*, int> tBestSpot;
+	if (!NavAreaUtils::FindClosestHidingSpot(pLocalArea, vVischeckPoint, 5, tBestSpot))
+		return false;
 
-		return F::NavEngine.NavTo(tBestSpot.first->m_vCenter, ePriority, true, !F::NavEngine.IsPathing());
-	}
+	return F::NavEngine.NavTo(tBestSpot.first->m_vCenter, ePriority, true, !F::NavEngine.IsPathing());
 }
 
 bool CNavBotReload::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)

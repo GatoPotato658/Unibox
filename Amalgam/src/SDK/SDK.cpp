@@ -1,18 +1,16 @@
 #include "SDK.h"
 
-#include "../Features/Visuals/Notifications/Notifications.h"
+#include "../Features/ImGui/Notifications/Notifications.h"
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/NavBot/NavEngine/NavEngine.h"
-
-#include <fstream>
-#include <string_view>
-#include <unordered_map>
+#include "../Features/Ticks/Ticks.h"
 
 #pragma warning (disable : 6385)
 
 MAKE_SIGNATURE(CM_TransformedBoxTrace, "engine.dll", "48 8B C4 48 89 58 ? 55 56 57 48 8D 68 ? 48 81 EC ? ? ? ? F3 0F 10 41", 0x0);
 MAKE_SIGNATURE(CAttributeManager_AttribHookValue_Float, "client.dll", "4C 8B DC 49 89 5B ? 49 89 6B ? 56 57 41 54 41 56 41 57 48 83 EC ? 48 8B 3D ? ? ? ? 4C 8D 35", 0x0);
+MAKE_SIGNATURE(IHasGenericMeter_GetMeterMultiplier, "client.dll", "F3 0F 10 81 ? ? ? ? C3 CC CC CC CC CC CC CC 48 85 D2", 0x0);
 
 static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 {
@@ -283,7 +281,7 @@ namespace
 
 
 void SDK::Output(const char* sFunction, const char* sLog, Color_t tColor,
-	int iTo, int iMessageBox,
+	int iTo, const char* sIcon, int iMessageBox,
 	const char* sLeft, const char* sRight)
 {
 	if (sLog)
@@ -296,7 +294,7 @@ void SDK::Output(const char* sFunction, const char* sLog, Color_t tColor,
 		if (iTo & OUTPUT_DEBUG)
 			OutputDebugString(std::format("{}{}{} {}\n", sLeft, sFunction, sRight, sLog).c_str());
 		if (iTo & OUTPUT_TOAST)
-			F::Notifications.Add(sLog, tColor);
+			F::Notifications.Add(sLog, sIcon, tColor);
 		if (iTo & OUTPUT_MENU)
 			F::Menu.AddOutput(std::format("{}{}{}", sLeft, sFunction, sRight).c_str(), sLog, tColor);
 		if (iTo & OUTPUT_CHAT)
@@ -313,7 +311,7 @@ void SDK::Output(const char* sFunction, const char* sLog, Color_t tColor,
 		if (iTo & OUTPUT_DEBUG)
 			OutputDebugString(std::format("{}\n", sFunction).c_str());
 		if (iTo & OUTPUT_TOAST)
-			F::Notifications.Add(sFunction, tColor);
+			F::Notifications.Add(sFunction, sIcon, tColor);
 		if (iTo & OUTPUT_MENU)
 			F::Menu.AddOutput("", sFunction, tColor);
 		if (iTo & OUTPUT_CHAT)
@@ -837,8 +835,6 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 
 	switch (pWeapon->GetWeaponID())
 	{
-	case TF_WEAPON_COMPOUND_BOW:
-		return !(pCmd->buttons & IN_ATTACK) && pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f;
 	case TF_WEAPON_PIPEBOMBLAUNCHER:
 	case TF_WEAPON_STICKY_BALL_LAUNCHER:
 	case TF_WEAPON_GRENADE_STICKY_BALL:
@@ -859,17 +855,16 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 	}
 	case TF_WEAPON_SNIPERRIFLE_CLASSIC:
 		return !(pCmd->buttons & IN_ATTACK) && pWeapon->As<CTFSniperRifle>()->m_flChargedDamage() > 0.f;
+	case TF_WEAPON_COMPOUND_BOW:
+		return !(pCmd->buttons & IN_ATTACK) && pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f;
 	case TF_WEAPON_PARTICLE_CANNON:
-	{
-		float flChargeBeginTime = pWeapon->As<CTFParticleCannon>()->m_flChargeBeginTime();
-		if (flChargeBeginTime > 0)
+		if (float flChargeBeginTime = pWeapon->As<CTFParticleCannon>()->m_flChargeBeginTime(); flChargeBeginTime > 0)
 		{
 			float flTotalChargeTime = flTickBase - flChargeBeginTime;
 			if (flTotalChargeTime >= TF_PARTICLE_MAX_CHARGE_TIME)
 				return 1;
 		}
 		break;
-	}
 	case TF_WEAPON_CLEAVER: // we can randomly use attack2 to fire
 	case TF_WEAPON_JAR:
 	case TF_WEAPON_JAR_MILK:
@@ -948,6 +943,10 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 		if (G::CanSecondaryAttack && pCmd->buttons & IN_ATTACK2)
 			return 1;
 		break;
+	case TF_WEAPON_MEDIGUN:
+		if (pWeapon->As<CWeaponMedigun>()->m_bHealing())
+			return false;
+		break;
 	}
 
 	switch (pWeapon->m_iItemDefinitionIndex())
@@ -975,6 +974,13 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 	}
 
 	return G::CanPrimaryAttack && pCmd->buttons & IN_ATTACK ? 1 : G::Reloading && pCmd->buttons & IN_ATTACK ? 2 : 0;
+}
+
+float SDK::GetGravity()
+{
+	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
+
+	return sv_gravity->GetFloat();
 }
 
 float SDK::MaxSpeed(CTFPlayer* pPlayer, bool bIncludeCrouch, bool bIgnoreSpecialAbility)
@@ -1478,4 +1484,160 @@ bool TriggerData_t::PointIsWithin(Vec3 vPoint) const
 bool SDK::CleanScreenshot()
 {
 	return Vars::Visuals::UI::CleanScreenshots.Value && I::EngineClient->IsTakingScreenshot();
+}
+
+void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool& bPrimary, bool& bSecondary, bool& bReloading)
+{
+	bPrimary = bSecondary = bReloading = false;
+
+	if (pWeapon->GetMaxClip1() != WEAPON_NOCLIP && !pWeapon->m_bReloadsSingly())
+	{	// dumb fix
+		float flOldCurtime = I::GlobalVars->curtime;
+		I::GlobalVars->curtime = TICKS_TO_TIME(pLocal->m_nTickBase());
+		pWeapon->CheckReload();
+		I::GlobalVars->curtime = flOldCurtime;
+	}
+
+	for (int i = 0; i <= SLOT_PDA2; i++)
+	{
+		auto pWeaponInSlot = pLocal->GetWeaponFromSlot(i);
+		if (pWeaponInSlot)
+		{
+			int iDefIndex = pWeaponInSlot->m_iItemDefinitionIndex(), iWeaponID = pWeaponInSlot->GetWeaponID();
+			bool bWeaponChanged = G::SavedDefIndexes[i] != iDefIndex || G::SavedWepIds[i] != iWeaponID;
+			int iActualWeaponSlot = pWeaponInSlot->GetSlot(); // this whole thing is fucked up
+			G::SavedWepSlots[i] = iActualWeaponSlot;
+			G::SavedDefIndexes[iActualWeaponSlot] = iDefIndex;
+			G::SavedWepIds[iActualWeaponSlot] = iWeaponID;
+
+			if (iActualWeaponSlot < SLOT_MELEE)
+			{
+				G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->m_iClip1();
+				G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
+				if (bWeaponChanged)
+				{
+					G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->m_pWeaponInfo()->iMaxClip1 : 0;
+					G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = SDK::GetWeaponMaxReserveAmmo(iWeaponID, iDefIndex);
+					G::AmmoInSlot[iActualWeaponSlot].m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIndex);
+				}
+			}
+			else if (i < SLOT_MELEE)
+				G::AmmoInSlot[i].m_bUsesAmmo = false;
+		}
+	}
+
+	bool bCanAttack = pLocal->CanAttack();
+	{
+		static int iStaticItemDefinitionIndex = 0;
+		int iOldItemDefinitionIndex = iStaticItemDefinitionIndex;
+		int iNewItemDefinitionIndex = iStaticItemDefinitionIndex = pWeapon->m_iItemDefinitionIndex();
+
+		if (iNewItemDefinitionIndex != iOldItemDefinitionIndex || !bCanAttack || !pWeapon->m_iClip1())
+			F::Ticks.m_iWait = -1;
+	}
+	if (bCanAttack)
+	{
+		bPrimary = pWeapon->CanPrimaryAttack();
+		bSecondary = pWeapon->CanSecondaryAttack();
+
+		switch (pWeapon->GetWeaponID())
+		{
+		case TF_WEAPON_FLAME_BALL:
+			if (bPrimary)
+			{
+				// do this, otherwise it will be a tick behind
+				float flFrametime = TICK_INTERVAL * 100;
+				float flMeterMult = S::IHasGenericMeter_GetMeterMultiplier.Call<float>(pWeapon->m_pMeter());
+				float flRate = SDK::AttribHookValue(1.f, "item_meter_charge_rate", pWeapon) - 1;
+				float flMult = SDK::AttribHookValue(1.f, "mult_item_meter_charge_rate", pWeapon);
+				float flTankPressure = pLocal->m_flTankPressure() + flFrametime * flMeterMult / (flRate * flMult);
+
+				if (bPrimary && flTankPressure < 100.f)
+					bPrimary = bSecondary = false;
+			}
+			break;
+		case TF_WEAPON_MINIGUN:
+			if (int iState = pWeapon->As<CTFMinigun>()->m_iWeaponState(); iState != AC_STATE_FIRING && iState != AC_STATE_SPINNING || !pWeapon->HasPrimaryAmmoForShot())
+				bPrimary = false;
+			break;
+		case TF_WEAPON_FLAREGUN_REVENGE:
+			if (pCmd->buttons & IN_ATTACK2)
+				bPrimary = false;
+			break;
+		case TF_WEAPON_BAT_WOOD:
+		case TF_WEAPON_BAT_GIFTWRAP:
+			if (!pWeapon->HasPrimaryAmmoForShot())
+				bSecondary = false;
+			break;
+		case TF_WEAPON_MEDIGUN:
+		case TF_WEAPON_BUILDER:
+			break;
+		case TF_WEAPON_LASER_POINTER:
+		{
+			auto pSentry = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+			if (!pSentry || !pSentry->m_bPlayerControlled() || pSentry->IsDisabled())
+			{
+				bPrimary = bSecondary = false;
+				break;
+			}
+			if (G::WranglerSecondFireTime + 2.25f < I::GlobalVars->curtime)
+			{
+				int iLocalTeam = pLocal->m_iTeamNum();
+				Vec3 vSentryPos = pSentry->GetAbsOrigin();
+				for (auto pRocket : H::Entities.GetGroup(EntityEnum::WorldProjectile))
+				{
+					if (pRocket->m_iTeamNum() == iLocalTeam &&
+						pRocket->m_hOwnerEntity().Get() == pSentry &&
+						pRocket->GetAbsOrigin().DistTo(vSentryPos) <= 1000.f)
+					{
+						G::WranglerSecondFireTime = I::GlobalVars->curtime;
+						break;
+					}
+				}
+			}
+			if (pSentry->m_iAmmoShells() <= 0) G::CanPrimaryAttack = false;
+			if (pSentry->m_iUpgradeLevel() <= 2 || pSentry->m_iAmmoRockets() <= 0)
+			{
+				bSecondary = false;
+				G::WranglerSecondFireTime = 0.f;
+			}
+			else bSecondary = I::GlobalVars->curtime - G::WranglerSecondFireTime > 2.25f;
+
+			break;
+		}
+		case TF_WEAPON_PARTICLE_CANNON:
+			if (float flChargeBeginTime = pWeapon->As<CTFParticleCannon>()->m_flChargeBeginTime(); flChargeBeginTime > 0)
+			{
+				float flTotalChargeTime = TICKS_TO_TIME(pLocal->m_nTickBase()) - flChargeBeginTime;
+				if (flTotalChargeTime < TF_PARTICLE_MAX_CHARGE_TIME)
+				{
+					bPrimary = bSecondary = false;
+					break;
+				}
+			}
+			[[fallthrough]];
+		default:
+			if (pWeapon->GetSlot() != SLOT_MELEE)
+			{
+				bool bAmmo = pWeapon->HasPrimaryAmmoForShot();
+				bool bReload = pWeapon->IsInReload();
+				if (!bAmmo && pWeapon->m_iItemDefinitionIndex() != Soldier_m_TheBeggarsBazooka)
+					bPrimary = bSecondary = false;
+				if (bReload && bAmmo && !bPrimary)
+					bReloading = true;
+			}
+		}
+		if (bPrimary)
+		{
+			switch (pWeapon->GetWeaponID())
+			{
+			case TF_WEAPON_FLAMETHROWER:
+			case TF_WEAPON_FLAME_BALL:
+			case TF_WEAPON_FLAREGUN:
+			case TF_WEAPON_FLAREGUN_REVENGE:
+				if (pLocal->IsUnderwater())
+					bPrimary = bSecondary = false;
+			}
+		}
+	}
 }

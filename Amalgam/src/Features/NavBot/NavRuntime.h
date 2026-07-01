@@ -1,12 +1,9 @@
 #pragma once
-
-class CTFPlayer;
-class CTFWeaponBase;
-class CUserCmd;
+#include "../../SDK/SDK.h"
 
 namespace NavRuntime
 {
-	auto IsMovementLocked(CTFPlayer* pLocal) -> bool;
-	auto IsMinigunJumpLocked(CTFWeaponBase* pWeapon, CUserCmd* pCmd) -> bool;
-	auto CanIssueNavJump(CTFWeaponBase* pWeapon, CUserCmd* pCmd) -> bool;
+	bool IsMovementLocked(CTFPlayer* pLocal);
+	bool IsMinigunJumpLocked(CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	inline bool CanIssueNavJump(CTFWeaponBase* pWeapon, CUserCmd* pCmd) { return !IsMinigunJumpLocked(pWeapon, pCmd); }
 }

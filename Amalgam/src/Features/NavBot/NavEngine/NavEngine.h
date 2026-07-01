@@ -1,6 +1,5 @@
 #pragma once
 #include "Map.h"
-#include <memory>
 
 namespace PathWorker { class CPathWorker; struct PathResult; }
 

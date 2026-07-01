@@ -2,7 +2,7 @@
 
 namespace NavJobUtils
 {
-	auto FindClosestTargetEnemy(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> ClosestEnemy_t
+	ClosestEnemy_t FindClosestTargetEnemy(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	{
 		if (!pLocal || !pWeapon)
 			return {};
@@ -29,7 +29,7 @@ namespace NavJobUtils
 		return tBestEnemy;
 	}
 
-	auto TryNavToAreaScores(std::vector<NavAreaScore_t>& vAreaScores, PriorityListEnum::PriorityListEnum ePriority, bool bLowestScoreFirst, size_t nMaxAttempts) -> bool
+	bool TryNavToAreaScores(std::vector<NavAreaScore_t>& vAreaScores, PriorityListEnum::PriorityListEnum ePriority, bool bLowestScoreFirst, size_t nMaxAttempts)
 	{
 		if (vAreaScores.empty())
 			return false;

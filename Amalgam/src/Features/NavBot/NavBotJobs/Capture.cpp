@@ -10,43 +10,40 @@
 #include "../NavEngine/Controllers/Controller.h"
 #include "../../Misc/NamedPipe/NamedPipe.h"
 
-namespace
+static CCaptureFlag* FindClosestWorldFlag(const Vector& vLocalOrigin)
 {
-	auto FindClosestWorldFlag(const Vector& vLocalOrigin) -> CCaptureFlag*
+	CCaptureFlag* pBestFlag = nullptr;
+	float flBestDist = FLT_MAX;
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		CCaptureFlag* pBestFlag = nullptr;
-		float flBestDist = FLT_MAX;
-		for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
-		{
-			if (pEntity->GetClassID() != ETFClassID::CCaptureFlag)
-				continue;
+		if (pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+			continue;
 
-			auto pFlag = pEntity->As<CCaptureFlag>();
-			const float flDist = vLocalOrigin.DistToSqr(pFlag->GetAbsOrigin());
-			if (flDist >= flBestDist)
-				continue;
+		auto pFlag = pEntity->As<CCaptureFlag>();
+		const float flDist = vLocalOrigin.DistToSqr(pFlag->GetAbsOrigin());
+		if (flDist >= flBestDist)
+			continue;
 
-			flBestDist = flDist;
-			pBestFlag = pFlag;
-		}
-
-		return pBestFlag;
+		flBestDist = flDist;
+		pBestFlag = pFlag;
 	}
 
-	auto AdjustCaptureCandidateToNav(Vector vCandidate) -> Vector
-	{
-		if (!F::NavEngine.IsNavMeshLoaded())
-			return vCandidate;
+	return pBestFlag;
+}
 
-		if (auto pArea = F::NavEngine.FindClosestNavArea(vCandidate))
-		{
-			Vector vCorrected = pArea->GetNearestPoint(vCandidate.Get2D());
-			vCorrected.z = pArea->m_vCenter.z;
-			return vCorrected;
-		}
-
+static Vector AdjustCaptureCandidateToNav(Vector vCandidate)
+{
+	if (!F::NavEngine.IsNavMeshLoaded())
 		return vCandidate;
+
+	if (auto pArea = F::NavEngine.FindClosestNavArea(vCandidate))
+	{
+		Vector vCorrected = pArea->GetNearestPoint(vCandidate.Get2D());
+		vCorrected.z = pArea->m_vCenter.z;
+		return vCorrected;
 	}
+
+	return vCandidate;
 }
 
 bool CNavBotCapture::ShouldAvoidPlayer(int iIndex)
@@ -729,7 +726,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	{
 		if (Vars::Debug::Logging.Value)
 			SDK::Output("NavBotCapture", "Capture.Run: overwritten capture (player is on objective or close enough)", { 150, 255, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		
+
 		auto DoLook = [&](const Vec3& vTarget, bool bTargetValid) -> void
 			{
 				if (G::Attacking == 1)
@@ -764,7 +761,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 			};
 
 		if (F::NavEngine.IsPathing()) F::NavEngine.CancelPath();
-		if (m_bWalkTo) 
+		if (m_bWalkTo)
 		{
 			DoLook(vTarget, true);
 			SDK::WalkTo(pCmd, pLocal, vTarget);

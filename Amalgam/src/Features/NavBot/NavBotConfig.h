@@ -1,7 +1,5 @@
 #pragma once
-
-class CTFPlayer;
-class CTFWeaponBase;
+#include "../../SDK/SDK.h"
 
 struct NavBotClassConfig_t
 {
@@ -19,5 +17,5 @@ namespace NavBotConfig
 	inline constexpr NavBotClassConfig_t CONFIG_ENGINEER = { 200.0f, 500.0f, 3000.0f, false };
 	inline constexpr NavBotClassConfig_t CONFIG_GUNSLINGER_ENGINEER = { 50.0f, 300.0f, 2000.0f, false };
 
-	auto Select(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> NavBotClassConfig_t;
+	NavBotClassConfig_t Select(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 }

@@ -243,6 +243,7 @@ public:
 	bool IsRapidFire();
 	float GetSmackDelay();
 	float GetRange();
+	const wchar_t* GetWeaponName();
 	CHudTexture* GetWeaponIcon();
 };
 

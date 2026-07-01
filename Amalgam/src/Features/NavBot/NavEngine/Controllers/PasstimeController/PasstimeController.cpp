@@ -1,88 +1,85 @@
 #include "PasstimeController.h"
 #include "../../NavEngine.h"
 
-namespace
+constexpr float kPasstimeGoalPointEpsilon = 8.0f;
+
+static Vector GetObjectiveOrigin(CBaseEntity* pEntity)
 {
-	constexpr float kPasstimeGoalPointEpsilon = 8.0f;
+	if (!pEntity) return {};
+	Vector v = pEntity->GetCenter();
+	if (!v.IsZero()) return v;
+	v = pEntity->GetAbsOrigin();
+	if (!v.IsZero()) return v;
+	return pEntity->m_vecOrigin();
+}
 
-	Vector GetObjectiveOrigin(CBaseEntity* pEntity)
+static Vector GetObjectiveOrigin(CServerBaseEntity* pEntity)
+{
+	return GetObjectiveOrigin(reinterpret_cast<CBaseEntity*>(pEntity));
+}
+
+static Vector GetGoalWorldMins(CFuncPasstimeGoal* pGoal)
+{
+	auto pE = reinterpret_cast<CBaseEntity*>(pGoal);
+	return pE->GetAbsOrigin() + pE->m_vecMins();
+}
+
+static Vector GetGoalWorldMaxs(CFuncPasstimeGoal* pGoal)
+{
+	auto pE = reinterpret_cast<CBaseEntity*>(pGoal);
+	return pE->GetAbsOrigin() + pE->m_vecMaxs();
+}
+
+static Vector AdjustObjectivePosToNav(Vector vPos)
+{
+	if (!F::NavEngine.IsNavMeshLoaded()) return vPos;
+	if (auto pArea = F::NavEngine.FindClosestNavArea(vPos, false))
 	{
-		if (!pEntity) return {};
-		Vector v = pEntity->GetCenter();
-		if (!v.IsZero()) return v;
-		v = pEntity->GetAbsOrigin();
-		if (!v.IsZero()) return v;
-		return pEntity->m_vecOrigin();
+		Vector vCorrected = pArea->GetNearestPoint(vPos.Get2D());
+		vCorrected.z = pArea->GetZ(vCorrected.x, vCorrected.y);
+		return vCorrected;
 	}
+	return vPos;
+}
 
-	Vector GetObjectiveOrigin(CServerBaseEntity* pEntity)
+static bool HasPasstimeThrowStandSpace(const Vector& vPos)
+{
+	CTraceFilterWorldAndPropsOnly filter = {};
+	CGameTrace trace = {};
+	const Vector vStart = vPos + Vec3(0.f, 0.f, 4.f);
+	SDK::TraceHull(vStart, vStart, Vec3(-20.f, -20.f, 0.f), Vec3(20.f, 20.f, 72.f), MASK_PLAYERSOLID, &filter, &trace);
+	if (trace.startsolid || trace.allsolid) return false;
+
+	CGameTrace ground = {};
+	SDK::TraceHull(vPos + Vec3(0.f, 0.f, 24.f), vPos - Vec3(0.f, 0.f, 56.f), Vec3(-18.f, -18.f, 0.f), Vec3(18.f, 18.f, 2.f), MASK_PLAYERSOLID, &filter, &ground);
+	return ground.DidHit();
+}
+
+static bool GetTeamSpawnCenter(int iTeam, Vector& vOut)
+{
+	Vector vSum = {};
+	int iCount = 0;
+	for (const auto& tRoom : F::NavEngine.GetRespawnRooms())
 	{
-		return GetObjectiveOrigin(reinterpret_cast<CBaseEntity*>(pEntity));
+		if (tRoom.tData.m_vCenter.IsZero()) continue;
+		if (tRoom.m_iTeam != 0 && tRoom.m_iTeam != iTeam) continue;
+		vSum += tRoom.tData.m_vCenter;
+		iCount++;
 	}
+	if (iCount > 0) { vOut = vSum / static_cast<float>(iCount); return true; }
 
-	Vector GetGoalWorldMins(CFuncPasstimeGoal* pGoal)
+	if (!F::NavEngine.IsNavMeshLoaded()) return false;
+	const uint32_t uFlag = iTeam == TF_TEAM_RED ? TF_NAV_SPAWN_ROOM_RED : iTeam == TF_TEAM_BLUE ? TF_NAV_SPAWN_ROOM_BLUE : 0;
+	if (!uFlag) return false;
+	for (auto& tArea : F::NavEngine.GetNavFile()->m_vAreas)
 	{
-		auto pE = reinterpret_cast<CBaseEntity*>(pGoal);
-		return pE->GetAbsOrigin() + pE->m_vecMins();
+		if (!(tArea.m_iTFAttributeFlags & uFlag)) continue;
+		vSum += tArea.m_vCenter;
+		iCount++;
 	}
-
-	Vector GetGoalWorldMaxs(CFuncPasstimeGoal* pGoal)
-	{
-		auto pE = reinterpret_cast<CBaseEntity*>(pGoal);
-		return pE->GetAbsOrigin() + pE->m_vecMaxs();
-	}
-
-	Vector AdjustObjectivePosToNav(Vector vPos)
-	{
-		if (!F::NavEngine.IsNavMeshLoaded()) return vPos;
-		if (auto pArea = F::NavEngine.FindClosestNavArea(vPos, false))
-		{
-			Vector vCorrected = pArea->GetNearestPoint(vPos.Get2D());
-			vCorrected.z = pArea->GetZ(vCorrected.x, vCorrected.y);
-			return vCorrected;
-		}
-		return vPos;
-	}
-
-	bool HasPasstimeThrowStandSpace(const Vector& vPos)
-	{
-		CTraceFilterWorldAndPropsOnly filter = {};
-		CGameTrace trace = {};
-		const Vector vStart = vPos + Vec3(0.f, 0.f, 4.f);
-		SDK::TraceHull(vStart, vStart, Vec3(-20.f, -20.f, 0.f), Vec3(20.f, 20.f, 72.f), MASK_PLAYERSOLID, &filter, &trace);
-		if (trace.startsolid || trace.allsolid) return false;
-
-		CGameTrace ground = {};
-		SDK::TraceHull(vPos + Vec3(0.f, 0.f, 24.f), vPos - Vec3(0.f, 0.f, 56.f), Vec3(-18.f, -18.f, 0.f), Vec3(18.f, 18.f, 2.f), MASK_PLAYERSOLID, &filter, &ground);
-		return ground.DidHit();
-	}
-
-	bool GetTeamSpawnCenter(int iTeam, Vector& vOut)
-	{
-		Vector vSum = {};
-		int iCount = 0;
-		for (const auto& tRoom : F::NavEngine.GetRespawnRooms())
-		{
-			if (tRoom.tData.m_vCenter.IsZero()) continue;
-			if (tRoom.m_iTeam != 0 && tRoom.m_iTeam != iTeam) continue;
-			vSum += tRoom.tData.m_vCenter;
-			iCount++;
-		}
-		if (iCount > 0) { vOut = vSum / static_cast<float>(iCount); return true; }
-
-		if (!F::NavEngine.IsNavMeshLoaded()) return false;
-		const uint32_t uFlag = iTeam == TF_TEAM_RED ? TF_NAV_SPAWN_ROOM_RED : iTeam == TF_TEAM_BLUE ? TF_NAV_SPAWN_ROOM_BLUE : 0;
-		if (!uFlag) return false;
-		for (auto& tArea : F::NavEngine.GetNavFile()->m_vAreas)
-		{
-			if (!(tArea.m_iTFAttributeFlags & uFlag)) continue;
-			vSum += tArea.m_vCenter;
-			iCount++;
-		}
-		if (iCount == 0) return false;
-		vOut = vSum / static_cast<float>(iCount);
-		return true;
-	}
+	if (iCount == 0) return false;
+	vOut = vSum / static_cast<float>(iCount);
+	return true;
 }
 
 void CPasstimeController::Init()
@@ -103,7 +100,7 @@ void CPasstimeController::Update()
 		switch (pEntity->GetClassID())
 		{
 		case ETFClassID::CFuncPasstimeGoal:  m_vGoals.push_back(pEntity->As<CFuncPasstimeGoal>()); break;
-		case ETFClassID::CPasstimeBall:      m_pBall  = pEntity->As<CPasstimeBall>();              break;
+		case ETFClassID::CPasstimeBall:      m_pBall = pEntity->As<CPasstimeBall>();              break;
 		case ETFClassID::CTFPasstimeLogic:   m_pLogic = pEntity->As<CTFPasstimeLogic>();           break;
 		}
 	}
@@ -183,7 +180,7 @@ bool CPasstimeController::GetGoalInfo(int iScoringTeam, const Vector& vRelativeP
 		{
 			// Farther from our spawn = closer to enemy = better neutral goal.
 			float flScore = bHaveSpawn ? vScoringSpawn.DistToSqr(vGoalPos)
-									   : -vRelativePos.DistToSqr(vGoalPos);
+				: -vRelativePos.DistToSqr(vGoalPos);
 			if (flScore > flBestNeutralScore) { pBestNeutral = pGoal; flBestNeutralScore = flScore; }
 		}
 	}
@@ -191,12 +188,12 @@ bool CPasstimeController::GetGoalInfo(int iScoringTeam, const Vector& vRelativeP
 	CFuncPasstimeGoal* pSelected = pBestOwn ? pBestOwn : pBestNeutral;
 	if (!pSelected) return false;
 
-	tOut.m_pGoal     = pSelected;
+	tOut.m_pGoal = pSelected;
 	tOut.m_iGoalType = pSelected->m_iGoalType();
-	tOut.m_iTeam     = GetGoalTeam(pSelected);
-	tOut.m_vOrigin   = GetObjectiveOrigin(pSelected);
-	tOut.m_vMins     = GetGoalWorldMins(pSelected);
-	tOut.m_vMaxs     = GetGoalWorldMaxs(pSelected);
+	tOut.m_iTeam = GetGoalTeam(pSelected);
+	tOut.m_vOrigin = GetObjectiveOrigin(pSelected);
+	tOut.m_vMins = GetGoalWorldMins(pSelected);
+	tOut.m_vMaxs = GetGoalWorldMaxs(pSelected);
 	return !tOut.m_vOrigin.IsZero();
 }
 
@@ -245,11 +242,11 @@ Vector CPasstimeController::GetThrowTargetPos(const PasstimeGoalInfo& tGoal, con
 	const float flMaxPassRange = GetMaxPassRange();
 	const std::array<float, 4> vStandOffs = flMaxPassRange != FLT_MAX
 		? std::array<float, 4>{
-			std::clamp(flMaxPassRange * 0.18f, 120.f, 220.f),
+		std::clamp(flMaxPassRange * 0.18f, 120.f, 220.f),
 			std::clamp(flMaxPassRange * 0.28f, 180.f, 320.f),
 			std::clamp(flMaxPassRange * 0.38f, 240.f, 420.f),
 			std::clamp(flMaxPassRange * 0.48f, 300.f, 520.f) }
-		: std::array<float, 4>{ 140.f, 220.f, 320.f, 420.f };
+	: std::array<float, 4>{ 140.f, 220.f, 320.f, 420.f };
 
 	Vector vPreferredDir = vRelativePos - vGoalCenter; vPreferredDir.z = 0.f;
 	if (vPreferredDir.Normalize() <= 0.01f) vPreferredDir = { 1.f, 0.f, 0.f };
@@ -268,8 +265,8 @@ Vector CPasstimeController::GetThrowTargetPos(const PasstimeGoalInfo& tGoal, con
 			if (vCandidate.IsZero() || !HasPasstimeThrowStandSpace(vCandidate)) continue;
 
 			float flScore = vDir.Dot(vPreferredDir) * 120.f
-						  - vCandidate.DistToSqr(vRelativePos) * 0.0008f
-						  - flStandOff * 2.f;
+				- vCandidate.DistToSqr(vRelativePos) * 0.0008f
+				- flStandOff * 2.f;
 			if (F::NavEngine.IsVectorVisibleNavigation(vCandidate + Vec3(0, 0, 45), vGoalCenter + Vec3(0, 0, 45), MASK_SHOT | CONTENTS_GRATE))
 				flScore += 1200.f;
 

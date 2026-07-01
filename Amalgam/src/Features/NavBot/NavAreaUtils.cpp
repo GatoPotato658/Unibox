@@ -1,70 +1,63 @@
 #include "NavAreaUtils.h"
 
-#include <algorithm>
-#include <vector>
-
 #include "NavEngine/NavEngine.h"
-#include "../../SDK/SDK.h"
 
-namespace
+static bool FindClosestHidingSpotRecursive(
+	CNavArea* pArea,
+	const Vector& vVischeckPoint,
+	int iRecursionCount,
+	std::pair<CNavArea*, int>& tOut,
+	bool bVischeck,
+	int iRecursionIndex,
+	std::vector<CNavArea*>& vVisited)
 {
-	auto FindClosestHidingSpotRecursive(
-		CNavArea* pArea,
-		const Vector& vVischeckPoint,
-		int iRecursionCount,
-		std::pair<CNavArea*, int>& tOut,
-		bool bVischeck,
-		int iRecursionIndex,
-		std::vector<CNavArea*>& vVisited) -> bool
+	if (!pArea || iRecursionCount <= 0)
+		return false;
+
+	Vector vAreaOrigin = pArea->m_vCenter;
+	vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
+
+	const int iNextIndex = iRecursionIndex + 1;
+	if (bVischeck && !F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vVischeckPoint))
 	{
-		if (!pArea || iRecursionCount <= 0)
-			return false;
-
-		Vector vAreaOrigin = pArea->m_vCenter;
-		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
-
-		const int iNextIndex = iRecursionIndex + 1;
-		if (bVischeck && !F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vVischeckPoint))
-		{
-			tOut = { pArea, iRecursionIndex };
-			return true;
-		}
-
-		if (iNextIndex >= iRecursionCount)
-			return false;
-
-		std::pair<CNavArea*, int> tBestSpot{};
-		for (const auto& tConnection : pArea->m_vConnections)
-		{
-			auto pNextArea = tConnection.m_pArea;
-			if (!pNextArea)
-				continue;
-
-			if (std::find(vVisited.begin(), vVisited.end(), pNextArea) != vVisited.end())
-				continue;
-
-			vVisited.push_back(pNextArea);
-
-			std::pair<CNavArea*, int> tSpot{};
-			if (FindClosestHidingSpotRecursive(pNextArea, vVischeckPoint, iRecursionCount, tSpot, bVischeck, iNextIndex, vVisited)
-				&& (!tBestSpot.first || tSpot.second < tBestSpot.second))
-				tBestSpot = tSpot;
-		}
-
-		tOut = tBestSpot;
-		return tBestSpot.first != nullptr;
+		tOut = { pArea, iRecursionIndex };
+		return true;
 	}
+
+	if (iNextIndex >= iRecursionCount)
+		return false;
+
+	std::pair<CNavArea*, int> tBestSpot{};
+	for (const auto& tConnection : pArea->m_vConnections)
+	{
+		auto pNextArea = tConnection.m_pArea;
+		if (!pNextArea)
+			continue;
+
+		if (std::find(vVisited.begin(), vVisited.end(), pNextArea) != vVisited.end())
+			continue;
+
+		vVisited.push_back(pNextArea);
+
+		std::pair<CNavArea*, int> tSpot{};
+		if (FindClosestHidingSpotRecursive(pNextArea, vVischeckPoint, iRecursionCount, tSpot, bVischeck, iNextIndex, vVisited)
+			&& (!tBestSpot.first || tSpot.second < tBestSpot.second))
+			tBestSpot = tSpot;
+	}
+
+	tOut = tBestSpot;
+	return tBestSpot.first != nullptr;
 }
 
 namespace NavAreaUtils
 {
-	auto FindClosestHidingSpot(
+	bool FindClosestHidingSpot(
 		CNavArea* pArea,
 		const Vector& vVischeckPoint,
 		int iRecursionCount,
 		std::pair<CNavArea*, int>& tOut,
 		bool bVischeck,
-		int iRecursionIndex) -> bool
+		int iRecursionIndex)
 	{
 		std::vector<CNavArea*> vVisited{};
 		vVisited.reserve(32);

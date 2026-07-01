@@ -1,10 +1,8 @@
 #include "NavRuntime.h"
 
-#include "../../SDK/SDK.h"
-
 namespace NavRuntime
 {
-	auto IsMovementLocked(CTFPlayer* pLocal) -> bool
+	bool IsMovementLocked(CTFPlayer* pLocal)
 	{
 		if (!pLocal || !pLocal->IsAlive())
 			return true;
@@ -32,17 +30,12 @@ namespace NavRuntime
 		return false;
 	}
 
-	auto IsMinigunJumpLocked(CTFWeaponBase* pWeapon, CUserCmd* pCmd) -> bool
+	bool IsMinigunJumpLocked(CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	{
 		if (!pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_MINIGUN)
 			return false;
 
 		const int iState = pWeapon->As<CTFMinigun>()->m_iWeaponState();
 		return iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (G::LastUserCmd->buttons & IN_ATTACK2);
-	}
-
-	auto CanIssueNavJump(CTFWeaponBase* pWeapon, CUserCmd* pCmd) -> bool
-	{
-		return !IsMinigunJumpLocked(pWeapon, pCmd);
 	}
 }

@@ -1,12 +1,9 @@
 #include "NavBotJobs.h"
 #include "../NavBotCore.h"
 
-namespace
+inline bool IsShortRangeSentryClass(CTFPlayer* pLocal)
 {
-	bool IsShortRangeSentryClass(CTFPlayer* pLocal)
-	{
-		return pLocal && (pLocal->m_iClass() == TF_CLASS_SCOUT || pLocal->m_iClass() == TF_CLASS_PYRO);
-	}
+	return pLocal->m_iClass() == TF_CLASS_SCOUT || pLocal->m_iClass() == TF_CLASS_PYRO;
 }
 
 bool CNavBotSnipe::IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bool bShortRangeClass, bool bFixSentryZ)
@@ -104,7 +101,7 @@ bool CNavBotSnipe::Run(CTFPlayer* pLocal)
 			continue;
 
 		int iEntIdx = pEntity->entindex();
-		
+
 		// Invalid sentry
 		if (F::BotUtils.ShouldTargetBuilding(pLocal, iEntIdx) != ShouldTargetEnum::Target)
 			continue;

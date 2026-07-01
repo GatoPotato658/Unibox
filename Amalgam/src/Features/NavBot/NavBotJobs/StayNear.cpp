@@ -2,82 +2,79 @@
 #include "../NavBotCore.h"
 #include "../../Players/PlayerUtils.h"
 
-namespace
+static float GetPreferredStalkRadius(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
-	float GetPreferredStalkRadius(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
-	{
-		if (!pLocal)
-			return 400.f;
+	if (!pLocal)
+		return 400.f;
 
-		switch (pLocal->m_iClass())
-		{
-		case TF_CLASS_SCOUT:
-			return 260.f;
-		case TF_CLASS_SOLDIER:
-			return 350.f;
-		case TF_CLASS_PYRO:
-			return 100.f;
-		case TF_CLASS_DEMOMAN:
-			return 350.f;
-		case TF_CLASS_HEAVY:
-			return 250.f;
-		case TF_CLASS_ENGINEER:
-			return pWeapon && pWeapon->m_iItemDefinitionIndex() == Engi_t_TheGunslinger ? 140.f : 260.f;
-		case TF_CLASS_MEDIC:
-			return 360.f;
-		case TF_CLASS_SNIPER:
-			return pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? 600.f : 800.f;
-		case TF_CLASS_SPY:
-			return 220.f;
-		default:
-			return 420.f;
-		}
+	switch (pLocal->m_iClass())
+	{
+	case TF_CLASS_SCOUT:
+		return 260.f;
+	case TF_CLASS_SOLDIER:
+		return 350.f;
+	case TF_CLASS_PYRO:
+		return 100.f;
+	case TF_CLASS_DEMOMAN:
+		return 350.f;
+	case TF_CLASS_HEAVY:
+		return 250.f;
+	case TF_CLASS_ENGINEER:
+		return pWeapon && pWeapon->m_iItemDefinitionIndex() == Engi_t_TheGunslinger ? 140.f : 260.f;
+	case TF_CLASS_MEDIC:
+		return 360.f;
+	case TF_CLASS_SNIPER:
+		return pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? 600.f : 800.f;
+	case TF_CLASS_SPY:
+		return 220.f;
+	default:
+		return 420.f;
+	}
+}
+
+static float GetStalkLeadTime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, float flTargetDistance, float flTargetSpeed)
+{
+	float flLeadTime = 0.15f;
+
+	if (!pLocal)
+		return flLeadTime;
+
+	switch (pLocal->m_iClass())
+	{
+	case TF_CLASS_SCOUT:
+	case TF_CLASS_PYRO:
+	case TF_CLASS_SPY:
+		flLeadTime = 0.14f;
+		break;
+	case TF_CLASS_SOLDIER:
+	case TF_CLASS_DEMOMAN:
+		flLeadTime = 0.2f;
+		break;
+	case TF_CLASS_SNIPER:
+		flLeadTime = pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? 0.28f : 0.38f;
+		break;
+	default:
+		flLeadTime = 0.18f;
+		break;
 	}
 
-	float GetStalkLeadTime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, float flTargetDistance, float flTargetSpeed)
-	{
-		float flLeadTime = 0.15f;
+	flLeadTime += std::clamp(flTargetDistance / 2500.f, 0.f, 0.2f);
+	if (flTargetSpeed < 25.f)
+		flLeadTime *= 0.6f;
 
-		if (!pLocal)
-			return flLeadTime;
+	return std::clamp(flLeadTime, 0.08f, 0.55f);
+}
 
-		switch (pLocal->m_iClass())
-		{
-		case TF_CLASS_SCOUT:
-		case TF_CLASS_PYRO:
-		case TF_CLASS_SPY:
-			flLeadTime = 0.14f;
-			break;
-		case TF_CLASS_SOLDIER:
-		case TF_CLASS_DEMOMAN:
-			flLeadTime = 0.2f;
-			break;
-		case TF_CLASS_SNIPER:
-			flLeadTime = pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? 0.28f : 0.38f;
-			break;
-		default:
-			flLeadTime = 0.18f;
-			break;
-		}
-
-		flLeadTime += std::clamp(flTargetDistance / 2500.f, 0.f, 0.2f);
-		if (flTargetSpeed < 25.f)
-			flLeadTime *= 0.6f;
-
-		return std::clamp(flLeadTime, 0.08f, 0.55f);
-	}
-
-	Vector Normalize2D(const Vector& v)
-	{
-		Vector vOut = v;
-		vOut.z = 0.f;
-		float flLength = vOut.Length();
-		if (flLength > 0.01f)
-			vOut /= flLength;
-		else
-			vOut = {};
-		return vOut;
-	}
+static Vector Normalize2D(const Vector& v)
+{
+	Vector vOut = v;
+	vOut.z = 0.f;
+	float flLength = vOut.Length();
+	if (flLength > 0.01f)
+		vOut /= flLength;
+	else
+		vOut = {};
+	return vOut;
 }
 
 bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex)

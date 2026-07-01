@@ -1129,7 +1129,6 @@
     <ClCompile Include="src\Features\NavBot\NavBotCore.cpp" />
     <ClCompile Include="src\Features\NavBot\NavAreaUtils.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotConfig.cpp" />
-    <ClCompile Include="src\Features\NavBot\NavBotDebug.cpp" />
     <ClCompile Include="src\Features\NavBot\NavRuntime.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Capture.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Engineer.cpp" />
@@ -1153,6 +1152,7 @@
     <ClCompile Include="src\Features\NavBot\NavEngine\NavEngine.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\Map.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\PathWorker.cpp" />
+    <ClCompile Include="src\Features\Debug\Debug.cpp" />
     <ClCompile Include="src\Features\Output\Output.cpp" />
     <ClCompile Include="src\Features\Misc\AutoQueue\AutoQueue.cpp" />
     <ClCompile Include="src\Features\Backtrack\Backtrack.cpp" />
@@ -1189,7 +1189,7 @@
     <ClCompile Include="src\Features\Visuals\Groups\Groups.cpp" />
     <ClCompile Include="src\Features\Visuals\PlayerConditions\PlayerConditions.cpp" />
     <ClCompile Include="src\Features\Visuals\Materials\Materials.cpp" />
-    <ClCompile Include="src\Features\Visuals\Notifications\Notifications.cpp" />
+    <ClCompile Include="src\Features\ImGui\Notifications\Notifications.cpp" />
     <ClCompile Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.cpp" />
     <ClCompile Include="src\Features\Visuals\SpectatorList\SpectatorList.cpp" />
     <ClCompile Include="src\Features\Visuals\Visuals.cpp" />
@@ -1201,7 +1201,7 @@
     <ClCompile Include="src\Hooks\CBaseAnimating_MaintainSequenceTransitions.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_SetSequence.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_SetupBones.cpp" />
-    <ClCompile Include="src\Hooks\CBaseAnimating_UpdateClientSideAnimation.cpp" />
+    <ClCompile Include="src\Hooks\CTFPlayer_UpdateClientSideAnimation.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_EstimateAbsVelocity.cpp" />
     <ClCompile Include="src\Hooks\CBaseViewModel_Interpolate.cpp" />
     <ClCompile Include="src\Hooks\CBoneFollower_TestCollision.cpp" />
@@ -1487,7 +1487,6 @@
     <ClInclude Include="src\Features\NavBot\NavBotCore.h" />
     <ClInclude Include="src\Features\NavBot\NavAreaUtils.h" />
     <ClInclude Include="src\Features\NavBot\NavBotConfig.h" />
-    <ClInclude Include="src\Features\NavBot\NavBotDebug.h" />
     <ClInclude Include="src\Features\NavBot\NavRuntime.h" />
     <ClInclude Include="src\Features\NavBot\NavBotJobs\NavBotJobs.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\Controller.h" />
@@ -1502,6 +1501,8 @@
     <ClInclude Include="src\Features\NavBot\NavEngine\NavEngine.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Map.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\PathWorker.h" />
+    <ClInclude Include="src\Features\Debug\Debug.h" />
+    <ClInclude Include="src\Features\ImGui\Easings\Easings.h" />
     <ClInclude Include="src\Features\Output\Output.h" />
     <ClInclude Include="src\Features\Misc\AutoQueue\AutoQueue.h" />
     <ClInclude Include="src\Features\Backtrack\Backtrack.h" />
@@ -1682,7 +1683,7 @@
     <ClInclude Include="src\Features\Players\PlayerCore.h" />
     <ClInclude Include="src\Features\Players\PlayerUtils.h" />
     <ClInclude Include="src\Features\Visuals\Materials\Materials.h" />
-    <ClInclude Include="src\Features\Visuals\Notifications\Notifications.h" />
+    <ClInclude Include="src\Features\ImGui\Notifications\Notifications.h" />
     <ClInclude Include="src\SDK\Definitions\Classes.h" />
     <ClInclude Include="src\SDK\Definitions\Definitions.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces.h" />

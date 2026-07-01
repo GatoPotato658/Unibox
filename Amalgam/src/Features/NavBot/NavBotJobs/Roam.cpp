@@ -3,30 +3,27 @@
 #include "../Hazards/Hazards.h"
 #include "../NavEngine/Controllers/Controller.h"
 
-namespace
+static std::pair<CBaseEntity*, float> FindClosestThreatToArea(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CNavArea* pArea)
 {
-	auto FindClosestThreatToArea(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CNavArea* pArea) -> std::pair<CBaseEntity*, float>
+	if (!pLocal || !pWeapon || !pArea)
+		return { nullptr, FLT_MAX };
+
+	CBaseEntity* pClosestEnemy = nullptr;
+	float flBestDist = FLT_MAX;
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
-		if (!pLocal || !pWeapon || !pArea)
-			return { nullptr, FLT_MAX };
+		if (!F::BotUtils.ShouldTarget(pLocal, pWeapon, pEntity->entindex()))
+			continue;
 
-		CBaseEntity* pClosestEnemy = nullptr;
-		float flBestDist = FLT_MAX;
-		for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
-		{
-			if (!F::BotUtils.ShouldTarget(pLocal, pWeapon, pEntity->entindex()))
-				continue;
+		const float flDist = pEntity->GetAbsOrigin().DistTo(pArea->m_vCenter);
+		if (flDist >= flBestDist)
+			continue;
 
-			const float flDist = pEntity->GetAbsOrigin().DistTo(pArea->m_vCenter);
-			if (flDist >= flBestDist)
-				continue;
-
-			flBestDist = flDist;
-			pClosestEnemy = pEntity;
-		}
-
-		return { pClosestEnemy, flBestDist };
+		flBestDist = flDist;
+		pClosestEnemy = pEntity;
 	}
+
+	return { pClosestEnemy, flBestDist };
 }
 
 bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)

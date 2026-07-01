@@ -43,13 +43,13 @@ static inline bool CheckDXLevel()
 		const char* sMessage = "You are running with graphics options that Amalgam does not support. -dxlevel must be at least 90.";
 		U::Core.AppendFailText(sMessage);
 		F::Menu.ShowDeferredNotification("Graphics Warning", sMessage);
-		SDK::Output("Amalgam", sMessage, DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
+		SDK::Output("Amalgam", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
 		return false;
 		*/
 
 		const char* sMessage = "You are running with graphics options that Amalgam does not support. It is recommended for -dxlevel to be at least 90.";
 		F::Menu.ShowDeferredNotification("Graphics Warning", sMessage);
-		SDK::Output("Amalgam", sMessage, DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+		SDK::Output("Amalgam", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
 	}
 
 	return true;
@@ -83,7 +83,7 @@ void CCore::LogFailText()
 	}
 	catch (...) {}
 #ifndef TEXTMODE
-	SDK::Output("Failed to load", m_ssFailStream.str().c_str(), {}, OUTPUT_DEBUG, MB_OK | MB_ICONERROR);
+	SDK::Output("Failed to load", m_ssFailStream.str().c_str(), {}, OUTPUT_DEBUG, nullptr, MB_OK | MB_ICONERROR);
 #endif
 }
 
@@ -163,7 +163,7 @@ void CCore::Load()
 #endif
 	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
-	SDK::Output("Amalgam", "Loaded", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+	SDK::Output("Amalgam", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }
 
 void CCore::Loop()
@@ -232,5 +232,5 @@ void CCore::Unload()
 		return;
 	}
 
-	SDK::Output("Amalgam", "Unloaded", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	SDK::Output("Amalgam", "Unloaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 }

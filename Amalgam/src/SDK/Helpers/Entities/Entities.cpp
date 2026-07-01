@@ -9,15 +9,16 @@
 #include "../../../Features/Misc/AutoVote/AutoVote.h"
 #include "../../../Features/Configs/Configs.h"
 
+static std::unordered_map<unsigned short, DormantData> s_mDormancy = {};
+
 bool CEntities::UpdatePlayerDetails(int n, CTFPlayer* pPlayer, int iLag)
 {
 	bool bDormant = ManageDormancy(n, pPlayer);
 	float flSimTime = pPlayer->m_flSimulationTime();
-	float flOldSimTime = pPlayer->m_flOldSimulationTime();
 
-	if (float flDeltaTime = m_aDeltaTimes[n] = TICKS_TO_TIME(std::clamp(TIME_TO_TICKS(flSimTime - flOldSimTime) - iLag, 0, 24)))
+	if (float flOldSimTime = m_aSimTimes[n], flSimTime = m_aSimTimes[n] = pPlayer->m_flSimulationTime(); m_aDeltaTimes[n] = flSimTime > flOldSimTime)
 	{
-		m_aLagTimes[n] = flDeltaTime;
+		m_aDeltaTimes[n] = m_aLagTimes[n] = TICKS_TO_TIME(std::clamp(TIME_TO_TICKS(flSimTime - flOldSimTime) - iLag, 1, 24));
 		m_aSetTicks[n] = I::GlobalVars->tickcount;
 		if (!bDormant)
 		{
@@ -27,15 +28,17 @@ bool CEntities::UpdatePlayerDetails(int n, CTFPlayer* pPlayer, int iLag)
 
 			if (pPlayer->IsAlive())
 				F::CheatDetection.ReportChoke(pPlayer, m_aChokes[n]);
+			m_aOldAngles[n] = m_aEyeAngles[n], m_aEyeAngles[n] = pPlayer->GetEyeAngles();
 		}
-		else 
-			m_aOrigins[n].clear();
-
-		m_aOldAngles[n] = m_aEyeAngles[n];
-		m_aEyeAngles[n] = pPlayer->GetEyeAngles();
 	}
-	m_aChokes[n] = std::max(0, I::GlobalVars->tickcount - m_aSetTicks[n]);
-
+	if (!bDormant)
+		m_aChokes[n] = std::max(0, I::GlobalVars->tickcount - m_aSetTicks[n]);
+	else
+	{
+		m_aOrigins[n].clear();
+		if (s_mDormancy.contains(n))
+			m_aChokes[n] = std::max(0, TIME_TO_TICKS(I::GlobalVars->curtime - s_mDormancy[n].m_flLastUpdate));
+	}
 	return !bDormant;
 }
 
@@ -198,8 +201,6 @@ void CEntities::UpdatePlayerAnimations(int nLocalIndex)
 	}
 }
 
-static std::unordered_map<unsigned short, DormantData> s_mDormancy = {};
-
 void CEntities::Store()
 {
 	int nLocalIndex = I::EngineClient->GetLocalPlayer();
@@ -274,7 +275,6 @@ void CEntities::Store()
 			case ETFClassID::CTFPasstimeLogic:
 			case ETFClassID::CFuncPasstimeGoal:
 			case ETFClassID::CObjectCartDispenser:
-			case ETFClassID::CTeamControlPoint:
 			case ETFClassID::CFuncTrackTrain:
 				m_aGroups[EntityEnum::WorldObjective].push_back(pEntity);
 				break;
@@ -453,13 +453,10 @@ void CEntities::ManualNetwork(const StartSoundParams_t& params)
 	case ETFClassID::CTFPlayer:
 		pEntity->As<CTFPlayer>()->m_vecVelocity() = (params.origin - pEntity->m_vecOrigin()) / std::min(I::GlobalVars->curtime - s_mDormancy[n].m_flLastUpdate, 1.f);
 		pEntity->SetAbsVelocity(pEntity->As<CTFPlayer>()->m_vecVelocity()); SetAvgVelocity(pEntity->entindex(), pEntity->As<CTFPlayer>()->m_vecVelocity());
-		s_mDormancy[n] = { params.origin, I::GlobalVars->curtime };
-		break;
-	case ETFClassID::CObjectSentrygun:
-	case ETFClassID::CObjectDispenser:
-	case ETFClassID::CObjectTeleporter:
-		s_mDormancy[n] = { params.origin, I::GlobalVars->curtime };
 	}
+	pEntity->SetAbsOrigin(pEntity->m_vecOrigin() = params.origin);
+
+	s_mDormancy[n] = { params.origin, I::GlobalVars->curtime };
 }
 
 bool CEntities::ManageDormancy(int nIndex, CBaseEntity* pEntity)
@@ -484,24 +481,22 @@ bool CEntities::ManageDormancy(int nIndex, CBaseEntity* pEntity)
 
 	if (bDormant)
 	{
-		if (pEntity->IsPlayer())
+		if (auto pResource = GetResource(); pResource && pEntity->IsPlayer())
 		{
-			if (auto pResource = GetResource(); pResource)
-			{
-				pEntity->As<CTFPlayer>()->m_lifeState() = pResource->m_bAlive(n) ? LIFE_ALIVE : LIFE_DEAD;
-				pEntity->As<CTFPlayer>()->m_iHealth() = pResource->m_iHealth(n);
-			}
+			auto pPlayer = pEntity->As<CTFPlayer>();
+			pPlayer->m_lifeState() = pResource->m_bAlive(n) ? LIFE_ALIVE : LIFE_DEAD;
+			pPlayer->m_iHealth() = pResource->m_iHealth(n);
+			if (pPlayer->IsAlive() && pPlayer->m_iObserverMode() != OBS_MODE_NONE)
+				pPlayer->m_iObserverMode() = OBS_MODE_NONE;
 		}
 		if (s_mDormancy.contains(n))
 		{
 			auto& tDormancy = s_mDormancy[n];
-			if (flDuration == 5.f || tDormancy.m_flLastUpdate + flDuration > I::GlobalVars->curtime)
-				pEntity->SetAbsOrigin(pEntity->m_vecOrigin() = tDormancy.m_vLocation);
-			else
+			if (tDormancy.m_flLastUpdate + flDuration < I::GlobalVars->curtime || pEntity->IsPlayer() && !pEntity->As<CTFPlayer>()->IsAlive())
 				s_mDormancy.erase(n);
 		}
 	}
-	else if (flDuration != 1.f || pEntity->As<CTFPlayer>()->IsAlive())
+	else if (!pEntity->IsPlayer() || pEntity->As<CTFPlayer>()->IsAlive())
 		s_mDormancy[n] = { pEntity->m_vecOrigin(), I::GlobalVars->curtime };
 	return bDormant;
 }

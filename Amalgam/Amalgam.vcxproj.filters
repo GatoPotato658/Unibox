@@ -9,7 +9,7 @@
     <ClCompile Include="src\Features\Players\PlayerCore.cpp" />
     <ClCompile Include="src\Features\Players\PlayerUtils.cpp" />
     <ClCompile Include="src\Features\Visuals\Materials\Materials.cpp" />
-    <ClCompile Include="src\Features\Visuals\Notifications\Notifications.cpp" />
+    <ClCompile Include="src\Features\ImGui\Notifications\Notifications.cpp" />
     <ClCompile Include="src\SDK\Definitions\Main\INetMessage.cpp" />
     <ClCompile Include="src\SDK\Definitions\Main\KeyValues.cpp" />
     <ClCompile Include="src\SDK\Definitions\Misc\bitbuf.cpp" />
@@ -86,7 +86,7 @@
     <ClCompile Include="src\Hooks\CBaseAnimating_MaintainSequenceTransitions.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_SetSequence.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_SetupBones.cpp" />
-    <ClCompile Include="src\Hooks\CBaseAnimating_UpdateClientSideAnimation.cpp" />
+    <ClCompile Include="src\Hooks\CTFPlayer_UpdateClientSideAnimation.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_EstimateAbsVelocity.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayer_FireBullet.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_ResetLatched.cpp" />
@@ -201,7 +201,6 @@
     <ClCompile Include="src\Features\NavBot\NavBotCore.cpp" />
     <ClCompile Include="src\Features\NavBot\NavAreaUtils.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotConfig.cpp" />
-    <ClCompile Include="src\Features\NavBot\NavBotDebug.cpp" />
     <ClCompile Include="src\Features\NavBot\NavRuntime.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\Map.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\PathWorker.cpp" />
@@ -257,6 +256,7 @@
     <ClCompile Include="src\Hooks\CTFPlayerShared_IsCritBoosted.cpp" />
     <ClCompile Include="src\Hooks\CEngineClient_GetScreenAspectRatio.cpp" />
     <ClCompile Include="src\Features\AntiCheatCompatibility\AntiCheatCompatibility.cpp" />
+    <ClCompile Include="src\Features\Debug\Debug.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Utils\UtlVector\UtlVector.h" />
@@ -274,7 +274,7 @@
     <ClInclude Include="src\Features\Players\PlayerCore.h" />
     <ClInclude Include="src\Features\Players\PlayerUtils.h" />
     <ClInclude Include="src\Features\Visuals\Materials\Materials.h" />
-    <ClInclude Include="src\Features\Visuals\Notifications\Notifications.h" />
+    <ClInclude Include="src\Features\ImGui\Notifications\Notifications.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CClientModeShared.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CClientState.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CGlobalVarsBase.h" />
@@ -643,7 +643,6 @@
     <ClInclude Include="src\Features\NavBot\NavBotCore.h" />
     <ClInclude Include="src\Features\NavBot\NavAreaUtils.h" />
     <ClInclude Include="src\Features\NavBot\NavBotConfig.h" />
-    <ClInclude Include="src\Features\NavBot\NavBotDebug.h" />
     <ClInclude Include="src\Features\NavBot\NavRuntime.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Map.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\PathWorker.h" />
@@ -718,6 +717,8 @@
     <ClInclude Include="src\SDK\Definitions\Misc\CUtlLinkedList.h" />
     <ClInclude Include="src\SDK\Definitions\Misc\CUtlShared.h" />
     <ClInclude Include="src\Features\AntiCheatCompatibility\AntiCheatCompatibility.h" />
+    <ClInclude Include="src\Features\Debug\Debug.h" />
+    <ClInclude Include="src\Features\ImGui\Easings\Easings.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
