@@ -979,7 +979,7 @@ void CVisuals::Store()
 					continue;
 
 				CGameTrace trace = {};
-				CBaseEntity* pSkip = tProjInfo.m_uType == FNV1A::Hash32Const("models/buildables/sentry3_rockets.mdl") ? tProjInfo.m_pOwner->GetObjectOfType(OBJ_SENTRYGUN)->As<CBaseEntity>() : tProjInfo.m_pOwner;
+				CBaseEntity* pSkip = tProjInfo.m_uType == FNV1A::Hash32Const("models/buildables/sentry3_rockets.mdl") && tProjInfo.m_pOwner ? tProjInfo.m_pOwner->GetObjectOfType(OBJ_SENTRYGUN)->As<CBaseEntity>() : tProjInfo.m_pOwner;
 				CTraceFilterCollideable filter(pSkip);
 				int nMask = MASK_SOLID;
 				F::ProjSim.SetupTrace(filter, nMask, pEntity);

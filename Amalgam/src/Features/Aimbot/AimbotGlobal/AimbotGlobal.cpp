@@ -7,6 +7,24 @@
 #include "../../EnginePrediction/EnginePrediction.h"
 #include "../../NavBot/NavBotJobs/NavBotJobs.h"
 #include "../../Followbot/Followbot.h"
+#include "../AutoHeal/AutoHeal.h"
+
+inline int GetPriorityIdx(CTFWeaponBase* pWeapon)
+{
+	if (pWeapon->GetSlot() != SLOT_MELEE)
+	{
+		if (Vars::Aimbot::General::PrioritizeFollowbot.Value && pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN)
+			return F::FollowBot.m_tLockedTarget.m_iEntIndex;
+
+		if (F::AutoHeal.m_iAutoSwitch)
+			return F::AutoHeal.m_iTargetIdx;
+
+		if (Vars::Aimbot::General::PrioritizeNavbot.Value && F::NavBotStayNear.m_iStayNearTargetIdx)
+			return F::NavBotStayNear.m_iStayNearTargetIdx;
+	}
+
+	return -1;
+}
 
 std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTargets)(CTFPlayer* pLocal, CTFWeaponBase* pWeapon), CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
 	int iMethod, int iMaxTargets)
@@ -14,10 +32,7 @@ std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTar
 	auto vTargets = GetTargets(pLocal, pWeapon);
 	SortTargetsPre(vTargets, iMethod);
 
-	// Prioritize navbot/followbot target
-	int iPriorityIdx = pWeapon->GetSlot() != SLOT_MELEE ? (pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN ?
-		(Vars::Aimbot::General::PrioritizeFollowbot.Value ? F::FollowBot.m_tLockedTarget.m_iEntIndex : -1) :
-		(Vars::Aimbot::General::PrioritizeNavbot.Value ? F::NavBotStayNear.m_iStayNearTargetIdx : -1)) : -1;
+	int iPriorityIdx = GetPriorityIdx(pWeapon);
 	if (iPriorityIdx > 0)
 	{
 		std::sort((vTargets).begin(), (vTargets).end(), [&](const Target_t& a, const Target_t& b) -> bool

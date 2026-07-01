@@ -698,7 +698,8 @@ void CAutoHeal::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	if (pWeapon->GetWeaponID() != TF_WEAPON_MEDIGUN)
 	{
-		if (m_iAutoSwitch == 2 || !(Vars::Aimbot::Healing::AutoArrow.Value && Vars::Aimbot::Healing::AutoSwitch.Value) && m_iAutoSwitch != 0)
+		bool bAutoSwitch = m_iAutoSwitch != 0;
+		if (m_iAutoSwitch == 2 || !(Vars::Aimbot::Healing::AutoArrow.Value && Vars::Aimbot::Healing::AutoSwitch.Value) && bAutoSwitch)
 		{
 			I::EngineClient->ClientCmd_Unrestricted("slot2");
 			m_iAutoSwitch = 0;
@@ -708,7 +709,8 @@ void CAutoHeal::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		m_mMedicCallers.clear();
 		m_iResistType = -1;
 		m_flDamagedTime = 0.f;
-		m_iTargetIdx = -1;
+		if (!bAutoSwitch)
+			m_iTargetIdx = -1;
 		return;
 	}
 	
