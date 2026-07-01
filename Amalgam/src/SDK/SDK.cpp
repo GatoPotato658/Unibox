@@ -145,11 +145,11 @@ namespace
 			return false;
 
 		const auto GetKeyValueOrDefault = [&mKeyValues](const char* sKey) -> const char*
-		{
-			if (auto it = mKeyValues.find(sKey); it != mKeyValues.end())
-				return it->second.c_str();
-			return "";
-		};
+			{
+				if (auto it = mKeyValues.find(sKey); it != mKeyValues.end())
+					return it->second.c_str();
+				return "";
+			};
 
 		const Vector vOrigin = ParseEntityVector(GetKeyValueOrDefault("origin"));
 		Vector vAngles = {};
@@ -675,6 +675,18 @@ bool SDK::PredictOrigin(Vec3& vOut, const Vec3& vOrigin, const Vec3& vVelocity, 
 	return !trace.DidHit();
 }
 
+float SDK::GetGravity()
+{
+	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
+	return sv_gravity->GetFloat();
+}
+
+bool SDK::FriendlyFire()
+{
+	static auto mp_friendlyfire = H::ConVars.FindVar("mp_friendlyfire");
+	return mp_friendlyfire->GetBool();
+}
+
 bool SDK::IsLoopback()
 {
 	auto pNetChan = I::EngineClient->GetNetChannelInfo();
@@ -692,6 +704,38 @@ int SDK::GetWinningTeam()
 	if (auto pGameRules = I::TFGameRules())
 		return pGameRules->m_iWinningTeam();
 	return 0;
+}
+
+const char* SDK::GetClassByIndex(const int nClass, bool bLower)
+{
+	static const char* szClassesUpper[] = {
+		"Unknown", "Scout", "Sniper", "Soldier", "Demoman", "Medic", "Heavy", "Pyro", "Spy", "Engineer"
+	};
+	static const char* szClassesLower[] = {
+		"unknown", "scout", "sniper", "soldier", "demoman", "medic", "heavy", "pyro", "spy", "engineer"
+	};
+
+	if (!bLower)
+		return nClass < 10 && nClass > 0 ? szClassesUpper[nClass] : szClassesUpper[0];
+	else
+		return nClass < 10 && nClass > 0 ? szClassesLower[nClass] : szClassesLower[0];
+}
+
+float SDK::AttribHookValue(float value, const char* name, void* econent, void* buffer, bool isGlobalConstString)
+{
+	return S::CAttributeManager_AttribHookValue_Float.Call<float>(value, name, econent, buffer, isGlobalConstString);
+}
+
+float SDK::MaxSpeed(CTFPlayer* pPlayer, bool bIncludeCrouch, bool bIgnoreSpecialAbility)
+{
+	float flSpeed = pPlayer->CalculateMaxSpeed(bIgnoreSpecialAbility);
+
+	if (pPlayer->InCond(TF_COND_SPEED_BOOST) || pPlayer->InCond(TF_COND_HALLOWEEN_SPEED_BOOST))
+		flSpeed *= 1.35f;
+	if (bIncludeCrouch && pPlayer->IsDucking() && pPlayer->IsOnGround())
+		flSpeed /= 3;
+
+	return flSpeed;
 }
 
 EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryType)
@@ -719,7 +763,7 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 				if (pSentryGun && pSentryGun->m_bPlayerControlled() && !pSentryGun->IsDisabled() && pSentryGun->m_iUpgradeLevel() > 2 && pSentryGun->m_iAmmoRockets() != 0)
 					*pSecondaryType = EWeaponType::PROJECTILE;
 			}
-			
+
 			break;
 		}
 		}
@@ -748,7 +792,6 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 	case TF_WEAPON_PDA_SPY_BUILD:
 	case TF_WEAPON_INVIS:
 	case TF_WEAPON_BUFF_ITEM:
-	case TF_WEAPON_GRAPPLINGHOOK:
 	case TF_WEAPON_ROCKETPACK:
 		return EWeaponType::UNKNOWN;
 	case TF_WEAPON_CLEAVER:
@@ -773,25 +816,11 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 	case TF_WEAPON_JAR_GAS:
 	case TF_WEAPON_PASSTIME_GUN:
 	case TF_WEAPON_LUNCHBOX:
+	case TF_WEAPON_GRAPPLINGHOOK:
 		return EWeaponType::PROJECTILE;
 	}
 
 	return EWeaponType::HITSCAN;
-}
-
-const char* SDK::GetClassByIndex(const int nClass, bool bLower)
-{
-	static const char* szClassesUpper[] = {
-		"Unknown", "Scout", "Sniper", "Soldier", "Demoman", "Medic", "Heavy", "Pyro", "Spy", "Engineer"
-	};
-	static const char* szClassesLower[] = {
-		"unknown", "scout", "sniper", "soldier", "demoman", "medic", "heavy", "pyro", "spy", "engineer"
-	};
-
-	if (!bLower)
-		return nClass < 10 && nClass > 0 ? szClassesUpper[nClass] : szClassesUpper[0];
-	else
-		return nClass < 10 && nClass > 0 ? szClassesLower[nClass] : szClassesLower[0];
 }
 
 int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool bTickBase)
@@ -903,13 +932,14 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 		if (!G::CanPrimaryAttack || !(pCmd->buttons & IN_ATTACK) || pWeapon->As<CTFGrapplingHook>()->m_hProjectile())
 			return false;
 
-		Vec3 vPos, vAngle; GetProjectileFireSetup(pLocal, pCmd->viewangles, { 23.5f, -8.f, -3.f }, vPos, vAngle, false);
+		static auto tf_grapplinghook_max_distance = H::ConVars.FindVar("tf_grapplinghook_max_distance");
+		const float flGrappleDistance = tf_grapplinghook_max_distance->GetFloat();
+
+		Vec3 vPos, vAngle; GetProjectileFireSetup(pLocal, pCmd->viewangles, { 23.5f, -8.f, -3.f }, vPos, vAngle, 2000.f);
 		Vec3 vForward; Math::AngleVectors(vAngle, &vForward);
 
 		CGameTrace trace = {};
-		CTraceFilterHitscan filter(pLocal);
-		static auto tf_grapplinghook_max_distance = H::ConVars.FindVar("tf_grapplinghook_max_distance");
-		const float flGrappleDistance = tf_grapplinghook_max_distance->GetFloat();
+		CTraceFilterWorldAndPropsOnly filter = {};
 		Trace(vPos, vPos + vForward * flGrappleDistance, MASK_SOLID, &filter, &trace);
 		return trace.DidHit() && !(trace.surface.flags & SURF_SKY);
 	}
@@ -976,36 +1006,12 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 	return G::CanPrimaryAttack && pCmd->buttons & IN_ATTACK ? 1 : G::Reloading && pCmd->buttons & IN_ATTACK ? 2 : 0;
 }
 
-float SDK::GetGravity()
-{
-	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
-
-	return sv_gravity->GetFloat();
-}
-
-float SDK::MaxSpeed(CTFPlayer* pPlayer, bool bIncludeCrouch, bool bIgnoreSpecialAbility)
-{
-	float flSpeed = pPlayer->CalculateMaxSpeed(bIgnoreSpecialAbility);
-
-	if (pPlayer->InCond(TF_COND_SPEED_BOOST) || pPlayer->InCond(TF_COND_HALLOWEEN_SPEED_BOOST))
-		flSpeed *= 1.35f;
-	if (bIncludeCrouch && pPlayer->IsDucking() && pPlayer->IsOnGround())
-		flSpeed /= 3;
-
-	return flSpeed;
-}
-
-float SDK::AttribHookValue(float value, const char* name, void* econent, void* buffer, bool isGlobalConstString)
-{
-	return S::CAttributeManager_AttribHookValue_Float.Call<float>(value, name, econent, buffer, isGlobalConstString);
-}
-
 void SDK::FixMovement(CUserCmd* pCmd, const Vec3& vCurAngle, const Vec3& vTargetAngle)
 {
 	bool bCurOOB = fabsf(Math::NormalizeAngle(vCurAngle.x)) > 90.f;
 	bool bTargetOOB = fabsf(Math::NormalizeAngle(vTargetAngle.x)) > 90.f;
 
-	Vec3 vMove = { pCmd->forwardmove, pCmd->sidemove * (bCurOOB ? -1 : 1), pCmd->upmove};
+	Vec3 vMove = { pCmd->forwardmove, pCmd->sidemove * (bCurOOB ? -1 : 1), pCmd->upmove };
 	float flSpeed = vMove.Length2D();
 	Vec3 vMoveAng = Math::VectorAngles(vMove);
 

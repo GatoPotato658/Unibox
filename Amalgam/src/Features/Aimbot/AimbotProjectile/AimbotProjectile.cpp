@@ -117,7 +117,7 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 	{
 		auto eGroup = EntityEnum::Invalid;
 		if (Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Players)
-			eGroup = !F::AimbotGlobal.FriendlyFire() || Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Team ? EntityEnum::PlayerEnemy : EntityEnum::PlayerAll;
+			eGroup = !SDK::FriendlyFire() || Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Team ? EntityEnum::PlayerEnemy : EntityEnum::PlayerAll;
 		
 		bool bHeal = false, bCrossbow = false;
 		switch (pWeapon->GetWeaponID())
@@ -284,7 +284,7 @@ static inline std::vector<Target_t> GetPlayers(CTFPlayer* pLocal, CTFWeaponBase*
 	{
 		auto eGroupType = EntityEnum::Invalid;
 		if (Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Players)
-			eGroupType = !F::AimbotGlobal.FriendlyFire() || Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Team ? EntityEnum::PlayerEnemy : EntityEnum::PlayerAll;
+			eGroupType = !SDK::FriendlyFire() || Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Team ? EntityEnum::PlayerEnemy : EntityEnum::PlayerAll;
 
 		for (auto pEntity : H::Entities.GetGroup(eGroupType))
 		{
@@ -1311,7 +1311,7 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	filter.m_iObject = iType != PointTypeEnum::Direct && bWrangler ? OBJECT_NONE : OBJECT_ALL;
 	filter.m_bMisc = iType == PointTypeEnum::Direct;
 	int nMask = MASK_SOLID;
-	if (iType == PointTypeEnum::Direct && F::AimbotGlobal.FriendlyFire())
+	if (iType == PointTypeEnum::Direct && SDK::FriendlyFire())
 	{
 		switch (m_iWeaponID)
 		{	// only weapons that actually hit teammates properly
@@ -2225,15 +2225,34 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 						pCmd->buttons &= ~IN_ATTACK;
 				}
 				break;
+			case TF_WEAPON_GRAPPLINGHOOK:
+				break;
 			default:
 				pCmd->buttons |= IN_ATTACK;
 			}
 		}
-		if (G::Attacking = m_iWeaponID == TF_WEAPON_LASER_POINTER ? 1 : SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
+
+		if (m_iWeaponID != TF_WEAPON_GRAPPLINGHOOK)
 		{
-			F::Aimbot.m_eRanType = EWeaponType::PROJECTILE;
-			if (F::AutoHeal.m_iAutoSwitch == 1)
-				F::AutoHeal.m_iAutoSwitch = 2;
+			if (G::Attacking = m_iWeaponID == TF_WEAPON_LASER_POINTER ? 1 : SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
+			{
+				F::Aimbot.m_eRanType = EWeaponType::PROJECTILE;
+				if (F::AutoHeal.m_iAutoSwitch == 1)
+					F::AutoHeal.m_iAutoSwitch = 2;
+			}
+		}
+		else
+		{
+			Vec3 vOriginalAngles = pCmd->viewangles; int iOriginalButtons = pCmd->buttons;
+			pCmd->viewangles = tTarget.m_vAngleTo, pCmd->buttons |= IN_ATTACK;
+			if (G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
+				F::Aimbot.m_eRanType = EWeaponType::PROJECTILE;
+			pCmd->viewangles = vOriginalAngles, pCmd->buttons = iOriginalButtons;
+			if (!G::Attacking)
+				continue;
+
+			if (Vars::Aimbot::General::AutoShoot.Value)
+				pCmd->buttons |= IN_ATTACK;
 		}
 		DrawVisuals(iResult, tTarget, m_vPlayerPath, m_vProjectilePath, m_vBoxes);
 
