@@ -1810,13 +1810,20 @@ void CMenu::MenuMisc(int iTab)
 					FTooltip("breaks weapon shoot sound by switching weapons (soldier only)");
 					FToggleSlider(Vars::Misc::Exploits::PingReducer, Vars::Misc::Exploits::PingTarget);
 				} EndSection();
-				if (Section("Mann vs. Machine", 8))
+				if (Section("Mann vs. Machine", 14))
 				{
 					FToggle(Vars::Misc::MannVsMachine::InstantRespawn, FToggleEnum::Left);
 					FToggle(Vars::Misc::MannVsMachine::InstantRevive, FToggleEnum::Right);
 					FToggle(Vars::Misc::MannVsMachine::AllowInspect, FToggleEnum::Left);
 					FToggle(Vars::Misc::MannVsMachine::AutoMvmReadyUp, FToggleEnum::Right);
+					FToggle(Vars::Misc::MannVsMachine::AutoAbandonMannUp, FToggleEnum::Left);
 					FToggleSlider(Vars::Misc::MannVsMachine::BuyBot, Vars::Misc::MannVsMachine::MaxCash);
+					FToggle(Vars::Misc::MannVsMachine::BuyBotAutoClass, FToggleEnum::Left);
+					PushTransparent(!Vars::Misc::MannVsMachine::BuyBotAutoClass.Value);
+					{
+						FDropdown(Vars::Misc::MannVsMachine::BuyBotClass, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Sniper", "Spy" }, { 1, 3, 7, 4, 6, 9, 2, 8 }, FDropdownEnum::Right);
+					}
+					PopTransparent();
 					FTooltip("WARNING: Works only on Mann Up missions with enough starting cash (600$) before the 1st wave!\nRequirements:\n1. Be a Vaccinator Medic\n2. Ping must be below 80ms\n3. Walk to the upgrade station\nPerforms MVM upgrade station exploit for extra cash.");
 				} EndSection();
 			}

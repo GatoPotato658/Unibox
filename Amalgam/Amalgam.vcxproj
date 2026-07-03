@@ -1147,6 +1147,7 @@
     <ClCompile Include="src\Features\NavBot\NavEngine\Controllers\FlagController\FlagController.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\Controllers\HaarpController\HaarpController.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\Controllers\DoomsdayController\DoomsdayController.cpp" />
+    <ClCompile Include="src\Features\NavBot\NavEngine\Controllers\MVMController\MVMController.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\Controllers\PasstimeController\PasstimeController.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\Controllers\PLController\PLController.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine\NavEngine.cpp" />
@@ -1495,6 +1496,7 @@
     <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\FlagController\FlagController.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\HaarpController\HaarpController.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\DoomsdayController\DoomsdayController.h" />
+    <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\MVMController\MVMController.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\PasstimeController\PasstimeController.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\Controllers\PLController\PLController.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine\FileReader\CNavFile.h" />

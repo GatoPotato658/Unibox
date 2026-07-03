@@ -100,6 +100,8 @@ namespace
 			return TriggerTypeEnum::RespawnRoom;
 		case FNV1A::Hash32Const("func_regenerate"):
 			return TriggerTypeEnum::Regenerate;
+		case FNV1A::Hash32Const("func_upgradestation"):
+			return TriggerTypeEnum::UpgradeStation;
 		case FNV1A::Hash32Const("trigger_capture_area"):
 		case FNV1A::Hash32Const("func_capturezone"):
 			return TriggerTypeEnum::CaptureArea;

@@ -1007,10 +1007,12 @@ void CVisuals::Store()
 			}
 		}
 
-		for (auto& pEntity : m_mProjectiles | std::views::keys)
+		for (auto it = m_mProjectiles.begin(); it != m_mProjectiles.end();)
 		{
-			if (!mProjectiles.contains(pEntity))
-				m_mProjectiles.erase(pEntity);
+			if (!mProjectiles.contains(it->first))
+				it = m_mProjectiles.erase(it);
+			else
+				++it;
 		}
 	}
 
@@ -1271,7 +1273,9 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 		uOldHashBeam = uHashBeam, uOldHashCharge = uHashCharge;
 	}
 
-	if (Vars::Visuals::Effects::SpellFootsteps.Value && (F::Ticks.m_bDoubletap || F::Ticks.m_bWarp))
+	const bool bLocalPlayer = pLocal && pLocal->IsAlive() && !pLocal->IsDormant() && I::EngineClient->IsConnected() && I::EngineClient->IsInGame();
+
+	if (Vars::Visuals::Effects::SpellFootsteps.Value && (F::Ticks.m_bDoubletap || F::Ticks.m_bWarp) && bLocalPlayer)
 		pLocal->FireEvent(pLocal->GetAbsOrigin(), QAngle(), 7001, nullptr);
 
 	DrawHitboxes(2);

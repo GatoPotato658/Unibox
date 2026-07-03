@@ -17,8 +17,10 @@ private:
 	void BreakShootSound(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AntiAFK(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void InstantRespawnMVM(CTFPlayer* pLocal);
-	void ExecBuyBot(CTFPlayer* pLocal);
+	void ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void ResetBuyBot();
+	void BuyBotJoinClass(int iClass);
+	bool BuyBotWalkAwayFromStation(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vStation);
 	void VoiceCommandSpam(CTFPlayer* pLocal);
 	void ChatSpam(CTFPlayer* pLocal);
 	void AutoDisguise(CTFPlayer* pLocal);
@@ -87,7 +89,17 @@ private:
 	bool m_bAutoBalanceTeamChangePending = false;
 
 	int m_iBuybotStep = 1;
+	int m_iBuybotUpgradeSlotStep = 0;
+	int m_iBuybotUpgradeIndex = 0;
 	float m_flBuybotClock = 0.0f;
+	float m_flBuybotStationPathStart = 0.0f;
+	float m_flBuybotNavClock = 0.0f;
+	float m_flBuybotClassClock = 0.0f;
+	float m_flBuybotRetryClock = 0.0f;
+	bool m_bBuybotUsingNav = false;
+	bool m_bBuybotCashLimitReached = false;
+	bool m_bBuybotFinishedUpgrades = false;
+	Vec3 m_vBuybotStationTarget = {};
 
 public:
 	struct ProfileDumpResult_t
@@ -123,6 +135,7 @@ public:
 	void LockItemAchievements();
 	void SetAutoBalanceTeamChangePending(bool bPending) { m_bAutoBalanceTeamChangePending = bPending; }
 	void AutoMvmReadyUp();
+	void OnBuyBotClassChangeBlocked();
 	void OnVoteStart(int iCaller, int iTarget, const std::string& sTarget);
 	void OnChatMessage(int iEntIndex, const std::string& sName, const std::string& sMsg);
 	std::string ReplaceTags(std::string sMsg, std::string sTarget = "", std::string sInitiator = "", std::string sKiller = "", std::string sVictim = "");

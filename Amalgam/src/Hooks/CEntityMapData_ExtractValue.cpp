@@ -77,6 +77,7 @@ static bool ParseTrigger(CEntityMapData* pData, TriggerTypeEnum::TriggerTypeEnum
 		if (pModel)
 		{
 			TriggerData_t tData = TriggerData_t{ pModel, eType, vOrigin, {}, vAngles, vRotate, iTeam, {} };
+			SDK::BuildTriggerGeometry(tData);
 #ifndef TEXTMODE
 			G::TriggerStorage.push_back(tData);
 #endif 
@@ -121,6 +122,9 @@ MAKE_HOOK(CEntityMapData_ExtractValue, S::CEntityMapData_ExtractValue(), bool,
 #ifndef TEXTMODE
 		case FNV1A::Hash32Const("func_regenerate"):
 			eType = TriggerTypeEnum::Regenerate;
+			break;
+		case FNV1A::Hash32Const("func_upgradestation"):
+			eType = TriggerTypeEnum::UpgradeStation;
 			break;
 		case FNV1A::Hash32Const("trigger_capture_area"):
 		case FNV1A::Hash32Const("func_capturezone"):

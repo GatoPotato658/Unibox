@@ -4,6 +4,7 @@
 #include "HaarpController/HaarpController.h"
 #include "DoomsdayController/DoomsdayController.h"
 #include "PasstimeController/PasstimeController.h"
+#include "MVMController/MVMController.h"
 
 class CGameObjectiveController
 {

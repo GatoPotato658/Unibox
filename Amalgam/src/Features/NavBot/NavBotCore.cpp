@@ -5,6 +5,7 @@
 #include "NavEngine/NavEngine.h"
 #include "NavBotJobs/NavBotJobs.h"
 #include "NavRuntime.h"
+#include "NavEngine/Controllers/MVMController/MVMController.h"
 #include "../FollowBot/FollowBot.h"
 #include "../CritHack/CritHack.h"
 #include "../Misc/Misc.h"
@@ -210,14 +211,14 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	UpdateSlot(pLocal, F::BotUtils.m_tClosestEnemy);
 	F::Hazards.Update(pLocal);
 
-	// TODO:
-	// Add engie logic and target sentries logic. (Done)
-	// Also maybe add some spy sapper logic? (No.)
-	// Fix defend and help capture logic
-	// Fix reload stuff because its really janky
-	// Finish auto wewapon stuff
-	// Make a better closest enemy logic
-	// Fix dormant player blacklist not actually running
+	if (F::MVMController.IsActive() && F::MVMController.Run(pCmd, pLocal, pWeapon))
+	{
+		m_tIdleTimer.Update();
+		m_tAntiStuckTimer.Update();
+		UpdateRunReloadInput(pCmd, false);
+		F::CritHack.m_bForce = F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMTank || F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat;
+		return;
+	}
 
 	const auto tJobResult = m_tJobSystem.Run(pCmd, pLocal, pWeapon);
 
@@ -375,6 +376,14 @@ static std::wstring BuildJobLabel()
 		return L"Escape danger";
 	case PriorityListEnum::Followbot:
 		return L"FollowBot";
+	case PriorityListEnum::MVMTank:
+		return L"MvM tank";
+	case PriorityListEnum::MVMCombat:
+		return L"MvM combat";
+	case PriorityListEnum::MVMMoney:
+		return L"MvM money";
+	case PriorityListEnum::MVMFrontline:
+		return L"MvM frontline";
 	default:
 		return L"None";
 	}

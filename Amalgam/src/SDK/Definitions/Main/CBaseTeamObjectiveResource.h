@@ -6,6 +6,9 @@ class CBaseTeamObjectiveResource : public CBaseEntity
 public:
 	NETVAR(m_iNumControlPoints, int, "CBaseTeamObjectiveResource", "m_iNumControlPoints");
 	NETVAR(m_bPlayingMiniRounds, bool, "CBaseTeamObjectiveResource", "m_bPlayingMiniRounds");
+	NETVAR(m_nMannVsMachineMaxWaveCount, int, "CTFObjectiveResource", "m_nMannVsMachineMaxWaveCount");
+	NETVAR(m_nMannVsMachineWaveCount, int, "CTFObjectiveResource", "m_nMannVsMachineWaveCount");
+	NETVAR(m_bMannVsMachineBetweenWaves, bool, "CTFObjectiveResource", "m_bMannVsMachineBetweenWaves");
 
 	NETVAR_ARRAY(m_vCPPositions, Vector, "CBaseTeamObjectiveResource", "m_vCPPositions[0]");
 	NETVAR_ARRAY(m_iBaseControlPoints, int, "CBaseTeamObjectiveResource", "m_iBaseControlPoints");

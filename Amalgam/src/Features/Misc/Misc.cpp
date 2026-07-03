@@ -8,6 +8,7 @@
 #include "../Aimbot/AutoRocketJump/AutoRocketJump.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../EnginePrediction/EnginePrediction.h"
+#include "../NavBot/NavEngine/NavEngine.h"
 #ifdef TEXTMODE
 #include "NamedPipe/NamedPipe.h"
 #endif
@@ -35,7 +36,7 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 #endif
 	AntiAFK(pLocal, pCmd);
 	InstantRespawnMVM(pLocal);
-	ExecBuyBot(pLocal);
+	ExecBuyBot(pLocal, pCmd);
 
 	if (!pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->m_MoveType() != MOVETYPE_WALK || pLocal->IsSwimming()
 		|| pLocal->IsTaunting() || pLocal->InCond(TF_COND_SHIELD_CHARGE))
@@ -1771,28 +1772,217 @@ void CMisc::AutoMvmReadyUp()
 		I::EngineClient->ClientCmd_Unrestricted("tournament_player_readystate 1");
 }
 
-void CMisc::ExecBuyBot(CTFPlayer* pLocal)
+void CMisc::BuyBotJoinClass(int iClass)
+{
+	static const std::array<const char*, 10> aClassNames = { "", "scout", "sniper", "soldier", "demoman", "medic", "heavyweapons", "pyro", "spy", "engineer" };
+	if (iClass <= TF_CLASS_UNDEFINED || iClass >= TF_CLASS_COUNT || iClass == TF_CLASS_CIVILIAN)
+		return;
+
+	float flCurTime = I::GlobalVars->curtime;
+	if (m_flBuybotClassClock > flCurTime)
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted(std::format("joinclass {}", aClassNames[iClass]).c_str());
+	I::EngineClient->ClientCmd_Unrestricted("menuclosed");
+	m_flBuybotClassClock = flCurTime + 1.0f;
+}
+
+bool CMisc::BuyBotWalkAwayFromStation(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vStation)
+{
+	if (!pLocal || !pCmd || vStation.IsZero())
+		return false;
+
+	if (m_bBuybotUsingNav)
+		F::NavEngine.CancelPath();
+
+	Vec3 vDirection = pLocal->GetAbsOrigin() - vStation;
+	vDirection.z = 0.0f;
+	if (vDirection.IsZero())
+		vDirection = { 1.0f, 0.0f, 0.0f };
+	vDirection.Normalize();
+
+	SDK::WalkTo(pCmd, pLocal, pLocal->GetAbsOrigin() + vDirection * 320.0f);
+	m_bBuybotUsingNav = false;
+	m_flBuybotStationPathStart = 0.0f;
+	return true;
+}
+
+void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
 	if (!Vars::Misc::MannVsMachine::BuyBot.Value)
+	{
+		if (m_bBuybotUsingNav)
+			F::NavEngine.CancelPath();
+		ResetBuyBot();
 		return;
+	}
 
 	auto pGameRules = I::TFGameRules();
 	if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine())
+	{
+		if (m_bBuybotUsingNav)
+			F::NavEngine.CancelPath();
+		ResetBuyBot();
 		return;
+	}
+
+	if (Vars::Misc::MannVsMachine::MaxCash.Value > 0 && pLocal->m_nCurrency() >= Vars::Misc::MannVsMachine::MaxCash.Value)
+		m_bBuybotCashLimitReached = true;
+
+	const Vec3 vLocalOrigin = pLocal->GetAbsOrigin();
+	bool bFoundStation = false;
+	float flBestDist = FLT_MAX;
+	Vec3 vBestStation = {};
+
+	for (const auto& tTrigger : G::TriggerStorage)
+	{
+		if (tTrigger.m_eType != TriggerTypeEnum::UpgradeStation)
+			continue;
+
+		Vec3 vStation = tTrigger.m_vCenter.IsZero() ? tTrigger.m_vOrigin : tTrigger.m_vCenter;
+		float flDist = vLocalOrigin.DistToSqr(vStation);
+		if (flDist >= flBestDist)
+			continue;
+
+		flBestDist = flDist;
+		vBestStation = vStation;
+		bFoundStation = true;
+	}
+
+	int iDesiredClass = 0;
+	if (Vars::Misc::MannVsMachine::BuyBotAutoClass.Value)
+	{
+		if (!m_bBuybotCashLimitReached)
+			iDesiredClass = TF_CLASS_MEDIC;
+		else if (pLocal->m_iClass() == TF_CLASS_MEDIC)
+		{
+			iDesiredClass = Vars::Misc::MannVsMachine::BuyBotClass.Value;
+			if (iDesiredClass == TF_CLASS_MEDIC)
+				iDesiredClass = TF_CLASS_HEAVY;
+		}
+	}
+
+	if (iDesiredClass > TF_CLASS_UNDEFINED && iDesiredClass < TF_CLASS_COUNT && pLocal->m_iClass() != iDesiredClass)
+	{
+		if (pLocal->m_bInUpgradeZone() && BuyBotWalkAwayFromStation(pLocal, pCmd, vBestStation))
+			return;
+
+		BuyBotJoinClass(iDesiredClass);
+		return;
+	}
+
+	const bool bWaitingForMedicClass = Vars::Misc::MannVsMachine::BuyBotAutoClass.Value && !m_bBuybotCashLimitReached && pLocal->m_iClass() != TF_CLASS_MEDIC;
+	if (m_bBuybotFinishedUpgrades)
+	{
+		if (m_bBuybotUsingNav)
+			F::NavEngine.CancelPath();
+		m_flBuybotStationPathStart = 0.0f;
+		m_bBuybotUsingNav = false;
+		return;
+	}
+
+	if (bFoundStation)
+	{
+		if (m_vBuybotStationTarget.IsZero() || m_vBuybotStationTarget.DistToSqr(vBestStation) > 4096.0f)
+		{
+			m_vBuybotStationTarget = vBestStation;
+			m_flBuybotStationPathStart = I::GlobalVars->curtime;
+			m_bBuybotUsingNav = false;
+		}
+
+		if (!pLocal->m_bInUpgradeZone() && pLocal->IsAlive() && !pLocal->IsAGhost() && pLocal->m_MoveType() == MOVETYPE_WALK && !pLocal->IsSwimming() && !pLocal->IsTaunting())
+		{
+			const float flCurTime = I::GlobalVars->curtime;
+			if (m_flBuybotStationPathStart == 0.0f)
+				m_flBuybotStationPathStart = flCurTime;
+
+			if (flCurTime - m_flBuybotStationPathStart >= 12.0f)
+			{
+				if (!m_bBuybotUsingNav || m_flBuybotNavClock <= flCurTime || m_vBuybotStationTarget.DistToSqr(vBestStation) > 4096.0f)
+				{
+					F::NavEngine.NavTo(vBestStation, PriorityListEnum::Forced, true, !F::NavEngine.IsPathing());
+					m_flBuybotNavClock = flCurTime + 0.5f;
+				}
+				m_bBuybotUsingNav = true;
+			}
+			else if (pCmd)
+				SDK::WalkTo(pCmd, pLocal, vBestStation);
+		}
+	}
+	else
+	{
+		m_flBuybotStationPathStart = 0.0f;
+		m_bBuybotUsingNav = false;
+		m_vBuybotStationTarget = {};
+	}
 
 	if (!pLocal->m_bInUpgradeZone())
 		return;
 
-	// cash threshold
-	if (Vars::Misc::MannVsMachine::MaxCash.Value > 0 && pLocal->m_nCurrency() >= Vars::Misc::MannVsMachine::MaxCash.Value)
-		return;
+	if (m_bBuybotUsingNav)
+		F::NavEngine.CancelPath();
+
+	m_flBuybotStationPathStart = 0.0f;
+	m_bBuybotUsingNav = false;
 
 	static auto tfMvmRespec = H::ConVars.FindVar("tf_mvm_respec_enabled");
-	if (tfMvmRespec->GetInt() != 1)
-		return;
-
 	float flCurTime = I::GlobalVars->curtime;
 	if (m_flBuybotClock > flCurTime)
+		return;
+
+	if (bWaitingForMedicClass)
+		return;
+
+	if (m_bBuybotCashLimitReached)
+	{
+		if (pLocal->m_iClass() == TF_CLASS_MEDIC)
+		{
+			m_flBuybotClock = flCurTime + 0.2f;
+			return;
+		}
+
+		constexpr int iMaxUpgradeIndex = 128;
+		constexpr int iMaxUpgradeLevels = 10;
+		const int aSlots[] = { 0, -1 };
+		const int iSlot = aSlots[m_iBuybotUpgradeSlotStep % std::size(aSlots)];
+
+		I::EngineClient->ServerCmdKeyValues(new KeyValues("MvM_UpgradesBegin"));
+		for (int iLevel = 0; iLevel < iMaxUpgradeLevels; iLevel++)
+		{
+			KeyValues* kv = new KeyValues("MVM_Upgrade");
+			KeyValues* sub = kv->FindKey("Upgrade", true);
+			sub->SetInt("itemslot", iSlot);
+			sub->SetInt("upgrade", m_iBuybotUpgradeIndex);
+			sub->SetInt("count", 1);
+			I::EngineClient->ServerCmdKeyValues(kv);
+		}
+		{
+			KeyValues* kv = new KeyValues("MvM_UpgradesDone");
+			kv->SetInt("num_upgrades", iMaxUpgradeLevels);
+			I::EngineClient->ServerCmdKeyValues(kv);
+		}
+
+		m_iBuybotUpgradeIndex++;
+		if (m_iBuybotUpgradeIndex >= iMaxUpgradeIndex)
+		{
+			m_iBuybotUpgradeIndex = 0;
+			m_iBuybotUpgradeSlotStep++;
+			if (m_iBuybotUpgradeSlotStep >= static_cast<int>(std::size(aSlots)))
+			{
+				m_bBuybotFinishedUpgrades = true;
+				m_bBuybotUsingNav = false;
+				m_vBuybotStationTarget = {};
+			}
+		}
+
+		m_flBuybotClock = flCurTime + 0.05f;
+		return;
+	}
+
+	m_iBuybotUpgradeSlotStep = 0;
+	m_iBuybotUpgradeIndex = 0;
+
+	if (tfMvmRespec->GetInt() != 1)
 		return;
 
 	switch (m_iBuybotStep)
@@ -1894,7 +2084,38 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal)
 void CMisc::ResetBuyBot()
 {
 	m_iBuybotStep = 1;
+	m_iBuybotUpgradeSlotStep = 0;
+	m_iBuybotUpgradeIndex = 0;
 	m_flBuybotClock = 0.0f;
+	m_flBuybotStationPathStart = 0.0f;
+	m_flBuybotNavClock = 0.0f;
+	m_flBuybotClassClock = 0.0f;
+	m_flBuybotRetryClock = 0.0f;
+	m_bBuybotUsingNav = false;
+	m_bBuybotCashLimitReached = false;
+	m_bBuybotFinishedUpgrades = false;
+	m_vBuybotStationTarget = {};
+}
+
+void CMisc::OnBuyBotClassChangeBlocked()
+{
+	if (!Vars::Misc::MannVsMachine::BuyBot.Value || !Vars::Misc::MannVsMachine::BuyBotAutoClass.Value)
+		return;
+
+	auto pGameRules = I::TFGameRules();
+	if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine() || pGameRules->m_iRoundState() == GR_STATE_RND_RUNNING)
+		return;
+
+	auto pObjectiveResource = H::Entities.GetObjectiveResource();
+	if (pObjectiveResource && !pObjectiveResource->m_bMannVsMachineBetweenWaves() && pGameRules->m_iRoundState() != GR_STATE_BETWEEN_RNDS)
+		return;
+
+	const float flCurTime = I::GlobalVars->curtime;
+	if (m_flBuybotRetryClock > flCurTime)
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted("retry");
+	m_flBuybotRetryClock = flCurTime + 10.0f;
 }
 
 void CMisc::MicSpam()

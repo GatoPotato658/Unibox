@@ -372,6 +372,9 @@ void CEntities::Store()
 				case ETFClassID::CTFAmmoPack:
 					m_aGroups[EntityEnum::PickupAmmo].push_back(pEntity);
 					break;
+				case ETFClassID::CCurrencyPack:
+					m_aGroups[EntityEnum::PickupMoney].push_back(pEntity);
+					break;
 				case ETFClassID::CLaserDot:
 					if (pEntity->As<CSniperDot>()->m_hOwnerEntity().GetEntryIndex() == nLocalIndex)
 						m_pLocalLaserDot = pEntity->As<CSniperDot>();

@@ -5,6 +5,7 @@
 #include "HaarpController/HaarpController.h"
 #include "DoomsdayController/DoomsdayController.h"
 #include "PasstimeController/PasstimeController.h"
+#include "MVMController/MVMController.h"
 
 static std::string GetNormalizedLevelName()
 {
@@ -44,6 +45,10 @@ void CGameObjectiveController::Update()
 	}
 
 	const auto sMapName = GetNormalizedLevelName();
+
+	F::MVMController.Update();
+	if (F::MVMController.IsActive())
+		return;
 
 	if (MapStartsWith(sMapName, "cppl_"))
 	{
@@ -132,4 +137,5 @@ void CGameObjectiveController::Reset()
 	F::PLController.Init();
 	F::CPController.Init();
 	F::PasstimeController.Init();
+	F::MVMController.Reset();
 }

@@ -21,7 +21,7 @@
 bool CEventListener::Initialize()
 {
 	std::vector<const char*> vEvents = { 
-		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify"
+		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify"
 	};
 
 	for (auto szEvent : vEvents)
@@ -48,6 +48,8 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 	if (!pEvent || G::Unload)
 		return;
 
+	static bool bAutoAbandonedMannUp = false;
+
 	auto pLocal = H::Entities.GetLocal();
 	auto uHash = FNV1A::Hash32(pEvent->GetName());
 
@@ -65,6 +67,37 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 #endif
 	switch (uHash)
 	{
+	case FNV1A::Hash32Const("client_disconnect"):
+	case FNV1A::Hash32Const("game_newmap"):
+	case FNV1A::Hash32Const("teamplay_round_start"):
+	case FNV1A::Hash32Const("mvm_reset_stats"):
+	{
+		bAutoAbandonedMannUp = false;
+		return;
+	}
+	case FNV1A::Hash32Const("mvm_wave_complete"):
+	{
+		if (!Vars::Misc::MannVsMachine::AutoAbandonMannUp.Value || bAutoAbandonedMannUp || !I::TFGCClientSystem)
+			return;
+
+		auto pGameRules = I::TFGameRules();
+		if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine() || pGameRules->GetCurrentMatchGroup() != k_eTFMatchGroup_MvM_MannUp)
+			return;
+
+		auto pObjectiveResource = H::Entities.GetObjectiveResource();
+		if (!pObjectiveResource)
+			return;
+
+		int iWave = pObjectiveResource->m_nMannVsMachineWaveCount();
+		int iMaxWave = pObjectiveResource->m_nMannVsMachineMaxWaveCount();
+		int iCompletedWave = pObjectiveResource->m_bMannVsMachineBetweenWaves() && iWave > 1 ? iWave - 1 : iWave;
+		if (iMaxWave <= 1 || iCompletedWave != iMaxWave - 1)
+			return;
+
+		bAutoAbandonedMannUp = true;
+		I::TFGCClientSystem->AbandonCurrentMatch();
+		return;
+	}
 	case FNV1A::Hash32Const("player_hurt"):
 	{
 		F::Resolver.PlayerHurt(pEvent);

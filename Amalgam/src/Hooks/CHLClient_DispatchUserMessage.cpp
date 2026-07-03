@@ -159,6 +159,10 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 			}
 			else if (FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#GameUI_vote_failed_vote_in_progress"))
 				F::AutoVote.m_bActiveVote = true;
+			else if (sMsg.find("change class") != std::string::npos && sMsg.find("wave") != std::string::npos)
+				F::Misc.OnBuyBotClassChangeBlocked();
+			else if (sMsg.find("Change_Class") != std::string::npos && sMsg.find("Wave") != std::string::npos)
+				F::Misc.OnBuyBotClassChangeBlocked();
 		}
 		break;
 	}

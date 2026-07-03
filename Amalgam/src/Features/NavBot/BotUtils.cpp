@@ -1,5 +1,6 @@
 #include "BotUtils.h"
 #include "NavEngine/NavEngine.h"
+#include "NavEngine/Controllers/MVMController/MVMController.h"
 #include "../Players/PlayerUtils.h"
 #include "../Misc/Misc.h"
 #include "../Aimbot/AutoHeal/AutoHeal.h"
@@ -370,6 +371,18 @@ void CBotUtils::UpdateBestSlot(CTFPlayer* pLocal)
 	if (Vars::Misc::Movement::BotUtils::WeaponSlot.Value != Vars::Misc::Movement::BotUtils::WeaponSlotEnum::Best)
 	{
 		m_iBestSlot = Vars::Misc::Movement::BotUtils::WeaponSlot.Value - 2;
+		return;
+	}
+
+	if (F::MVMController.WantsPrimary(pLocal))
+	{
+		m_iBestSlot = SLOT_PRIMARY;
+		return;
+	}
+
+	if (F::MVMController.WantsScoutSecondary(pLocal))
+	{
+		m_iBestSlot = SLOT_SECONDARY;
 		return;
 	}
 

@@ -1282,8 +1282,11 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(InstantRevive, "Instant revive", false);
 			CVar(AllowInspect, "Allow inspect", false);
 			CVar(AutoMvmReadyUp, "Auto MvM ready up", false);
+			CVar(AutoAbandonMannUp, "Auto abandon Mann Up", false);
 			CVar(BuyBot, "Buy Bot", false);
 			CVar(MaxCash, "Turn off buybot at cash", 15000, SLIDER_CLAMP | SLIDER_MIN, 0, 100000, 1000, "%i");
+			CVar(BuyBotAutoClass, "Buy Bot auto class", false);
+			CVar(BuyBotClass, "Buy Bot class", 6);
 		NAMESPACE_END(MannVsMachine)
 
 		NAMESPACE_BEGIN(Sound)

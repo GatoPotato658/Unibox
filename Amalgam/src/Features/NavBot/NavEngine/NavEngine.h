@@ -17,7 +17,11 @@ Enum(PriorityList, None,
 	GetHealth,
 	EscapeSpawn, EscapeDanger,
 	Followbot,
-	Forced
+	Forced,
+	MVMTank,
+	MVMCombat,
+	MVMMoney,
+	MVMFrontline
 )
 
 enum class PathSolveResult : int

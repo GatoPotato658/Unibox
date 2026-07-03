@@ -17,7 +17,11 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 	const auto dwRetAddr = uintptr_t(_ReturnAddress());
 	const auto dwDesired = S::CTFPlayer_FireEvent_AttribHookValue_Call();
 
-	if (dwRetAddr == dwDesired && Vars::Visuals::Effects::SpellFootsteps.Value
+	CTFPlayer* pLocal = H::Entities.GetLocal();
+	const bool bLocalPlayer = pLocal && econent == pLocal && pLocal->IsAlive() && !pLocal->IsDormant()
+		&& I::EngineClient->IsConnected() && I::EngineClient->IsInGame();
+
+	if (dwRetAddr == dwDesired && Vars::Visuals::Effects::SpellFootsteps.Value && bLocalPlayer
 		&& name && FNV1A::Hash32(name) == FNV1A::Hash32Const("halloween_footstep_type"))
 	{
 		switch (Vars::Visuals::Effects::SpellFootsteps.Value)
