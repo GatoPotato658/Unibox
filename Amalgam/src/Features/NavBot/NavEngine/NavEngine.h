@@ -56,10 +56,13 @@ private:
 	CNavArea* m_pLocalArea = nullptr;
 
 	Timer m_tStuckSampleTimer = {};
+	Timer m_tLastProgressTimer = {};
 	Vector m_vLastStuckSamplePos = {};
 	float m_flLastDistToCrumb = FLT_MAX;
 	int m_iNoProgressSamples = 0;
 	int m_iStuckJumpAttempts = 0;
+	int m_iStuckSide = 1;
+	CNavArea* m_pLastProgressArea = nullptr;
 
 	Timer m_tOffMeshTimer = {};
 	Vector m_vOffMeshTarget = {};
@@ -86,6 +89,8 @@ private:
 	void EmitConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo);
 	void EmitIntraAreaCrumbs(const Vector& vStart, const Vector& vDestination, CNavArea* pArea);
 	void AbandonPath(const std::string& sReason);
+	void RecordStuckFailure();
+	void ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
 	void PollPathWorker();
 	bool BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CTFPlayer* pLocal);
 	void UpdateRespawnRooms();

@@ -175,113 +175,253 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 	return static_cast<ImTextureID>(0);
 }
 
+static bool RoleDropdown(const char* sLabel, std::vector<int>& vRoles)
+{
+	using namespace ImGui;
+
+	std::vector<int> vValidRoles = {};
+	std::vector<const char*> vEntries = {};
+	for (int i = 0; i < F::PlayerUtils.m_vTags.size(); i++)
+	{
+		auto& tTag = F::PlayerUtils.m_vTags[i];
+		if (tTag.m_bLabel)
+			continue;
+
+		vValidRoles.push_back(i);
+		vEntries.push_back(tTag.m_sName.c_str());
+	}
+
+	for (auto it = vRoles.begin(); it != vRoles.end();)
+	{
+		if (std::ranges::find(vValidRoles, *it) == vValidRoles.end())
+			it = vRoles.erase(it);
+		else
+			++it;
+	}
+
+	std::string sPreview = "";
+	for (int iRole : vRoles)
+	{
+		if (auto pTag = F::PlayerUtils.GetTag(iRole))
+			sPreview += std::format("{}, ", pTag->m_sName);
+	}
+	if (sPreview.length() > 1)
+	{
+		sPreview.pop_back();
+		sPreview.pop_back();
+	}
+	else
+		sPreview = "All";
+
+	bool bReturn = false;
+	const ImVec2 vSize = { GetWindowWidth() - GetStyle().WindowPadding.x * 2.f, H::Draw.Scale(40) };
+	const ImVec2 vOriginalPos = GetCursorPos();
+	DebugShift({ 0, GetStyle().WindowPadding.y });
+	PushStyleVar(ImGuiStyleVar_FramePadding, { 0.f, H::Draw.Scale(13.5f) });
+	PushItemWidth(vSize.x);
+
+	bool bActive = BeginCombo(std::format("##{}", sLabel).c_str(), "", ImGuiComboFlags_CustomPreview | ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge);
+	if (bActive)
+	{
+		DebugDummy({ 0, H::Draw.Scale(8) });
+		PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, H::Draw.Scale(19) });
+		for (int i = 0; i < vEntries.size(); i++)
+		{
+			const int iRole = vValidRoles[i];
+			const bool bActiveRole = std::ranges::find(vRoles, iRole) != vRoles.end();
+			ImVec2 vEntryPos = GetCursorPos();
+			if (FSelectable(std::format("##{}{}", vEntries[i], i).c_str(), nullptr, 0, bActiveRole, ImGuiSelectableFlags_DontClosePopups))
+			{
+				if (bActiveRole)
+					std::erase(vRoles, iRole);
+				else
+					vRoles.push_back(iRole);
+				bReturn = true;
+			}
+
+			ImVec2 vNextPos = GetCursorPos();
+			SetCursorPos(vEntryPos + ImVec2(H::Draw.Scale(40), 0));
+			TextColored(bActiveRole ? F::Render.Active : F::Render.Inactive, vEntries[i]);
+			SameLine();
+			DebugDummy({ H::Draw.Scale(!GetCurrentWindow()->ScrollbarY ? 16 : 9), 0 });
+			FCheckboxIcon(GetDrawPos() + vEntryPos + ImVec2(H::Draw.Scale(18), H::Draw.Scale(3)), bActiveRole);
+			SetCursorPos(vNextPos);
+		}
+		PopStyleVar();
+		SetCursorPosY(GetCursorPosY() - H::Draw.Scale(10));
+		DebugDummy({});
+		EndCombo();
+	}
+	if (!Disabled && IsItemHovered())
+		SetMouseCursor(ImGuiMouseCursor_Hand);
+	if (BeginComboPreview())
+	{
+		ImVec2 vPreviewPos = GetCursorPos();
+		SetCursorPos(vPreviewPos + ImVec2(H::Draw.Scale(12), H::Draw.Scale(-6)));
+		PushFont(F::Render.FontSmall);
+		TextColored(F::Render.Inactive, TruncateText(StripDoubleHash(sLabel), vSize.x - H::Draw.Scale(45)).c_str());
+		PopFont();
+		SetCursorPos(vPreviewPos + ImVec2(H::Draw.Scale(12), H::Draw.Scale(8)));
+		TextUnformatted(TruncateText(sPreview, vSize.x - H::Draw.Scale(45)).c_str());
+		SetCursorPos(vPreviewPos + ImVec2(vSize.x - H::Draw.Scale(24), H::Draw.Scale(-1)));
+		IconImage(bActive ? ICON_MD_KEYBOARD_ARROW_UP : ICON_MD_KEYBOARD_ARROW_DOWN);
+		EndComboPreview();
+	}
+
+	PopItemWidth();
+	PopStyleVar();
+	SetCursorPos(vOriginalPos);
+	AddRowSize(vOriginalPos, vSize + ImVec2(0, GetStyle().WindowPadding.y));
+	DebugDummy({ vSize.x, GetRowSize(vSize.y + GetStyle().WindowPadding.y) });
+	return bReturn;
+}
+
 void CMenu::DrawMenu()
 {
 	using namespace ImGui;
 
-	if (static bool bSetPosition = false; !bSetPosition)
+	static bool bSetPosition = false;
+	static bool bDraggingMenu = false;
+	static ImVec2 vMenuTargetPos = {};
+	static ImVec2 vMenuAnimPos = {};
+	static ImVec2 vMenuDragOffset = {};
+	ImVec2 vDefaultMenuSize = { H::Draw.Scale(750), H::Draw.Scale(500) };
+	if (!bSetPosition)
 	{
-		SetNextWindowPos((GetIO().DisplaySize - ImVec2(H::Draw.Scale(750), H::Draw.Scale(500))) / 2, ImGuiCond_FirstUseEver);
-		SetNextWindowSize({ H::Draw.Scale(750), H::Draw.Scale(500) }, ImGuiCond_FirstUseEver);
+		vMenuTargetPos = (GetIO().DisplaySize - vDefaultMenuSize) / 2;
+		vMenuAnimPos = vMenuTargetPos;
 		bSetPosition = true;
 	}
+	float flDragDelta = std::clamp(GetIO().DeltaTime * 18.f, 0.f, 1.f);
+	vMenuAnimPos = ImLerp(vMenuAnimPos, vMenuTargetPos, flDragDelta);
+	SetNextWindowPos(vMenuAnimPos, ImGuiCond_Always);
+	SetNextWindowSize(vDefaultMenuSize, ImGuiCond_FirstUseEver);
 
 	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(750), H::Draw.Scale(500) });
-	if (Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+	if (Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove))
 	{
 		ImVec2 vWindowSize = GetWindowSize();
 		ImVec2 vDrawPos = GetDrawPos();
+		ImVec2 vMousePos = GetMousePos();
 		auto pDrawList = GetWindowDrawList();
-		float flSize = H::Draw.Scale(140);
 		float flInset = H::Draw.Scale();
-		float flOffset = 0.f;
+		float flNavHeight = H::Draw.Scale(42);
+		float flSubTabHeight = H::Draw.Scale(34);
+		const std::vector<std::vector<const char*>> vSubTabs = {
+			{ "GENERAL", "DRAW" },
+			{ "ESP", "MISC##", "MENU" },
+			{ "MAIN" },
+			{ "MAIN", "BOT", "QUEUEING" },
+			{ "CHEATERS", "DETECTION" },
+			{ "PLAYERLIST", "SETTINGS##", "OUTPUT" },
+			{ "CONFIG", "BINDS", "MATERIALS", "MISC##" }
+		};
+		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSettingsTab = 0;
+		bool bHasSubTabs = !vSubTabs[iTab].empty();
+		float flHeaderHeight = flNavHeight + (bHasSubTabs ? flSubTabHeight : 0.f);
+		float flBrandWidth = H::Draw.Scale(140);
+		float flSearchWidth = H::Draw.Scale(150);
 
 		Bind_t tBind;
 		if (!F::Binds.GetBind(CurrentBind, &tBind))
 			CurrentBind = DEFAULT_BIND;
 
-		if (CurrentBind != DEFAULT_BIND) // bind
-		{
-			flOffset = H::Draw.Scale(60);
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize, flOffset - flInset), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset - flInset), vDrawPos + ImVec2(flSize, flOffset), F::Render.Background2);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset), vDrawPos + ImVec2(flSize, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersBottomLeft);
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(vWindowSize.x, vWindowSize.y), F::Render.Background1, H::Draw.Scale(4));
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(vWindowSize.x, flNavHeight), F::Render.Background0, H::Draw.Scale(4), ImDrawFlags_RoundCornersTop);
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flNavHeight - flInset), vDrawPos + ImVec2(vWindowSize.x, flNavHeight), F::Render.Background2);
+		pDrawList->AddRect(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vWindowSize - ImVec2(flInset, flInset), F::Render.Background2, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(11) });
-			FText("Editing bind", {}, 0, F::Render.FontRegular);
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(35) });
+		if (CurrentBind != DEFAULT_BIND)
+		{
+			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(6) });
+			FText("editing bind", {}, 0, F::Render.FontRegular);
+			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(22) });
 			PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-			FText(TruncateText(tBind.m_sName, flSize - H::Draw.Scale(28)).c_str(), {}, 0, F::Render.FontRegular);
+			FText(TruncateText(tBind.m_sName, flBrandWidth - H::Draw.Scale(46)).c_str(), {}, 0, F::Render.FontRegular);
 			PopStyleColor();
 
-			SetCursorPos({ flSize - H::Draw.Scale(31), H::Draw.Scale(6) });
+			SetCursorPos({ flBrandWidth - H::Draw.Scale(31), H::Draw.Scale(6) });
 			if (IconButton(ICON_MD_CANCEL))
 				CurrentBind = DEFAULT_BIND;
 		}
-		else if (!Vars::Menu::CheatTitle.Value.empty()) // title
+		else if (!Vars::Menu::CheatTitle.Value.empty())
 		{
-			flOffset = H::Draw.Scale(36);
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize, flOffset - flInset), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset - flInset), vDrawPos + ImVec2(flSize, flOffset), F::Render.Background2);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset), vDrawPos + ImVec2(flSize, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersBottomLeft);
-
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(11) });
+			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(13) });
 			PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-			FText(TruncateText(Vars::Menu::CheatTitle.Value, flSize - H::Draw.Scale(28), F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
+			FText(TruncateText(Vars::Menu::CheatTitle.Value, flBrandWidth - H::Draw.Scale(24), F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
 			PopStyleColor();
 		}
-		else
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize - flInset, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersLeft);
 
-		pDrawList->PushClipRect({ 0, 0 }, { GetIO().DisplaySize.x, GetIO().DisplaySize.y }, false);
-		RenderTwoToneBackground(flSize, {}, F::Render.Background1, F::Render.Background2, 0.f, false);
-		pDrawList->PopClipRect();
-
-		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSettingsTab = 0;
 		PushFont(F::Render.FontBold);
 		FTabs(
 			{
-				{ "AIMBOT", "GENERAL" },
-				{ "VISUALS", "ESP", "AIMDRAW", "MISC##", "MENU" },
-				{ "HVH", "MAIN" },
-				{ "MISC", "MAIN", "BOT"},
-				{ "ANTICHEAT", "CHEATERS", "DETECTION" },
-				{ "LOGS", "PLAYERLIST", "SETTINGS##", "OUTPUT" },
-				{ "SETTINGS", "CONFIG", "BINDS", "MATERIALS", "MISC##" }
+				{ "AIMBOT" },
+				{ "VISUALS" },
+				{ "HVH" },
+				{ "MISC" },
+				{ "ANTICHEAT" },
+				{ "LOGS" },
+				{ "SETTINGS" }
 			},
-			{ &iTab, &iAimbotTab, &iVisualsTab, &iHvHTab, &iMiscTab, &iAnticheatTab, &iLogsTab, &iSettingsTab },
-			{ flSize - H::Draw.Scale(16), H::Draw.Scale(36) },
-			{ H::Draw.Scale(8), H::Draw.Scale(8) + flOffset },
-			FTabsEnum::Vertical | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarLeft,
+			{ &iTab },
+			{ H::Draw.Scale(28), H::Draw.Scale(34) },
+			{ flBrandWidth, H::Draw.Scale(4) },
+			FTabsEnum::Horizontal | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarBottom | FTabsEnum::Fit,
 			{ { ICON_MD_PERSON }, { ICON_MD_VISIBILITY }, { ICON_MD_SECURITY }, { ICON_MD_ARTICLE }, { ICON_MD_GPP_MAYBE }, { ICON_MD_IMPORT_CONTACTS }, { ICON_MD_SETTINGS } },
 			{ H::Draw.Scale(10), 0 }, {},
-			{}, { H::Draw.Scale(22), 0 }
+			{}, {}, H::Draw.Scale(8), 0.f
 		);
 		PopFont();
 
-		static std::string sSearch = "";
-		SetCursorPos({ H::Draw.Scale(8), vWindowSize.y - H::Draw.Scale(37) });
-		FInputText("Search...", sSearch, H::Draw.Scale(123), ImGuiInputTextFlags_None);
-		bool bSearch = /*IsItemFocused() ||*/ !sSearch.empty();
-		if (!bSearch || FCalcTextSize(sSearch.c_str()).x < 86.f)
+		std::vector<int*> vSubVars = { &iAimbotTab, &iVisualsTab, &iHvHTab, &iMiscTab, &iAnticheatTab, &iLogsTab, &iSettingsTab };
+		if (bHasSubTabs)
 		{
-			SetCursorPos({ H::Draw.Scale(109), vWindowSize.y - H::Draw.Scale(31) });
+			PushFont(F::Render.FontBold);
+			FTabs(
+				vSubTabs[iTab],
+				vSubVars[iTab],
+				{ H::Draw.Scale(24), H::Draw.Scale(24) },
+				{ H::Draw.Scale(18), flNavHeight + H::Draw.Scale(5) },
+				FTabsEnum::Horizontal | FTabsEnum::AlignLeft | FTabsEnum::BarBottom | FTabsEnum::Fit,
+				{}, { H::Draw.Scale(8), 0 }, {}, {}, {}, H::Draw.Scale(16), 0.f
+			);
+			PopFont();
+		}
+
+		static std::string sSearch = "";
+		SetCursorPos({ vWindowSize.x - flSearchWidth - H::Draw.Scale(8), H::Draw.Scale(5) });
+		FInputText("Search...", sSearch, flSearchWidth, ImGuiInputTextFlags_None);
+		bool bSearch = !sSearch.empty();
+		if (!bSearch || FCalcTextSize(sSearch.c_str()).x < flSearchWidth - H::Draw.Scale(37))
+		{
+			SetCursorPos({ vWindowSize.x - H::Draw.Scale(31), H::Draw.Scale(11) });
 			IconImage(ICON_MD_SEARCH);
 		}
-		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && IsMouseWithin(vDrawPos.x, vDrawPos.y, H::Draw.Scale(140), vWindowSize.y - H::Draw.Scale(45)))
+		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && IsMouseWithin(vDrawPos.x, vDrawPos.y + flHeaderHeight, vWindowSize.x, vWindowSize.y - flHeaderHeight))
 			sSearch = "";
 
-		SetCursorPos({ flSize, 0 });
+		if (!IsMouseDown(ImGuiMouseButton_Left))
+			bDraggingMenu = false;
+		if (bDraggingMenu)
+			vMenuTargetPos = vMousePos - vMenuDragOffset;
+		bool bCanDragMenu = IsMouseWithin(vDrawPos.x, vDrawPos.y, vWindowSize.x, flNavHeight) && !IsAnyItemHovered() && !IsAnyItemActive() && !IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
+		if (bCanDragMenu && IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			bDraggingMenu = true;
+			vMenuDragOffset = vMousePos - vMenuTargetPos;
+		}
+
 		PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(8), H::Draw.Scale(8) });
-		if (BeginChild("Page", { vWindowSize.x - flSize, vWindowSize.y }, ImGuiChildFlags_AlwaysUseWindowPadding))
+		SetCursorPos({ 0, flHeaderHeight });
+		if (BeginChild("Page", { vWindowSize.x, vWindowSize.y - flHeaderHeight }, ImGuiChildFlags_AlwaysUseWindowPadding))
 		{
 			if (!bSearch)
 			{
 				switch (iTab)
 				{
 				case 0: MenuAimbot(iAimbotTab); break;
-				case 1: MenuVisuals(iVisualsTab); break;
+				case 1: MenuVisuals(iVisualsTab >= 1 ? iVisualsTab + 1 : iVisualsTab); break;
 				case 2: MenuHvH(iHvHTab); break;
 				case 3: MenuMisc(iMiscTab); break;
 				case 4: MenuAnticheat(iAnticheatTab); break;
@@ -626,6 +766,11 @@ void CMenu::MenuAimbot(int iTab)
 		}
 		break;
 	}
+	case 1:
+	{
+		MenuVisuals(1);
+		break;
+	}
 	}
 }
 
@@ -807,6 +952,7 @@ void CMenu::MenuVisuals(int iTab)
 					Divider(H::Draw.Scale(8), H::Draw.Scale(-1));
 					PushTransparent(!(tGroup.m_iTargets & TargetsEnum::Players));
 					{
+						RoleDropdown("Roles", tGroup.m_vRoles);
 						FDropdown("Players", &tGroup.m_iPlayers, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy", "##Divider", "Invulnerable", "Crits", (tGroup.m_iPlayers & PlayerEnum::NotInvis) ? "Not invisible" : "Invisible", "Disguise", "Hurt", "##Divider", "Invisible -> Not invisible" }, {}, FDropdownEnum::Multi, 0, "All");
 					}
 					PopTransparent();
@@ -1784,42 +1930,6 @@ void CMenu::MenuMisc(int iTab)
 					}
 					PopTransparent();
 				} EndSection();
-				if (Section("Navbot"))
-				{
-					PushTransparent(!Vars::Misc::Movement::NavEngine::Enabled.Value);
-					{
-						FToggle(Vars::Misc::Movement::NavBot::Enabled, FToggleEnum::Left);
-						PushTransparent(!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value);
-						{
-							FDropdown(Vars::Misc::Movement::NavBot::RechargeDT);
-							PushTransparent(Transparent || !Vars::Misc::Movement::NavBot::RechargeDT.Value);
-								FSlider(Vars::Misc::Movement::NavBot::RechargeDTDelay, FSliderEnum::None);
-							PopTransparent();
-							FDropdown(Vars::Misc::Movement::NavBot::Preferences);
-							FDropdown(Vars::Misc::Movement::NavBot::Blacklist);
-							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats));
-							{
-								FSlider(Vars::Misc::Movement::NavBot::BlacklistDelay, FSliderEnum::Left);
-							}
-							PopTransparent();
-							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
-							{
-								FSlider(Vars::Misc::Movement::NavBot::BlacklistDormantDelay, FSliderEnum::Right);
-							}
-							PopTransparent();
-							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats)
-											&& !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
-							{
-								FSlider(Vars::Misc::Movement::NavBot::BlacklistSlightDangerLimit);
-							}
-							PopTransparent();
-							FSlider(Vars::Misc::Movement::NavBot::MeleeTargetRange);
-							FToggleSlider(Vars::Misc::Movement::NavBot::DangerOverlay, Vars::Misc::Movement::NavBot::DangerOverlayMaxDist);
-						}
-						PopTransparent();
-					}
-					PopTransparent();
-				} EndSection();
 				if (Section("Followbot"))
 				{
 					FToggle(Vars::Misc::Movement::FollowBot::Enabled);
@@ -1828,9 +1938,10 @@ void CMenu::MenuMisc(int iTab)
 						FTooltip("Use nav engine when unable to reach current target.\nNormal - runs in case the target is NOT dormant\nNormal + Dormant - runs regardless of dormancy\nNOTE:\n'+ Dormant' does not make the followbot target players across the whole map. \nIt only prevents followbot from losing current target in case it goes dormant");
 					PopTransparent();
 					FDropdown(Vars::Misc::Movement::FollowBot::Targets, FDropdownEnum::Right);
-					FDropdown(Vars::Misc::Movement::FollowBot::LookAtPath, FDropdownEnum::Left);
+					FDropdown(Vars::Misc::Movement::FollowBot::Prefer, FDropdownEnum::Left);
+					FDropdown(Vars::Misc::Movement::FollowBot::LookAtPath, FDropdownEnum::Right);
 					PushTransparent(!Vars::Misc::Movement::FollowBot::LookAtPath.Value);
-						FDropdown(Vars::Misc::Movement::FollowBot::LookAtPathMode, FDropdownEnum::Right);
+						FDropdown(Vars::Misc::Movement::FollowBot::LookAtPathMode, FDropdownEnum::Left);
 						FTooltip("Look at path mode:\nPath - look at current path node.\nCopy - use saved target viewangles.\nCopy immediate - use current target viewangles.\nAt target - look at current target.");
 						FToggle(Vars::Misc::Movement::FollowBot::LookAtPathNoSnap);
 					PopTransparent();
@@ -1905,55 +2016,47 @@ void CMenu::MenuMisc(int iTab)
 						}
 					} EndSection();
 				}
+				if (Section("Navbot"))
+				{
+					PushTransparent(!Vars::Misc::Movement::NavEngine::Enabled.Value);
+					{
+						FToggle(Vars::Misc::Movement::NavBot::Enabled, FToggleEnum::Left);
+						PushTransparent(!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value);
+						{
+							FDropdown(Vars::Misc::Movement::NavBot::RechargeDT);
+							PushTransparent(Transparent || !Vars::Misc::Movement::NavBot::RechargeDT.Value);
+								FSlider(Vars::Misc::Movement::NavBot::RechargeDTDelay, FSliderEnum::None);
+							PopTransparent();
+							FDropdown(Vars::Misc::Movement::NavBot::Preferences);
+							FDropdown(Vars::Misc::Movement::NavBot::Blacklist);
+							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats));
+							{
+								FSlider(Vars::Misc::Movement::NavBot::BlacklistDelay, FSliderEnum::Left);
+							}
+							PopTransparent();
+							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
+							{
+								FSlider(Vars::Misc::Movement::NavBot::BlacklistDormantDelay, FSliderEnum::Right);
+							}
+							PopTransparent();
+							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats)
+											&& !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
+							{
+								FSlider(Vars::Misc::Movement::NavBot::BlacklistSlightDangerLimit);
+							}
+							PopTransparent();
+							FSlider(Vars::Misc::Movement::NavBot::MeleeTargetRange);
+							FToggleSlider(Vars::Misc::Movement::NavBot::DangerOverlay, Vars::Misc::Movement::NavBot::DangerOverlayMaxDist);
+						}
+						PopTransparent();
+					}
+					PopTransparent();
+				} EndSection();
 			}
 
 			/* Column 2 */
 			TableNextColumn();
 			{
-				if (Section("Queueing", 8))
-				{
-					FDropdown(Vars::Misc::Queueing::ForceRegions, FDropdownEnum::Left);
-					FDropdown(Vars::Misc::Queueing::ExtendQueue, FDropdownEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::AutoCasualJoin, FToggleEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::MapPopularizing, FToggleEnum::Right);
-		            FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::MapBarBoost, FToggleEnum::Right);
-					PushTransparent(!Vars::Misc::Queueing::AutoCasualQueue.Value);
-					{
-						FToggle(Vars::Misc::Queueing::AutoAbandonIfNoNavmesh);
-						FToggleSlider(Vars::Misc::Queueing::AutoDumpProfiles, Vars::Misc::Queueing::AutoDumpDelay);
-					}
-					PopTransparent();
-					FSlider(Vars::Misc::Queueing::QueueDelay, FSliderEnum::None);
-					FToggle(Vars::Misc::Queueing::RQif, FToggleEnum::Left);
-					PushTransparent(!Vars::Misc::Queueing::RQif.Value);
-					{
-						FSlider(Vars::Misc::Queueing::RQplt);
-						FSlider(Vars::Misc::Queueing::RQpgt);
-						FToggle(Vars::Misc::Queueing::RQkick, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::RQnoAbandon, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::RQIgnoreFriends, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::RQLTM, FToggleEnum::Right);
-					}
-					PopTransparent();
-
-					FToggle(Vars::Misc::Queueing::AutoCommunityQueue, FToggleEnum::Left);
-					PushTransparent(!Vars::Misc::Queueing::AutoCommunityQueue.Value);
-					{
-						FSlider(Vars::Misc::Queueing::ServerSearchDelay, FSliderEnum::Left);
-						FSlider(Vars::Misc::Queueing::MaxTimeOnServer, FSliderEnum::Right);
-						FSlider(Vars::Misc::Queueing::MinPlayersOnServer, FSliderEnum::Left);
-						FSlider(Vars::Misc::Queueing::MaxPlayersOnServer, FSliderEnum::Right);
-						FToggle(Vars::Misc::Queueing::RequireNavmesh, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::AvoidPasswordServers, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::OnlyNonDedicatedServers, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::OnlySteamNetworkingIPs, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::PreferSteamNickServers, FToggleEnum::Left);
-					}
-					PopTransparent();
-				} EndSection();
 				if (Section("Auto-Item"))
 				{
 					FDropdown(Vars::Misc::Automation::AutoItem::Enable);
@@ -1986,6 +2089,7 @@ void CMenu::MenuMisc(int iTab)
 					PopTransparent();
 					FDropdown(Vars::Misc::Automation::VoiceCommandSpam);
 					FToggle(Vars::Misc::Automation::Micspam, FToggleEnum::Left);
+#if 0
 					FToggle(Vars::Misc::Automation::AchievementSpam, FToggleEnum::Right);
 					PushTransparent(!Vars::Misc::Automation::AchievementSpam.Value);
 					{
@@ -1995,12 +2099,83 @@ void CMenu::MenuMisc(int iTab)
 							Vars::Misc::Automation::GetAchievementSpamDropdownIDs());
 					}
 					PopTransparent();
+#endif
 					FToggle(Vars::Misc::Automation::NoiseSpam, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::CallVoteSpam, FToggleEnum::Right);
 					// if (FButton("HELP", FButtonEnum::Left, { 0, 24 }))
 					// 	ShellExecuteA(NULL, "open", (F::Configs.m_sConfigPath + "chathelp.txt").c_str(), NULL, NULL, SW_SHOWNORMAL);
 					// if (FButton("OPEN FOLDER", FButtonEnum::Right, { 0, 24 }, 0, nullptr, nullptr))
 					// 	ShellExecuteA(NULL, "open", F::Configs.m_sConfigPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+				} EndSection();
+			}
+			EndTable();
+		}
+		break;
+	}
+	case 2:
+	{
+		if (BeginTable("QueueingTable", 2))
+		{
+			TableNextColumn();
+			{
+				if (Section("Matchmaking"))
+				{
+					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoCasualJoin, FToggleEnum::Right);
+					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Right);
+					FSlider(Vars::Misc::Queueing::QueueDelay);
+				} EndSection();
+				if (Section("Casual automation", 8))
+				{
+					FToggle(Vars::Misc::Queueing::MapPopularizing, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::MapBarBoost, FToggleEnum::Right);
+					PushTransparent(!Vars::Misc::Queueing::AutoCasualQueue.Value);
+					{
+						FToggle(Vars::Misc::Queueing::AutoAbandonIfNoNavmesh, FToggleEnum::Left);
+						FToggleSlider(Vars::Misc::Queueing::AutoDumpProfiles, Vars::Misc::Queueing::AutoDumpDelay);
+					}
+					PopTransparent();
+				} EndSection();
+				if (Section("Regions", 8))
+				{
+					FDropdown(Vars::Misc::Queueing::ForceRegions, FDropdownEnum::Left);
+					FDropdown(Vars::Misc::Queueing::ExtendQueue, FDropdownEnum::Right);
+				} EndSection();
+			}
+
+			TableNextColumn();
+			{
+				if (Section("Requeue"))
+				{
+					FToggle(Vars::Misc::Queueing::RQif);
+					PushTransparent(!Vars::Misc::Queueing::RQif.Value);
+					{
+						FSlider(Vars::Misc::Queueing::RQplt, FSliderEnum::Left);
+						FSlider(Vars::Misc::Queueing::RQpgt, FSliderEnum::Right);
+						FToggle(Vars::Misc::Queueing::RQkick, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::RQnoAbandon, FToggleEnum::Right);
+						FToggle(Vars::Misc::Queueing::RQIgnoreFriends, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::RQLTM, FToggleEnum::Right);
+					}
+					PopTransparent();
+				} EndSection();
+				if (Section("Community", 8))
+				{
+					FToggle(Vars::Misc::Queueing::AutoCommunityQueue);
+					PushTransparent(!Vars::Misc::Queueing::AutoCommunityQueue.Value);
+					{
+						FSlider(Vars::Misc::Queueing::ServerSearchDelay, FSliderEnum::Left);
+						FSlider(Vars::Misc::Queueing::MaxTimeOnServer, FSliderEnum::Right);
+						FSlider(Vars::Misc::Queueing::MinPlayersOnServer, FSliderEnum::Left);
+						FSlider(Vars::Misc::Queueing::MaxPlayersOnServer, FSliderEnum::Right);
+						FToggle(Vars::Misc::Queueing::RequireNavmesh, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::AvoidPasswordServers, FToggleEnum::Right);
+						FToggle(Vars::Misc::Queueing::OnlyNonDedicatedServers, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::OnlySteamNetworkingIPs, FToggleEnum::Right);
+						FToggle(Vars::Misc::Queueing::PreferSteamNickServers, FToggleEnum::Left);
+					}
+					PopTransparent();
 				} EndSection();
 			}
 			EndTable();

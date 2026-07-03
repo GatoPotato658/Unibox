@@ -6,6 +6,7 @@
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../Backtrack/Backtrack.h"
 #include "../Createmove/Createmove.h"
+#include "../ImGui/IndicatorPanel.h"
 
 MAKE_SIGNATURE(Host_ShouldRun, "engine.dll", "48 83 EC ? 48 8B 05 ? ? ? ? 83 78 ? ? 74 ? 48 8B 05", 0x0);
 MAKE_SIGNATURE(net_time, "engine.dll", "F2 0F 10 05 ? ? ? ? 66 0F 2F 05 ? ? ? ? 72", 0x0);
@@ -548,45 +549,50 @@ void CTicks::Draw(CTFPlayer* pLocal)
 		return;
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
-	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
+
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
+	const float flPanelWidth = H::Draw.Scale(180.f);
+	const float flPanelHeight = H::Draw.Scale(29.f);
+	const ImVec2 vPanelPos =
+	{
+		static_cast<float>(dtPos.x) - flPanelWidth / 2.f,
+		static_cast<float>(dtPos.y)
+	};
 
 	if (m_bSpeedhack)
-		return H::Draw.StringOutlined(fFont, dtPos.x, dtPos.y + 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("Speedhack x{}", Vars::Speedhack::Scale.Value).c_str());;
-
-	int iAntiAimTicks = F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0;
-	int iTicks = std::clamp(m_iShiftedTicks + std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0), 0, m_iMaxUsrCmdProcessTicks);
-	int iMax = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
-
-	int boxWidth = 180;
-	int boxHeight = 29;
-	int barHeight = 3;
-	int textBoxHeight = boxHeight - barHeight;
-
-	int x = dtPos.x - boxWidth / 2;
-	int y = dtPos.y;
-
-	Color_t bgColor = { 0, 0, 0, 180 };
-	H::Draw.GradientRect(x, y, boxWidth, textBoxHeight, bgColor, bgColor, true);
-	H::Draw.GradientRect(x, y + textBoxHeight, boxWidth, barHeight, bgColor, bgColor, true);
-
-	static float currentProgress = 0.0f;
-	float targetProgress = float(iTicks) / iMax;
-	currentProgress = std::lerp(currentProgress, targetProgress, I::GlobalVars->frametime * 10.0f);
-
-	int barWidth = static_cast<int>(boxWidth * currentProgress);
-	if (barWidth > 0)
 	{
-		Color_t barColor = m_iWait ? Color_t{ 255, 150, 0, 255 } : Color_t{ 0, 255, 100, 255 };
-		H::Draw.GradientRect(x, y + textBoxHeight, barWidth, barHeight, barColor, barColor, true);
+		const std::string sRightText = std::format("x{}", Vars::Speedhack::Scale.Value);
+		DrawIndicatorPanel(
+			pDrawList,
+			vPanelPos,
+			flPanelWidth,
+			flPanelHeight,
+			"Speedhack",
+			sRightText.c_str(),
+			Vars::Menu::Theme::Active.Value,
+			Vars::Menu::Theme::Active.Value,
+			Color_t(100, 255, 100, 255),
+			1.f);
+		return;
 	}
 
-	std::string leftText = "Ticks";
-	std::string rightText = std::format("{} / {}", iTicks, iMax);
-	Color_t textColor = Vars::Menu::Theme::Active.Value;
-
-	H::Draw.String(fFont, x + 5, y + (textBoxHeight / 2), textColor, ALIGN_LEFT, leftText.c_str());
-	H::Draw.String(fFont, x + boxWidth - 5, y + (textBoxHeight / 2), textColor, ALIGN_RIGHT, rightText.c_str());
-
-	if (m_iWait)
-		H::Draw.StringOutlined(fFont, dtPos.x, y + boxHeight + 2, textColor, Vars::Menu::Theme::Background.Value, ALIGN_TOP, "Not Ready");
+	const int iAntiAimTicks = F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0;
+	const int iTicks = std::clamp(m_iShiftedTicks + std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0), 0, m_iMaxUsrCmdProcessTicks);
+	const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
+	const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
+	static float flCurrentProgress = 0.f;
+	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, ImGui::GetIO().DeltaTime * 10.f);
+	DrawIndicatorPanel(
+		pDrawList,
+		vPanelPos,
+		flPanelWidth,
+		flPanelHeight,
+		"Ticks",
+		std::format("{} / {}", iTicks, iMaxTicks).c_str(),
+		Vars::Menu::Theme::Active.Value,
+		Vars::Menu::Theme::Active.Value,
+		m_iWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255),
+		flCurrentProgress,
+		m_iWait != 0,
+		"Not Ready");
 }

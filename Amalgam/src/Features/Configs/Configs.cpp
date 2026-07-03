@@ -57,6 +57,19 @@ template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::s
 	t.put_child(s, tChild);
 }
 
+template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const std::vector<int>& v)
+{
+	boost::property_tree::ptree tChild;
+	for (int iValue : v)
+	{
+		boost::property_tree::ptree tValue;
+		tValue.put("", iValue);
+		tChild.push_back({ "", tValue });
+	}
+
+	t.put_child(s, tChild);
+}
+
 template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const Gradient_t& v)
 {
 	boost::property_tree::ptree tChild;
@@ -195,6 +208,16 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 			++it;
 		else
 			it = v.erase(it);
+	}
+}
+
+template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s, std::vector<int>& v)
+{
+	if (auto tChild = t.get_child_optional(s))
+	{
+		v.clear();
+		for (auto& tValue : *tChild | std::views::values)
+			v.push_back(tValue.get_value<int>());
 	}
 }
 
@@ -495,6 +518,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 				SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				SaveJson(tChild, "Targets", tGroup.m_iTargets);
 				SaveJson(tChild, "Conditions", tGroup.m_iConditions);
+				SaveJson(tChild, "Roles", tGroup.m_vRoles);
 				SaveJson(tChild, "Players", tGroup.m_iPlayers);
 				SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
 				SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
@@ -614,6 +638,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 				LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				LoadJson(tChild, "Targets", tGroup.m_iTargets);
 				LoadJson(tChild, "Conditions", tGroup.m_iConditions);
+				LoadJson(tChild, "Roles", tGroup.m_vRoles);
 				LoadJson(tChild, "Players", tGroup.m_iPlayers);
 				LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
 				LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);
@@ -735,6 +760,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 				SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				SaveJson(tChild, "Targets", tGroup.m_iTargets);
 				SaveJson(tChild, "Conditions", tGroup.m_iConditions);
+				SaveJson(tChild, "Roles", tGroup.m_vRoles);
 				SaveJson(tChild, "Players", tGroup.m_iPlayers);
 				SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
 				SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
@@ -818,6 +844,7 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 				LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				LoadJson(tChild, "Targets", tGroup.m_iTargets);
 				LoadJson(tChild, "Conditions", tGroup.m_iConditions);
+				LoadJson(tChild, "Roles", tGroup.m_vRoles);
 				LoadJson(tChild, "Players", tGroup.m_iPlayers);
 				LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
 				LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);

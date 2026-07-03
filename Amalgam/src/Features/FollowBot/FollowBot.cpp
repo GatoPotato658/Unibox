@@ -48,6 +48,37 @@ static bool ShouldStartFollowNav(const FollowTarget_t& tTarget, size_t nCurrentP
 		nCurrentPathSize >= Vars::Misc::Movement::FollowBot::MaxNodes.Value;
 }
 
+static int GetPreferScore(int iEntIndex)
+{
+	switch (Vars::Misc::Movement::FollowBot::Prefer.Value)
+	{
+	case Vars::Misc::Movement::FollowBot::PreferEnum::PreferFriends:
+		return H::Entities.IsFriend(iEntIndex) ? 1 : 0;
+	case Vars::Misc::Movement::FollowBot::PreferEnum::PartyMembers:
+		return H::Entities.InParty(iEntIndex) ? 1 : 0;
+	}
+	return 0;
+}
+
+static int GetClassPreference(CTFPlayer* pLocal, CTFPlayer* pPlayer, int iPriority, int iPrefer)
+{
+	if (!pPlayer || !pLocal || iPriority || iPrefer || pPlayer->m_iTeamNum() != pLocal->m_iTeamNum())
+		return 0;
+
+	switch (pPlayer->m_iClass())
+	{
+	case TF_CLASS_HEAVY:
+	case TF_CLASS_SOLDIER:
+	case TF_CLASS_DEMOMAN:
+		return 2;
+	case TF_CLASS_ENGINEER:
+	case TF_CLASS_SPY:
+		return 0;
+	default:
+		return 1;
+	}
+}
+
 void CFollowBot::UpdateTargets(CTFPlayer* pLocal)
 {
 	m_vTargets.clear();
@@ -71,8 +102,12 @@ void CFollowBot::UpdateTargets(CTFPlayer* pLocal)
 		{
 			auto pPlayer = pEntity->As<CTFPlayer>();
 			bool bDormant = pPlayer->IsDormant();
-			int iPriority = F::PlayerUtils.GetFollowPriority(iEntIndex);
-			if (iPriority >= Vars::Misc::Movement::FollowBot::MinPriority.Value && (bTryDormant || !bDormant) && pPlayer->IsAlive() && !pPlayer->IsAGhost())
+			int iPriority = F::PlayerUtils.GetFollowPriority(iEntIndex, false);
+			if (iPriority >= Vars::Misc::Movement::FollowBot::MinPriority.Value &&
+				(bTryDormant || !bDormant) &&
+				pPlayer->IsAlive() &&
+				!pPlayer->IsAGhost() &&
+				!IsAfkTarget(pPlayer))
 			{
 				Vec3 vOrigin;
 				float flDistance = FLT_MAX;
@@ -80,7 +115,24 @@ void CFollowBot::UpdateTargets(CTFPlayer* pLocal)
 					flDistance = vLocalOrigin.DistTo(vOrigin);
 
 				if (flDistance <= flMaxDist)
-					m_vTargets.emplace_back(iEntIndex, pResource->m_iUserID(iEntIndex), iPriority, flDistance, false, true, bDormant, vOrigin, FNV1A::Hash32(F::PlayerUtils.GetPlayerName(iEntIndex, pResource->GetName(iEntIndex))), pPlayer);
+				{
+					int iPrefer = GetPreferScore(iEntIndex);
+					int iClassPreference = GetClassPreference(pLocal, pPlayer, iPriority, iPrefer);
+					m_vTargets.emplace_back(
+						iEntIndex,
+						pResource->m_iUserID(iEntIndex),
+						iPriority,
+						iPrefer,
+						iClassPreference,
+						flDistance,
+						false,
+						true,
+						bDormant,
+						vOrigin,
+						FNV1A::Hash32(F::PlayerUtils.GetPlayerName(iEntIndex, pResource->GetName(iEntIndex))),
+						pPlayer
+					);
+				}
 			}
 		}
 	}
@@ -89,6 +141,12 @@ void CFollowBot::UpdateTargets(CTFPlayer* pLocal)
 		{
 			if (a.m_iPriority != b.m_iPriority)
 				return a.m_iPriority > b.m_iPriority;
+
+			if (a.m_iPrefer != b.m_iPrefer)
+				return a.m_iPrefer > b.m_iPrefer;
+
+			if (a.m_iClassPreference != b.m_iClassPreference)
+				return a.m_iClassPreference > b.m_iClassPreference;
 
 			return a.m_flDistance < b.m_flDistance;
 		});
@@ -162,6 +220,9 @@ bool CFollowBot::IsValidTarget(CTFPlayer* pLocal, CTFPlayer* pPlayer)
 	if (!pPlayer || !pPlayer->IsPlayer() || !pPlayer->IsAlive() || pPlayer->IsAGhost())
 		return false;
 
+	if (IsAfkTarget(pPlayer))
+		return false;
+
 	if (pPlayer->m_iTeamNum() != pLocal->m_iTeamNum())
 	{
 		if (Vars::Misc::Movement::FollowBot::Targets.Value & Vars::Misc::Movement::FollowBot::TargetsEnum::Enemies)
@@ -171,6 +232,31 @@ bool CFollowBot::IsValidTarget(CTFPlayer* pLocal, CTFPlayer* pPlayer)
 		return true;
 
 	return false;
+}
+
+bool CFollowBot::IsAfkTarget(CTFPlayer* pPlayer)
+{
+	if (!pPlayer || pPlayer->IsDormant())
+		return false;
+
+	int iEntIndex = pPlayer->entindex();
+	if (iEntIndex <= 0 || iEntIndex >= MAX_PLAYERS || !I::GlobalVars)
+		return false;
+
+	Vec3 vOrigin = pPlayer->GetAbsOrigin();
+	Vec3 vAngles = pPlayer->GetEyeAngles();
+	const bool bMoved = m_aLastOrigins[iEntIndex].IsZero() || vOrigin.DistTo(m_aLastOrigins[iEntIndex]) > 8.f;
+	const bool bLooked = vAngles.DeltaAngle(m_aLastAngles[iEntIndex]).Length() > 2.f;
+	const bool bVelocity = pPlayer->m_vecVelocity().Length2D() > 10.f;
+	const bool bButtons = pPlayer->m_nButtons() & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT | IN_JUMP | IN_DUCK | IN_ATTACK | IN_ATTACK2);
+
+	if (bMoved || bLooked || bVelocity || bButtons || m_aLastActiveTimes[iEntIndex] <= 0.f)
+		m_aLastActiveTimes[iEntIndex] = I::GlobalVars->curtime;
+
+	m_aLastOrigins[iEntIndex] = vOrigin;
+	m_aLastAngles[iEntIndex] = vAngles;
+
+	return I::GlobalVars->curtime - m_aLastActiveTimes[iEntIndex] > 8.f;
 }
 
 void CFollowBot::LookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, std::deque<Vec3>* vIn, bool bSmooth)
@@ -231,9 +317,8 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 	}
 	else
 	{
-		if (m_tLockedTarget.m_iUserID == -1 || (m_tLockedTarget.m_iUserID && m_tLockedTarget.m_uNameHash != m_vTargets.front().m_uNameHash))
+		if (m_tLockedTarget.m_iUserID == -1 || m_tLockedTarget.m_iUserID != m_vTargets.front().m_iUserID)
 		{
-			// Our target is invalid or no longer at highest priority
 			Reset(FB_RESET_NAV);
 			m_tLockedTarget = m_vTargets.front();
 		}
@@ -410,6 +495,12 @@ void CFollowBot::Reset(int iFlags)
 	m_vTempAngles.clear();
 	m_tLockedTarget = FollowTarget_t{};
 	m_bActive = false;
+	if (iFlags & FB_RESET_TARGETS)
+	{
+		m_aLastActiveTimes = {};
+		m_aLastOrigins = {};
+		m_aLastAngles = {};
+	}
 }
 
 void CFollowBot::Render()

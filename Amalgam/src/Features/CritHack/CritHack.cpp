@@ -2,6 +2,7 @@
 
 #include "../Ticks/Ticks.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
+#include "../ImGui/IndicatorPanel.h"
 
 #define WEAPON_RANDOM_RANGE				10000
 #define TF_DAMAGE_CRIT_MULTIPLIER		3.0f
@@ -613,155 +614,123 @@ MAKE_HOOK(CTFGameStats_FindPlayerStats, S::CTFGameStats_FindPlayerStats(), void*
 
 void CCritHack::Draw(CTFPlayer* pLocal)
 {
-	static auto tf_weapon_criticals = H::ConVars.FindVar("tf_weapon_criticals");
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) || !I::EngineClient->IsInGame() || !tf_weapon_criticals->GetBool())
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) || !I::EngineClient->IsInGame())
 		return;
 
 	auto pWeapon = H::Entities.GetWeapon();
-	if (!pWeapon || !pLocal->IsAlive() || pLocal->IsAGhost() || !WeaponCanCrit(pWeapon, true))
+	if (!pWeapon || !pLocal->IsAlive() || pLocal->IsAGhost())
 		return;
 
-
-
-	int x = Vars::Menu::CritsDisplay.Value.x;
-	int y = Vars::Menu::CritsDisplay.Value.y;
-
-	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-
-	// Fixed box dimensions
-	int boxWidth = 180;
-	int boxHeight = 29;
-	int barHeight = 3;
-	int textBoxHeight = boxHeight - barHeight;
-
-	// Adjust x position to center the box
-	x -= boxWidth / 2;
-
-	// Draw black transparent background
-	Color_t bgColor = { 0, 0, 0, 180 };
-	H::Draw.GradientRect(x, y, boxWidth, textBoxHeight, bgColor, bgColor, true);
-
-	// Draw progress bar background
-	H::Draw.GradientRect(x, y + textBoxHeight, boxWidth, barHeight, bgColor, bgColor, true);
-
-	// Calculate and draw the progress bar with smooth interpolation
-	static float currentProgress = 0.0f;
-	float targetProgress = 0.0f;
-
-	std::string leftText, rightText;
-	Color_t leftColor = Vars::Menu::Theme::Active.Value;
-	Color_t rightColor = Vars::Menu::Theme::Active.Value;
-	Color_t barColor = { 0, 255, 100, 255 }; // Default green
-
-	if (!WeaponCanCrit(pWeapon))
+	if (!WeaponCanCrit(pWeapon, true))
 	{
-		leftText = "Cannot crit";
-		rightText = "DISABLED";
-		rightColor = { 200, 40, 40, 255 }; // Dark red
-		barColor = { 200, 40, 40, 255 };
-		targetProgress = 1.0f;
+		DrawIndicatorPanel(
+			ImGui::GetForegroundDrawList(),
+			{
+				static_cast<float>(Vars::Menu::CritsDisplay.Value.x) - H::Draw.Scale(180.f) / 2.f,
+				static_cast<float>(Vars::Menu::CritsDisplay.Value.y)
+			},
+			H::Draw.Scale(180.f),
+			H::Draw.Scale(29.f),
+			"Cannot crit",
+			"DISABLED",
+			Color_t(255, 255, 255, 255),
+			Color_t(200, 40, 40, 255),
+			Color_t(200, 40, 40, 255),
+			1.f);
+		return;
+	}
+
+	const ImVec2 vPanelPos =
+	{
+		static_cast<float>(Vars::Menu::CritsDisplay.Value.x) - H::Draw.Scale(180.f) / 2.f,
+		static_cast<float>(Vars::Menu::CritsDisplay.Value.y)
+	};
+	const float flPanelWidth = H::Draw.Scale(180.f);
+	const float flPanelHeight = H::Draw.Scale(29.f);
+	const float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
+	float flTargetProgress = 0.f;
+	static float flCurrentProgress = 0.f;
+	std::string sLeftText = "Calculating";
+	std::string sRightText = "";
+	Color_t tLeftColor = Vars::Menu::Theme::Active.Value;
+	Color_t tRightColor = Vars::Menu::Theme::Active.Value;
+	Color_t tBarColor = Color_t(0, 255, 100, 255);
+
+	if (!pWeapon->AreRandomCritsEnabled())
+	{
+		sLeftText = "Random crits";
+		sRightText = "DISABLED";
+		tRightColor = Color_t(200, 40, 40, 255);
+		tBarColor = Color_t(200, 40, 40, 255);
+		flTargetProgress = 1.f;
+	}
+	else if (F::AntiCheatCompatibility.Active())
+	{
+		sLeftText = "Anticheat";
+		sRightText = "COMPAT";
+		tRightColor = Color_t(255, 150, 0, 255);
+		tBarColor = Color_t(255, 150, 0, 255);
+		flTargetProgress = 1.f;
+	}
+	else if (pWeapon->m_flCritTime() > flTickBase)
+	{
+		const float flTime = pWeapon->m_flCritTime() - flTickBase;
+		sLeftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
+		sRightText = "STREAMING";
+		tRightColor = Color_t(100, 255, 255, 255);
+		tBarColor = Color_t(100, 255, 255, 255);
+		flTargetProgress = std::clamp(flTime / TF_DAMAGE_CRIT_DURATION_RAPID, 0.f, 1.f);
+	}
+	else if (pLocal->IsCritBoosted())
+	{
+		sLeftText = "Crit Boosted";
+		sRightText = "READY";
+		tRightColor = Color_t(100, 255, 255, 255);
+		tBarColor = Color_t(100, 255, 255, 255);
+		flTargetProgress = 1.f;
+	}
+	else if (!m_bCritBanned || m_bMelee)
+	{
+		sLeftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
+		if (pWeapon->IsRapidFire() && flTickBase < pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
+		{
+			const float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - flTickBase;
+			sRightText = std::format("WAIT {:.2f}s", flTime);
+			tRightColor = m_iAvailableCrits > 0 ? Color_t(40, 200, 40, 255) : Color_t(200, 40, 40, 255);
+			tBarColor = Color_t(255, 150, 0, 255);
+			flTargetProgress = std::clamp(flTime, 0.f, 1.f);
+		}
+		else if (m_iAvailableCrits >= m_iPotentialCrits)
+		{
+			sRightText = "READY";
+			tRightColor = Color_t(40, 200, 40, 255);
+			flTargetProgress = 1.f;
+		}
+		else if (m_iPotentialCrits > 0)
+		{
+			const float flBucket = pWeapon->m_flCritTokenBucket();
+			static auto bucketCap = H::ConVars.FindVar("tf_weapon_criticals_bucket_cap");
+			const int iDamageNeeded = static_cast<int>(std::ceil(m_flCost - flBucket));
+			sRightText = std::format("DMG: {}", std::max(0, iDamageNeeded));
+			tRightColor = m_iAvailableCrits > 0 ? Color_t(40, 200, 40, 255) : Color_t(200, 40, 40, 255);
+			flTargetProgress = bucketCap ? std::clamp(flBucket / bucketCap->GetFloat(), 0.f, 1.f) : 0.f;
+		}
 	}
 	else
 	{
-		const auto iSlot = pWeapon->GetSlot();
-		const auto bRapidFire = pWeapon->IsRapidFire();
-
-		if (m_flDamage > 0)
-		{
-			float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
-			if (pLocal->IsCritBoosted())
-			{
-				leftText = "Crit Boosted";
-				rightText = "READY";
-				rightColor = { 100, 255, 255, 255 };
-				barColor = { 100, 255, 255, 255 };
-				targetProgress = 1.0f;
-			}
-			else if (pWeapon->m_flCritTime() > flTickBase)
-			{
-				const float flTime = pWeapon->m_flCritTime() - flTickBase;
-				leftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
-				rightText = "STREAMING";
-				rightColor = { 100, 255, 255, 255 };
-				barColor = { 100, 255, 255, 255 };
-				targetProgress = flTime / TF_DAMAGE_CRIT_DURATION_RAPID;
-			}
-			else if (!m_bCritBanned || iSlot == SLOT_MELEE)
-			{
-				leftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
-				if (bRapidFire && flTickBase < pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
-				{
-					const float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - flTickBase;
-					if (flTime > 0.0001f)
-					{
-						rightText = std::format("WAIT {:.2f}s", flTime);
-						rightColor = m_iAvailableCrits > 0 ? Color_t{ 40, 200, 40, 255 } : Color_t{ 200, 40, 40, 255 };
-						barColor = { 255, 150, 0, 255 }; // Orange for waiting
-					}
-					else
-					{
-						rightText = "STREAMING";
-						rightColor = { 100, 255, 255, 255 };
-						barColor = { 100, 255, 255, 255 };
-					}
-					targetProgress = flTime;
-				}
-				else if (m_iAvailableCrits >= m_iPotentialCrits)
-				{
-					rightText = "READY";
-					rightColor = { 40, 200, 40, 255 }; // Dark green
-					targetProgress = 1.0f;
-				}
-				else
-				{
-					float currentBucket = pWeapon->m_flCritTokenBucket();
-					int damageNeeded = static_cast<int>(std::ceil(m_flCost - currentBucket));
-					rightText = std::format("DMG: {}", std::max(0, damageNeeded));
-					rightColor = m_iAvailableCrits > 0 ? Color_t{ 40, 200, 40, 255 } : Color_t{ 200, 40, 40, 255 };
-
-					static auto bucketCap = H::ConVars.FindVar("tf_weapon_criticals_bucket_cap");
-					targetProgress = currentBucket / bucketCap->GetFloat();
-				}
-			}
-			else
-			{
-				leftText = std::format("DMG: {}", static_cast<int>(ceilf(m_flDamageTilFlip)));
-				rightText = "BANNED";
-				rightColor = { 200, 40, 40, 255 }; // Dark red
-				barColor = { 200, 40, 40, 255 };
-				targetProgress = 0.2f; // Low progress when banned
-			}
-		}
-		else
-		{
-			leftText = "Calculating";
-			rightText = "";
-		}
+		sLeftText = std::format("DMG: {}", static_cast<int>(std::ceil(m_flDamageTilFlip)));
+		sRightText = "BANNED";
+		tRightColor = Color_t(200, 40, 40, 255);
+		tBarColor = Color_t(200, 40, 40, 255);
+		flTargetProgress = 0.2f;
 	}
-	currentProgress = std::lerp(currentProgress, targetProgress, I::GlobalVars->frametime * 10.0f);
 
-	int barWidth = static_cast<int>(boxWidth * currentProgress);
-	if (barWidth > 0)
+	if (m_flDamage <= 0.f && sRightText.empty())
 	{
-		Color_t accentColor = Vars::Menu::Theme::Accent.Value;
-
-		for (int i = 0; i < barWidth; i++)
-		{
-			float t = static_cast<float>(i) / static_cast<float>(barWidth);
-			Color_t lineColor = {
-				static_cast<byte>(0 + t * accentColor.r),
-				static_cast<byte>(0 + t * accentColor.g),
-				static_cast<byte>(0 + t * accentColor.b),
-				255
-			};
-			H::Draw.Line(x + i, y + textBoxHeight, x + i, y + textBoxHeight + barHeight, lineColor);
-		}
+		sLeftText = "Calculating";
+		flTargetProgress = 0.f;
 	}
 
-	H::Draw.String(fFont, x + 5, y + (textBoxHeight / 2), leftColor, ALIGN_LEFT, leftText.c_str());
-	if (!rightText.empty())
-		H::Draw.String(fFont, x + boxWidth - 5, y + (textBoxHeight / 2), rightColor, ALIGN_RIGHT, rightText.c_str());
-
-	if (F::AntiCheatCompatibility.Active())
-		H::Draw.String(fFont, x + boxWidth / 2, y - fFont.m_nTall - 2, Vars::Colors::IndicatorTextBad.Value, ALIGN_CENTER, "Anti-cheat compatibility");
+	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, ImGui::GetIO().DeltaTime * 10.f);
+	DrawIndicatorPanel(ImGui::GetForegroundDrawList(), vPanelPos, flPanelWidth, flPanelHeight, sLeftText.c_str(), sRightText.c_str(), tLeftColor, tRightColor, tBarColor, flCurrentProgress, F::Ticks.m_iWait > 0, "Not Ready");
 }

@@ -166,7 +166,7 @@ void CAutoQueue::Run()
 		return;
 	}
 
-	if (!Vars::Misc::Queueing::AutoAbandonIfNoNavmesh.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value)
+	if (!Vars::Misc::Queueing::AutoCasualQueue.Value || !Vars::Misc::Queueing::AutoAbandonIfNoNavmesh.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value)
 	{
 		m_bNavmeshAbandonTriggered = false;
 		m_flNavmeshAbandonStartTime = 0.0f;

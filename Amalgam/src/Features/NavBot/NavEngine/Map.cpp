@@ -266,20 +266,22 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		if (!bPassable || !std::isfinite(flBaseCost) || flBaseCost <= 0.f)
 			continue;
 
-		float flFinalCost = std::max(tPoints.m_vCurrent.DistTo(tPoints.m_vNext), 1.f);
+		float flFinalCost = std::max(flBaseCost, 1.f);
 
 		if (!tCtx.m_bIgnoreTraces)
 		{
 			const float flHazardCost = LookupHazard(pNextArea);
 			if (std::isfinite(flHazardCost))
-				flFinalCost += std::clamp(flHazardCost * 0.2f, 0.f, 400.f);
+				flFinalCost += std::clamp(flHazardCost * 0.28f, 0.f, 650.f);
 			else
 				continue;
 
 			if (auto itStuck = m_mConnectionStuckTime.find(tKey); itStuck != m_mConnectionStuckTime.end())
 			{
 				if (itStuck->second.m_iExpireTick == 0 || itStuck->second.m_iExpireTick > iNow)
-					flFinalCost += std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 18.f, 12.f, 160.f);
+					flFinalCost += std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 120.f, 80.f, 800.f);
+				else
+					m_mConnectionStuckTime.erase(itStuck);
 			}
 		}
 		else
@@ -394,15 +396,15 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 	const float flDeviationEnd = HorizontalDistance(tPoints.m_vCenter, tPoints.m_vNext);
 	const float flHeightDiff = tPoints.m_vNext.z - tPoints.m_vCurrent.z;
 
-	float flCost = flForward + flDeviationStart * 0.3f + flDeviationEnd * 0.2f;
+	float flCost = flForward + flDeviationStart * 0.55f + flDeviationEnd * 0.35f;
 
-	if (flHeightDiff > 0.f)              flCost += flHeightDiff * 1.8f;
-	else if (flHeightDiff < -8.f)        flCost += std::abs(flHeightDiff) * 0.9f;
+	if (flHeightDiff > 0.f)              flCost += flHeightDiff * 2.6f;
+	else if (flHeightDiff < -8.f)        flCost += std::abs(flHeightDiff) * 1.15f;
 
 	if (tDropdown.m_bRequiresDrop)
-		flCost += tDropdown.m_flDropHeight * 2.2f + tDropdown.m_flApproachDistance * 0.45f;
+		flCost += tDropdown.m_flDropHeight * 3.25f + tDropdown.m_flApproachDistance * 0.7f;
 	else if (tDropdown.m_flApproachDistance > 0.f)
-		flCost += tDropdown.m_flApproachDistance * 0.25f;
+		flCost += tDropdown.m_flApproachDistance * 0.5f;
 
 	Vector vIn = tPoints.m_vCenter - tPoints.m_vCurrent;  vIn.z = 0.f;
 	Vector vOut = tPoints.m_vNext - tPoints.m_vCenter;    vOut.z = 0.f;
@@ -413,12 +415,15 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 		vIn /= flLenIn;
 		vOut /= flLenOut;
 		const float flDot = std::clamp(vIn.Dot(vOut), -1.f, 1.f);
-		flCost += (1.f - flDot) * 30.f;
+		flCost += (1.f - flDot) * 65.f;
 	}
 
 	Vector vAreaExtent = pNextArea->m_vSeCorner - pNextArea->m_vNwCorner;
 	vAreaExtent.z = 0.f;
-	flCost -= std::clamp(vAreaExtent.Length() * 0.01f, 0.f, 12.f);
+	const float flNextAreaSize = vAreaExtent.Length();
+	flCost -= std::clamp(flNextAreaSize * 0.008f, 0.f, 8.f);
+	if (flNextAreaSize < PLAYER_WIDTH * 1.6f)
+		flCost += 75.f;
 
 	const bool bRedSpawn = pNextArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_RED;
 	const bool bBlueSpawn = pNextArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_BLUE;
@@ -431,7 +436,9 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 	}
 
 	if (pNextArea->m_iAttributeFlags & NAV_MESH_AVOID)  flCost += 100000.f;
-	if (pNextArea->m_iAttributeFlags & NAV_MESH_CROUCH) flCost += flForward * 5.f;
+	if (pNextArea->m_iAttributeFlags & NAV_MESH_CROUCH) flCost += flForward * 7.f + 90.f;
+	if (pNextArea->m_iAttributeFlags & NAV_MESH_NO_JUMP) flCost += flHeightDiff > 8.f ? 420.f : 80.f;
+	if (pNextArea->m_iAttributeFlags & NAV_MESH_STAIRS) flCost += std::max(flHeightDiff, 0.f) * 0.6f;
 
 	const bool bHasReturnPath = HasDirectConnection(pNextArea, pCurrentArea);
 	int iForwardExitCount = 0;
@@ -443,17 +450,17 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 	}
 
 	if (iForwardExitCount == 0)
-		flCost += bHasReturnPath ? 220.f : 900.f;
+		flCost += bHasReturnPath ? 340.f : 1300.f;
 	else if (iForwardExitCount == 1)
-		flCost += 90.f;
+		flCost += 150.f;
 
 	if (!bHasReturnPath)
 	{
-		flCost += 160.f;
+		flCost += 260.f;
 		if (tDropdown.m_bRequiresDrop)
-			flCost += std::clamp(tDropdown.m_flDropHeight * 3.0f, 120.f, 420.f);
+			flCost += std::clamp(tDropdown.m_flDropHeight * 4.5f, 180.f, 720.f);
 		if (pNextArea->m_iAttributeFlags & NAV_MESH_NO_JUMP)
-			flCost += 220.f;
+			flCost += 320.f;
 	}
 
 	return std::max(flCost, 1.f);

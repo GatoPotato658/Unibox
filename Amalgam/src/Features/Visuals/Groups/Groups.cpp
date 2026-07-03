@@ -22,9 +22,49 @@ static inline bool ShouldTargetTeam(Group_t& tGroup, int iBit, CBaseEntity* pEnt
 	return true;
 }
 
+static inline bool HasRole(uint32_t uAccountID, int iRole)
+{
+	if (!uAccountID)
+		return false;
+
+	if (F::PlayerUtils.HasTag(uAccountID, iRole))
+		return true;
+
+	const int iTag = F::PlayerUtils.IndexToTag(iRole);
+	if (iTag == FRIEND_TAG)
+		return H::Entities.IsFriend(uAccountID);
+	if (iTag == PARTY_TAG)
+		return H::Entities.InParty(uAccountID);
+	if (iTag == F2P_TAG)
+		return H::Entities.IsF2P(uAccountID);
+
+	return false;
+}
+
+static inline bool ShouldTargetRole(Group_t& tGroup, CBaseEntity* pOwner)
+{
+	if (tGroup.m_vRoles.empty())
+		return true;
+
+	if (!pOwner || !pOwner->IsPlayer())
+		return false;
+
+	const uint32_t uAccountID = F::PlayerUtils.GetAccountID(pOwner->entindex());
+	for (int iRole : tGroup.m_vRoles)
+	{
+		if (HasRole(uAccountID, iRole))
+			return true;
+	}
+
+	return false;
+}
+
 static inline bool ShouldTargetOwner(Group_t& tGroup, int iBit, CBaseEntity* pOwner, CBaseEntity* pEntity, CTFPlayer* pLocal)
 {
 	if (!(tGroup.m_iTargets & iBit))
+		return false;
+
+	if (!ShouldTargetRole(tGroup, pOwner))
 		return false;
 
 	if (tGroup.m_iConditions & ConditionsEnum::Local && pOwner == pLocal

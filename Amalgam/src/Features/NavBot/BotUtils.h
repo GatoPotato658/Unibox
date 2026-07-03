@@ -40,11 +40,15 @@ private:
 		Vec3 m_vOffset = {};
 		Vec3 m_vOffsetGoal = {};
 		Vec3 m_vLastTarget = {};
+		Vec3 m_vPathTarget = {};
+		Vec3 m_vPathTargetGoal = {};
 		Vec3 m_vGlanceCurrent = {};
 		Vec3 m_vGlanceGoal = {};
 		int m_iLastTarget = -1;
 		float m_flLastSeen = 0.f;
 		Vec3 m_vLastPos = {};
+		float m_flPathTargetTime = 0.f;
+		float m_flPathTargetScore = 0.f;
 		float m_flNextOffset = 1.f;
 		float m_flAcquireDuration = 0.f;
 		float m_flEnemyBlend = 0.f;
@@ -65,6 +69,8 @@ private:
 		float m_flErrorY = 0.f;
 		float m_flErrorVelocityX = 0.f;
 		float m_flErrorVelocityY = 0.f;
+		float m_flPitchVelocity = 0.f;
+		float m_flYawVelocity = 0.f;
 	};
 
 	LegitLook_t m_tLLAP = {};

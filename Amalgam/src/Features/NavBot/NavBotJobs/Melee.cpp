@@ -12,6 +12,25 @@ static bool ApproachMeleeTarget(CUserCmd* pCmd, CTFPlayer* pLocal, const Vector&
 	return true;
 }
 
+static Vector GetSpyBackstabSpot(CTFPlayer* pLocal, CTFPlayer* pPlayer)
+{
+	Vec3 vForward;
+	Math::AngleVectors(pPlayer->GetEyeAngles(), &vForward);
+	vForward.z = 0.f;
+	if (vForward.Normalize() <= 0.01f)
+		return pPlayer->GetAbsOrigin();
+
+	Vector vSide(-vForward.y, vForward.x, 0.f);
+	const float flSideSign = (pLocal->entindex() + pPlayer->entindex()) % 2 ? 1.f : -1.f;
+	Vector vBackstabSpot = pPlayer->GetAbsOrigin() - vForward * 68.f + vSide * (flSideSign * 28.f);
+
+	CNavArea* pBackstabArea = F::NavEngine.FindClosestNavArea(vBackstabSpot);
+	if (!pBackstabArea || pBackstabArea->IsBlocked(pLocal->m_iTeamNum()))
+		vBackstabSpot = pPlayer->GetAbsOrigin() - vForward * 54.f;
+
+	return vBackstabSpot;
+}
+
 bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnemy_t tClosestEnemy)
 {
 	if (iSlot != SLOT_MELEE || F::NavBotReload.m_iLastReloadSlot != -1)
@@ -52,16 +71,16 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnem
 
 	if (pLocal->m_iClass() == TF_CLASS_SPY)
 	{
-		Vec3 vForward;
-		Math::AngleVectors(pPlayer->GetEyeAngles(), &vForward);
-		Vector vBackstabSpot = vTargetOrigin - (vForward * 60.f);
+		auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
+		const bool bReadyToBackstab = pKnife && pKnife->GetWeaponID() == TF_WEAPON_KNIFE && pKnife->As<CTFKnife>()->m_bReadyToBackstab();
+		const bool bKnifeLethal = pKnife && pPlayer->m_iHealth() <= pKnife->GetDamage(false);
+		const bool bCanSwing = bReadyToBackstab || bKnifeLethal;
+		if (!bCanSwing)
+			pCmd->buttons &= ~IN_ATTACK;
 
-		CNavArea* pBackstabArea = F::NavEngine.FindClosestNavArea(vBackstabSpot);
-		if (!pBackstabArea || pBackstabArea->IsBlocked(pLocal->m_iTeamNum()))
-			vBackstabSpot = vTargetOrigin;
-
+		Vector vBackstabSpot = GetSpyBackstabSpot(pLocal, pPlayer);
 		if (vLocalOrigin.DistTo(vBackstabSpot) < 100.0f && bIsVisible)
-			return ApproachMeleeTarget(pCmd, pLocal, vBackstabSpot);
+			return ApproachMeleeTarget(pCmd, pLocal, bCanSwing ? vTargetOrigin : vBackstabSpot);
 
 		static Timer tSpyMeleeCooldown{};
 		float flDistToSpot = vLocalOrigin.DistTo(vBackstabSpot);

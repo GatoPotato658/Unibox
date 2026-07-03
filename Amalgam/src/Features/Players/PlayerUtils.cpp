@@ -249,7 +249,7 @@ int CPlayerlistUtils::GetPriority(int iIndex, bool bCache)
 	if (bCache)
 		return H::Entities.GetPriority(iIndex);
 
-	return GetPriority(GetAccountID(iIndex));
+	return GetPriority(GetAccountID(iIndex), false);
 }
 
 int CPlayerlistUtils::GetFollowPriority(uint32_t uAccountID, bool bCache)
@@ -306,7 +306,7 @@ int CPlayerlistUtils::GetFollowPriority(int iIndex, bool bCache)
 	if (bCache)
 		return H::Entities.GetPriority(iIndex, PriorityTypeEnum::Follow);
 
-	return GetFollowPriority(GetAccountID(iIndex));
+	return GetFollowPriority(GetAccountID(iIndex), false);
 }
 
 int CPlayerlistUtils::GetVotePriority(uint32_t uAccountID, bool bCache)
@@ -363,7 +363,7 @@ int CPlayerlistUtils::GetVotePriority(int iIndex, bool bCache)
 	if (bCache)
 		return H::Entities.GetPriority(iIndex, PriorityTypeEnum::Vote);
 
-	return GetVotePriority(GetAccountID(iIndex));
+	return GetVotePriority(GetAccountID(iIndex), false);
 }
 
 PriorityLabel_t* CPlayerlistUtils::GetSignificantTag(uint32_t uAccountID, int iMode)

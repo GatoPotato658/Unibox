@@ -433,6 +433,7 @@
     <ClInclude Include="src\SDK\Definitions\Steam\SteamUniverse.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\SteamInterfaces.h" />
     <ClInclude Include="src\Features\ImGui\Render.h" />
+    <ClInclude Include="src\Features\ImGui\IndicatorPanel.h" />
     <ClInclude Include="src\Features\Aimbot\Aimbot.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotGlobal\AimbotGlobal.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotHitscan\AimbotHitscan.h" />
