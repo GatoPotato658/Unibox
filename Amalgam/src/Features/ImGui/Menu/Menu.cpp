@@ -552,7 +552,7 @@ void CMenu::MenuAimbot(int iTab)
 					PushTransparent(!Vars::Aimbot::Healing::AutoArrow.Value);
 					{
 						FToggleSlider(Vars::Aimbot::Healing::AutoSwitch, Vars::Aimbot::Healing::AutoSwitchHealth);
-						FTooltip("Automatically switch to crossbow and heal if target has less hp than max and has resistance or invulnerability or medigun does not have enough charges.\nThe slider controls how much less hp the target should have from max amount.");
+						FTooltip("Automatically switch to crossbow and heal if target is below the selected health percent and has resistance or invulnerability or medigun does not have enough charges.");
 					}
 					PopTransparent();
 				} EndSection();
@@ -1805,7 +1805,6 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Exploits::CheatsBypass, FToggleEnum::Right);
 					FToggle(Vars::Misc::Exploits::UnlockCVars, FToggleEnum::Left);
 					FToggle(Vars::Misc::Exploits::EquipRegionUnlock, FToggleEnum::Right);
-					FToggle(Vars::Misc::Exploits::PremiumCraftingBypass, FToggleEnum::Left);
 					FToggle(Vars::Misc::Exploits::BackpackExpander, FToggleEnum::Left);
 					FToggle(Vars::Misc::Exploits::BreakShootSound, FToggleEnum::Right);
 					FTooltip("breaks weapon shoot sound by switching weapons (soldier only)");
@@ -1835,7 +1834,6 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::AutoBanJoiner, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::JoinSpam, FToggleEnum::Left); // i think it doesnt work anymore but dh wanted it so here it is
 				} EndSection();
 				if (Section("Voting", 8))
@@ -2079,7 +2077,6 @@ void CMenu::MenuMisc(int iTab)
 					}
 					PopTransparent();
 					FToggle(Vars::Misc::Automation::ChatSpam::AutoReply, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::ChatSpam::ChatRelay, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::ChatSpam::VoteKickReply, FToggleEnum::Left);
 					FToggleSlider(Vars::Misc::Automation::KillSay::Enable, Vars::Misc::Automation::KillSay::Chance);
 					PushTransparent(!Vars::Misc::Automation::KillSay::Enable.Value);
@@ -4154,10 +4151,6 @@ void CMenu::MenuSettings(int iTab)
 			TableNextColumn();
 			if (Section("Config"))
 			{
-				FToggle(Vars::Config::AutoLoadCheaterConfig, FToggleEnum::Left);
-				FTooltip("Loads cheater.json when a tagged cheater is in match and switches back when none are present.");
-				DebugDummy({ 0, H::Draw.Scale(6) });
-
 				static std::string sStaticName;
 
 				fDrawConfigs(sStaticName);

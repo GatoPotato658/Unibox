@@ -1,5 +1,7 @@
 #include "PlayerConditions.h"
 
+#include "../../ImGui/IndicatorPanel.h"
+
 std::vector<std::string> CPlayerConditions::Get(CTFPlayer* pEntity)
 {
 	std::vector<std::string> vConditions = {};
@@ -392,6 +394,7 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::ConditionsDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 
 	EAlign align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
@@ -410,7 +413,7 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 	int iOffset = 0;
 	for (const std::string& sCondition : vConditions)
 	{
-		H::Draw.StringOutlined(fFont, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition.c_str());
+		DrawIndicatorText(pDrawList, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition);
 		iOffset += nTall;
 	}
 }

@@ -16,6 +16,7 @@ public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Reset();
 	void Draw(CTFPlayer* pLocal);
+	void DrawDangerOverlay(CTFPlayer* pLocal);
 
 private:
 

@@ -1,5 +1,6 @@
 #include "SpectatorList.h"
 
+#include "../../ImGui/IndicatorPanel.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../Spectate/Spectate.h"
 
@@ -84,7 +85,7 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators))
 	{
 		m_mRespawnCache.clear();
-		s_flCurrentHeight = 0.0f;  // Reset height when disabled
+		s_flCurrentHeight = 0.0f;
 		return;
 	}
 
@@ -103,14 +104,13 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::SpectatorsDisplay.Value.y;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(3);
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 
-	int maxTextWidth = 0;
+	float flMaxTextWidth = 0.f;
 	for (auto& Spectator : m_vSpectators)
 	{
-		int w = 0, h = 0;
-		std::string text = std::format("{} ({} - respawn {}s)", Spectator.m_sName, Spectator.m_sMode, static_cast<int>(Spectator.m_flRespawnIn));
-		I::MatSystemSurface->GetTextSize(fFont.m_dwFont, SDK::ConvertUtf8ToWide(text).c_str(), w, h);
-		maxTextWidth = std::max(maxTextWidth, w);
+		const std::string sText = std::format("{} ({} - respawn {}s)", Spectator.m_sName, Spectator.m_sMode, static_cast<int>(Spectator.m_flRespawnIn));
+		flMaxTextWidth = std::max(flMaxTextWidth, ImGui::CalcTextSize(sText.c_str()).x);
 	}
 
 	int totalHeight = H::Draw.Scale(48);
@@ -120,17 +120,19 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	s_flCurrentHeight = std::lerp(s_flCurrentHeight, static_cast<float>(totalHeight), I::GlobalVars->frametime * 10.0f);
 	totalHeight = static_cast<int>(std::round(s_flCurrentHeight));
 
-	const int boxWidth = std::max(H::Draw.Scale(220), maxTextWidth + H::Draw.Scale(40)); 
+	const int boxWidth = std::max(H::Draw.Scale(220), static_cast<int>(flMaxTextWidth) + H::Draw.Scale(40)); 
 	const int cornerRadius = H::Draw.Scale(2); 
 	
 	Color_t tBackgroundColor = Vars::Menu::Theme::Background.Value;
 	tBackgroundColor = tBackgroundColor.Lerp({ 127, 127, 127, tBackgroundColor.a }, 1.f / 9);
-	tBackgroundColor.a = 255; // Make fully opaque
+	tBackgroundColor.a = 255;
 	
 	Color_t tAccentColor = Vars::Menu::Theme::Accent.Value;
 	Color_t tActiveColor = Vars::Menu::Theme::Active.Value;
 
-	H::Draw.FillRoundRect(x, y, boxWidth, totalHeight, cornerRadius, tBackgroundColor);
+	const float flX = static_cast<float>(x);
+	float flY = static_cast<float>(y);
+	pDrawList->AddRectFilled({ flX, flY }, { flX + boxWidth, flY + totalHeight }, ColorToU32(tBackgroundColor), static_cast<float>(cornerRadius));
 
 	const float headerHeight = H::Draw.Scale(24);
 	Color_t tHeaderBgColor = tBackgroundColor;
@@ -141,13 +143,12 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 		tBackgroundColor.a 
 	};
 	
-	H::Draw.FillRoundRect(x, y, boxWidth, headerHeight, cornerRadius, tHeaderBgColor);
-	H::Draw.String(fFont, x + H::Draw.Scale(16), y + H::Draw.Scale(5), tActiveColor, ALIGN_TOPLEFT, "Spec");
-	int specWidth = 0, specHeight = 0;
-	I::MatSystemSurface->GetTextSize(fFont.m_dwFont, L"Spec", specWidth, specHeight);
-	H::Draw.String(fFont, x + H::Draw.Scale(16) + specWidth, y + H::Draw.Scale(5), tAccentColor, ALIGN_TOPLEFT, "tators");
+	pDrawList->AddRectFilled({ flX, flY }, { flX + boxWidth, flY + headerHeight }, ColorToU32(tHeaderBgColor), static_cast<float>(cornerRadius));
+	DrawIndicatorText(pDrawList, flX + H::Draw.Scale(16), flY + H::Draw.Scale(5), tActiveColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, "Spec");
+	const float flSpecWidth = ImGui::CalcTextSize("Spec").x;
+	DrawIndicatorText(pDrawList, flX + H::Draw.Scale(16) + flSpecWidth, flY + H::Draw.Scale(5), tAccentColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, "tators");
 
-	y += H::Draw.Scale(32);
+	flY += H::Draw.Scale(32);
 	for (auto& Spectator : m_vSpectators)
 	{
 		Color_t tColor = tActiveColor;
@@ -164,10 +165,14 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 		{
 			Color_t tHighlightColor = tBackgroundColor;
 			tHighlightColor = tHighlightColor.Lerp({ 255, 255, 255, tBackgroundColor.a }, 0.05f);
-			H::Draw.FillRoundRect(x + H::Draw.Scale(12), y - H::Draw.Scale(2), boxWidth - H::Draw.Scale(24), nTall, H::Draw.Scale(2), tHighlightColor);
+			pDrawList->AddRectFilled(
+				{ flX + H::Draw.Scale(12), flY - H::Draw.Scale(2) },
+				{ flX + boxWidth - H::Draw.Scale(12), flY - H::Draw.Scale(2) + nTall },
+				ColorToU32(tHighlightColor),
+				H::Draw.Scale(2.f));
 		}
 
-		H::Draw.String(fFont, x + H::Draw.Scale(16), y, tColor, ALIGN_TOPLEFT, std::format("{} ({} - respawn {}s)", Spectator.m_sName.c_str(), Spectator.m_sMode, static_cast<int>(Spectator.m_flRespawnIn)).c_str());
-		y += nTall;
+		DrawIndicatorText(pDrawList, flX + H::Draw.Scale(16), flY, tColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("{} ({} - respawn {}s)", Spectator.m_sName.c_str(), Spectator.m_sMode, static_cast<int>(Spectator.m_flRespawnIn)));
+		flY += nTall;
 	}
 }

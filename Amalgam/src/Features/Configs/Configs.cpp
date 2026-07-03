@@ -677,34 +677,6 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 	return true;
 }
 
-void CConfigs::HandleAutoConfig(bool bHasCheater)
-{
-	if (!Vars::Config::AutoLoadCheaterConfig.Value)
-		return;
-
-	const char* sConfigName = nullptr;
-	bool bHasNotLoaded = m_sLoadOriginalConfig.empty();
-	if (bHasCheater && bHasNotLoaded)
-	{
-		m_sLoadOriginalConfig = m_sCurrentConfig;
-		sConfigName = "cheater";
-	}
-	else if (!bHasNotLoaded)
-		sConfigName = m_sLoadOriginalConfig.c_str();
-	else
-		return;
-
-	if (FNV1A::Hash32(m_sCurrentConfig.c_str()) == FNV1A::Hash32(sConfigName))
-		return;
-	else if (!bHasCheater)
-		m_sLoadOriginalConfig.clear();
-
-	if (!std::filesystem::exists(m_sConfigPath + sConfigName + m_sConfigExtension))
-		return;
-
-	LoadConfig(sConfigName, true);
-}
-
 template <class T>
 static inline void SaveMiscMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
 {

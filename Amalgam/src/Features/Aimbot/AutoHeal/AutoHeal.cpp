@@ -3,6 +3,7 @@
 #include "../../Players/PlayerUtils.h"
 #include "../../Backtrack/Backtrack.h"
 #include "../../CritHack/CritHack.h"
+#include "../../ImGui/IndicatorPanel.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include "../AimbotProjectile/AimbotProjectile.h"
 
@@ -40,7 +41,8 @@ void CAutoHeal::AutoHeal(CUserCmd* pCmd)
 
 			float flDeployTime = 0.5f * flDeployTimeMultiplier;
 			float flNextPrimaryAttack = pCrossbow->m_flNextPrimaryAttack();
-			if (flNextPrimaryAttack - flDeployTime <= I::GlobalVars->curtime && pTarget->m_iHealth() < pTarget->GetMaxHealth() - Vars::Aimbot::Healing::AutoSwitchHealth.Value)
+			float health_percent = pTarget->GetMaxHealth() ? static_cast<float>(pTarget->m_iHealth()) / pTarget->GetMaxHealth() * 100.f : 100.f;
+			if (flNextPrimaryAttack - flDeployTime <= I::GlobalVars->curtime && health_percent < Vars::Aimbot::Healing::AutoSwitchHealth.Value)
 			{
 				float flMinCharge = m_pWeapon->GetMedigunType() == MEDIGUN_RESIST ? 0.25f : 96.f;
 				if (m_pWeapon->m_flChargeLevel() < flMinCharge
@@ -847,12 +849,13 @@ void CAutoHeal::Draw(CTFPlayer* pLocal)
 	int x = H::Draw.m_nScreenW / 2, y = 100;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 	y -= nTall;
 
 	for (int iResist = MEDIGUN_BULLET_RESIST; iResist < MEDIGUN_NUM_RESISTS; iResist++)
 	{
 		float flDanger = vResistDangers[iResist];
-		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("{}: {:.3f}", iResist == MEDIGUN_BULLET_RESIST ? "Bullet" : iResist == MEDIGUN_BLAST_RESIST ? "Blast" : "Fire", flDanger).c_str());
+		DrawIndicatorText(pDrawList, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOP, std::format("{}: {:.3f}", iResist == MEDIGUN_BULLET_RESIST ? "Bullet" : iResist == MEDIGUN_BLAST_RESIST ? "Blast" : "Fire", flDanger));
 	}
 }
 #endif

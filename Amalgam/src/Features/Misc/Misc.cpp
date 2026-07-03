@@ -25,7 +25,6 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 	JoinSpam(pLocal);
 	AchievementSpam(pLocal);
 	CallVoteSpam(pLocal);
-	AutoBanJoiner();
 	CheatsBypass();
 	WeaponSway();
 	AutoReport();
@@ -726,60 +725,6 @@ void CMisc::JoinSpam(CTFPlayer* pLocal)
 	}
 
 	I::EngineClient->ClientCmd_Unrestricted(pLocal->m_iTeamNum() == TF_TEAM_RED ? "jointeam blue" : "jointeam red");
-}
-
-void CMisc::AutoBanJoiner()
-{
-	static bool bApplied = false, bRestore = false;
-	static auto sv_cheats = H::ConVars.FindVar("sv_cheats");
-	static auto fps_max = H::ConVars.FindVar("fps_max");
-	static auto host_timescale = H::ConVars.FindVar("host_timescale");
-
-	static float m_fOldFPSValue = 30.f;
-	static int m_nOldFPSValue = 30;
-	static int m_nOldCheatsValue = 1;
-
-	if (bRestore)
-	{
-		sv_cheats->m_nValue = m_nOldCheatsValue;
-		bRestore = false;
-	}
-
-	const bool bShouldApply = Vars::Misc::Automation::AutoBanJoiner.Value && I::EngineClient->IsDrawingLoadingImage();
-	if (bShouldApply)
-	{	
-		if (bApplied)
-			return;
-
-		// Save original fps_max values every time we run this
-		m_fOldFPSValue = fps_max->m_fValue;
-		m_nOldFPSValue = fps_max->m_nValue;
-
-		// Also save original sv_cheats
-		m_nOldCheatsValue = sv_cheats->m_nValue;
-		sv_cheats->m_nValue = 1;
-
-		fps_max->m_fValue = 0.3f;
-		fps_max->m_nValue = 0;
-		host_timescale->m_fValue = 40.f;
-		host_timescale->m_nValue = 40;
-
-		bApplied = true;
-		return;
-	}
-
-	if (!bApplied)
-		return;
-
-	sv_cheats->m_nValue = 1;
-
-	fps_max->m_fValue = m_fOldFPSValue;
-	fps_max->m_nValue = m_nOldFPSValue;
-	host_timescale->m_fValue = 1.f;
-	host_timescale->m_nValue = 1;
-
-	bRestore = true;
-	bApplied = false;
 }
 
 void CMisc::CallVoteSpam(CTFPlayer* pLocal)
@@ -1550,7 +1495,9 @@ void CMisc::AutoRetry(CTFPlayer* pLocal)
 	if (!Vars::Misc::Automation::AutoRetry.Value || !pLocal || !pLocal->IsAlive())
 		return;
 
-	if (pLocal->m_iHealth() >= Vars::Misc::Automation::AutoRetryHealth.Value)
+	const int max_health = pLocal->GetMaxHealth();
+	const float health_percent = max_health ? static_cast<float>(pLocal->m_iHealth()) / max_health * 100.f : 100.f;
+	if (health_percent >= Vars::Misc::Automation::AutoRetryHealth.Value)
 		return;
 
 	static Timer tRetryTimer{};
@@ -1707,12 +1654,8 @@ void CMisc::EnsureChatUtilsDoc()
 		"                     Triggers are matched case-insensitively as\n"
 		"                     substrings; one reply is chosen at random.\n"
 		"\n"
-		"  chat_relay.txt     Output-only log of every chat message seen\n"
-		"                     (server IP, map, name, message). Written by\n"
-		"                     the Chat Relay toggle. Do not hand-edit.\n"
-		"\n"
 		"----------------------------------------------------------------\n"
-		"  Tags (work in every file above except chat_relay)\n"
+		"  Tags\n"
 		"----------------------------------------------------------------\n"
 		"\n"
 		"  {killer}        Your in-game name (KillSay).\n"
@@ -2595,39 +2538,4 @@ void CMisc::OnChatMessage(int iEntIndex, const std::string& sName, const std::st
 		}
 	}
 
-	if (Vars::Misc::Automation::ChatSpam::ChatRelay.Value)
-	{
-		std::string sPath = F::Configs.m_sConfigPath + "chat_relay.txt";
-
-		std::string sServerIP = "";
-		if (auto pNetChan = I::EngineClient->GetNetChannelInfo())
-			sServerIP = pNetChan->GetAddress();
-
-		std::string sMapName = "";
-		if (const char* pMapName = I::EngineClient->GetLevelName())
-			sMapName = std::filesystem::path(pMapName).stem().string();
-
-		std::string sLogLine = std::format("[{}] [{}] {}: {}", sServerIP, sMapName, sName, sMsg);
-
-		{
-			std::ifstream file(sPath);
-			if (file.good())
-			{
-				file.seekg(0, std::ios::end);
-				std::streampos length = file.tellg();
-				if (length > 0)
-				{
-					int readSize = std::min((int)length, 4096);
-					file.seekg(-readSize, std::ios::end);
-					std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-					if (content.find(sLogLine) != std::string::npos)
-						return;
-				}
-			}
-		}
-
-		std::ofstream outfile(sPath, std::ios::app);
-		if (outfile.good())
-			outfile << sLogLine << std::endl;
-	}
 }

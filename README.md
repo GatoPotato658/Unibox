@@ -61,7 +61,6 @@
   - Auto engineer building repair/upgrade
   - Auto class select
   - Auto disguise (disguises as a random class if not disguised already)
-  - Auto ban joiner (if your account has an active ban, it makes you able to join VAC secured servers, works better with high ping)
   - Auto edgebug (Nullifiews fall damage by landing on an edge of a surface. Can strafe automatically if specified)
   - Anti-autobalance option to try avoiding an autobalance on death if enemy team has more than 2 missing players
   - Changes to auto queue allowing for more customization:
@@ -70,7 +69,6 @@
     - MannUp queue
   - Cathook's autoitem system (Automatically equip weapons, hats, noisemakers. Currently glitchy on textmode builds)
   - `-insecure` bypass (Bypasses client-side checks allowing to join VAC protected servers.)
-  - Premium crafting bypass (Bypasses client-side restictions allowing to use the crafting mechanic.)
   - Added weapon shooting sound break exploit (Switches weapons back and forth every attack avoiding shoot sound. Soldier only)
   - MvM:
     - Buybot: Performs MVM upgrade station exploit which can result in huge amounts of cash (You have to be playing medic with a vaccinator and walk to the upgrade station while the `Buybot` automatically buys and refunds an upgrade giving you additional cash). Stops at a specified cash count.

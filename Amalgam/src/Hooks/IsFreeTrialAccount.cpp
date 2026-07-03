@@ -8,7 +8,7 @@ MAKE_HOOK(IsFreeTrialAccount, S::IsFreeTrialAccount(), bool)
 	const auto dwRetAddr = uintptr_t(_ReturnAddress());
 	const auto dwDesired = S::CCraftingPanel_UpdateCraftButton_IsFreeTrialAccount_Call();
 
-	if (dwRetAddr == dwDesired && Vars::Misc::Exploits::PremiumCraftingBypass.Value)
+	if (dwRetAddr == dwDesired)
 		return false;
 
 	return CALL_ORIGINAL();

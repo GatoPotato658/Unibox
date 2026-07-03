@@ -2,6 +2,7 @@
 
 #include "../../Ticks/Ticks.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
+#include "../../ImGui/IndicatorPanel.h"
 #include <regex>
 #include <numeric>
 
@@ -212,6 +213,7 @@ void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::SeedPredictionDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 
 	EAlign align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
@@ -227,8 +229,8 @@ void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 
 	const auto& cColor = m_bSynced ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
 
-	H::Draw.StringOutlined(fFont, x, y, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Uptime {}", GetFormat(m_flServerTime)).c_str());
-	H::Draw.StringOutlined(fFont, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Mantissa step {}", m_flMantissaStep).c_str());
+	DrawIndicatorText(pDrawList, x, y, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Uptime {}", GetFormat(m_flServerTime)));
+	DrawIndicatorText(pDrawList, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Mantissa step {}", m_flMantissaStep));
 	if (Vars::Debug::Info.Value)
-		H::Draw.StringOutlined(fFont, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Delta {:.3f}", m_dTimeDelta).c_str());
+		DrawIndicatorText(pDrawList, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Delta {:.3f}", m_dTimeDelta));
 }

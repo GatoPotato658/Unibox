@@ -23,7 +23,6 @@ private:
 	void ChatSpam(CTFPlayer* pLocal);
 	void AutoDisguise(CTFPlayer* pLocal);
 	void JoinSpam(CTFPlayer* pLocal);
-	void AutoBanJoiner();
 
 	void AchievementSpam(CTFPlayer* pLocal);
 	void NoiseSpam(CTFPlayer* pLocal);

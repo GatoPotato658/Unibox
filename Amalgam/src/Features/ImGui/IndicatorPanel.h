@@ -3,10 +3,83 @@
 #include "Render.h"
 #include <algorithm>
 #include <cfloat>
+#include <string>
 
 static inline ImU32 ColorToU32(const Color_t& tColor)
 {
 	return IM_COL32(tColor.r, tColor.g, tColor.b, tColor.a);
+}
+
+static inline ImVec2 GetIndicatorTextPos(float x, float y, const char* sText, EAlign eAlign)
+{
+	ImVec2 vTextSize = ImGui::CalcTextSize(sText);
+	switch (eAlign)
+	{
+	case ALIGN_TOP:
+		x -= vTextSize.x / 2.f;
+		break;
+	case ALIGN_TOPRIGHT:
+		x -= vTextSize.x;
+		break;
+	case ALIGN_LEFT:
+		y -= vTextSize.y / 2.f;
+		break;
+	case ALIGN_CENTER:
+		x -= vTextSize.x / 2.f;
+		y -= vTextSize.y / 2.f;
+		break;
+	case ALIGN_RIGHT:
+		x -= vTextSize.x;
+		y -= vTextSize.y / 2.f;
+		break;
+	case ALIGN_BOTTOMLEFT:
+		y -= vTextSize.y;
+		break;
+	case ALIGN_BOTTOM:
+		x -= vTextSize.x / 2.f;
+		y -= vTextSize.y;
+		break;
+	case ALIGN_BOTTOMRIGHT:
+		x -= vTextSize.x;
+		y -= vTextSize.y;
+		break;
+	default:
+		break;
+	}
+	return { x, y };
+}
+
+static inline void DrawIndicatorText(ImDrawList* pDrawList, float x, float y, const Color_t& tColor, const Color_t& tOutline, EAlign eAlign, const char* sText)
+{
+	if (!sText || sText[0] == '\0')
+		return;
+
+	const ImVec2 vPos = GetIndicatorTextPos(x, y, sText, eAlign);
+	if (!Vars::Menu::CheapText.Value)
+	{
+		Color_t tOutlineColor = tOutline;
+		tOutlineColor.a *= Math::RemapVal(tOutlineColor.Brightness(), 0, 255, 0.5f, 0.1f);
+		if (tOutlineColor.a)
+		{
+			const ImU32 uOutline = ColorToU32(tOutlineColor);
+			const float flOutline = H::Draw.Scale(1.f);
+			pDrawList->AddText({ vPos.x - flOutline, vPos.y }, uOutline, sText);
+			pDrawList->AddText({ vPos.x, vPos.y - flOutline }, uOutline, sText);
+			pDrawList->AddText({ vPos.x + flOutline, vPos.y }, uOutline, sText);
+			pDrawList->AddText({ vPos.x, vPos.y + flOutline }, uOutline, sText);
+			pDrawList->AddText({ vPos.x - flOutline, vPos.y - flOutline }, uOutline, sText);
+			pDrawList->AddText({ vPos.x + flOutline, vPos.y + flOutline }, uOutline, sText);
+			pDrawList->AddText({ vPos.x - flOutline, vPos.y + flOutline }, uOutline, sText);
+			pDrawList->AddText({ vPos.x + flOutline, vPos.y - flOutline }, uOutline, sText);
+		}
+	}
+
+	pDrawList->AddText(vPos, ColorToU32(tColor), sText);
+}
+
+static inline void DrawIndicatorText(ImDrawList* pDrawList, float x, float y, const Color_t& tColor, const Color_t& tOutline, EAlign eAlign, const std::string& sText)
+{
+	DrawIndicatorText(pDrawList, x, y, tColor, tOutline, eAlign, sText.c_str());
 }
 
 static inline void DrawIndicatorPanel(

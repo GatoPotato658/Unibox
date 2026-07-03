@@ -4,6 +4,7 @@
 #include "../Ticks/Ticks.h"
 #include "../Aimbot/Aimbot.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
+#include "../ImGui/IndicatorPanel.h"
 
 void CBacktrack::Reset()
 {
@@ -427,6 +428,7 @@ void CBacktrack::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::PingDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 
 	EAlign align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
@@ -441,8 +443,8 @@ void CBacktrack::Draw(CTFPlayer* pLocal)
 	}
 
 	if (flFake || Vars::Backtrack::Interp.Value > G::Lerp * 1000)
-		H::Draw.StringOutlined(fFont, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} (+ {:.0f}) ms", flLatency, flFake).c_str());
+		DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} (+ {:.0f}) ms", flLatency, flFake));
 	else
-		H::Draw.StringOutlined(fFont, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} ms", flLatency).c_str());
-	H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Scoreboard {} ms", iLatencyScoreboard).c_str());
+		DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} ms", flLatency));
+	DrawIndicatorText(pDrawList, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Scoreboard {} ms", iLatencyScoreboard));
 }

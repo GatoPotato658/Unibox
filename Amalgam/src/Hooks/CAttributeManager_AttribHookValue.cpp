@@ -18,7 +18,7 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 	const auto dwDesired = S::CTFPlayer_FireEvent_AttribHookValue_Call();
 
 	if (dwRetAddr == dwDesired && Vars::Visuals::Effects::SpellFootsteps.Value
-		&& econent == H::Entities.GetLocal() && FNV1A::Hash32(name) == FNV1A::Hash32Const("halloween_footstep_type"))
+		&& name && FNV1A::Hash32(name) == FNV1A::Hash32Const("halloween_footstep_type"))
 	{
 		switch (Vars::Visuals::Effects::SpellFootsteps.Value)
 		{

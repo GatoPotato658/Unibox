@@ -545,8 +545,13 @@ bool CTicks::IsTimingUnsure()
 
 void CTicks::Draw(CTFPlayer* pLocal)
 {
+	static float flCurrentProgress = 0.f;
+
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks) || !pLocal->IsAlive())
+	{
+		flCurrentProgress = 0.f;
 		return;
+	}
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
 
@@ -576,12 +581,12 @@ void CTicks::Draw(CTFPlayer* pLocal)
 		return;
 	}
 
-	const int iAntiAimTicks = F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0;
-	const int iTicks = std::clamp(m_iShiftedTicks + std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0), 0, m_iMaxUsrCmdProcessTicks);
+	const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
+	const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
 	const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
+	const int iTicks = std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks);
 	const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
-	static float flCurrentProgress = 0.f;
-	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, ImGui::GetIO().DeltaTime * 10.f);
+	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 	DrawIndicatorPanel(
 		pDrawList,
 		vPanelPos,

@@ -124,8 +124,6 @@ void CEntities::UpdatePartyAndLobbyInfo(int nLocalIndex)
 	}
 	m_iPartyCount = uPartyCount;
 
-	bool bHasCheater = !Vars::Config::AutoLoadCheaterConfig.Value;
-	const int iCheaterTag = F::PlayerUtils.TagToIndex(CHEATER_TAG);
 	int nMaxClients = I::EngineClient->GetMaxClients();
 	for (int n = 1; n <= nMaxClients; n++)
 	{
@@ -136,8 +134,6 @@ void CEntities::UpdatePartyAndLobbyInfo(int nLocalIndex)
 		if (bLocal) m_uAccountID = uAccountID;
 
 		const int iPriority = bLocal ? 0 : F::PlayerUtils.GetPriority(uAccountID, false);
-		if (!bHasCheater && iPriority >= 0 && F::PlayerUtils.HasTag(uAccountID, iCheaterTag))
-			bHasCheater = true;
 
 		m_aIPriorities[PriorityTypeEnum::Relationship][n] = m_aUPriorities[PriorityTypeEnum::Relationship][uAccountID] = iPriority;
 		m_aIPriorities[PriorityTypeEnum::Follow][n] = m_aUPriorities[PriorityTypeEnum::Follow][uAccountID] = !bLocal ? F::PlayerUtils.GetFollowPriority(uAccountID, false) : 0;
@@ -148,7 +144,6 @@ void CEntities::UpdatePartyAndLobbyInfo(int nLocalIndex)
 		m_mIF2P[n] = m_mUF2P[uAccountID] = mF2P.count(uAccountID) ? mF2P[uAccountID] : false;
 		m_mILevels[n] = m_mULevels[uAccountID] = mLevels.count(uAccountID) ? mLevels[uAccountID] : -2;
 	}
-	F::Configs.HandleAutoConfig(bHasCheater);
 }
 
 void CEntities::UpdatePlayerAnimations(int nLocalIndex)

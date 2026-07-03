@@ -171,7 +171,6 @@ public:
 NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Config)
 		CVar(LoadDebugSettings, "Load debug settings", false);
-		CVar(AutoLoadCheaterConfig, "Auto load cheater config", false);
 		CVar(SteamWebAPIKey, "steamwebapi key", std::string(""), NOBIND);
 	NAMESPACE_END(Config)
 	
@@ -474,7 +473,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(ActivateOnVoice, "Activate on voice", false);
 			CVar(ActivateFriendsOnly, "Activate friends only", false);
 			CVar(ActivationHealthPercent, "Activate at health", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
-			CVar(AutoSwitchHealth, "Switch at", 75, SLIDER_CLAMP, 75, 200);
+			CVar(AutoSwitchHealth, "Switch at", 75, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 
 			CVar(AutoVaccinatorBulletScale, "Auto vaccinator bullet scale", 100.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 200.f, 10.f, "%g%%");
 			CVar(AutoVaccinatorBlastScale, "Auto vaccinator blast scale", 100.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 200.f, 10.f, "%g%%");
@@ -937,7 +936,7 @@ I dont think this is a good idea to disable simulations completely:
 				VA_LIST("Off", "Retry", "Retry on death"),
 				Off, Retry, RetryOnDeath);
 			CVar(AutoRetry, "Auto retry", false);
-			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 450, 1, "%i HP");
+			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 			CVar(TauntControl, "Taunt control", false);
 			CVar(KartControl, "Kart control", false);
 			CVar(AutoDisguise, "Auto disguise", false);
@@ -1147,7 +1146,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(RandomClassInterval, "Random class interval", FloatRange_t(3.f, 5.f), SLIDER_MIN | SLIDER_PRECISION, 0.5f, 30.f, 0.5f, "%g - %gm");
 			CVar(ForceClass, "Autojoin class", 0);
 			CVar(JoinSpam, "Join spam", false);
-			CVar(AutoBanJoiner, "Auto-ban joiner", false);
 			CVar(Micspam, "Micspam", false);
 			CVar(NoiseSpam, "Noise spam", false);
 			CVar(CallVoteSpam, "Callvote spam", false);
@@ -1164,7 +1162,6 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(TeamChat, "Team chat", false);
 				CVar(Randomize, "Randomize", false);
 				CVar(AutoReply, "Auto reply", false);
-				CVar(ChatRelay, "Chat relay", false);
 				CVar(VoteKickReply, "Vote kick reply", false);
 			NAMESPACE_END(ChatSpam)
 
@@ -1195,7 +1192,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(CheatsBypass, "Cheats bypass", false);
 			CVar(UnlockCVars, "Unlock CVars", true);
 			CVar(EquipRegionUnlock, "Equip region unlock", false);
-			CVar(PremiumCraftingBypass, "Premium crafting bypass", false);
 			CVar(BreakShootSound, "Break shoot sound", false);
 			CVar(BackpackExpander, "Backpack expander", false);
 			CVar(PingReducer, "Ping reducer", false);

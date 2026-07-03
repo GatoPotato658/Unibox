@@ -14,6 +14,12 @@
 #include "Menu/Components.h"
 #include "../CritHack/CritHack.h"
 #include "../Ticks/Ticks.h"
+#include "../Backtrack/Backtrack.h"
+#include "../Visuals/PlayerConditions/PlayerConditions.h"
+#include "../NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
+#include "../Visuals/SpectatorList/SpectatorList.h"
+#include "../NavBot/NavBotCore.h"
+#include "../Aimbot/AutoHeal/AutoHeal.h"
 
 namespace
 {
@@ -61,6 +67,14 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	{
 		F::CritHack.Draw(pLocal);
 		F::Ticks.Draw(pLocal);
+#ifdef DEBUG_VACCINATOR
+		F::AutoHeal.Draw(pLocal);
+#endif
+		F::NoSpreadHitscan.Draw(pLocal);
+		F::PlayerConditions.Draw(pLocal);
+		F::Backtrack.Draw(pLocal);
+		F::SpectatorList.Draw(pLocal);
+		F::NavBotCore.Draw(pLocal);
 	}
 
 	ImGui::EndFrame();

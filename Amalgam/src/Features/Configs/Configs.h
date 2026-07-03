@@ -7,14 +7,11 @@
 
 class CConfigs
 {
-private:
-	std::string m_sLoadOriginalConfig;
 public:
 	CConfigs();
 
 	bool SaveConfig(const std::string& sConfigName, bool bNotify = true);
 	bool LoadConfig(const std::string& sConfigName, bool bNotify = true);
-	void HandleAutoConfig(bool bHasCheater);
 	void DeleteConfig(const std::string& sConfigName, bool bNotify = true);
 	void ResetConfig(const std::string& sConfigName, bool bNotify = true);
 	bool SaveVisual(const std::string& sConfigName, bool bNotify = true);

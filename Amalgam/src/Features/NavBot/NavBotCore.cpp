@@ -10,6 +10,7 @@
 #include "../Misc/Misc.h"
 #include "../PacketManip/FakeLag/FakeLag.h"
 #include "../Ticks/Ticks.h"
+#include "../ImGui/IndicatorPanel.h"
 
 
 void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy)
@@ -392,6 +393,7 @@ void CNavBotCore::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::NavBotDisplay.Value.y + 8;
 	const auto& f_font = H::Fonts.GetFont(FONT_INDICATORS);
 	const int n_tall = f_font.m_nTall + H::Draw.Scale(1);
+	ImDrawList* p_draw_list = ImGui::GetForegroundDrawList();
 
 	EAlign e_align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
@@ -419,60 +421,66 @@ void CNavBotCore::Draw(CTFPlayer* pLocal)
 	}
 
 	const auto s_job = BuildJobLabel();
-	H::Draw.StringOutlined(
-		f_font,
+	DrawIndicatorText(
+		p_draw_list,
 		x,
 		y,
 		t_color,
 		Vars::Menu::Theme::Background.Value,
 		e_align,
-		std::format(L"Job: {} {}", s_job, std::wstring(F::CritHack.m_bForce ? L"(Crithack on)" : L"")).data());
+		std::format("Job: {} {}", SDK::ConvertWideToUTF8(s_job), F::CritHack.m_bForce ? "(Crithack on)" : ""));
 
 	if (F::NavEngine.IsPathing())
 	{
 		auto p_crumbs = F::NavEngine.GetCrumbs();
 		const float fl_dist = pLocal->GetAbsOrigin().DistTo(F::NavEngine.m_vLastDestination);
-		H::Draw.StringOutlined(f_font, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Nodes: {} (Dist: {:.0f})", p_crumbs->size(), fl_dist).c_str());
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Nodes: {} (Dist: {:.0f})", p_crumbs->size(), fl_dist));
 	}
 
 	const float fl_idle_time = SDK::PlatFloatTime() - F::NavBotCore.m_tIdleTimer.GetLastUpdate();
 	if (fl_idle_time > 2.0f && F::NavEngine.IsPathing())
-		H::Draw.StringOutlined(f_font, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Stuck: {:.1f}s", fl_idle_time).c_str());
+		DrawIndicatorText(p_draw_list, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Stuck: {:.1f}s", fl_idle_time));
 
 	if (!F::NavEngine.IsPathing() && !F::NavEngine.m_sLastFailureReason.empty())
-		H::Draw.StringOutlined(f_font, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Failed: {}", F::NavEngine.m_sLastFailureReason).c_str());
+		DrawIndicatorText(p_draw_list, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Failed: {}", F::NavEngine.m_sLastFailureReason));
 
 	if (!Vars::Debug::Info.Value)
 		return;
 
-	H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Is ready: {}", std::to_string(b_is_ready)).c_str());
-	H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Priority: {}", static_cast<int>(F::NavEngine.m_eCurrentPriority)).c_str());
-	H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("In spawn: {}", std::to_string(i_in_spawn)).c_str());
-	H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area flags: {}", std::to_string(i_area_flags)).c_str());
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Is ready: {}", std::to_string(b_is_ready)));
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Priority: {}", static_cast<int>(F::NavEngine.m_eCurrentPriority)));
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("In spawn: {}", std::to_string(i_in_spawn)));
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area flags: {}", std::to_string(i_area_flags)));
 
 	if (F::NavEngine.IsNavMeshLoaded())
 	{
-		H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Map: {}", F::NavEngine.GetNavFilePath()).c_str());
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Map: {}", F::NavEngine.GetNavFilePath()));
 		if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
-			H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area ID: {}", pLocalArea->m_uId).c_str());
-		H::Draw.StringOutlined(f_font, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Total areas: {}", F::NavEngine.GetNavFile()->m_vAreas.size()).c_str());
+			DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area ID: {}", pLocalArea->m_uId));
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Total areas: {}", F::NavEngine.GetNavFile()->m_vAreas.size()));
 	}
 
 	if (F::NavEngine.IsPathing() || F::NavEngine.m_vLastDestination.Length() > 0.f)
 	{
 		const auto& v_dest = F::NavEngine.m_vLastDestination;
-		H::Draw.StringOutlined(f_font, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Dest: {:.0f}, {:.0f}, {:.0f}", v_dest.x, v_dest.y, v_dest.z).c_str());
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Dest: {:.0f}, {:.0f}, {:.0f}", v_dest.x, v_dest.y, v_dest.z));
 	}
 
 	const bool b_is_idle = F::NavEngine.m_eCurrentPriority == PriorityListEnum::None || !F::NavEngine.IsPathing();
-	H::Draw.StringOutlined(
-		f_font,
+	DrawIndicatorText(
+		p_draw_list,
 		x,
 		y += n_tall,
 		b_is_idle ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value,
 		Vars::Menu::Theme::Background.Value,
 		e_align,
-		std::format("Idle: {} ({:.1f}s)", b_is_idle ? "Yes" : "No", std::max(0.f, fl_idle_time)).c_str());
+		std::format("Idle: {} ({:.1f}s)", b_is_idle ? "Yes" : "No", std::max(0.f, fl_idle_time)));
+}
+
+void CNavBotCore::DrawDangerOverlay(CTFPlayer* pLocal)
+{
+	if (!pLocal || !(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) || !pLocal->IsAlive() || !Vars::Debug::Info.Value)
+		return;
 
 	if (!Vars::Misc::Movement::NavBot::DangerOverlay.Value)
 		return;
