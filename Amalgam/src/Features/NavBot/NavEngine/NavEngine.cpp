@@ -420,6 +420,7 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 				tEnt.m_iExpireTick = iExpire;
 				tEnt.m_eVischeckState = VischeckStateEnum::NotVisible;
 				tEnt.m_bPassable = false;
+				tEnt.m_bStuckBlacklist = false;
 				tEnt.m_flCachedCost = std::numeric_limits<float>::max();
 				bValid = false;
 				break;
@@ -430,6 +431,8 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 				tEnt.m_iExpireTick = iExpire;
 				tEnt.m_eVischeckState = VischeckStateEnum::Visible;
 				tEnt.m_bPassable = true;
+				tEnt.m_bStuckBlacklist = false;
+				m_pMap->m_mConnectionStuckTime.erase(tKey);
 			}
 		}
 
@@ -588,6 +591,7 @@ void CNavEngine::VischeckPath()
 				tEnt.m_iExpireTick = TICKCOUNT_TIMESTAMP(8.f);
 				tEnt.m_eVischeckState = VischeckStateEnum::NotVisible;
 				tEnt.m_bPassable = false;
+				tEnt.m_bStuckBlacklist = false;
 				tEnt.m_flCachedCost = std::numeric_limits<float>::max();
 			}
 			AbandonPath("Path entrance blocked");
@@ -617,6 +621,7 @@ void CNavEngine::VischeckPath()
 			tEnt.m_iExpireTick = iExpire;
 			tEnt.m_eVischeckState = VischeckStateEnum::NotVisible;
 			tEnt.m_bPassable = false;
+			tEnt.m_bStuckBlacklist = false;
 			tEnt.m_flCachedCost = std::numeric_limits<float>::max();
 			AbandonPath("Traceline blocked");
 			break;
@@ -627,6 +632,8 @@ void CNavEngine::VischeckPath()
 			tEnt.m_iExpireTick = iExpire;
 			tEnt.m_eVischeckState = VischeckStateEnum::Visible;
 			tEnt.m_bPassable = true;
+			tEnt.m_bStuckBlacklist = false;
+			m_pMap->m_mConnectionStuckTime.erase(tKey);
 		}
 	}
 }
@@ -789,12 +796,13 @@ void CNavEngine::AbandonPath(const std::string& sReason)
 	if (!m_pMap) return;
 
 	m_sLastFailureReason = sReason;
-	if (sReason.find("Stuck") != std::string::npos)
+	const bool bStuck = sReason.find("Stuck") != std::string::npos;
+	if (bStuck)
 		RecordStuckFailure();
 	ClearPathState();
 	m_uPendingRequestId = 0;
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
-	if (m_bRepathOnFail)
+	if (m_bRepathOnFail || bStuck)
 	{
 		m_bRepathRequested = true;
 		const float flDelay = (sReason.find("Blacklisted") != std::string::npos
@@ -829,7 +837,6 @@ void CNavEngine::RecordStuckFailure()
 	tStuck.m_iTimeStuck++;
 	tStuck.m_iExpireTick = iPenaltyExpire;
 
-	if (tStuck.m_iTimeStuck >= 2)
 	{
 		auto& tEntry = m_pMap->m_mVischeckCache[tKey];
 		tEntry.m_iExpireTick = iBlacklistExpire;
@@ -1348,25 +1355,6 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 
 	if (nConsumed)
 	{
-		if (m_pMap)
-		{
-			std::lock_guard lock(m_pMap->m_mutex);
-			for (size_t i = 0; i < nConsumed && i < m_vCrumbs.size(); ++i)
-			{
-				CNavArea* pArea = m_vCrumbs[i].m_pNavArea;
-				if (!pArea) continue;
-
-				const auto tAreaKey = std::pair<CNavArea*, CNavArea*>(pArea, pArea);
-				if (auto itArea = m_pMap->m_mVischeckCache.find(tAreaKey); itArea != m_pMap->m_mVischeckCache.end() && itArea->second.m_bStuckBlacklist)
-					m_pMap->m_mVischeckCache.erase(itArea);
-
-				std::erase_if(m_pMap->m_mVischeckCache, [pArea](const auto& tEntry)
-					{ return tEntry.second.m_bStuckBlacklist && (tEntry.first.first == pArea || tEntry.first.second == pArea); });
-				std::erase_if(m_pMap->m_mConnectionStuckTime, [pArea](const auto& tEntry)
-					{ return tEntry.first.first == pArea || tEntry.first.second == pArea; });
-			}
-		}
-
 		if (nConsumed >= m_vCrumbs.size())
 			m_vCrumbs.clear();
 		else
@@ -1436,18 +1424,15 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			break;
 
 		case StuckPhase::Fail:
-			if (m_bRepathOnFail)
-			{
-				AbandonPath("Stuck (no progress)");
-				return;
-			}
+			AbandonPath("Stuck (no progress)");
+			return;
 			break;
 
 		default:
 			break;
 		}
 	}
-	else if (bDropCrumb && ePhase == StuckPhase::Fail && m_bRepathOnFail)
+	else if (bDropCrumb && ePhase == StuckPhase::Fail)
 	{
 		AbandonPath("Stuck on drop");
 		return;

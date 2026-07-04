@@ -12,7 +12,7 @@ bool CBotUtils::IsSurfaceWalkable(const Vector& vNormal)
 
 bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (!pLocal || !pLocal->IsAlive() || !Vars::Misc::Movement::NavBot::SmartJump.Value) return false;
+	if (!pLocal || !pLocal->IsAlive() || !Vars::Misc::Movement::NavEngine::Enabled.Value || !Vars::Misc::Movement::NavBot::SmartJump.Value) return false;
 	if (NavRuntime::IsMinigunJumpLocked(H::Entities.GetWeapon(), pCmd))
 		return false;
 
@@ -107,7 +107,7 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CBotUtils::HandleSmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (!pLocal || !pLocal->IsAlive() || F::AutoRocketJump.IsRunning())
+	if (!pLocal || !pLocal->IsAlive() || !Vars::Misc::Movement::NavEngine::Enabled.Value || F::AutoRocketJump.IsRunning())
 	{
 		m_eJumpState = STATE_AWAITING_JUMP;
 		return;

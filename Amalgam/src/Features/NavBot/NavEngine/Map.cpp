@@ -221,12 +221,15 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		float flBaseCost = std::numeric_limits<float>::max();
 		bool bPassable = false;
 
-		if (bValidCache && tEntry.m_eVischeckState == VischeckStateEnum::Visible && tEntry.m_bPassable)
+		if (bValidCache && tEntry.m_eVischeckState == VischeckStateEnum::Visible && tEntry.m_bPassable
+			&& std::isfinite(tEntry.m_flCachedCost) && tEntry.m_flCachedCost < std::numeric_limits<float>::max())
 		{
 			tPoints = tEntry.m_tPoints;
 			tDropdown = tEntry.m_tDropdown;
 			flBaseCost = tEntry.m_flCachedCost;
 			bPassable = true;
+			tEntry.m_bStuckBlacklist = false;
+			m_mConnectionStuckTime.erase(tKey);
 		}
 		else if (bValidCache && !tEntry.m_bPassable && tEntry.m_bStuckBlacklist)
 		{
@@ -246,6 +249,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 				tEntry.m_iExpireTick = iUnreachableCacheExpiry;
 				tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
 				tEntry.m_bPassable = false;
+				tEntry.m_bStuckBlacklist = false;
 				tEntry.m_flCachedCost = std::numeric_limits<float>::max();
 				tEntry.m_tPoints = tPoints;
 				tEntry.m_tDropdown = tDropdown;
@@ -258,9 +262,11 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 			tEntry.m_iExpireTick = iCacheExpiry;
 			tEntry.m_eVischeckState = VischeckStateEnum::Visible;
 			tEntry.m_bPassable = true;
+			tEntry.m_bStuckBlacklist = false;
 			tEntry.m_tPoints = tPoints;
 			tEntry.m_tDropdown = tDropdown;
 			tEntry.m_flCachedCost = flBaseCost;
+			m_mConnectionStuckTime.erase(tKey);
 		}
 
 		if (!bPassable || !std::isfinite(flBaseCost) || flBaseCost <= 0.f)
