@@ -546,12 +546,57 @@ bool CTicks::IsTimingUnsure()
 void CTicks::Draw(CTFPlayer* pLocal)
 {
 	static float flCurrentProgress = 0.f;
+	static std::string sRightText = {};
+	static Color_t tBarColor = {};
+	static float flCachedProgress = 0.f;
+	static bool bCachedFooter = false;
+	static bool bCachedSpeedhack = false;
+	static bool bCachedValid = false;
 
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks) || !pLocal->IsAlive())
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks))
 	{
 		flCurrentProgress = 0.f;
+		bCachedValid = false;
 		return;
 	}
+
+	if (pLocal)
+	{
+		if (!pLocal->IsAlive())
+		{
+			flCurrentProgress = 0.f;
+			bCachedValid = false;
+			return;
+		}
+
+		if (m_bSpeedhack)
+		{
+			sRightText = std::format("x{}", Vars::Speedhack::Scale.Value);
+			tBarColor = Color_t(100, 255, 100, 255);
+			flCachedProgress = 1.f;
+			bCachedFooter = false;
+			bCachedSpeedhack = true;
+			bCachedValid = true;
+		}
+		else
+		{
+			const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
+			const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
+			const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
+			const int iTicks = std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks);
+			const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
+			flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
+			sRightText = std::format("{} / {}", iTicks, iMaxTicks);
+			tBarColor = m_iWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255);
+			flCachedProgress = flCurrentProgress;
+			bCachedFooter = m_iWait != 0;
+			bCachedSpeedhack = false;
+			bCachedValid = true;
+		}
+	}
+
+	if (!bCachedValid)
+		return;
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
 
@@ -564,9 +609,8 @@ void CTicks::Draw(CTFPlayer* pLocal)
 		static_cast<float>(dtPos.y)
 	};
 
-	if (m_bSpeedhack)
+	if (bCachedSpeedhack)
 	{
-		const std::string sRightText = std::format("x{}", Vars::Speedhack::Scale.Value);
 		DrawIndicatorPanel(
 			pDrawList,
 			vPanelPos,
@@ -576,28 +620,22 @@ void CTicks::Draw(CTFPlayer* pLocal)
 			sRightText.c_str(),
 			Vars::Menu::Theme::Active.Value,
 			Vars::Menu::Theme::Active.Value,
-			Color_t(100, 255, 100, 255),
-			1.f);
+			tBarColor,
+			flCachedProgress);
 		return;
 	}
 
-	const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
-	const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
-	const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
-	const int iTicks = std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks);
-	const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
-	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 	DrawIndicatorPanel(
 		pDrawList,
 		vPanelPos,
 		flPanelWidth,
 		flPanelHeight,
 		"Ticks",
-		std::format("{} / {}", iTicks, iMaxTicks).c_str(),
+		sRightText.c_str(),
 		Vars::Menu::Theme::Active.Value,
 		Vars::Menu::Theme::Active.Value,
-		m_iWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255),
-		flCurrentProgress,
-		m_iWait != 0,
+		tBarColor,
+		flCachedProgress,
+		bCachedFooter,
 		"Not Ready");
 }

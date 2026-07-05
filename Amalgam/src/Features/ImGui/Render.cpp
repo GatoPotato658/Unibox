@@ -63,8 +63,9 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui::NewFrame();
 
 	F::Menu.Render();
-	if (auto pLocal = H::Entities.GetLocal(); pLocal && !SDK::CleanScreenshot())
+	if (I::EngineClient->IsInGame() && !SDK::CleanScreenshot())
 	{
+		CTFPlayer* pLocal = H::Entities.GetLocal();
 		F::CritHack.Draw(pLocal);
 		F::Ticks.Draw(pLocal);
 #ifdef DEBUG_VACCINATOR

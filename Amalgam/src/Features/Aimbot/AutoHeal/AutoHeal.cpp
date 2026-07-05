@@ -841,7 +841,14 @@ void CAutoHeal::Event(IGameEvent* pEvent, uint32_t uHash)
 #ifdef DEBUG_VACCINATOR
 void CAutoHeal::Draw(CTFPlayer* pLocal)
 {
-	auto pWeapon = H::Entities.GetWeapon()->As<CWeaponMedigun>();
+	if (!pLocal)
+		return;
+
+	auto pLocalWeapon = H::Entities.GetWeapon();
+	if (!pLocalWeapon)
+		return;
+
+	auto pWeapon = pLocalWeapon->As<CWeaponMedigun>();
 	if (!pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_MEDIGUN
 		|| !Vars::Aimbot::Healing::AutoVaccinator.Value || pWeapon->GetMedigunType() != MEDIGUN_RESIST)
 		return;

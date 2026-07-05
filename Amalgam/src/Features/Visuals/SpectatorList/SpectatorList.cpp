@@ -89,15 +89,21 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 		return;
 	}
 
-	auto pTarget = pLocal;
-	switch (pLocal->m_iObserverMode())
+	if (pLocal)
 	{
-	case OBS_MODE_FIRSTPERSON:
-	case OBS_MODE_THIRDPERSON:
-		pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
+		auto pTarget = pLocal;
+		switch (pLocal->m_iObserverMode())
+		{
+		case OBS_MODE_FIRSTPERSON:
+		case OBS_MODE_THIRDPERSON:
+			pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
+		}
+		if (!pTarget || !pTarget->IsPlayer()
+			|| !GetSpectators(pTarget))
+			return;
 	}
-	if (!pTarget || !pTarget->IsPlayer()
-		|| !GetSpectators(pTarget))
+
+	if (m_vSpectators.empty())
 		return;
 
 	int x = Vars::Menu::SpectatorsDisplay.Value.x;

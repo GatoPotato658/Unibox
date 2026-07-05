@@ -404,25 +404,54 @@ void CBacktrack::RestorePing(CNetChannel* pNetChan)
 
 void CBacktrack::Draw(CTFPlayer* pLocal)
 {
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ping) || !pLocal->IsAlive())
-		return;
+	static std::string sPingText = {};
+	static std::string sScoreboardText = {};
+	static bool bCachedValid = false;
 
-	auto pResource = H::Entities.GetResource();
-	auto pNetChan = I::EngineClient->GetNetChannelInfo();
-	if (!pResource || !pNetChan)
-		return;
-
-	static float flFakeLatency = 0.f;
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ping))
 	{
-		static Timer tTimer = {};
-		if (tTimer.Run(0.5f))
-			flFakeLatency = GetFakeLatency();
+		bCachedValid = false;
+		return;
 	}
-	float flFakeLerp = GetFakeInterp() > G::Lerp ? GetFakeInterp() : 0.f;
 
-	float flFake = std::min(flFakeLatency + flFakeLerp, m_flMaxUnlag) * 1000;
-	float flLatency = std::max(pNetChan->GetLatency(FLOW_INCOMING) + pNetChan->GetLatency(FLOW_OUTGOING) - flFakeLatency, 0.f) * 1000;
-	int iLatencyScoreboard = pResource->m_iPing(I::EngineClient->GetLocalPlayer());
+	if (pLocal)
+	{
+		if (!pLocal->IsAlive())
+		{
+			bCachedValid = false;
+			return;
+		}
+
+		auto pResource = H::Entities.GetResource();
+		auto pNetChan = I::EngineClient->GetNetChannelInfo();
+		if (!pResource || !pNetChan)
+		{
+			bCachedValid = false;
+			return;
+		}
+
+		static float flFakeLatency = 0.f;
+		{
+			static Timer tTimer = {};
+			if (tTimer.Run(0.5f))
+				flFakeLatency = GetFakeLatency();
+		}
+		float flFakeLerp = GetFakeInterp() > G::Lerp ? GetFakeInterp() : 0.f;
+
+		float flFake = std::min(flFakeLatency + flFakeLerp, m_flMaxUnlag) * 1000;
+		float flLatency = std::max(pNetChan->GetLatency(FLOW_INCOMING) + pNetChan->GetLatency(FLOW_OUTGOING) - flFakeLatency, 0.f) * 1000;
+		int iLatencyScoreboard = pResource->m_iPing(I::EngineClient->GetLocalPlayer());
+
+		if (flFake || Vars::Backtrack::Interp.Value > G::Lerp * 1000)
+			sPingText = std::format("Ping {:.0f} (+ {:.0f}) ms", flLatency, flFake);
+		else
+			sPingText = std::format("Ping {:.0f} ms", flLatency);
+		sScoreboardText = std::format("Scoreboard {} ms", iLatencyScoreboard);
+		bCachedValid = true;
+	}
+
+	if (!bCachedValid)
+		return;
 
 	int x = Vars::Menu::PingDisplay.Value.x;
 	int y = Vars::Menu::PingDisplay.Value.y + 8;
@@ -442,9 +471,6 @@ void CBacktrack::Draw(CTFPlayer* pLocal)
 		align = ALIGN_TOPRIGHT;
 	}
 
-	if (flFake || Vars::Backtrack::Interp.Value > G::Lerp * 1000)
-		DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} (+ {:.0f}) ms", flLatency, flFake));
-	else
-		DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Ping {:.0f} ms", flLatency));
-	DrawIndicatorText(pDrawList, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, std::format("Scoreboard {} ms", iLatencyScoreboard));
+	DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sPingText);
+	DrawIndicatorText(pDrawList, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sScoreboardText);
 }

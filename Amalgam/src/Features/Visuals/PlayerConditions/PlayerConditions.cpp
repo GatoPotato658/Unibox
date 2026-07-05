@@ -377,17 +377,37 @@ std::vector<std::string> CPlayerConditions::Get(CTFPlayer* pEntity)
 
 void CPlayerConditions::Draw(CTFPlayer* pLocal)
 {
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Conditions))
-		return;
+	static std::vector<std::string> vCachedConditions = {};
+	static bool bCachedValid = false;
 
-	auto pTarget = pLocal;
-	switch (pLocal->m_iObserverMode())
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Conditions))
 	{
-	case OBS_MODE_FIRSTPERSON:
-	case OBS_MODE_THIRDPERSON:
-		pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
+		vCachedConditions.clear();
+		bCachedValid = false;
+		return;
 	}
-	if (!pTarget || !pTarget->IsPlayer() || !pTarget->IsAlive())
+
+	if (pLocal)
+	{
+		auto pTarget = pLocal;
+		switch (pLocal->m_iObserverMode())
+		{
+		case OBS_MODE_FIRSTPERSON:
+		case OBS_MODE_THIRDPERSON:
+			pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
+		}
+		if (!pTarget || !pTarget->IsPlayer() || !pTarget->IsAlive())
+		{
+			vCachedConditions.clear();
+			bCachedValid = false;
+			return;
+		}
+
+		vCachedConditions = Get(pTarget);
+		bCachedValid = true;
+	}
+
+	if (!bCachedValid)
 		return;
 
 	int x = Vars::Menu::ConditionsDisplay.Value.x;
@@ -408,10 +428,8 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 		align = ALIGN_TOPRIGHT;
 	}
 
-	std::vector<std::string> vConditions = Get(pTarget);
-
 	int iOffset = 0;
-	for (const std::string& sCondition : vConditions)
+	for (const std::string& sCondition : vCachedConditions)
 	{
 		DrawIndicatorText(pDrawList, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition);
 		iOffset += nTall;

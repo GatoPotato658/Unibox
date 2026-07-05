@@ -206,7 +206,34 @@ void CNoSpreadHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* 
 
 void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 {
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::SeedPrediction) || !ShouldRun() || !pLocal->IsAlive())
+	static std::string sUptime = {};
+	static std::string sMantissaStep = {};
+	static std::string sDelta = {};
+	static Color_t tCachedColor = {};
+	static bool bCachedValid = false;
+
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::SeedPrediction))
+	{
+		bCachedValid = false;
+		return;
+	}
+
+	if (pLocal)
+	{
+		if (!ShouldRun() || !pLocal->IsAlive())
+		{
+			bCachedValid = false;
+			return;
+		}
+
+		tCachedColor = m_bSynced ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
+		sUptime = std::format("Uptime {}", GetFormat(m_flServerTime));
+		sMantissaStep = std::format("Mantissa step {}", m_flMantissaStep);
+		sDelta = std::format("Delta {:.3f}", m_dTimeDelta);
+		bCachedValid = true;
+	}
+
+	if (!bCachedValid)
 		return;
 
 	int x = Vars::Menu::SeedPredictionDisplay.Value.x;
@@ -227,10 +254,8 @@ void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 		align = ALIGN_TOPRIGHT;
 	}
 
-	const auto& cColor = m_bSynced ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
-
-	DrawIndicatorText(pDrawList, x, y, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Uptime {}", GetFormat(m_flServerTime)));
-	DrawIndicatorText(pDrawList, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Mantissa step {}", m_flMantissaStep));
+	DrawIndicatorText(pDrawList, x, y, tCachedColor, Vars::Menu::Theme::Background.Value, align, sUptime);
+	DrawIndicatorText(pDrawList, x, y += nTall, tCachedColor, Vars::Menu::Theme::Background.Value, align, sMantissaStep);
 	if (Vars::Debug::Info.Value)
-		DrawIndicatorText(pDrawList, x, y += nTall, cColor, Vars::Menu::Theme::Background.Value, align, std::format("Delta {:.3f}", m_dTimeDelta));
+		DrawIndicatorText(pDrawList, x, y += nTall, tCachedColor, Vars::Menu::Theme::Background.Value, align, sDelta);
 }

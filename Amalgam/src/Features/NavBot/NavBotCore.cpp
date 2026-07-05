@@ -391,11 +391,97 @@ static std::wstring BuildJobLabel()
 
 void CNavBotCore::Draw(CTFPlayer* pLocal)
 {
-	if (!pLocal || !(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) || !pLocal->IsAlive())
-		return;
+	struct NavIndicatorLine_t
+	{
+		std::string m_sText = {};
+		Color_t m_tColor = {};
+	};
 
-	const bool b_is_ready = F::NavEngine.IsReady();
-	if (!Vars::Debug::Info.Value && !b_is_ready)
+	static std::vector<NavIndicatorLine_t> vCachedLines = {};
+	static bool bCachedValid = false;
+
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot))
+	{
+		vCachedLines.clear();
+		bCachedValid = false;
+		return;
+	}
+
+	if (pLocal)
+	{
+		vCachedLines.clear();
+		if (!pLocal->IsAlive())
+		{
+			bCachedValid = false;
+			return;
+		}
+
+		const bool b_is_ready = F::NavEngine.IsReady();
+		if (!Vars::Debug::Info.Value && !b_is_ready)
+		{
+			bCachedValid = false;
+			return;
+		}
+
+		const auto& t_color = F::NavEngine.IsPathing() ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
+		const auto& t_ready_color = b_is_ready ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
+		int i_in_spawn = -1;
+		int i_area_flags = -1;
+		if (F::NavEngine.IsNavMeshLoaded())
+		{
+			if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
+			{
+				i_area_flags = pLocalArea->m_iTFAttributeFlags;
+				i_in_spawn = i_area_flags & (TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_RED);
+			}
+		}
+
+		const auto s_job = BuildJobLabel();
+		vCachedLines.push_back({ std::format("Job: {} {}", SDK::ConvertWideToUTF8(s_job), F::CritHack.m_bForce ? "(Crithack on)" : ""), t_color });
+
+		if (F::NavEngine.IsPathing())
+		{
+			auto p_crumbs = F::NavEngine.GetCrumbs();
+			const float fl_dist = pLocal->GetAbsOrigin().DistTo(F::NavEngine.m_vLastDestination);
+			vCachedLines.push_back({ std::format("Nodes: {} (Dist: {:.0f})", p_crumbs->size(), fl_dist), t_color });
+		}
+
+		const float fl_idle_time = SDK::PlatFloatTime() - F::NavBotCore.m_tIdleTimer.GetLastUpdate();
+		if (fl_idle_time > 2.0f && F::NavEngine.IsPathing())
+			vCachedLines.push_back({ std::format("Stuck: {:.1f}s", fl_idle_time), Vars::Menu::Theme::Active.Value });
+
+		if (!F::NavEngine.IsPathing() && !F::NavEngine.m_sLastFailureReason.empty())
+			vCachedLines.push_back({ std::format("Failed: {}", F::NavEngine.m_sLastFailureReason), Vars::Menu::Theme::Active.Value });
+
+		if (Vars::Debug::Info.Value)
+		{
+			vCachedLines.push_back({ std::format("Is ready: {}", std::to_string(b_is_ready)), t_ready_color });
+			vCachedLines.push_back({ std::format("Priority: {}", static_cast<int>(F::NavEngine.m_eCurrentPriority)), t_ready_color });
+			vCachedLines.push_back({ std::format("In spawn: {}", std::to_string(i_in_spawn)), t_ready_color });
+			vCachedLines.push_back({ std::format("Area flags: {}", std::to_string(i_area_flags)), t_ready_color });
+
+			if (F::NavEngine.IsNavMeshLoaded())
+			{
+				vCachedLines.push_back({ std::format("Map: {}", F::NavEngine.GetNavFilePath()), t_ready_color });
+				if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
+					vCachedLines.push_back({ std::format("Area ID: {}", pLocalArea->m_uId), t_ready_color });
+				vCachedLines.push_back({ std::format("Total areas: {}", F::NavEngine.GetNavFile()->m_vAreas.size()), t_ready_color });
+			}
+
+			if (F::NavEngine.IsPathing() || F::NavEngine.m_vLastDestination.Length() > 0.f)
+			{
+				const auto& v_dest = F::NavEngine.m_vLastDestination;
+				vCachedLines.push_back({ std::format("Dest: {:.0f}, {:.0f}, {:.0f}", v_dest.x, v_dest.y, v_dest.z), t_color });
+			}
+
+			const bool b_is_idle = F::NavEngine.m_eCurrentPriority == PriorityListEnum::None || !F::NavEngine.IsPathing();
+			vCachedLines.push_back({ std::format("Idle: {} ({:.1f}s)", b_is_idle ? "Yes" : "No", std::max(0.f, fl_idle_time)), b_is_idle ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value });
+		}
+
+		bCachedValid = !vCachedLines.empty();
+	}
+
+	if (!bCachedValid)
 		return;
 
 	int x = Vars::Menu::NavBotDisplay.Value.x;
@@ -416,74 +502,11 @@ void CNavBotCore::Draw(CTFPlayer* pLocal)
 		e_align = ALIGN_TOPRIGHT;
 	}
 
-	const auto& t_color = F::NavEngine.IsPathing() ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
-	const auto& t_ready_color = b_is_ready ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
-	int i_in_spawn = -1;
-	int i_area_flags = -1;
-	if (F::NavEngine.IsNavMeshLoaded())
+	for (size_t i = 0; i < vCachedLines.size(); i++)
 	{
-		if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
-		{
-			i_area_flags = pLocalArea->m_iTFAttributeFlags;
-			i_in_spawn = i_area_flags & (TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_RED);
-		}
+		const int i_y = y + static_cast<int>(i) * n_tall;
+		DrawIndicatorText(p_draw_list, x, i_y, vCachedLines[i].m_tColor, Vars::Menu::Theme::Background.Value, e_align, vCachedLines[i].m_sText);
 	}
-
-	const auto s_job = BuildJobLabel();
-	DrawIndicatorText(
-		p_draw_list,
-		x,
-		y,
-		t_color,
-		Vars::Menu::Theme::Background.Value,
-		e_align,
-		std::format("Job: {} {}", SDK::ConvertWideToUTF8(s_job), F::CritHack.m_bForce ? "(Crithack on)" : ""));
-
-	if (F::NavEngine.IsPathing())
-	{
-		auto p_crumbs = F::NavEngine.GetCrumbs();
-		const float fl_dist = pLocal->GetAbsOrigin().DistTo(F::NavEngine.m_vLastDestination);
-		DrawIndicatorText(p_draw_list, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Nodes: {} (Dist: {:.0f})", p_crumbs->size(), fl_dist));
-	}
-
-	const float fl_idle_time = SDK::PlatFloatTime() - F::NavBotCore.m_tIdleTimer.GetLastUpdate();
-	if (fl_idle_time > 2.0f && F::NavEngine.IsPathing())
-		DrawIndicatorText(p_draw_list, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Stuck: {:.1f}s", fl_idle_time));
-
-	if (!F::NavEngine.IsPathing() && !F::NavEngine.m_sLastFailureReason.empty())
-		DrawIndicatorText(p_draw_list, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Failed: {}", F::NavEngine.m_sLastFailureReason));
-
-	if (!Vars::Debug::Info.Value)
-		return;
-
-	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Is ready: {}", std::to_string(b_is_ready)));
-	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Priority: {}", static_cast<int>(F::NavEngine.m_eCurrentPriority)));
-	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("In spawn: {}", std::to_string(i_in_spawn)));
-	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area flags: {}", std::to_string(i_area_flags)));
-
-	if (F::NavEngine.IsNavMeshLoaded())
-	{
-		DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Map: {}", F::NavEngine.GetNavFilePath()));
-		if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
-			DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area ID: {}", pLocalArea->m_uId));
-		DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Total areas: {}", F::NavEngine.GetNavFile()->m_vAreas.size()));
-	}
-
-	if (F::NavEngine.IsPathing() || F::NavEngine.m_vLastDestination.Length() > 0.f)
-	{
-		const auto& v_dest = F::NavEngine.m_vLastDestination;
-		DrawIndicatorText(p_draw_list, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Dest: {:.0f}, {:.0f}, {:.0f}", v_dest.x, v_dest.y, v_dest.z));
-	}
-
-	const bool b_is_idle = F::NavEngine.m_eCurrentPriority == PriorityListEnum::None || !F::NavEngine.IsPathing();
-	DrawIndicatorText(
-		p_draw_list,
-		x,
-		y += n_tall,
-		b_is_idle ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value,
-		Vars::Menu::Theme::Background.Value,
-		e_align,
-		std::format("Idle: {} ({:.1f}s)", b_is_idle ? "Yes" : "No", std::max(0.f, fl_idle_time)));
 }
 
 void CNavBotCore::DrawDangerOverlay(CTFPlayer* pLocal)
