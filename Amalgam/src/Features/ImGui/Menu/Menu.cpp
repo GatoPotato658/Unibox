@@ -2317,6 +2317,7 @@ void CMenu::MenuAnticheat(int iTab)
 		if (Section("Cheater List"))
 		{
 			static std::string cheater_search = "";
+			SetCursorPosY(GetCursorPosY() - H::Draw.Scale(4));
 			FInputText("Search cheaters...", cheater_search, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
 			auto vCheaters = F::PlayerUtils.GetCheaterVector();
@@ -3397,6 +3398,7 @@ void CMenu::MenuLogs(int iTab)
 		if (Section("Marked Players"))
 		{
 			static std::string marked_player_search = "";
+			SetCursorPosY(GetCursorPosY() - H::Draw.Scale(4));
 			FInputText("Search marked players...", marked_player_search, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
 			auto vMarkedPlayers = F::PlayerUtils.GetMarkedPlayers();
