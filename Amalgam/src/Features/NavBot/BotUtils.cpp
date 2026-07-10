@@ -9,18 +9,17 @@
 
 static int GetRangedFallbackSlot(CTFPlayer* pLocal)
 {
-	auto HasWeapon = [&](int iSlot) { return pLocal->GetWeaponFromSlot(iSlot) != nullptr; };
 	auto HasUsableWeapon = [&](int iSlot)
 		{
-			if (!HasWeapon(iSlot)) return false;
+			if (!G::HasWeaponForSlot[iSlot]) return false;
 			if (!G::AmmoInSlot[iSlot].m_bUsesAmmo) return true;
 			return G::AmmoInSlot[iSlot].m_iClip > 0 || G::AmmoInSlot[iSlot].m_iReserve > 0;
 		};
 
-	if (HasUsableWeapon(SLOT_PRIMARY))   return SLOT_PRIMARY;
-	if (HasUsableWeapon(SLOT_SECONDARY)) return SLOT_SECONDARY;
-	if (HasWeapon(SLOT_PRIMARY))         return SLOT_PRIMARY;
-	if (HasWeapon(SLOT_SECONDARY))       return SLOT_SECONDARY;
+	if (HasUsableWeapon(SLOT_PRIMARY))			return SLOT_PRIMARY;
+	if (HasUsableWeapon(SLOT_SECONDARY))		return SLOT_SECONDARY;
+	if (G::HasWeaponForSlot[SLOT_PRIMARY])		return SLOT_PRIMARY;
+	if (G::HasWeaponForSlot[SLOT_SECONDARY])	return SLOT_SECONDARY;
 	return SLOT_MELEE;
 }
 
@@ -115,7 +114,7 @@ static int SelectBestSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy
 	case TF_CLASS_SNIPER:
 	{
 		const int iTargetLowHp = GetSniperTargetHealthTier(tClosestEnemy);
-		const bool bOutOfAmmo = !SlotHasClip(SLOT_PRIMARY) && !SlotHasClip(SLOT_SECONDARY);
+		const bool bOutOfAmmo = !SlotHasReserve(SLOT_PRIMARY) && !SlotHasClip(SLOT_SECONDARY);
 		if (bMeleeReachable && (bOutOfAmmo || flEnemyDist <= 200.f))
 			return SLOT_MELEE;
 		if (SlotUsesAmmo(SLOT_SECONDARY) && SlotCanUseNow(SLOT_SECONDARY) && bHasEnemy && flEnemyDist <= 240.f && (!SlotCanUseNow(SLOT_PRIMARY) || iTargetLowHp > 1))
@@ -160,7 +159,7 @@ static int SelectBestSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy
 			return SLOT_PRIMARY;
 		if (bMeleeReachable && flEnemyDist <= 260.f)
 			return SLOT_MELEE;
-		if (pLocal->GetWeaponFromSlot(SLOT_PRIMARY))
+		if (G::HasWeaponForSlot[SLOT_PRIMARY])
 			return SLOT_PRIMARY;
 		break;
 	}
@@ -390,7 +389,7 @@ void CBotUtils::UpdateBestSlot(CTFPlayer* pLocal)
 		HasMedigunTargets(pLocal, pLocal->GetWeaponFromSlot(SLOT_SECONDARY));
 	m_iBestSlot = SelectBestSlot(pLocal, m_tClosestEnemy, m_iCurrentSlot, bHasMedigunTargets);
 
-	if (m_iBestSlot == SLOT_MELEE && !pLocal->GetWeaponFromSlot(SLOT_MELEE))
+	if (m_iBestSlot == SLOT_MELEE && !G::HasWeaponForSlot[SLOT_MELEE])
 		m_iBestSlot = GetRangedFallbackSlot(pLocal);
 
 	if (m_iBestSlot == -1 && m_iCurrentSlot == SLOT_MELEE)

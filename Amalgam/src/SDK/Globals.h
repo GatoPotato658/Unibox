@@ -179,6 +179,7 @@ namespace G
 	inline int SavedWepIds[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };
 	inline int SavedWepSlots[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };
 	inline WeaponAmmoInfo_t AmmoInSlot[SLOT_SECONDARY + 1] = { WeaponAmmoInfo_t(), WeaponAmmoInfo_t() };
+	inline bool HasWeaponForSlot[SLOT_MELEE + 1] = { false, false, false };
 
 	inline int& RandomSeed()
 	{

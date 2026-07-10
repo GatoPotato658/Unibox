@@ -112,6 +112,11 @@ void CDebug::Draw(CTFPlayer* pLocal)
 			H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Throw: {}, Smack: {}", G::Throwing, pWeapon->m_flSmackTime()).c_str());
 		}
 		*/
+		H::Draw.StringOutlined(fFont, x, y += nTall * 2, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Primary: {}, {}, {}, {}, ({})", G::AmmoInSlot[SLOT_PRIMARY].m_bUsesAmmo, G::AmmoInSlot[SLOT_PRIMARY].m_iClip, G::AmmoInSlot[SLOT_PRIMARY].m_iMaxClip, G::AmmoInSlot[SLOT_PRIMARY].m_iReserve, G::SavedWepSlots[SLOT_PRIMARY]).c_str());
+		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Secondary: {}, {}, {}, {}, ({})", G::AmmoInSlot[SLOT_SECONDARY].m_bUsesAmmo, G::AmmoInSlot[SLOT_SECONDARY].m_iClip, G::AmmoInSlot[SLOT_SECONDARY].m_iMaxClip, G::AmmoInSlot[SLOT_SECONDARY].m_iReserve, G::SavedWepSlots[SLOT_SECONDARY]).c_str());
+		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("Melee: {}", G::SavedWepSlots[SLOT_MELEE]).c_str());
+		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("PDA1: {}", G::SavedWepSlots[SLOT_PDA1]).c_str());
+		H::Draw.StringOutlined(fFont, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, std::format("PDA2: {}", G::SavedWepSlots[SLOT_PDA2]).c_str());
 	}
 
 #ifdef DEBUG_TEXT
