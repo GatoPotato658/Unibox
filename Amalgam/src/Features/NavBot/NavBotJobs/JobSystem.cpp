@@ -259,10 +259,10 @@ namespace
 
 		const bool bAlreadyGettingAmmo = F::NavEngine.m_eCurrentPriority == PriorityListEnum::GetAmmo;
 		float flScore = 0.f;
-		for (int i = 0; i <= SLOT_MELEE; i++)
+		for (int i = 0; i <= SLOT_PDA2; i++)
 		{
 			const int iActualSlot = G::SavedWepSlots[i];
-			if (iActualSlot == SLOT_MELEE || !G::AmmoInSlot[iActualSlot].m_bUsesAmmo)
+			if ((iActualSlot != SLOT_PRIMARY && iActualSlot != SLOT_SECONDARY) || !G::AmmoInSlot[iActualSlot].m_bUsesAmmo)
 				continue;
 
 			const int iWeaponID = G::SavedWepIds[iActualSlot];

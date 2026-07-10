@@ -1512,8 +1512,10 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 		if (pWeaponInSlot)
 		{
 			int iDefIndex = pWeaponInSlot->m_iItemDefinitionIndex(), iWeaponID = pWeaponInSlot->GetWeaponID();
-			bool bWeaponChanged = G::SavedDefIndexes[i] != iDefIndex || G::SavedWepIds[i] != iWeaponID;
 			int iActualWeaponSlot = pWeaponInSlot->GetSlot(); // this whole thing is fucked up
+			if (iActualWeaponSlot < SLOT_PRIMARY || iActualWeaponSlot > SLOT_PDA2)
+				continue;
+
 			G::SavedWepSlots[i] = iActualWeaponSlot;
 			G::SavedDefIndexes[iActualWeaponSlot] = iDefIndex;
 			G::SavedWepIds[iActualWeaponSlot] = iWeaponID;
@@ -1522,15 +1524,27 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 			{
 				G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->m_iClip1();
 				G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
-				if (bWeaponChanged)
+				if (G::SavedDefIndexes[iActualWeaponSlot] != iDefIndex 
+					|| G::SavedWepIds[iActualWeaponSlot] != iWeaponID)
 				{
 					G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->m_pWeaponInfo()->iMaxClip1 : 0;
 					G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = SDK::GetWeaponMaxReserveAmmo(iWeaponID, iDefIndex);
 					G::AmmoInSlot[iActualWeaponSlot].m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIndex);
 				}
 			}
-			else if (i < SLOT_MELEE)
+			else if (i < SLOT_MELEE) // TODO: remember why i added this shit
 				G::AmmoInSlot[i].m_bUsesAmmo = false;
+
+			if (iActualWeaponSlot <= SLOT_MELEE)
+				G::HasWeaponForSlot[iActualWeaponSlot] = true;
+		}
+		else
+		{
+			int iActualWeaponSlot = G::SavedWepSlots[i];
+			if (iActualWeaponSlot < SLOT_PRIMARY || iActualWeaponSlot > SLOT_MELEE)
+				continue;
+
+			G::HasWeaponForSlot[iActualWeaponSlot] = false;
 		}
 	}
 
