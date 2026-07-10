@@ -214,7 +214,7 @@ public:
 	// Might be related to the fact that im not using CUtlBuffer for saving this
 	bool Write(const char* szFilename = nullptr)
 	{
-		std::string sFilePath{ szFilename ? szFilename : std::filesystem::current_path().string() + "\\Amalgam\\Nav\\" + SDK::GetLevelName() + ".nav" };
+		std::string sFilePath{ szFilename ? szFilename : std::filesystem::current_path().string() + "\\unibox\\Nav\\" + SDK::GetLevelName() + ".nav" };
 		std::ofstream file(sFilePath, std::ios::binary | std::ios::ate);
 		if (!file.is_open())
 		{

@@ -81,11 +81,11 @@ void CPlayerlistCore::SavePlayerlist()
 
 		write_json(F::Configs.m_sCorePath + "Players.json", tWrite);
 
-		SDK::Output("Amalgam", "Saved playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+		SDK::Output("unibox", "Saved playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}
 	catch (...)
 	{
-		SDK::Output("Amalgam", "Save playerlist failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+		SDK::Output("unibox", "Save playerlist failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 	}
 }
 
@@ -143,7 +143,7 @@ void CPlayerlistCore::LoadPlayerlist()
 			}
 		}
 		else
-			SDK::Output("Amalgam", "Playerlist config not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+			SDK::Output("unibox", "Playerlist config not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
 		if (auto tSub = tRead.get_child_optional("Tags"))
 		{
@@ -165,7 +165,7 @@ void CPlayerlistCore::LoadPlayerlist()
 			}
 		}
 		else
-			SDK::Output("Amalgam", "Playerlist tags not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+			SDK::Output("unibox", "Playerlist tags not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
 		if (auto tSub = tRead.get_child_optional("Aliases"))
 		{
@@ -179,13 +179,13 @@ void CPlayerlistCore::LoadPlayerlist()
 			}
 		}
 		else
-			SDK::Output("Amalgam", "Playerlist aliases not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+			SDK::Output("unibox", "Playerlist aliases not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
-		SDK::Output("Amalgam", "Loaded playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+		SDK::Output("unibox", "Loaded playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}
 	catch (...)
 	{
-		SDK::Output("Amalgam", "Load playerlist failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+		SDK::Output("unibox", "Load playerlist failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 	}
 	F::PlayerUtils.m_bLoad = false;
 }
@@ -203,11 +203,11 @@ void CPlayerlistCore::SaveCheaterlist()
 		fStream.close();
 
 		F::PlayerUtils.m_bCheaterSave = false;
-		SDK::Output("Amalgam", "Saved cheaterlist", { 255, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+		SDK::Output("unibox", "Saved cheaterlist", { 255, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 	}
 	catch (...)
 	{
-		SDK::Output("Amalgam", "Save cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		SDK::Output("unibox", "Save cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 	}
 }
 
@@ -238,16 +238,16 @@ void CPlayerlistCore::LoadCheaterlist()
 		if (F::PlayerUtils.ImportCheatersFromJson(sContents, false))
 		{
 			F::PlayerUtils.m_bCheaterLoad = false;
-			SDK::Output("Amalgam", "Loaded cheaterlist", { 255, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+			SDK::Output("unibox", "Loaded cheaterlist", { 255, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 		}
 		else
 		{
-			SDK::Output("Amalgam", "Load cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			SDK::Output("unibox", "Load cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 		}
 	}
 	catch (...)
 	{
-		SDK::Output("Amalgam", "Load cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		SDK::Output("unibox", "Load cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 	}
 	F::PlayerUtils.m_bCheaterLoad = false;
 }

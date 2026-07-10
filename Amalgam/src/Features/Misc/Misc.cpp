@@ -1537,9 +1537,9 @@ void CMisc::ChatSpam(CTFPlayer* pLocal)
 
 			static const char* szDefaultContent =
 				"This is a default message from cat_chatspam.txt\n"
-				"Edit this file Amalgam/cat_chatspam.txt\n"
+				"Edit this file unibox/cat_chatspam.txt\n"
 				"Each line will be sent as a separate message\n"
-				"[Amalgam] Chat Spam is working!\n"
+				"[unibox] Chat Spam is working!\n"
 				"Put your chat spam lines in this file\n";
 
 			if (LoadLines("cat_chatspam.txt", m_vChatSpamLines, szDefaultContent))
@@ -1551,9 +1551,9 @@ void CMisc::ChatSpam(CTFPlayer* pLocal)
 			}
 
 			m_vChatSpamLines = {
-				"Put your chat spam lines in Amalgam/cat_chatspam.txt",
-				"ChatSpam is running but couldn't find Amalgam/cat_chatspam.txt",
-				"[Amalgam] Chat Spam is working!"
+				"Put your chat spam lines in unibox/cat_chatspam.txt",
+				"ChatSpam is running but couldn't find unibox/cat_chatspam.txt",
+				"[unibox] Chat Spam is working!"
 			};
 			m_iCurrentChatSpamIndex = 0;
 			return false;
@@ -2259,7 +2259,7 @@ CMisc::ProfileDumpResult_t CMisc::DumpProfiles(bool bAnnounce)
 		return tResult;
 	}
 
-	auto sPath = std::filesystem::current_path() / "Amalgam" / "profiles.csv";
+	auto sPath = std::filesystem::current_path() / "unibox" / "profiles.csv";
 	std::error_code ec;
 	std::filesystem::create_directories(sPath.parent_path(), ec);
 

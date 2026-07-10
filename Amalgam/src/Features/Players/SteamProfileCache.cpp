@@ -140,7 +140,7 @@ static std::vector<uint8_t> DownloadUrl(const std::wstring& sUrl, DWORD* pStatus
 	if (!CrackUrl(sUrl, tParsed))
 		return vBuffer;
 
-	HINTERNET hSession = WinHttpOpen(L"Amalgam/SteamProfileCache", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	HINTERNET hSession = WinHttpOpen(L"unibox/SteamProfileCache", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
 	if (!hSession)
 		return vBuffer;
 

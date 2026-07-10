@@ -40,16 +40,16 @@ static inline bool CheckDXLevel()
 	if (mat_dxlevel->GetInt() < 90)
 	{
 		/*
-		const char* sMessage = "You are running with graphics options that Amalgam does not support. -dxlevel must be at least 90.";
+		const char* sMessage = "You are running with graphics options that unibox does not support. -dxlevel must be at least 90.";
 		U::Core.AppendFailText(sMessage);
 		F::Menu.ShowDeferredNotification("Graphics Warning", sMessage);
-		SDK::Output("Amalgam", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
+		SDK::Output("unibox", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
 		return false;
 		*/
 
-		const char* sMessage = "You are running with graphics options that Amalgam does not support. It is recommended for -dxlevel to be at least 90.";
+		const char* sMessage = "You are running with graphics options that unibox does not support. It is recommended for -dxlevel to be at least 90.";
 		F::Menu.ShowDeferredNotification("Graphics Warning", sMessage);
-		SDK::Output("Amalgam", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
+		SDK::Output("unibox", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
 	}
 
 	return true;
@@ -79,7 +79,7 @@ void CCore::LogFailText()
 
 		m_ssFailStream << "\n";
 		m_ssFailStream << "Ctrl + C to copy. \n";
-		m_ssFailStream << "Logged to Amalgam\\fail_log.txt. ";
+		m_ssFailStream << "Logged to unibox\\fail_log.txt. ";
 	}
 	catch (...) {}
 #ifndef TEXTMODE
@@ -163,7 +163,7 @@ void CCore::Load()
 #endif
 	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
-	SDK::Output("Amalgam", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+	SDK::Output("unibox", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }
 
 void CCore::Loop()
@@ -232,5 +232,5 @@ void CCore::Unload()
 		return;
 	}
 
-	SDK::Output("Amalgam", "Unloaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	SDK::Output("unibox", "Unloaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 }
