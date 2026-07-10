@@ -283,18 +283,19 @@ void CMenu::DrawMenu()
 	static bool bSetPosition = false;
 	static bool bDraggingMenu = false;
 	static ImVec2 vMenuTargetPos = {};
-	static ImVec2 vMenuAnimPos = {};
 	static ImVec2 vMenuDragOffset = {};
 	ImVec2 vDefaultMenuSize = { H::Draw.Scale(750), H::Draw.Scale(500) };
 	if (!bSetPosition)
 	{
 		vMenuTargetPos = (GetIO().DisplaySize - vDefaultMenuSize) / 2;
-		vMenuAnimPos = vMenuTargetPos;
+		SetNextWindowPos(vMenuTargetPos, ImGuiCond_Always);
 		bSetPosition = true;
 	}
-	float flDragDelta = std::clamp(GetIO().DeltaTime * 18.f, 0.f, 1.f);
-	vMenuAnimPos = ImLerp(vMenuAnimPos, vMenuTargetPos, flDragDelta);
-	SetNextWindowPos(vMenuAnimPos, ImGuiCond_Always);
+	if (bDraggingMenu)
+	{
+		vMenuTargetPos = GetMousePos() - vMenuDragOffset;
+		SetNextWindowPos(vMenuTargetPos, ImGuiCond_Always);
+	}
 	SetNextWindowSize(vDefaultMenuSize, ImGuiCond_FirstUseEver);
 
 	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(750), H::Draw.Scale(500) });
@@ -408,7 +409,8 @@ void CMenu::DrawMenu()
 		if (bCanDragMenu && IsMouseClicked(ImGuiMouseButton_Left))
 		{
 			bDraggingMenu = true;
-			vMenuDragOffset = vMousePos - vMenuTargetPos;
+			vMenuTargetPos = vDrawPos;
+			vMenuDragOffset = vMousePos - vDrawPos;
 		}
 
 		PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);

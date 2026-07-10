@@ -224,7 +224,7 @@ void CRender::LoadStyle()
 	style.ItemSpacing = { H::Draw.Scale(8), H::Draw.Scale(8) };
 	style.PopupBorderSize = 0.f;
 	style.PopupRounding = H::Draw.Scale(4);
-	style.ScrollbarSize = H::Draw.Scale(4);
+	style.ScrollbarSize = H::Draw.Scale(12);
 	style.ScrollbarRounding = 99.f;
 	style.WindowBorderSize = 0.f;
 	style.WindowPadding = { 0, 0 };
