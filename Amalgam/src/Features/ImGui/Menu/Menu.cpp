@@ -2317,6 +2317,7 @@ void CMenu::MenuAnticheat(int iTab)
 		if (Section("Cheater List"))
 		{
 			static std::string cheater_search = "";
+			SetCursorPosY(GetCursorPosY() - H::Draw.Scale(4));
 			FInputText("Search cheaters...", cheater_search, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
 			auto vCheaters = F::PlayerUtils.GetCheaterVector();
@@ -2338,7 +2339,7 @@ void CMenu::MenuAnticheat(int iTab)
 
 			if (vCheaters.empty())
 			{
-				SetCursorPos({ H::Draw.Scale(15), H::Draw.Scale(40) });
+				SetCursorPos({ H::Draw.Scale(15), H::Draw.Scale(60) });
 				FText(cheater_search.empty() ? "Nothings here..." : "No matching cheaters.");
 				DebugDummy({ 0, H::Draw.Scale(8) });
 			}
@@ -2397,7 +2398,7 @@ void CMenu::MenuAnticheat(int iTab)
 						const float flPadding = H::Draw.Scale(8);
 						const float flTextOffset = flPadding * 2 + flAvatarSize;
 
-						ImVec2 vOriginalPos = { !x ? GetStyle().WindowPadding.x : GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(35 + 64 * y) };
+						ImVec2 vOriginalPos = { !x ? GetStyle().WindowPadding.x : GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(64 + 64 * y) };
 						float flWidth = GetWindowWidth() / 2 - GetStyle().WindowPadding.x * 1.5f;
 						float flHeight = H::Draw.Scale(56);
 						ImVec2 vDrawPos = GetDrawPos() + vOriginalPos;
@@ -2570,7 +2571,7 @@ void CMenu::MenuAnticheat(int iTab)
 					drawCheater(vCheaters[i], x, y);
 					if (!x) iBlu++; else iRed++;
 				}
-				SetCursorPos({ 0, H::Draw.Scale(36 + 64 * std::max(iBlu, iRed)) });
+				SetCursorPos({ 0, H::Draw.Scale(65 + 64 * std::max(iBlu, iRed)) });
 				DebugDummy({ 0, H::Draw.Scale(8) });
 			}
 		}
@@ -3397,6 +3398,7 @@ void CMenu::MenuLogs(int iTab)
 		if (Section("Marked Players"))
 		{
 			static std::string marked_player_search = "";
+			SetCursorPosY(GetCursorPosY() - H::Draw.Scale(4));
 			FInputText("Search marked players...", marked_player_search, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
 			auto vMarkedPlayers = F::PlayerUtils.GetMarkedPlayers();
@@ -3417,7 +3419,7 @@ void CMenu::MenuLogs(int iTab)
 
 			if (vMarkedPlayers.empty())
 			{
-				SetCursorPos({ H::Draw.Scale(15), H::Draw.Scale(40) });
+				SetCursorPos({ H::Draw.Scale(15), H::Draw.Scale(60) });
 				FText(marked_player_search.empty() ? "Nothings here..." : "No matching marked players.");
 				DebugDummy({ 0, H::Draw.Scale(8) });
 			}
@@ -3439,7 +3441,7 @@ void CMenu::MenuLogs(int iTab)
 					const float flPadding = H::Draw.Scale(8);
 					const float flTextOffset = flPadding * 2 + flAvatarSize;
 
-					ImVec2 vOriginalPos = { !x ? GetStyle().WindowPadding.x : GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(35 + 64 * y) };
+					ImVec2 vOriginalPos = { !x ? GetStyle().WindowPadding.x : GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(64 + 64 * y) };
 					float flWidth = GetWindowWidth() / 2 - GetStyle().WindowPadding.x * 1.5f;
 					float flHeight = H::Draw.Scale(56);
 					ImVec2 vDrawPos = GetDrawPos() + vOriginalPos;
@@ -3618,7 +3620,7 @@ void CMenu::MenuLogs(int iTab)
 					else
 						iRed++;
 				}
-				SetCursorPos({ 0, H::Draw.Scale(36 + 64 * std::max(iBlu, iRed)) });
+				SetCursorPos({ 0, H::Draw.Scale(65 + 64 * std::max(iBlu, iRed)) });
 				DebugDummy({ 0, H::Draw.Scale(8) });
 			}
 		} EndSection();
