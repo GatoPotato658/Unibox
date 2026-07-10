@@ -20,8 +20,13 @@
   [![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodePDB.zip)
   [![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2.zip)
   [![PDB Textmode AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2PDB.zip)
+  <br>
+  [![Ember Freetype](.github/assets/ember_freetype.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/ember/Amalgamx64ReleaseFreetype.zip)
+  [![Ember Freetype AVX2](.github/assets/ember_freetype_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/ember/Amalgamx64ReleaseFreetypeAVX2.zip)
   
   <sub>AVX2 may be faster than SSE2 though not all CPUs support it (`Steam > Help > System Information > Processor Information > AVX2`). Freetype uses freetype as the text rasterizer and includes some custom fonts, which results in better looking text but larger DLL sizes. PDBs are for developer use. </sub>
+  <br><br>
+  <sub><strong>Ember builds are experimental.</strong> Some features may be broken or unstable.</sub>
   <br><br>
   <sub>If nightly.link is down or can't be accessed, you can still download through [GitHub](https://github.com/GatoPotato658/Unibox/actions) with an account. </sub>
   <br><br>
