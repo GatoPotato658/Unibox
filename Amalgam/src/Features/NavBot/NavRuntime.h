@@ -5,5 +5,6 @@ namespace NavRuntime
 {
 	bool IsMovementLocked(CTFPlayer* pLocal);
 	bool IsMinigunJumpLocked(CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	bool CanUseNavJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	inline bool CanIssueNavJump(CTFWeaponBase* pWeapon, CUserCmd* pCmd) { return !IsMinigunJumpLocked(pWeapon, pCmd); }
 }

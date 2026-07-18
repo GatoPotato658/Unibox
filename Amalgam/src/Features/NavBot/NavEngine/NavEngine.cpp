@@ -178,25 +178,12 @@ bool CNavEngine::IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFro
 	Vector vDelta = vTo - vFrom; vDelta.z = 0.f;
 	if (vDelta.Length() < 16.f) return true;
 
-	Vec3 vForward, vRight, vUp;
-	Math::AngleVectors(Math::VectorAngles(vDelta), &vForward, &vRight, &vUp);
-	vRight.z = 0.f;
-	const float flRightLen = vRight.Length();
-	if (flRightLen <= 0.001f) return false;
-	vRight /= flRightLen;
-
 	Vector vStart = vFrom; vStart.z += PLAYER_JUMP_HEIGHT;
 	Vector vEnd = vTo;     vEnd.z += PLAYER_JUMP_HEIGHT;
-	const Vector vOffset = vRight * (HALF_PLAYER_WIDTH * 0.8f);
-
 	CTraceFilterNavigation tFilter(pLocal);
-	CGameTrace tLeft{}, tRight{};
-
-	SDK::Trace(vStart - vOffset, vEnd - vOffset, nMask, &tFilter, &tLeft);
-	if (tLeft.fraction < 1.0f) return false;
-
-	SDK::Trace(vStart + vOffset, vEnd + vOffset, nMask, &tFilter, &tRight);
-	return tRight.fraction >= 1.0f;
+	CGameTrace tTrace{};
+	SDK::Trace(vStart, vEnd, nMask, &tFilter, &tTrace);
+	return tTrace.fraction > 0.12f;
 }
 
 void CNavEngine::EmitIntraAreaCrumbs(const Vector& vStart, const Vector& vDestination, CNavArea* pArea)
@@ -225,6 +212,7 @@ void CNavEngine::EmitIntraAreaCrumbs(const Vector& vStart, const Vector& vDestin
 		Crumb_t tCrumb{};
 		tCrumb.m_pNavArea = pArea;
 		tCrumb.m_vPos = vStart + vStep * static_cast<float>(i);
+		tCrumb.m_vPos.z = pArea->GetZ(tCrumb.m_vPos.x, tCrumb.m_vPos.y);
 		tCrumb.m_vApproachDir = vApproachDir;
 		m_vCrumbs.push_back(tCrumb);
 	}
@@ -395,15 +383,7 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 			if (a.m_bRequiresDrop) continue;
 
 			const bool bSameArea = a.m_pNavArea && a.m_pNavArea == b.m_pNavArea;
-			if (bSameArea)
-			{
-				if (!IsPlayerPassableNavigation(pLocal, a.m_vPos, b.m_vPos))
-				{
-					bValid = false;
-					break;
-				}
-				continue;
-			}
+			if (bSameArea) continue;
 
 			const auto tKey = std::pair<CNavArea*, CNavArea*>(a.m_pNavArea, b.m_pNavArea);
 			auto it = m_pMap->m_mVischeckCache.find(tKey);
@@ -937,6 +917,7 @@ void CNavEngine::UpdateRespawnRooms()
 					m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
 			}
 
+	m_pMap->cache_map_wide_crumbs();
 	m_bUpdatedRespawnRooms = true;
 }
 
@@ -1019,11 +1000,14 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 			m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(0.25f));
 	}
 
-	if ((m_eCurrentPriority == PriorityListEnum::Engineer
+	const bool bShouldCancelPath = (m_eCurrentPriority == PriorityListEnum::Engineer
 		&& ((!Vars::Aimbot::AutoEngie::AutoRepair.Value && !Vars::Aimbot::AutoEngie::AutoUpgrade.Value)
 		|| pLocal->m_iClass() != TF_CLASS_ENGINEER))
 		|| (m_eCurrentPriority == PriorityListEnum::Capture
-		&& !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives)))
+		&& !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives))
+		|| (m_eCurrentPriority == PriorityListEnum::EscapeSpawn
+		&& !Vars::Misc::Movement::NavBot::EscapeSpawn.Value);
+	if (bShouldCancelPath)
 	{
 		CancelPath();
 		return;
@@ -1379,6 +1363,12 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		}
 	}
 
+	if (!bDropCrumb && !NavRuntime::CanUseNavJump(pLocal, pWeapon) && ShouldJumpForNavObstacle(pLocal, vMoveDir, vCrumbTarget))
+	{
+		AbandonPath("Path requires jump while scoped/revved");
+		return;
+	}
+
 	StuckPhase ePhase = StuckPhase::Idle;
 	if (bPayloadEscortPace)
 	{
@@ -1502,8 +1492,12 @@ void CNavEngine::Render()
 	}
 
 	if ((Vars::Misc::Movement::NavEngine::Draw.Value & Vars::Misc::Movement::NavEngine::DrawEnum::Path) && !m_vCrumbs.empty())
+	{
 		for (size_t i = 0; i + 1 < m_vCrumbs.size(); ++i)
 			H::Draw.RenderLine(m_vCrumbs[i].m_vPos, m_vCrumbs[i + 1].m_vPos, Vars::Colors::NavbotPath.Value, false);
+		for (const auto& tCrumb : m_vCrumbs)
+			H::Draw.RenderBox(tCrumb.m_vPos, Vector(-3.f, -3.f, -3.f), Vector(3.f, 3.f, 3.f), Vector(), Vars::Colors::NavbotPath.Value, false);
+	}
 
 	if (Vars::Misc::Movement::NavEngine::Draw.Value & Vars::Misc::Movement::NavEngine::DrawEnum::PossiblePaths)
 	{

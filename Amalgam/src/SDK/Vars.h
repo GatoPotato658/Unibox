@@ -861,6 +861,7 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(BlacklistSlightDangerLimit, "Blacklist slight danger limit", 2, SLIDER_MIN, 1, 10);
 
 				CVar(SmartJump, "Smart jump", true);
+				CVar(EscapeSpawn, "Escape spawn", true);
 
 				CVarEnum(RechargeDT, "Recharge DT", 0, NONE, nullptr,
 					VA_LIST("Off", "On", "If not fakelagging"),

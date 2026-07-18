@@ -36,6 +36,23 @@ namespace NavRuntime
 			return false;
 
 		const int iState = pWeapon->As<CTFMinigun>()->m_iWeaponState();
-		return iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (G::LastUserCmd->buttons & IN_ATTACK2);
+		return iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (pCmd && (pCmd->buttons & IN_ATTACK2));
+	}
+
+	bool CanUseNavJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+	{
+		if (!pLocal || !pWeapon || pLocal->m_fFlags() & FL_INWATER)
+			return true;
+
+		if (pWeapon->GetWeaponID() == TF_WEAPON_MINIGUN)
+		{
+			const int iState = pWeapon->As<CTFMinigun>()->m_iWeaponState();
+			if (iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (G::LastUserCmd && (G::LastUserCmd->buttons & IN_ATTACK2)))
+				return false;
+		}
+
+		return pWeapon->GetWeaponID() == TF_WEAPON_SNIPERRIFLE_CLASSIC
+			? !pWeapon->As<CTFSniperRifleClassic>()->m_bCharging()
+			: !pLocal->InCond(TF_COND_ZOOMED);
 	}
 }

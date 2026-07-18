@@ -88,6 +88,7 @@ struct SolveContext
 	int m_iTickcount = 0;
 	int m_iVischeckCacheSeconds = 30;
 	bool m_bIgnoreTraces = false;
+	bool m_bCanJump = true;
 	std::unordered_map<CNavArea*, float> m_mHazardCosts;
 };
 
@@ -111,6 +112,8 @@ public:
 		: m_navfile(sMapName), m_sMapName(sMapName)
 	{
 		m_eState = m_navfile.m_bOK ? NavStateEnum::Active : NavStateEnum::Unavailable;
+		if (m_eState == NavStateEnum::Active)
+			cache_map_wide_crumbs();
 	}
 
 	// Caller must hold m_mutex — reads/writes m_mVischeckCache + m_mConnectionStuckTime.
@@ -120,6 +123,7 @@ public:
 
 	// Must be called on the main thread; touches H::Entities / F::Hazards / F::NavEngine.
 	static SolveContext BuildSolveContext();
+	void cache_map_wide_crumbs();
 
 	NavPoints_t DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, bool bIsOneWay);
 	DropdownHint_t HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos, bool bIsOneWay);

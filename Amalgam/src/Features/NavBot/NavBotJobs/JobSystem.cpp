@@ -205,6 +205,9 @@ namespace
 
 	auto get_escape_spawn_score(CTFPlayer* pLocal) -> float
 	{
+		if (!Vars::Misc::Movement::NavBot::EscapeSpawn.Value)
+			return 0.f;
+
 		if (!pLocal)
 			return get_active_priority_score(PriorityListEnum::EscapeSpawn, 0.f);
 

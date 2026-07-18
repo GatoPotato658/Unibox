@@ -1,5 +1,6 @@
 #include "NavEngine.h"
 #include "../Hazards/Hazards.h"
+#include "../NavRuntime.h"
 
 float CMap::GetBlacklistPenalty(const BlacklistReason_t& tReason) const
 {
@@ -167,8 +168,52 @@ SolveContext CMap::BuildSolveContext()
 	tCtx.m_iTickcount = I::GlobalVars ? I::GlobalVars->tickcount : 0;
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
 	tCtx.m_bIgnoreTraces = F::NavEngine.m_bIgnoreTraces;
+	if (pLocal)
+	{
+		auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+		tCtx.m_bCanJump = NavRuntime::CanUseNavJump(pLocal, pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr);
+	}
 	F::Hazards.SnapshotCosts(tCtx.m_mHazardCosts);
 	return tCtx;
+}
+
+void CMap::cache_map_wide_crumbs()
+{
+	std::lock_guard lock(m_mutex);
+	if (m_eState != NavStateEnum::Active)
+		return;
+
+	size_t uConnectionCount = 0;
+	for (const auto& tArea : m_navfile.m_vAreas)
+		uConnectionCount += tArea.m_vConnections.size();
+	m_mVischeckCache.reserve(m_mVischeckCache.size() + uConnectionCount);
+
+	for (auto& tArea : m_navfile.m_vAreas)
+	{
+		for (const auto& tConnection : tArea.m_vConnections)
+		{
+			CNavArea* pNextArea = tConnection.m_pArea;
+			if (!pNextArea || pNextArea == &tArea || !IsAreaValid(pNextArea) || !HasDirectConnection(&tArea, pNextArea))
+				continue;
+
+			const auto tKey = std::pair<CNavArea*, CNavArea*>(&tArea, pNextArea);
+			CachedConnection_t& tEntry = m_mVischeckCache[tKey];
+			const size_t uNavMeshHash = GetConnectionNavMeshHash(&tArea, pNextArea);
+			if (tEntry.m_uNavMeshHash == uNavMeshHash && !tEntry.m_vCrumbs.empty())
+				continue;
+
+			if (tEntry.m_uNavMeshHash != uNavMeshHash)
+				tEntry = {};
+
+			const bool bIsOneWay = IsOneWay(&tArea, pNextArea);
+			const NavPoints_t tPoints = DeterminePoints(&tArea, pNextArea, bIsOneWay);
+			const DropdownHint_t tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext, bIsOneWay);
+			tEntry.m_uNavMeshHash = uNavMeshHash;
+			tEntry.m_tPoints = tPoints;
+			tEntry.m_tDropdown = tDropdown;
+			CacheConnectionCrumbs(tEntry, &tArea, pNextArea, tPoints, tDropdown);
+		}
+	}
 }
 
 void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::vector<AdjacentEntry>& vOut)
@@ -193,11 +238,11 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		if (!pNextArea || pNextArea == pCurrentArea || !IsAreaValid(pNextArea))
 			continue;
 
-		if (m_bSkipSpawn && (pCurrentArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE) ||
-			pNextArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)))
-			continue;
-
 		if (!HasDirectConnection(pCurrentArea, pNextArea)) continue;
+		if (pNextArea->IsBlocked(iTeam)) continue;
+
+		const bool bTouchesSpawn = pCurrentArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)
+			|| pNextArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE);
 
 		if (!std::isfinite(LookupHazard(pNextArea)))
 			continue;
@@ -249,6 +294,8 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 			tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext, bIsOneWay);
 
 			const float flUpDelta = tPoints.m_vCenterNext.z - tPoints.m_vCenter.z;
+			if (!tCtx.m_bCanJump && flUpDelta > 18.0f)
+				continue;
 
 			if (!tCtx.m_bIgnoreTraces && flUpDelta > PLAYER_CROUCHED_JUMP_HEIGHT)
 			{
@@ -284,6 +331,8 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 			continue;
 
 		float flFinalCost = std::max(flBaseCost, 1.f);
+		if (m_bSkipSpawn && bTouchesSpawn)
+			flFinalCost += 5000.f;
 
 		if (!tCtx.m_bIgnoreTraces)
 		{
@@ -445,6 +494,7 @@ void CMap::CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CN
 				CachedPathCrumb_t tCrumb{};
 				tCrumb.m_pNavArea = pArea;
 				tCrumb.m_vPos = vStart + vDelta * (static_cast<float>(iStep) / iSteps);
+				tCrumb.m_vPos.z = pArea->GetZ(tCrumb.m_vPos.x, tCrumb.m_vPos.y);
 				tCrumb.m_vApproachDir = vApproachDir;
 				tCrumb.m_bRequiresDrop = bRequiresDrop && iStep == iSteps;
 				tCrumb.m_flDropHeight = tCrumb.m_bRequiresDrop ? flDropHeight : 0.f;
