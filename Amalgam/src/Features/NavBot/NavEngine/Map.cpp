@@ -214,6 +214,12 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 
 		const auto tKey = std::pair<CNavArea*, CNavArea*>(pCurrentArea, pNextArea);
 		CachedConnection_t& tEntry = m_mVischeckCache[tKey];
+		const size_t uNavMeshHash = GetConnectionNavMeshHash(pCurrentArea, pNextArea);
+		if (tEntry.m_uNavMeshHash != uNavMeshHash)
+		{
+			tEntry = {};
+			tEntry.m_uNavMeshHash = uNavMeshHash;
+		}
 		const bool bValidCache = (tEntry.m_iExpireTick == 0 || tEntry.m_iExpireTick > iNow);
 
 		NavPoints_t tPoints{};
@@ -222,7 +228,8 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		bool bPassable = false;
 
 		if (bValidCache && tEntry.m_eVischeckState == VischeckStateEnum::Visible && tEntry.m_bPassable
-			&& std::isfinite(tEntry.m_flCachedCost) && tEntry.m_flCachedCost < std::numeric_limits<float>::max())
+			&& std::isfinite(tEntry.m_flCachedCost) && tEntry.m_flCachedCost < std::numeric_limits<float>::max()
+			&& !tEntry.m_vCrumbs.empty())
 		{
 			tPoints = tEntry.m_tPoints;
 			tDropdown = tEntry.m_tDropdown;
@@ -239,8 +246,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		{
 			const bool bIsOneWay = IsOneWay(pCurrentArea, pNextArea);
 			tPoints = DeterminePoints(pCurrentArea, pNextArea, bIsOneWay);
-			tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vNext, bIsOneWay);
-			tPoints.m_vCenter = tDropdown.m_vAdjustedPos;
+			tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext, bIsOneWay);
 
 			const float flUpDelta = tPoints.m_vCenterNext.z - tPoints.m_vCenter.z;
 
@@ -253,11 +259,14 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 				tEntry.m_flCachedCost = std::numeric_limits<float>::max();
 				tEntry.m_tPoints = tPoints;
 				tEntry.m_tDropdown = tDropdown;
+				tEntry.m_vCrumbs.clear();
 				continue;
 			}
 
+			NavPoints_t tCostPoints = tPoints;
+			tCostPoints.m_vCenter = tDropdown.m_vAdjustedPos;
 			bPassable = true;
-			flBaseCost = EvaluateConnectionCost(pCurrentArea, pNextArea, tPoints, tDropdown, iTeam);
+			flBaseCost = EvaluateConnectionCost(pCurrentArea, pNextArea, tCostPoints, tDropdown, iTeam);
 
 			tEntry.m_iExpireTick = iCacheExpiry;
 			tEntry.m_eVischeckState = VischeckStateEnum::Visible;
@@ -266,6 +275,8 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 			tEntry.m_tPoints = tPoints;
 			tEntry.m_tDropdown = tDropdown;
 			tEntry.m_flCachedCost = flBaseCost;
+			if (tEntry.m_vCrumbs.empty())
+				CacheConnectionCrumbs(tEntry, pCurrentArea, pNextArea, tPoints, tDropdown);
 			m_mConnectionStuckTime.erase(tKey);
 		}
 
@@ -302,6 +313,33 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 	}
 }
 
+size_t CMap::GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const
+{
+	size_t uHash = 0;
+	auto hash_area = [&uHash](const CNavArea* pArea)
+		{
+			boost::hash_combine(uHash, pArea->m_uId);
+			boost::hash_combine(uHash, pArea->m_iAttributeFlags);
+			boost::hash_combine(uHash, pArea->m_iTFAttributeFlags);
+			boost::hash_combine(uHash, pArea->m_vNwCorner.x);
+			boost::hash_combine(uHash, pArea->m_vNwCorner.y);
+			boost::hash_combine(uHash, pArea->m_vSeCorner.x);
+			boost::hash_combine(uHash, pArea->m_vSeCorner.y);
+			boost::hash_combine(uHash, pArea->m_vCenter.z);
+			boost::hash_combine(uHash, pArea->m_flNeZ);
+			boost::hash_combine(uHash, pArea->m_flSwZ);
+			boost::hash_combine(uHash, pArea->m_flMinZ);
+			boost::hash_combine(uHash, pArea->m_flMaxZ);
+			boost::hash_combine(uHash, pArea->m_vConnections.size());
+			for (const auto& tConnection : pArea->m_vConnections)
+				boost::hash_combine(uHash, tConnection.m_pArea ? tConnection.m_pArea->m_uId : 0u);
+		};
+
+	hash_area(pFrom);
+	hash_area(pTo);
+	return uHash;
+}
+
 NavPoints_t CMap::DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, bool /*bIsOneWay*/)
 {
 	const auto vCurrentCenter = pCurrentArea->m_vCenter;
@@ -318,7 +356,19 @@ NavPoints_t CMap::DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, b
 		vTransition.z = pCurrentArea->GetNearestPoint(Vector2D(vNextClosest.x, vNextClosest.y)).z;
 	}
 
-	const auto vCenterNext = pNextArea->GetNearestPoint(Vector2D(vTransition.x, vTransition.y));
+	Vector vTransitionOffset = vCurrentCenter - vTransition;
+	vTransitionOffset.z = 0.f;
+	if (const float flTransitionLength = vTransitionOffset.Length(); flTransitionLength > 0.01f)
+		vTransition += vTransitionOffset * (std::min(18.0f, flTransitionLength * 0.5f) / flTransitionLength);
+	vTransition.z = pCurrentArea->GetNearestPoint(Vector2D(vTransition.x, vTransition.y)).z;
+
+	Vector vCenterNext = pNextArea->GetNearestPoint(Vector2D(vTransition.x, vTransition.y));
+	Vector vNextOffset = vNextCenter - vCenterNext;
+	vNextOffset.z = 0.f;
+	if (const float flNextLength = vNextOffset.Length(); flNextLength > 0.01f)
+		vCenterNext += vNextOffset * (std::min(18.0f, flNextLength * 0.5f) / flNextLength);
+	vCenterNext.z = pNextArea->GetNearestPoint(Vector2D(vCenterNext.x, vCenterNext.y)).z;
+
 	return NavPoints_t(vCurrentCenter, vTransition, vCenterNext, vNextCenter);
 }
 
@@ -369,6 +419,58 @@ DropdownHint_t CMap::HandleDropdown(const Vector& vCurrentPos, const Vector& vNe
 	}
 
 	return tHint;
+}
+
+void CMap::CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CNavArea* pTo, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown) const
+{
+	tEntry.m_vCrumbs.clear();
+
+	auto append_segment = [&](const Vector& vStart, const Vector& vEnd, CNavArea* pArea, bool bRequiresDrop, float flDropHeight, float flApproachDistance, const Vector& vDropDir)
+		{
+			constexpr float flSpacing = 100.0f;
+			const Vector vDelta = vEnd - vStart;
+			Vector vPlanar = vDelta;
+			vPlanar.z = 0.f;
+			const float flDistance = std::max(vPlanar.Length(), std::fabs(vDelta.z));
+			const int iSteps = std::max(static_cast<int>(std::ceil(flDistance / flSpacing)), 1);
+
+			Vector vApproachDir = vPlanar;
+			if (const float flLength = vApproachDir.Length(); flLength > 0.01f)
+				vApproachDir /= flLength;
+			else
+				vApproachDir = {};
+
+			for (int iStep = 1; iStep <= iSteps; ++iStep)
+			{
+				CachedPathCrumb_t tCrumb{};
+				tCrumb.m_pNavArea = pArea;
+				tCrumb.m_vPos = vStart + vDelta * (static_cast<float>(iStep) / iSteps);
+				tCrumb.m_vApproachDir = vApproachDir;
+				tCrumb.m_bRequiresDrop = bRequiresDrop && iStep == iSteps;
+				tCrumb.m_flDropHeight = tCrumb.m_bRequiresDrop ? flDropHeight : 0.f;
+				tCrumb.m_flApproachDistance = tCrumb.m_bRequiresDrop ? flApproachDistance : 0.f;
+				if (tCrumb.m_bRequiresDrop && vDropDir.LengthSqr() > 0.f)
+					tCrumb.m_vApproachDir = vDropDir;
+				tEntry.m_vCrumbs.push_back(tCrumb);
+			}
+		};
+
+	append_segment(tPoints.m_vCenter, tDropdown.m_vAdjustedPos, pFrom,
+		tDropdown.m_bRequiresDrop, tDropdown.m_flDropHeight, tDropdown.m_flApproachDistance, tDropdown.m_vApproachDir);
+
+	if (tDropdown.m_bRequiresDrop)
+		append_segment(tDropdown.m_vAdjustedPos, tPoints.m_vCenterNext, pTo, false, 0.f, 0.f, {});
+
+	append_segment(tDropdown.m_bRequiresDrop ? tPoints.m_vCenterNext : tDropdown.m_vAdjustedPos,
+		tPoints.m_vNext, pTo, false, 0.f, 0.f, {});
+}
+
+const std::vector<CachedPathCrumb_t>* CMap::GetConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo) const
+{
+	const auto it = m_mVischeckCache.find({ pFrom, pTo });
+	if (it == m_mVischeckCache.end() || it->second.m_vCrumbs.empty())
+		return nullptr;
+	return &it->second.m_vCrumbs;
 }
 
 bool CMap::IsOneWay(CNavArea* pFrom, CNavArea* pTo) const

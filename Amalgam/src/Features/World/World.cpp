@@ -436,9 +436,11 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 
 	std::vector<Face_t> vFaces;
 
-	if (iFlags & (FaceTypeEnum::BoxBrush | FaceTypeEnum::PlaneBrush))
+	if ((iFlags & (FaceTypeEnum::BoxBrush | FaceTypeEnum::PlaneBrush)) && I::BSPData && I::BSPData->numbrushes > 0)
 	{
-		CUtlVector<int> vBrushes; I::EngineTrace->GetBrushesInAABB(vMins, vMaxs, &vBrushes, iMask);
+		std::vector<int> vBrushStorage(I::BSPData->numbrushes);
+		CUtlVector<int> vBrushes(vBrushStorage.data(), static_cast<int>(vBrushStorage.size()));
+		I::EngineTrace->GetBrushesInAABB(vMins, vMaxs, &vBrushes, iMask);
 		for (int iBrush = 0; iBrush < vBrushes.Count(); iBrush++)
 		{
 			cbrush_t* pBrush = &I::BSPData->map_brushes[vBrushes[iBrush]];

@@ -51,6 +51,16 @@ struct DropdownHint_t
 	Vector m_vApproachDir = {};
 };
 
+struct CachedPathCrumb_t
+{
+	CNavArea* m_pNavArea = nullptr;
+	Vector m_vPos = {};
+	Vector m_vApproachDir = {};
+	bool m_bRequiresDrop = false;
+	float m_flDropHeight = 0.f;
+	float m_flApproachDistance = 0.f;
+};
+
 struct CachedConnection_t
 {
 	int m_iExpireTick = 0;
@@ -60,6 +70,8 @@ struct CachedConnection_t
 	NavPoints_t m_tPoints = {};
 	bool m_bPassable = false;
 	bool m_bStuckBlacklist = false;
+	size_t m_uNavMeshHash = 0;
+	std::vector<CachedPathCrumb_t> m_vCrumbs;
 };
 
 struct CachedStucktime_t
@@ -111,6 +123,7 @@ public:
 
 	NavPoints_t DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, bool bIsOneWay);
 	DropdownHint_t HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos, bool bIsOneWay);
+	const std::vector<CachedPathCrumb_t>* GetConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo) const;
 
 	bool IsOneWay(CNavArea* pFrom, CNavArea* pTo) const;
 	bool HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const;
@@ -151,5 +164,7 @@ private:
 
 	struct AdjacentEntry { CNavArea* m_pArea; float m_flCost; };
 	void GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::vector<AdjacentEntry>& vOut);
+	size_t GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const;
+	void CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CNavArea* pTo, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown) const;
 	float EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown, int iTeam) const;
 };

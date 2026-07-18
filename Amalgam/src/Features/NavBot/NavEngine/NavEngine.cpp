@@ -216,11 +216,11 @@ void CNavEngine::EmitIntraAreaCrumbs(const Vector& vStart, const Vector& vDestin
 	else
 		vApproachDir = {};
 
-	constexpr float kSpacing = 90.f;
-	const int nIntermediate = std::clamp(static_cast<int>(std::ceil(flEffective / kSpacing)), 1, 6);
-	const Vector vStep = vDelta / static_cast<float>(nIntermediate + 1);
+	constexpr float flSpacing = 100.f;
+	const int iIntermediate = std::max(static_cast<int>(std::ceil(flEffective / flSpacing)) - 1, 0);
+	const Vector vStep = vDelta / static_cast<float>(iIntermediate + 1);
 
-	for (int i = 1; i <= nIntermediate; ++i)
+	for (int i = 1; i <= iIntermediate; ++i)
 	{
 		Crumb_t tCrumb{};
 		tCrumb.m_pNavArea = pArea;
@@ -234,41 +234,23 @@ void CNavEngine::EmitConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo)
 {
 	if (!pFrom || !pTo || !m_pMap) return;
 
-	const bool bIsOneWay = m_pMap->IsOneWay(pFrom, pTo);
-	NavPoints_t tPoints = m_pMap->DeterminePoints(pFrom, pTo, bIsOneWay);
-	DropdownHint_t tDrop = m_pMap->HandleDropdown(tPoints.m_vCenter, tPoints.m_vNext, bIsOneWay);
-	tPoints.m_vCenter = tDrop.m_vAdjustedPos;
+	const auto* pCachedCrumbs = m_pMap->GetConnectionCrumbs(pFrom, pTo);
+	if (!pCachedCrumbs) return;
 
-	Vector vApproachDir = tPoints.m_vCenter - tPoints.m_vCurrent;
-	vApproachDir.z = 0.f;
-	if (const float flLen = vApproachDir.Length(); flLen > 0.01f)
-		vApproachDir /= flLen;
-	else
-		vApproachDir = {};
+	for (const auto& tCachedCrumb : *pCachedCrumbs)
+	{
+		if (!m_vCrumbs.empty() && m_vCrumbs.back().m_vPos.DistToSqr(tCachedCrumb.m_vPos) < 1.0f)
+			continue;
 
-	auto Push = [&](const Vector& vPos, const Vector& vDir, CNavArea* pArea, bool bDrop, float flDropH, float flApproach, const Vector& vDropDir)
-		{
-			if (!m_vCrumbs.empty() && m_vCrumbs.back().m_vPos.DistToSqr(vPos) < 1.0f)
-				return;
-			Crumb_t tCrumb{};
-			tCrumb.m_pNavArea = pArea;
-			tCrumb.m_vPos = vPos;
-			tCrumb.m_vApproachDir = vDir;
-			tCrumb.m_bRequiresDrop = bDrop;
-			tCrumb.m_flDropHeight = flDropH;
-			tCrumb.m_flApproachDistance = flApproach;
-			if (bDrop && vDropDir.LengthSqr() > 0.f)
-				tCrumb.m_vApproachDir = vDropDir;
-			m_vCrumbs.push_back(tCrumb);
-		};
-
-	Push(tPoints.m_vCenter, vApproachDir, pFrom,
-		tDrop.m_bRequiresDrop, tDrop.m_flDropHeight, tDrop.m_flApproachDistance, tDrop.m_vApproachDir);
-
-	Vector vNextDir = tPoints.m_vNext - tPoints.m_vCenter;
-	vNextDir.z = 0.f;
-	if (const float flLen = vNextDir.Length(); flLen > 0.01f) vNextDir /= flLen; else vNextDir = vApproachDir;
-	Push(tPoints.m_vNext, vNextDir, pTo, false, 0.f, 0.f, {});
+		Crumb_t tCrumb{};
+		tCrumb.m_pNavArea = tCachedCrumb.m_pNavArea;
+		tCrumb.m_vPos = tCachedCrumb.m_vPos;
+		tCrumb.m_vApproachDir = tCachedCrumb.m_vApproachDir;
+		tCrumb.m_bRequiresDrop = tCachedCrumb.m_bRequiresDrop;
+		tCrumb.m_flDropHeight = tCachedCrumb.m_flDropHeight;
+		tCrumb.m_flApproachDistance = tCachedCrumb.m_flApproachDistance;
+		m_vCrumbs.push_back(tCrumb);
+	}
 }
 
 bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority, bool bShouldRepath, bool bNavToLocal, bool bIgnoreTraces)
@@ -366,16 +348,22 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 	}
 	else
 	{
-		m_vCrumbs.reserve(vPath.size() * 2 + 1);
+		m_vCrumbs.reserve(vPath.size() * 3 + 1);
+		std::lock_guard lock(m_pMap->m_mutex);
 		for (size_t i = 0; i < vPath.size(); ++i)
 		{
 			CNavArea* pArea = vPath[i];
 			if (!pArea) continue;
 
 			if (i + 1 < vPath.size())
+			{
+				if (const auto* pCachedCrumbs = m_pMap->GetConnectionCrumbs(pArea, vPath[i + 1]); pCachedCrumbs && !pCachedCrumbs->empty())
+					EmitIntraAreaCrumbs(i == 0 ? pLocal->GetAbsOrigin() : pArea->m_vCenter, pCachedCrumbs->front().m_vPos, pArea);
 				EmitConnectionCrumbs(pArea, vPath[i + 1]);
+			}
 			else
 			{
+				EmitIntraAreaCrumbs(pArea->m_vCenter, tResult.m_vDestination, pArea);
 				Crumb_t tEnd{};
 				tEnd.m_pNavArea = pArea;
 				tEnd.m_vPos = tResult.m_vDestination;
@@ -404,7 +392,18 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 		{
 			const auto& a = m_vCrumbs[i];
 			const auto& b = m_vCrumbs[i + 1];
-			if (a.m_pNavArea && a.m_pNavArea == b.m_pNavArea) continue;
+			if (a.m_bRequiresDrop) continue;
+
+			const bool bSameArea = a.m_pNavArea && a.m_pNavArea == b.m_pNavArea;
+			if (bSameArea)
+			{
+				if (!IsPlayerPassableNavigation(pLocal, a.m_vPos, b.m_vPos))
+				{
+					bValid = false;
+					break;
+				}
+				continue;
+			}
 
 			const auto tKey = std::pair<CNavArea*, CNavArea*>(a.m_pNavArea, b.m_pNavArea);
 			auto it = m_pMap->m_mVischeckCache.find(tKey);
@@ -837,6 +836,7 @@ void CNavEngine::RecordStuckFailure()
 	tStuck.m_iTimeStuck++;
 	tStuck.m_iExpireTick = iPenaltyExpire;
 
+	if (tStuck.m_iTimeStuck >= 2)
 	{
 		auto& tEntry = m_pMap->m_mVischeckCache[tKey];
 		tEntry.m_iExpireTick = iBlacklistExpire;
@@ -882,19 +882,36 @@ void CNavEngine::UpdateRespawnRooms()
 {
 	if (m_vRespawnRooms.empty() || !m_pMap) return;
 
+	auto is_area_in_respawn_room = [](const TriggerData_t& tRoom, const CNavArea& tArea) -> bool
+		{
+			constexpr float flSampleSpacing = 32.0f;
+			const float flWidth = std::fabs(tArea.m_vSeCorner.x - tArea.m_vNwCorner.x);
+			const float flHeight = std::fabs(tArea.m_vSeCorner.y - tArea.m_vNwCorner.y);
+			const int iXSamples = std::max(static_cast<int>(std::ceil(flWidth / flSampleSpacing)), 1);
+			const int iYSamples = std::max(static_cast<int>(std::ceil(flHeight / flSampleSpacing)), 1);
+
+			for (int iX = 0; iX <= iXSamples; ++iX)
+			{
+				const float flX = std::lerp(tArea.m_vNwCorner.x, tArea.m_vSeCorner.x, static_cast<float>(iX) / iXSamples);
+				for (int iY = 0; iY <= iYSamples; ++iY)
+				{
+					const float flY = std::lerp(tArea.m_vNwCorner.y, tArea.m_vSeCorner.y, static_cast<float>(iY) / iYSamples);
+					if (tRoom.PointIsWithin({ flX, flY, tArea.GetZ(flX, flY) + 18.0f }))
+						return true;
+				}
+			}
+
+			return false;
+		};
+
 	std::unordered_set<CNavArea*> setSpawnAreas;
 	for (const auto& tRoom : m_vRespawnRooms)
 	{
-		static Vector vStep(0.0f, 0.0f, 18.0f);
+		if (!tRoom.tData.m_pModel) continue;
+
 		for (auto& tArea : m_pMap->m_navfile.m_vAreas)
 		{
-			if (setSpawnAreas.contains(&tArea)) continue;
-
-			if (tRoom.tData.PointIsWithin(tArea.m_vCenter + vStep)
-				|| tRoom.tData.PointIsWithin(tArea.m_vNwCorner + vStep)
-				|| tRoom.tData.PointIsWithin(tArea.GetNeCorner() + vStep)
-				|| tRoom.tData.PointIsWithin(tArea.GetSwCorner() + vStep)
-				|| tRoom.tData.PointIsWithin(tArea.m_vSeCorner + vStep))
+			if (is_area_in_respawn_room(tRoom.tData, tArea))
 			{
 				setSpawnAreas.insert(&tArea);
 				const uint32_t uFlags = tRoom.m_iTeam == 0
@@ -905,13 +922,19 @@ void CNavEngine::UpdateRespawnRooms()
 		}
 	}
 
+	for (auto& tArea : m_pMap->m_navfile.m_vAreas)
+		if (tArea.m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE))
+			setSpawnAreas.insert(&tArea);
+
+	std::unordered_set<CNavArea*> setExitAreas;
 	for (auto pArea : setSpawnAreas)
 		for (auto& tConn : pArea->m_vConnections)
 			if (tConn.m_pArea
-				&& !(tConn.m_pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_EXIT)))
+				&& !(tConn.m_pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)))
 			{
 				tConn.m_pArea->m_iTFAttributeFlags |= TF_NAV_SPAWN_ROOM_EXIT;
-				m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
+				if (setExitAreas.insert(tConn.m_pArea).second)
+					m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
 			}
 
 	m_bUpdatedRespawnRooms = true;
@@ -1330,22 +1353,11 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		if (bDropCrumb)
 		{
 			constexpr float kDropSkipFloor = 18.f;
-			bool bDone = false;
-
 			const float flHeightBelow = vCrumbTarget.z - vLocalOrigin.z;
 			const float flThreshold = std::max(kDropSkipFloor, tActive.m_flDropHeight * 0.5f);
-			if (flHeightBelow >= flThreshold) bDone = true;
-
-			if (!bDone && m_pLocalArea && m_pLocalArea != tActive.m_pNavArea && tActive.m_flDropHeight > kDropSkipFloor)
-				bDone = true;
-
-			if (!bDone && uRemaining > 1)
-			{
-				Vector vNext = m_vCrumbs[nConsumed + 1].m_vPos;
-				vNext.z = vLocalOrigin.z;
-				if (vNext.DistToSqr(vLocalOrigin) < std::max(kDefaultReachRadius, flReachRadius + 12.f) * std::max(kDefaultReachRadius, flReachRadius + 12.f))
-					bDone = true;
-			}
+			const float flLandingRadius = std::max(kDefaultReachRadius, tActive.m_flApproachDistance + PLAYER_WIDTH);
+			const bool bDone = flHeightBelow >= flThreshold
+				&& vDeltaPlanar.LengthSqr() <= flLandingRadius * flLandingRadius;
 
 			if (bDone) { m_tLastCrumb = tActive; nConsumed++; continue; }
 		}

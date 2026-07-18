@@ -109,7 +109,7 @@ void CAimbotGlobal::SortTargetsPost(std::vector<Target_t>& vTargets, int iMethod
 
 float CAimbotGlobal::GetAimFOV()
 {	// restrict now vs later
-	return Vars::Aimbot::General::LeadAndRestrict.Value ? 180.f : Vars::Aimbot::General::AimFOV.Value;
+	return Vars::Aimbot::General::LeadAndRestrict.Value ? 180.f : std::min(Vars::Aimbot::General::AimFOV.Value, 180.f);
 }
 
 bool CAimbotGlobal::EntityCenterInFOV(CBaseEntity* pTarget, const Vec3& vLocalPos, const Vec3& vLocalAngles, float& flFOVTo, Vec3& vPos, Vec3& vAngleTo)
@@ -118,7 +118,7 @@ bool CAimbotGlobal::EntityCenterInFOV(CBaseEntity* pTarget, const Vec3& vLocalPo
 	vAngleTo = Math::CalcAngle(vLocalPos, vPos);
 	flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
 
-	return flFOVTo < GetAimFOV();
+	return flFOVTo <= GetAimFOV();
 }
 
 bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, const Vec3& vLocalAngles, float& flFOVTo, Vec3& vPos, Vec3& vAngleTo, int iHitboxes)
@@ -146,7 +146,7 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 	if (!aBones)
 		return false;
 
-	float flMinFOV = 180.f;
+	float flMinFOV = std::numeric_limits<float>::max();
 	for (int nHitbox = 0; nHitbox < pTarget->GetNumOfHitboxes(); nHitbox++)
 	{
 		if (!IsHitboxValid(pTarget, nHitbox, iHitboxes))
@@ -164,7 +164,7 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 		}
 	}
 
-	return flMinFOV < GetAimFOV();
+	return flMinFOV <= GetAimFOV();
 }
 
 bool CAimbotGlobal::IsHitboxValid(CBaseEntity* pEntity, int nHitbox, int iHitboxes)
@@ -245,7 +245,7 @@ bool CAimbotGlobal::ShouldAimAtAngle(Vec3 vAngles)
 	if (!Vars::Aimbot::General::LeadAndRestrict.Value)
 		return true;
 
-	return Math::CalcFov(I::EngineClient->GetViewAngles(), vAngles) < Vars::Aimbot::General::AimFOV.Value;
+	return Math::CalcFov(I::EngineClient->GetViewAngles(), vAngles) <= GetAimFOV();
 }
 
 bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iFunctionFlags, int iTargetFlags, int iIgnoreFlags)
