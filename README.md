@@ -30,7 +30,7 @@
   <br><br>
   <sub>If nightly.link is down or can't be accessed, you can still download through [GitHub](https://github.com/GatoPotato658/Unibox/actions) with an account. </sub>
   <br><br>
-  <sub>Textmode doesnt fully make the game textmode. You need to preload [TextModeTF2](https://github.com/pupnoodle/TextmodeTF2) module to make the game textmode.</sub>
+  <sub>Textmode doesnt fully make the game textmode. You need to preload [TextModeTF2](https://github.com/johnnycoultonfreeman/TextmodeTF2) module to make the game textmode.</sub>
 
   ##
   
