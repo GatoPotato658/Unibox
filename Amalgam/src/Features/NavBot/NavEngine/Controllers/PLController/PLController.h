@@ -4,8 +4,8 @@
 class CPLController
 {
 private:
-	// Valid_ents that controls all the payloads for each team. Red team is first, then comes blue team.
-	std::array<std::vector<CObjectCartDispenser*>, 2> m_aPayloads;
+	std::array<std::array<CObjectCartDispenser*, MAX_EDICTS>, 2> m_aPayloads = {};
+	std::array<size_t, 2> m_aPayloadCounts = {};
 
 public:
 	// Get the closest Control Payload

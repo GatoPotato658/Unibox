@@ -177,7 +177,7 @@ SolveContext CMap::BuildSolveContext()
 	return tCtx;
 }
 
-void CMap::cache_map_wide_crumbs()
+void CMap::CacheMapWideCrumbs()
 {
 	std::lock_guard lock(m_mutex);
 	if (m_eState != NavStateEnum::Active)
@@ -365,7 +365,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 size_t CMap::GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const
 {
 	size_t uHash = 0;
-	auto hash_area = [&uHash](const CNavArea* pArea)
+	auto HashArea = [&uHash](const CNavArea* pArea)
 		{
 			boost::hash_combine(uHash, pArea->m_uId);
 			boost::hash_combine(uHash, pArea->m_iAttributeFlags);
@@ -384,8 +384,8 @@ size_t CMap::GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const
 				boost::hash_combine(uHash, tConnection.m_pArea ? tConnection.m_pArea->m_uId : 0u);
 		};
 
-	hash_area(pFrom);
-	hash_area(pTo);
+	HashArea(pFrom);
+	HashArea(pTo);
 	return uHash;
 }
 
@@ -474,7 +474,7 @@ void CMap::CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CN
 {
 	tEntry.m_vCrumbs.clear();
 
-	auto append_segment = [&](const Vector& vStart, const Vector& vEnd, CNavArea* pArea, bool bRequiresDrop, float flDropHeight, float flApproachDistance, const Vector& vDropDir)
+	auto AppendSegment = [&](const Vector& vStart, const Vector& vEnd, CNavArea* pArea, bool bRequiresDrop, float flDropHeight, float flApproachDistance, const Vector& vDropDir)
 		{
 			constexpr float flSpacing = 100.0f;
 			const Vector vDelta = vEnd - vStart;
@@ -505,13 +505,13 @@ void CMap::CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CN
 			}
 		};
 
-	append_segment(tPoints.m_vCenter, tDropdown.m_vAdjustedPos, pFrom,
+	AppendSegment(tPoints.m_vCenter, tDropdown.m_vAdjustedPos, pFrom,
 		tDropdown.m_bRequiresDrop, tDropdown.m_flDropHeight, tDropdown.m_flApproachDistance, tDropdown.m_vApproachDir);
 
 	if (tDropdown.m_bRequiresDrop)
-		append_segment(tDropdown.m_vAdjustedPos, tPoints.m_vCenterNext, pTo, false, 0.f, 0.f, {});
+		AppendSegment(tDropdown.m_vAdjustedPos, tPoints.m_vCenterNext, pTo, false, 0.f, 0.f, {});
 
-	append_segment(tDropdown.m_bRequiresDrop ? tPoints.m_vCenterNext : tDropdown.m_vAdjustedPos,
+	AppendSegment(tDropdown.m_bRequiresDrop ? tPoints.m_vCenterNext : tDropdown.m_vAdjustedPos,
 		tPoints.m_vNext, pTo, false, 0.f, 0.f, {});
 }
 

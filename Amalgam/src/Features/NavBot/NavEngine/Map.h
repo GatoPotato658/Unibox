@@ -113,7 +113,7 @@ public:
 	{
 		m_eState = m_navfile.m_bOK ? NavStateEnum::Active : NavStateEnum::Unavailable;
 		if (m_eState == NavStateEnum::Active)
-			cache_map_wide_crumbs();
+			CacheMapWideCrumbs();
 	}
 
 	// Caller must hold m_mutex — reads/writes m_mVischeckCache + m_mConnectionStuckTime.
@@ -123,7 +123,7 @@ public:
 
 	// Must be called on the main thread; touches H::Entities / F::Hazards / F::NavEngine.
 	static SolveContext BuildSolveContext();
-	void cache_map_wide_crumbs();
+	void CacheMapWideCrumbs();
 
 	NavPoints_t DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, bool bIsOneWay);
 	DropdownHint_t HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos, bool bIsOneWay);

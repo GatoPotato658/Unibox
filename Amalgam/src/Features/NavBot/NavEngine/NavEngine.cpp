@@ -862,7 +862,7 @@ void CNavEngine::UpdateRespawnRooms()
 {
 	if (m_vRespawnRooms.empty() || !m_pMap) return;
 
-	auto is_area_in_respawn_room = [](const TriggerData_t& tRoom, const CNavArea& tArea) -> bool
+	auto IsAreaInRespawnRoom = [](const TriggerData_t& tRoom, const CNavArea& tArea) -> bool
 		{
 			constexpr float flSampleSpacing = 32.0f;
 			const float flWidth = std::fabs(tArea.m_vSeCorner.x - tArea.m_vNwCorner.x);
@@ -891,7 +891,7 @@ void CNavEngine::UpdateRespawnRooms()
 
 		for (auto& tArea : m_pMap->m_navfile.m_vAreas)
 		{
-			if (is_area_in_respawn_room(tRoom.tData, tArea))
+			if (IsAreaInRespawnRoom(tRoom.tData, tArea))
 			{
 				setSpawnAreas.insert(&tArea);
 				const uint32_t uFlags = tRoom.m_iTeam == 0
@@ -917,7 +917,7 @@ void CNavEngine::UpdateRespawnRooms()
 					m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
 			}
 
-	m_pMap->cache_map_wide_crumbs();
+	m_pMap->CacheMapWideCrumbs();
 	m_bUpdatedRespawnRooms = true;
 }
 
