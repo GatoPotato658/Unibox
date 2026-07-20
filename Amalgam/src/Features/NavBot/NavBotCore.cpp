@@ -488,7 +488,7 @@ void CNavBotCore::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::NavBotDisplay.Value.y + 8;
 	const auto& f_font = H::Fonts.GetFont(FONT_INDICATORS);
 	const int n_tall = f_font.m_nTall + H::Draw.Scale(1);
-	ImDrawList* p_draw_list = ImGui::GetForegroundDrawList();
+	ImDrawList* p_draw_list = ImGui::GetBackgroundDrawList();
 
 	EAlign e_align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))

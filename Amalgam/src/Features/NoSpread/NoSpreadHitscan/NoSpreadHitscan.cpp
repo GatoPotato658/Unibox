@@ -240,7 +240,7 @@ void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::SeedPredictionDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
-	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
+	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 
 	EAlign align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))

@@ -600,7 +600,7 @@ void CTicks::Draw(CTFPlayer* pLocal)
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
 
-	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
+	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 	const float flPanelWidth = H::Draw.Scale(180.f);
 	const float flPanelHeight = H::Draw.Scale(29.f);
 	const ImVec2 vPanelPos =

@@ -32,6 +32,7 @@ namespace PathWorker
 		uint64_t m_uHazardGeneration = 0;
 		CNavArea* m_pStartArea = nullptr;
 		CNavArea* m_pDestArea = nullptr;
+		Vector m_vStart{};
 		Vector m_vDestination{};
 		PriorityListEnum::PriorityListEnum m_ePriority = PriorityListEnum::None;
 		bool m_bIgnoreTraces = false;
@@ -51,7 +52,7 @@ namespace PathWorker
 		bool m_bNavToLocal = true;
 		int m_iSolveResult = -1;
 		bool m_bCancelled = false;
-		std::vector<CNavArea*> m_vPath;
+		std::vector<CachedPathCrumb_t> m_vCrumbs;
 	};
 
 	class CPathWorker

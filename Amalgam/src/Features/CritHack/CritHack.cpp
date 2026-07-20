@@ -755,5 +755,5 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 	};
 	const float flPanelWidth = H::Draw.Scale(180.f);
 	const float flPanelHeight = H::Draw.Scale(29.f);
-	DrawIndicatorPanel(ImGui::GetForegroundDrawList(), vPanelPos, flPanelWidth, flPanelHeight, tCache.m_sLeftText.c_str(), tCache.m_sRightText.c_str(), tCache.m_tLeftColor, tCache.m_tRightColor, tCache.m_tBarColor, tCache.m_flProgress, tCache.m_bDrawFooter, "Not Ready");
+	DrawIndicatorPanel(ImGui::GetBackgroundDrawList(), vPanelPos, flPanelWidth, flPanelHeight, tCache.m_sLeftText.c_str(), tCache.m_sRightText.c_str(), tCache.m_tLeftColor, tCache.m_tRightColor, tCache.m_tBarColor, tCache.m_flProgress, tCache.m_bDrawFooter, "Not Ready");
 }

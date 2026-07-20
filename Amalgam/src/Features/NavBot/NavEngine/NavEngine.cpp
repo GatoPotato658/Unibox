@@ -186,64 +186,10 @@ bool CNavEngine::IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFro
 	return tTrace.fraction > 0.12f;
 }
 
-void CNavEngine::EmitIntraAreaCrumbs(const Vector& vStart, const Vector& vDestination, CNavArea* pArea)
-{
-	if (!pArea) return;
-
-	const Vector vDelta = vDestination - vStart;
-	Vector vPlanar = vDelta; vPlanar.z = 0.f;
-	const float flPlanar = vPlanar.Length();
-	const float flVertical = std::fabs(vDelta.z);
-	const float flEffective = std::max(flPlanar, flVertical);
-	if (flEffective <= 1.f) return;
-
-	Vector vApproachDir = vPlanar;
-	if (const float flLen = vApproachDir.Length(); flLen > 0.01f)
-		vApproachDir /= flLen;
-	else
-		vApproachDir = {};
-
-	constexpr float flSpacing = 100.f;
-	const int iIntermediate = std::max(static_cast<int>(std::ceil(flEffective / flSpacing)) - 1, 0);
-	const Vector vStep = vDelta / static_cast<float>(iIntermediate + 1);
-
-	for (int i = 1; i <= iIntermediate; ++i)
-	{
-		Crumb_t tCrumb{};
-		tCrumb.m_pNavArea = pArea;
-		tCrumb.m_vPos = vStart + vStep * static_cast<float>(i);
-		tCrumb.m_vPos.z = pArea->GetZ(tCrumb.m_vPos.x, tCrumb.m_vPos.y);
-		tCrumb.m_vApproachDir = vApproachDir;
-		m_vCrumbs.push_back(tCrumb);
-	}
-}
-
-void CNavEngine::EmitConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo)
-{
-	if (!pFrom || !pTo || !m_pMap) return;
-
-	const auto* pCachedCrumbs = m_pMap->GetConnectionCrumbs(pFrom, pTo);
-	if (!pCachedCrumbs) return;
-
-	for (const auto& tCachedCrumb : *pCachedCrumbs)
-	{
-		if (!m_vCrumbs.empty() && m_vCrumbs.back().m_vPos.DistToSqr(tCachedCrumb.m_vPos) < 1.0f)
-			continue;
-
-		Crumb_t tCrumb{};
-		tCrumb.m_pNavArea = tCachedCrumb.m_pNavArea;
-		tCrumb.m_vPos = tCachedCrumb.m_vPos;
-		tCrumb.m_vApproachDir = tCachedCrumb.m_vApproachDir;
-		tCrumb.m_bRequiresDrop = tCachedCrumb.m_bRequiresDrop;
-		tCrumb.m_flDropHeight = tCachedCrumb.m_flDropHeight;
-		tCrumb.m_flApproachDistance = tCachedCrumb.m_flApproachDistance;
-		m_vCrumbs.push_back(tCrumb);
-	}
-}
-
 bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority, bool bShouldRepath, bool bNavToLocal, bool bIgnoreTraces)
 {
 	if (!m_pMap || !m_pPathWorker) return false;
+	RefreshCrumbGraph();
 
 	auto pLocal = H::Entities.GetLocal();
 	if (!pLocal) return false;
@@ -288,6 +234,7 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 	tReq.m_uHazardGeneration = uHazardGen;
 	tReq.m_pStartArea = m_pLocalArea;
 	tReq.m_pDestArea = pDestArea;
+	tReq.m_vStart = pLocal->GetAbsOrigin();
 	tReq.m_vDestination = vDestination;
 	tReq.m_ePriority = ePriority;
 	tReq.m_bIgnoreTraces = bIgnoreTraces;
@@ -303,61 +250,27 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 
 bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CTFPlayer* pLocal)
 {
-	const auto& vPath = tResult.m_vPath;
-	const bool bSingleAreaPath = tResult.m_iSolveResult == 3;
-
-	if (!bSingleAreaPath && vPath.empty()) return false;
-
-	if (!bSingleAreaPath)
-	{
-		std::lock_guard lock(m_pMap->m_mutex);
-		for (size_t i = 0; i + 1 < vPath.size(); ++i)
-		{
-			if (!vPath[i] || !vPath[i + 1] || !m_pMap->IsAreaValid(vPath[i]) || !m_pMap->IsAreaValid(vPath[i + 1])
-				|| !m_pMap->HasDirectConnection(vPath[i], vPath[i + 1]))
-			{
-				m_sLastFailureReason = "Path contains disconnected areas";
-				return false;
-			}
-		}
-	}
+	if (tResult.m_vCrumbs.empty()) return false;
 
 	m_vCrumbs.clear();
-	if (bSingleAreaPath)
+	m_vCrumbs.reserve(tResult.m_vCrumbs.size());
+	for (const auto& tCached : tResult.m_vCrumbs)
 	{
-		const Vector vStart = pLocal->IsAlive() ? pLocal->GetAbsOrigin()
-			: (m_pLocalArea ? m_pLocalArea->m_vCenter : tResult.m_vDestination);
-		EmitIntraAreaCrumbs(vStart, tResult.m_vDestination, m_pLocalArea);
-
-		Crumb_t tEnd{};
-		tEnd.m_pNavArea = m_pLocalArea;
-		tEnd.m_vPos = tResult.m_vDestination;
-		m_vCrumbs.push_back(tEnd);
-	}
-	else
-	{
-		m_vCrumbs.reserve(vPath.size() * 3 + 1);
-		std::lock_guard lock(m_pMap->m_mutex);
-		for (size_t i = 0; i < vPath.size(); ++i)
+		if (!tCached.m_pNavArea || !m_pMap->IsAreaValid(tCached.m_pNavArea))
 		{
-			CNavArea* pArea = vPath[i];
-			if (!pArea) continue;
-
-			if (i + 1 < vPath.size())
-			{
-				if (const auto* pCachedCrumbs = m_pMap->GetConnectionCrumbs(pArea, vPath[i + 1]); pCachedCrumbs && !pCachedCrumbs->empty())
-					EmitIntraAreaCrumbs(i == 0 ? pLocal->GetAbsOrigin() : pArea->m_vCenter, pCachedCrumbs->front().m_vPos, pArea);
-				EmitConnectionCrumbs(pArea, vPath[i + 1]);
-			}
-			else
-			{
-				EmitIntraAreaCrumbs(pArea->m_vCenter, tResult.m_vDestination, pArea);
-				Crumb_t tEnd{};
-				tEnd.m_pNavArea = pArea;
-				tEnd.m_vPos = tResult.m_vDestination;
-				m_vCrumbs.push_back(tEnd);
-			}
+			m_sLastFailureReason = "Crumb graph contains an invalid area";
+			m_vCrumbs.clear();
+			return false;
 		}
+
+		Crumb_t tCrumb{};
+		tCrumb.m_pNavArea = tCached.m_pNavArea;
+		tCrumb.m_vPos = tCached.m_vPos;
+		tCrumb.m_vApproachDir = tCached.m_vApproachDir;
+		tCrumb.m_bRequiresDrop = tCached.m_bRequiresDrop;
+		tCrumb.m_flDropHeight = tCached.m_flDropHeight;
+		tCrumb.m_flApproachDistance = tCached.m_flApproachDistance;
+		m_vCrumbs.push_back(tCrumb);
 	}
 
 	if (m_vCrumbs.size() >= 2)
@@ -426,6 +339,27 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 	return true;
 }
 
+bool CNavEngine::RefreshCrumbGraph()
+{
+	if (!m_pMap || !m_tCrumbGraphCheckTimer.Run(0.5f))
+		return false;
+	if (!m_pMap->RefreshCrumbGraph(false))
+		return false;
+
+	const bool bWasPathing = IsPathing();
+	const auto ePriority = m_eCurrentPriority;
+	m_uWorldGeneration++;
+	if (m_pPathWorker) m_pPathWorker->CancelAll();
+	ClearPathState();
+	m_uPendingRequestId = 0;
+	if (bWasPathing && ePriority != PriorityListEnum::None)
+	{
+		m_bRepathRequested = true;
+		m_iNextRepathTick = TICKCOUNT_TIMESTAMP(0.05f);
+	}
+	return true;
+}
+
 void CNavEngine::PollPathWorker()
 {
 	if (!m_pPathWorker) return;
@@ -462,15 +396,14 @@ void CNavEngine::PollPathWorker()
 
 float CNavEngine::GetPathCost(CNavArea* pStartArea, CNavArea* pDestinationArea)
 {
-	if (!m_pMap) return FLT_MAX;
+	if (!m_pMap || !pStartArea || !pDestinationArea) return FLT_MAX;
 	SolveContext tCtx = CMap::BuildSolveContext();
 	std::lock_guard lock(m_pMap->m_mutex);
-	std::vector<CNavArea*> vPath;
+	std::vector<CachedPathCrumb_t> vPath;
 	float flCost = FLT_MAX;
-	const int iResult = m_pMap->Solve(pStartArea, pDestinationArea, tCtx, vPath, &flCost);
-	if (iResult == 3) return 0.f;
-	if (iResult != 0) return FLT_MAX;
-	return flCost;
+	const int iResult = m_pMap->SolveCrumbs(pStartArea->m_vCenter, pStartArea, pDestinationArea->m_vCenter,
+		pDestinationArea, tCtx, vPath, &flCost);
+	return iResult == 0 || iResult == 3 ? flCost : FLT_MAX;
 }
 
 float CNavEngine::GetPathCost(const Vector& vStart, const Vector& vDestination, bool bLocal)
@@ -480,7 +413,12 @@ float CNavEngine::GetPathCost(const Vector& vStart, const Vector& vDestination, 
 	if (!pStart) return FLT_MAX;
 	CNavArea* pDest = FindClosestNavArea(vDestination, false);
 	if (!pDest) return FLT_MAX;
-	return GetPathCost(pStart, pDest);
+	SolveContext tCtx = CMap::BuildSolveContext();
+	std::lock_guard lock(m_pMap->m_mutex);
+	std::vector<CachedPathCrumb_t> vPath;
+	float flCost = FLT_MAX;
+	const int iResult = m_pMap->SolveCrumbs(vStart, pStart, vDestination, pDest, tCtx, vPath, &flCost);
+	return iResult == 0 || iResult == 3 ? flCost : FLT_MAX;
 }
 
 CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
@@ -917,7 +855,7 @@ void CNavEngine::UpdateRespawnRooms()
 					m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
 			}
 
-	m_pMap->CacheMapWideCrumbs();
+	m_pMap->RefreshCrumbGraph(false);
 	m_bUpdatedRespawnRooms = true;
 }
 
@@ -959,9 +897,23 @@ void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector
 	{
 		m_vOffMeshTarget = vTarget;
 		m_vCrumbs.clear();
-		EmitIntraAreaCrumbs(vLocalOrigin, vTarget, pRecovery);
-		Crumb_t tEnd{}; tEnd.m_pNavArea = pRecovery; tEnd.m_vPos = vTarget;
-		m_vCrumbs.push_back(tEnd);
+		std::vector<CachedPathCrumb_t> vRecoveryCrumbs;
+		const SolveContext tContext = CMap::BuildSolveContext();
+		{
+			std::lock_guard lock(m_pMap->m_mutex);
+			m_pMap->SolveCrumbs(vLocalOrigin, pArea, vTarget, pRecovery, tContext, vRecoveryCrumbs, nullptr);
+		}
+		for (const auto& tCached : vRecoveryCrumbs)
+		{
+			Crumb_t tCrumb{};
+			tCrumb.m_pNavArea = tCached.m_pNavArea;
+			tCrumb.m_vPos = tCached.m_vPos;
+			tCrumb.m_vApproachDir = tCached.m_vApproachDir;
+			tCrumb.m_bRequiresDrop = tCached.m_bRequiresDrop;
+			tCrumb.m_flDropHeight = tCached.m_flDropHeight;
+			tCrumb.m_flApproachDistance = tCached.m_flApproachDistance;
+			m_vCrumbs.push_back(tCrumb);
+		}
 		m_eCurrentPriority = PriorityListEnum::Patrol;
 		m_tOffMeshTimer.Update();
 	}
@@ -981,6 +933,7 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (!m_bUpdatedRespawnRooms) UpdateRespawnRooms();
 
+	RefreshCrumbGraph();
 	PollPathWorker();
 
 	if (!pLocal->IsAlive() || F::FollowBot.m_bActive)

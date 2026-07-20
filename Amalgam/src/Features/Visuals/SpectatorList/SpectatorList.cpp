@@ -110,7 +110,7 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::SpectatorsDisplay.Value.y;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(3);
-	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
+	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 
 	float flMaxTextWidth = 0.f;
 	for (auto& Spectator : m_vSpectators)

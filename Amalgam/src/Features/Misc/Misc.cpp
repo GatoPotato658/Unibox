@@ -83,7 +83,9 @@ void CMisc::RunPost(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CMisc::AutoCrouchNavbot(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value)
+	if (!Vars::Misc::Movement::DuckSpeed.Value
+		|| !Vars::Misc::Movement::NavBot::Enabled.Value
+		|| !Vars::Misc::Movement::NavEngine::Enabled.Value)
 		return;
 
 	if (pLocal->IsSwimming() || F::NavEngine.IsUnstucking() || pCmd->buttons & IN_JUMP)
@@ -891,7 +893,7 @@ void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 	}
 	case 1:
 	{
-		const bool bDucking = pLocal->IsDucking();
+		const bool bDucking = pLocal->IsDucking() || (pCmd->buttons & IN_DUCK);
 		if ((bDucking ? !Vars::Misc::Movement::DuckSpeed.Value : !Vars::Misc::Movement::FastAccelerate.Value)
 			|| F::AntiCheatCompatibility.Active()
 			|| G::Attacking == 1 || F::Ticks.m_bDoubletap || F::Ticks.m_bSpeedhack || F::Ticks.m_bRecharge)

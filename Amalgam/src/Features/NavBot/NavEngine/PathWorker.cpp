@@ -99,12 +99,13 @@ namespace PathWorker
 				continue;
 			}
 
-			std::vector<CNavArea*> vPath;
+			std::vector<CachedPathCrumb_t> vCrumbs;
 			int iResult = -1;
 			{
 				std::lock_guard lock(m_pMap->m_mutex);
 				if (!tRequest.m_tToken.IsCancelled())
-					iResult = m_pMap->Solve(tRequest.m_pStartArea, tRequest.m_pDestArea, tRequest.m_tCtx, vPath, nullptr);
+					iResult = m_pMap->SolveCrumbs(tRequest.m_vStart, tRequest.m_pStartArea, tRequest.m_vDestination,
+						tRequest.m_pDestArea, tRequest.m_tCtx, vCrumbs, nullptr);
 			}
 
 			PathResult tResult{};
@@ -117,7 +118,7 @@ namespace PathWorker
 			tResult.m_bNavToLocal       = tRequest.m_bNavToLocal;
 			tResult.m_iSolveResult      = iResult;
 			tResult.m_bCancelled        = tRequest.m_tToken.IsCancelled();
-			tResult.m_vPath             = std::move(vPath);
+			tResult.m_vCrumbs           = std::move(vCrumbs);
 
 			std::lock_guard lock(m_mCompleted);
 			while (m_vCompleted.size() >= 4)
