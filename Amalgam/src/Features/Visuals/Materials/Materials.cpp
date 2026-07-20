@@ -16,7 +16,6 @@ IMaterial* CMaterials::Create(char const* szName, KeyValues* pKV)
 	if (!pMaterial)
 		return nullptr;
 
-	m_mMatList[pMaterial];
 	return pMaterial;
 }
 
@@ -39,9 +38,6 @@ void CMaterials::Remove(IMaterial* pMaterial)
 {
 	if (!pMaterial)
 		return;
-
-	if (m_mMatList.contains(pMaterial))
-		m_mMatList.erase(pMaterial);
 
 	pMaterial->DecrementReferenceCount();
 	pMaterial->DeleteIfUnreferenced();
@@ -290,7 +286,6 @@ void CMaterials::UnloadMaterials()
 	for (auto& tMaterial : m_mMaterials | std::views::values)
 		Remove(tMaterial.m_pMaterial);
 	m_mMaterials.clear();
-	m_mMatList.clear();
 }
 
 void CMaterials::ReloadMaterials()

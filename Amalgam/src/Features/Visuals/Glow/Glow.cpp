@@ -196,7 +196,7 @@ void CGlow::RenderFirst()
 {
 	auto pRenderContext = I::MaterialSystem->GetRenderContext();
 	if (!pRenderContext || !m_pMatGlowColor || !m_pMatBlurX || !m_pMatBlurY || !m_pMatHaloAddToScreen)
-		return F::Materials.ReloadMaterials();
+		return;
 
 	FirstBegin(pRenderContext);
 	for (auto& [tGlow, vInfo] : m_mEntities)
@@ -215,7 +215,7 @@ void CGlow::RenderSecond()
 {
 	auto pRenderContext = I::MaterialSystem->GetRenderContext();
 	if (!pRenderContext || !m_pMatGlowColor || !m_pMatBlurX || !m_pMatBlurY || !m_pMatHaloAddToScreen)
-		return F::Materials.ReloadMaterials();
+		return;
 
 	const int w = H::Draw.m_nScreenW, h = H::Draw.m_nScreenH;
 	for (auto& [tGlow, vInfo] : m_mEntities)
@@ -315,7 +315,7 @@ void CGlow::RenderViewmodel(void* rcx, int flags)
 
 	auto pRenderContext = I::MaterialSystem->GetRenderContext();
 	if (!pRenderContext || !m_pMatGlowColor || !m_pMatBlurX || !m_pMatBlurY || !m_pMatHaloAddToScreen)
-		return F::Materials.ReloadMaterials();
+		return;
 
 	Group_t* pGroup = nullptr;
 	if (!F::Groups.GetGroup(reinterpret_cast<CBaseAnimating*>(rcx)->IsValid() ? TargetsEnum::ViewmodelHands : TargetsEnum::ViewmodelWeapon, pGroup) || !pGroup->m_tGlow())
@@ -343,7 +343,7 @@ void CGlow::RenderViewmodel(const DrawModelState_t& pState, const ModelRenderInf
 
 	auto pRenderContext = I::MaterialSystem->GetRenderContext();
 	if (!pRenderContext || !m_pMatGlowColor || !m_pMatBlurX || !m_pMatBlurY || !m_pMatHaloAddToScreen)
-		return F::Materials.ReloadMaterials();
+		return;
 
 	Group_t* pGroup = nullptr;
 	if (!F::Groups.GetGroup(TargetsEnum::ViewmodelWeapon, pGroup) || !pGroup->m_tGlow())
@@ -373,7 +373,6 @@ void CGlow::Initialize()
 	{
 		m_pMatGlowColor = I::MaterialSystem->FindMaterial("dev/glow_color", TEXTURE_GROUP_OTHER);
 		m_pMatGlowColor->IncrementReferenceCount();
-		F::Materials.m_mMatList[m_pMatGlowColor];
 	}
 
 	if (!m_pRenderBuffer1)

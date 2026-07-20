@@ -1245,7 +1245,6 @@
     <ClCompile Include="src\Hooks\CL_ProcessPacketEntities.cpp" />
     <ClCompile Include="src\Hooks\CL_ReadPackets.cpp" />
     <ClCompile Include="src\Hooks\CMatchInviteNotification_OnTick.cpp" />
-    <ClCompile Include="src\Hooks\CMaterial_Uncache.cpp" />
     <ClCompile Include="src\Hooks\CTFWeaponBase_CanFireRandomCriticalShot.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayer_GetMinFOV.cpp" />
     <ClCompile Include="src\Hooks\CWeaponMedigun_PrimaryAttack.cpp" />
