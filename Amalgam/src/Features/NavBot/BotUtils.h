@@ -78,7 +78,6 @@ private:
 public:
 	Vector m_vPredictedJumpPos = {};
 	Vector m_vJumpPeakPos = {};
-	std::vector<std::pair<Vector, Vector>> m_vWalkableSegments = {};
 
 	int m_iCurrentSlot = -1;
 	int m_iBestSlot = -1;

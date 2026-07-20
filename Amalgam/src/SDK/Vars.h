@@ -259,8 +259,6 @@ NAMESPACE_BEGIN(Vars)
 		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
 
 		CVar(NavbotPath, "Navbot path color", Color_t(255, 255, 0, 255), VISUAL);
-		CVar(NavbotPossiblePath, "Navbot possible path color", Color_t(255, 255, 255, 100), VISUAL);
-		CVar(NavbotWalkablePath, "Navbot walkable path color", Color_t(0, 255, 255, 200), VISUAL);
 		CVar(NavbotArea, "Navbot area color", Color_t(0, 255, 0, 255), VISUAL);
 		CVar(NavbotBlacklist, "Navbot blacklisted color", Color_t(255, 0, 0, 255), VISUAL);
 		CVar(FollowbotPathLine, "Followbot path line color", Color_t(255, 255, 0, 255), VISUAL);
@@ -817,8 +815,8 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(Enabled, VA_LIST("Enabled", "Nav engine enabled"), false);
 				CVar(PathInSetup, "Path in setup time", false);
 				CVarEnum(Draw, "Draw", 0b011, VISUAL | DROPDOWN_MULTI, nullptr,
-					VA_LIST("Path", "Areas", "Blacklisted zones", "Possible paths", "Walkable (Debug)"),
-					Path = 1 << 0, Area = 1 << 1, Blacklist = 1 << 2, PossiblePaths = 1 << 3, Walkable = 1 << 4);
+					VA_LIST("Path", "Areas", "Blacklisted zones"),
+					Path = 1 << 0, Area = 1 << 1, Blacklist = 1 << 2);
 				CVarEnum(LookAtPath, "Look at path", 0, NONE, nullptr,
 					VA_LIST("Off", "Plain", "Silent", "Legit", "Legit silent"),
 					Off, Plain, Silent, Legit, LegitSilent);
@@ -1144,7 +1142,6 @@ I dont think this is a good idea to disable simulations completely:
 				Scout = 1 << 0, Sniper = 1 << 1, Soldier = 1 << 2, Demoman = 1 << 3, Medic = 1 << 4, Heavy = 1 << 5, Pyro = 1 << 6, Spy = 1 << 7, Engineer = 1 << 8);
 			CVar(RandomClassInterval, "Random class interval", FloatRange_t(3.f, 5.f), SLIDER_MIN | SLIDER_PRECISION, 0.5f, 30.f, 0.5f, "%g - %gm");
 			CVar(ForceClass, "Autojoin class", 0);
-			CVar(JoinSpam, "Join spam", false);
 			CVar(Micspam, "Micspam", false);
 			CVar(NoiseSpam, "Noise spam", false);
 			CVar(CallVoteSpam, "Callvote spam", false);
@@ -1250,8 +1247,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(AutoCasualQueue, "Auto casual queue", false);
 			CVar(AutoCasualJoin, "Auto casual join", false);
 			CVar(AutoCompetitiveQueue, "Auto competitive queue", false);
-			CVar(MapPopularizing, "Map popularizing mode", false);
-			CVar(MapBarBoost, "Boost Playercount Visualizer", false);
 			CVar(AutoAbandonIfNoNavmesh, "Auto abandon if no navmesh", false);
 			CVar(AutoDumpProfiles, "Auto dump profiles", false);
 			CVar(AutoDumpDelay, "Auto dump delay", 15, SLIDER_CLAMP, 0, 120, 1, "%is");
@@ -1263,16 +1258,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(RQLTM, "dont RQLTM", false);
 			CVar(RQIgnoreFriends, "Ignore Friends", false);
 			CVar(RQnoAbandon, "RQ w/o abandon", false);
-			CVar(AutoCommunityQueue, "Auto community queue", false);
-			CVar(ServerSearchDelay, "Server search delay", 30, SLIDER_MIN, 10, 300, 5, "%is");
-			CVar(MaxTimeOnServer, "Max time on server", 600, SLIDER_MIN, 60, 3600, 30, "%is");
-			CVar(MinPlayersOnServer, "Min players on server", 6, SLIDER_MIN, 0, 32, 1, "%i");
-			CVar(MaxPlayersOnServer, "Max players on server", 24, SLIDER_MIN, 1, 32, 1, "%i");
-			CVar(RequireNavmesh, "Require navmesh", true);
-			CVar(AvoidPasswordServers, "Avoid password servers", true);
-			CVar(OnlyNonDedicatedServers, "Only non-dedicated servers", false);
-			CVar(OnlySteamNetworkingIPs, "Only SteamNetworking IPs (169.254.*)", false);
-			CVar(PreferSteamNickServers, "Prefer '*'s Server' format", true);
 			CVar(AutoMannUpQueue, "Auto MannUp queue", false);
 		NAMESPACE_END(Queueing)
 

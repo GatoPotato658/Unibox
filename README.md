@@ -97,7 +97,6 @@
     - Voice chat spam
     - Achievement spam
     - Vote spam
-    - Join spam (constantly changes team to spam the chat)
   - New commands (all commands now use `cat_` prefix):
     - `cat_criteria`: Loads casual criteria
     - `cat_abandon`: Abandons current match

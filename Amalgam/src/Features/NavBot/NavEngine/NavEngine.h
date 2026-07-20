@@ -100,7 +100,6 @@ private:
 	bool BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CTFPlayer* pLocal);
 	void UpdateRespawnRooms();
 	void ClearPathState();
-	void ClearDebugPaths();
 	void RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector& vLocalOrigin);
 	void SampleFallSpeed(float flVerticalVelocity);
 	bool RecentlyAtRest() const;
@@ -110,9 +109,6 @@ private:
 public:
 	std::string m_sLastFailureReason = "";
 	bool m_bIgnoreTraces = false;
-	std::vector<std::pair<Vector, Vector>> m_vPossiblePaths = {};
-	std::vector<std::pair<Vector, Vector>> m_vDebugWalkablePaths = {};
-	std::vector<std::pair<Vector, Vector>> m_vRejectedPaths = {};
 
 	PriorityListEnum::PriorityListEnum m_eCurrentPriority = PriorityListEnum::None;
 	Crumb_t m_tCurrentCrumb = {};

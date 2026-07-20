@@ -19,14 +19,6 @@ MAKE_HOOK(CTFGCClientSystem_SOCreated, S::CTFGCClientSystem_SOCreated(), void,
 		auto uType = reinterpret_cast<unsigned int(*)(void*)>(U::Memory.GetVirtual(pObject, 1))(pObject);
 		// SDK::Output("CTFGCClientSystem_SOCreated", std::format("SO created: {}", uType).c_str(), Color_t(255, 255, 255, 255), OUTPUT_CONSOLE | OUTPUT_DEBUG);
 
-		if (Vars::Misc::Queueing::MapBarBoost.Value && uType == 2004)
-		{
-			CALL_ORIGINAL(rcx, not_used, pObject);
-			if (I::TFGCClientSystem)
-				I::TFGCClientSystem->AbandonCurrentMatch();
-			return;
-		}
-
 #ifndef TEXTMODE
 		if (Vars::Misc::Queueing::AutoCasualJoin.Value)
 #endif

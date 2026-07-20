@@ -1849,7 +1849,6 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::JoinSpam, FToggleEnum::Left); // i think it doesnt work anymore but dh wanted it so here it is
 				} EndSection();
 				if (Section("Voting", 8))
 				{
@@ -1926,9 +1925,6 @@ void CMenu::MenuMisc(int iTab)
 					{
 						FDropdown(Vars::Misc::Movement::NavEngine::Draw, FDropdownEnum::Multi, -60);
 						FColorPicker(Vars::Colors::NavbotPath, FColorPickerEnum::Left);
-						FColorPicker(Vars::Colors::NavbotPossiblePath, FColorPickerEnum::Right);
-						// debug only and it crashes
-						// FColorPicker(Vars::Colors::NavbotWalkablePath, FColorPickerEnum::SameLine, {}, { H::Draw.Scale(10), H::Draw.Scale(40) });
 						FColorPicker(Vars::Colors::NavbotArea, FColorPickerEnum::Left);
 						FColorPicker(Vars::Colors::NavbotBlacklist, FColorPickerEnum::Right);
 
@@ -2140,8 +2136,6 @@ void CMenu::MenuMisc(int iTab)
 				} EndSection();
 				if (Section("Casual automation", 8))
 				{
-					FToggle(Vars::Misc::Queueing::MapPopularizing, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::MapBarBoost, FToggleEnum::Right);
 					PushTransparent(!Vars::Misc::Queueing::AutoCasualQueue.Value);
 					{
 						FToggle(Vars::Misc::Queueing::AutoAbandonIfNoNavmesh, FToggleEnum::Left);
@@ -2177,23 +2171,6 @@ void CMenu::MenuMisc(int iTab)
 						FToggle(Vars::Misc::Queueing::RQnoAbandon, FToggleEnum::Right);
 						FToggle(Vars::Misc::Queueing::RQIgnoreFriends, FToggleEnum::Left);
 						FToggle(Vars::Misc::Queueing::RQLTM, FToggleEnum::Right);
-					}
-					PopTransparent();
-				} EndSection();
-				if (Section("Community", 8))
-				{
-					FToggle(Vars::Misc::Queueing::AutoCommunityQueue);
-					PushTransparent(!Vars::Misc::Queueing::AutoCommunityQueue.Value);
-					{
-						FSlider(Vars::Misc::Queueing::ServerSearchDelay, FSliderEnum::Left);
-						FSlider(Vars::Misc::Queueing::MaxTimeOnServer, FSliderEnum::Right);
-						FSlider(Vars::Misc::Queueing::MinPlayersOnServer, FSliderEnum::Left);
-						FSlider(Vars::Misc::Queueing::MaxPlayersOnServer, FSliderEnum::Right);
-						FToggle(Vars::Misc::Queueing::RequireNavmesh, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::AvoidPasswordServers, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::OnlyNonDedicatedServers, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::OnlySteamNetworkingIPs, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::PreferSteamNickServers, FToggleEnum::Left);
 					}
 					PopTransparent();
 				} EndSection();

@@ -701,13 +701,6 @@ void CNavEngine::ClearPathState()
 	m_tLastProgressTimer.Update();
 }
 
-void CNavEngine::ClearDebugPaths()
-{
-	m_vPossiblePaths.clear();
-	m_vRejectedPaths.clear();
-	m_vDebugWalkablePaths.clear();
-}
-
 void CNavEngine::AbandonPath(const std::string& sReason)
 {
 	if (!m_pMap) return;
@@ -993,31 +986,6 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (Vars::Misc::Movement::NavEngine::VischeckEnabled.Value && !F::Ticks.m_bWarp && !F::Ticks.m_bDoubletap)
 		VischeckPath();
-
-	ClearDebugPaths();
-
-	if (Vars::Misc::Movement::NavEngine::Draw.Value & Vars::Misc::Movement::NavEngine::DrawEnum::PossiblePaths)
-	{
-		std::lock_guard lock(m_pMap->m_mutex);
-		if (pArea)
-		{
-			std::vector<CNavArea*> vAreas;
-			m_pMap->CollectAreasAround(vLocalOrigin, 500.f, vAreas);
-			for (auto* pCur : vAreas)
-				for (auto& tConn : pCur->m_vConnections)
-				{
-					if (!tConn.m_pArea) continue;
-					auto it = m_pMap->m_mVischeckCache.find({ pCur, tConn.m_pArea });
-					if (it != m_pMap->m_mVischeckCache.end())
-					{
-						if (it->second.m_bPassable)
-							m_vPossiblePaths.push_back({ it->second.m_tPoints.m_vCurrent, it->second.m_tPoints.m_vNext });
-						else
-							m_vRejectedPaths.push_back({ it->second.m_tPoints.m_vCurrent, it->second.m_tPoints.m_vNext });
-					}
-				}
-		}
-	}
 
 	FollowCrumbs(pLocal, pWeapon, pCmd);
 	CheckBlacklist(pLocal);
@@ -1457,18 +1425,6 @@ void CNavEngine::Render()
 		for (const auto& tCrumb : m_vCrumbs)
 			H::Draw.RenderBox(tCrumb.m_vPos, Vector(-3.f, -3.f, -3.f), Vector(3.f, 3.f, 3.f), Vector(), Vars::Colors::NavbotPath.Value, false);
 	}
-
-	if (Vars::Misc::Movement::NavEngine::Draw.Value & Vars::Misc::Movement::NavEngine::DrawEnum::PossiblePaths)
-	{
-		for (auto& tPath : m_vPossiblePaths)
-			H::Draw.RenderLine(tPath.first, tPath.second, Vars::Colors::NavbotPossiblePath.Value, false);
-		for (auto& tPath : m_vRejectedPaths)
-			H::Draw.RenderLine(tPath.first, tPath.second, Color_t(255, 0, 0, 255), false);
-	}
-
-	if (Vars::Misc::Movement::NavEngine::Draw.Value & Vars::Misc::Movement::NavEngine::DrawEnum::Walkable)
-		for (auto& tPath : m_vDebugWalkablePaths)
-			H::Draw.RenderLine(tPath.first, tPath.second, Vars::Colors::NavbotWalkablePath.Value, false);
 
 	F::NavBotEngineer.Render();
 }

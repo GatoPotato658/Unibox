@@ -126,11 +126,6 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (Vars::Debug::Info.Value)
 	{
-		for (const auto& segment : F::BotUtils.m_vWalkableSegments)
-		{
-			G::LineStorage.push_back({ { segment.first, segment.second }, I::GlobalVars->curtime + I::GlobalVars->interval_per_tick * 2.f, { 0, 255, 0, 255 } });
-		}
-
 		if (F::BotUtils.m_vPredictedJumpPos.Length() > 0.f)
 		{
 			G::LineStorage.push_back({ { pLocal->GetAbsOrigin(), F::BotUtils.m_vPredictedJumpPos }, I::GlobalVars->curtime + I::GlobalVars->interval_per_tick * 2.f, { 255, 255, 0, 255 } });
