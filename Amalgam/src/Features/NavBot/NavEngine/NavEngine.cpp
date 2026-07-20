@@ -969,6 +969,8 @@ void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector
 
 void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	m_bUnstucking = false;
+
 	static bool bWasOn = false;
 	if (!Vars::Misc::Movement::NavEngine::Enabled.Value) bWasOn = false;
 	else if (I::EngineClient->IsInGame() && !bWasOn)
@@ -1189,6 +1191,8 @@ void CNavEngine::DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& v
 
 void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	m_bUnstucking = false;
+
 	static Timer tLastJump{};
 
 	if (m_vCrumbs.empty())
@@ -1378,6 +1382,7 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 	{
 		ePhase = TickStuckSample(vLocalOrigin, vCrumbTarget);
 	}
+	m_bUnstucking = ePhase != StuckPhase::Idle;
 
 	if (!bDropCrumb)
 	{
@@ -1397,6 +1402,7 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		const bool bShouldJumpNow = ePhase == StuckPhase::Jump
 			|| (ePhase == StuckPhase::Nudge && m_iNoProgressSamples >= 2)
 			|| ShouldJumpForNavObstacle(pLocal, vMoveDir, vCrumbTarget);
+		m_bUnstucking = m_bUnstucking || bShouldJumpNow;
 
 		if (bShouldJumpNow && bCanJump && NavRuntime::CanIssueNavJump(pWeapon, pCmd) && pLocal->OnSolid() && tLastJump.Check(0.35f))
 		{

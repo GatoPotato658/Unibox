@@ -75,6 +75,7 @@ private:
 	int m_iNextRepathTick = 0;
 	bool m_bRepathOnFail = false;
 	bool m_bCurrentNavToLocal = false;
+	bool m_bUnstucking = false;
 	int m_iLastBlacklistAbandonTick = 0;
 
 	bool m_bUpdatedRespawnRooms = false;
@@ -129,6 +130,7 @@ public:
 	bool IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFrom, Vector vTo, unsigned int nMask = MASK_PLAYERSOLID);
 
 	bool IsPathing() { return !m_vCrumbs.empty() || m_uPendingRequestId != 0; }
+	bool IsUnstucking() const { return m_bUnstucking; }
 	bool IsNavMeshLoaded() const { return m_pMap && m_pMap->m_eState == NavStateEnum::Active; }
 	std::string GetNavFilePath() const { return m_pMap ? m_pMap->m_sMapName : ""; }
 	bool HasRespawnRooms() const { return !m_vRespawnRooms.empty(); }

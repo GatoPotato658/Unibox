@@ -1765,8 +1765,6 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Movement::FastStop, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::FastAccelerate, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::DuckSpeed, FToggleEnum::Left);
-					FToggle(Vars::Misc::Movement::DuckSpeedNavbotCompat, FToggleEnum::Right);
-					FToggle(Vars::Misc::Movement::DuckSpeedForward, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::MovementLock, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::ShieldTurnRate, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::NoPush, FToggleEnum::Right);

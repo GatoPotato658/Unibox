@@ -56,6 +56,9 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CMisc::RunPost(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
+	m_bDuckSpeedActive = false;
+	AutoCrouchNavbot(pLocal, pCmd);
+
 	if (!pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->m_MoveType() != MOVETYPE_WALK || pLocal->IsSwimming()
 		|| pLocal->InCond(TF_COND_SHIELD_CHARGE))
 		return;
@@ -76,6 +79,20 @@ void CMisc::RunPost(CTFPlayer* pLocal, CUserCmd* pCmd)
 			MovementLock(pLocal, pCmd);
 		}
 	}
+}
+
+void CMisc::AutoCrouchNavbot(CTFPlayer* pLocal, CUserCmd* pCmd)
+{
+	if (!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value)
+		return;
+
+	if (pLocal->IsSwimming() || F::NavEngine.IsUnstucking() || pCmd->buttons & IN_JUMP)
+	{
+		pCmd->buttons &= ~IN_DUCK;
+		return;
+	}
+
+	pCmd->buttons |= IN_DUCK;
 }
 
 
@@ -874,20 +891,21 @@ void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 	}
 	case 1:
 	{
-		if ((pLocal->IsDucking() ? !Vars::Misc::Movement::DuckSpeed.Value : !Vars::Misc::Movement::FastAccelerate.Value)
+		const bool bDucking = pLocal->IsDucking();
+		if ((bDucking ? !Vars::Misc::Movement::DuckSpeed.Value : !Vars::Misc::Movement::FastAccelerate.Value)
 			|| F::AntiCheatCompatibility.Active()
-			|| G::Attacking == 1 || F::Ticks.m_bDoubletap || F::Ticks.m_bSpeedhack || F::Ticks.m_bRecharge || G::AntiAim)
+			|| G::Attacking == 1 || F::Ticks.m_bDoubletap || F::Ticks.m_bSpeedhack || F::Ticks.m_bRecharge)
 			return;
 
 		if (!(pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT))
-			&& !(Vars::Misc::Movement::DuckSpeedNavbotCompat.Value && (pCmd->forwardmove || pCmd->sidemove)))
+			&& (!bDucking || (!pCmd->forwardmove && !pCmd->sidemove)))
 			return;
 
 		bool bChoke = !I::ClientState->chokedcommands && F::Ticks.CanChoke(true);
 		if (!bChoke)
 			return;
 
-		if (Vars::Misc::Movement::DuckSpeedForward.Value)
+		if (bDucking)
 		{
 			pCmd->forwardmove *= -1.f;
 			pCmd->sidemove *= -1.f;
@@ -901,6 +919,7 @@ void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 		pCmd->viewangles.y = fmodf(pCmd->viewangles.y - vAngMoveReverse.y, 360.f);
 		pCmd->viewangles.z = 270.f;
 		G::PSilentAngles = true;
+		m_bDuckSpeedActive = bDucking;
 
 		break;
 	}

@@ -809,8 +809,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(FastStop, "Fast stop", false);
 			CVar(FastAccelerate, "Fast accelerate", false);
 			CVar(DuckSpeed, "Duck speed", false);
-			CVar(DuckSpeedNavbotCompat, "Duck speed navbot compatibility", false);
-			CVar(DuckSpeedForward, "Duck speed forward", false);
 			CVar(ShieldTurnRate, "Shield turn rate", false);
 			CVar(NoPush, "No push", false);
 			CVar(MovementLock, "Movement lock", false);

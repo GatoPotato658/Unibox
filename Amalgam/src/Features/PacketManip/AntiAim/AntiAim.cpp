@@ -461,6 +461,13 @@ void CAntiAim::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	}
 
 	G::AntiAim = AntiAimOn() && ShouldRun(pLocal, pWeapon, pCmd);
+	if (F::Misc.IsDuckSpeedActive())
+	{
+		G::AntiAim = false;
+		vRealAngles = { pCmd->viewangles.x, pCmd->viewangles.y };
+		vFakeAngles = { pCmd->viewangles.x, pCmd->viewangles.y };
+		return;
+	}
 
 	int iAntiBackstab = F::Misc.AntiBackstab(pLocal, pCmd);
 	if (!iAntiBackstab)
