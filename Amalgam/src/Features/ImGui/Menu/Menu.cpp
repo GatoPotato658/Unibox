@@ -280,20 +280,29 @@ void CMenu::DrawMenu()
 {
 	using namespace ImGui;
 
+	auto ClampMenuPosition = [](const ImVec2& vPosition, const ImVec2& vSize, const ImVec2& vDisplaySize)
+	{
+		return ImVec2(
+			std::clamp(vPosition.x, 0.f, std::max(0.f, vDisplaySize.x - vSize.x)),
+			std::clamp(vPosition.y, 0.f, std::max(0.f, vDisplaySize.y - vSize.y))
+		);
+	};
+
 	static bool bSetPosition = false;
 	static bool bDraggingMenu = false;
 	static ImVec2 vMenuTargetPos = {};
 	static ImVec2 vMenuDragOffset = {};
 	ImVec2 vDefaultMenuSize = { H::Draw.Scale(900), H::Draw.Scale(500) };
+	static ImVec2 vMenuSize = vDefaultMenuSize;
 	if (!bSetPosition)
 	{
-		vMenuTargetPos = (GetIO().DisplaySize - vDefaultMenuSize) / 2;
+		vMenuTargetPos = ClampMenuPosition((GetIO().DisplaySize - vDefaultMenuSize) / 2, vDefaultMenuSize, GetIO().DisplaySize);
 		SetNextWindowPos(vMenuTargetPos, ImGuiCond_Always);
 		bSetPosition = true;
 	}
 	if (bDraggingMenu)
 	{
-		vMenuTargetPos = GetMousePos() - vMenuDragOffset;
+		vMenuTargetPos = ClampMenuPosition(GetMousePos() - vMenuDragOffset, vMenuSize, GetIO().DisplaySize);
 		SetNextWindowPos(vMenuTargetPos, ImGuiCond_Always);
 	}
 	SetNextWindowSize(vDefaultMenuSize, ImGuiCond_FirstUseEver);
@@ -302,6 +311,7 @@ void CMenu::DrawMenu()
 	if (Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove))
 	{
 		ImVec2 vWindowSize = GetWindowSize();
+		vMenuSize = vWindowSize;
 		ImVec2 vDrawPos = GetDrawPos();
 		ImVec2 vMousePos = GetMousePos();
 		auto pDrawList = GetWindowDrawList();
@@ -398,14 +408,12 @@ void CMenu::DrawMenu()
 			SetCursorPos({ vWindowSize.x - H::Draw.Scale(31), H::Draw.Scale(11) });
 			IconImage(ICON_MD_SEARCH);
 		}
-		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && IsMouseWithin(vDrawPos.x, vDrawPos.y + flHeaderHeight, vWindowSize.x, vWindowSize.y - flHeaderHeight))
+		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && !IsAnyItemHovered() && IsMouseWithin(vDrawPos.x, vDrawPos.y + flHeaderHeight, vWindowSize.x, vWindowSize.y - flHeaderHeight))
 			sSearch = "";
 
 		if (!IsMouseDown(ImGuiMouseButton_Left))
 			bDraggingMenu = false;
-		if (bDraggingMenu)
-			vMenuTargetPos = vMousePos - vMenuDragOffset;
-		bool bCanDragMenu = IsMouseWithin(vDrawPos.x, vDrawPos.y, vWindowSize.x, flNavHeight) && !IsAnyItemHovered() && !IsAnyItemActive() && !IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
+		bool bCanDragMenu = IsMouseWithin(vDrawPos.x, vDrawPos.y, vWindowSize.x, vWindowSize.y) && !IsAnyItemHovered() && !IsAnyItemActive() && !IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
 		if (bCanDragMenu && IsMouseClicked(ImGuiMouseButton_Left))
 		{
 			bDraggingMenu = true;
@@ -1133,8 +1141,8 @@ void CMenu::MenuVisuals(int iTab)
 			{
 				if (Section("Line", 8))
 				{
-					FColorPicker(Vars::Colors::LineIgnoreZ, FColorPickerEnum::None, { 0, H::Draw.Scale(6) }, { H::Draw.Scale(12), H::Draw.Scale(6) });
-					FColorPicker(Vars::Colors::Line, FColorPickerEnum::None, {}, { H::Draw.Scale(12), H::Draw.Scale(6) });
+					FColorPicker(Vars::Colors::LineIgnoreZ, FColorPickerEnum::Left);
+					FColorPicker(Vars::Colors::Line, FColorPickerEnum::Right);
 					FToggle(Vars::Visuals::Line::TracersEnabled);
 					FSlider(Vars::Visuals::Line::DrawDuration);
 				} EndSection();
@@ -1820,13 +1828,13 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::MannVsMachine::AutoMvmReadyUp, FToggleEnum::Right);
 					FToggle(Vars::Misc::MannVsMachine::AutoAbandonMannUp, FToggleEnum::Left);
 					FToggleSlider(Vars::Misc::MannVsMachine::BuyBot, Vars::Misc::MannVsMachine::MaxCash);
+					FTooltip("WARNING: Works only on Mann Up missions with enough starting cash (600$) before the 1st wave!\nRequirements:\n1. Be a Vaccinator Medic\n2. Ping must be below 80ms\n3. Walk to the upgrade station\nPerforms MVM upgrade station exploit for extra cash.");
 					FToggle(Vars::Misc::MannVsMachine::BuyBotAutoClass, FToggleEnum::Left);
 					PushTransparent(!Vars::Misc::MannVsMachine::BuyBotAutoClass.Value);
 					{
 						FDropdown(Vars::Misc::MannVsMachine::BuyBotClass, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Sniper", "Spy" }, { 1, 3, 7, 4, 6, 9, 2, 8 }, FDropdownEnum::Right);
 					}
 					PopTransparent();
-					FTooltip("WARNING: Works only on Mann Up missions with enough starting cash (600$) before the 1st wave!\nRequirements:\n1. Be a Vaccinator Medic\n2. Ping must be below 80ms\n3. Walk to the upgrade station\nPerforms MVM upgrade station exploit for extra cash.");
 				} EndSection();
 			}
 
@@ -1919,12 +1927,12 @@ void CMenu::MenuMisc(int iTab)
 					PushTransparent(!Vars::Misc::Movement::NavEngine::Enabled.Value);
 					{
 						FDropdown(Vars::Misc::Movement::NavEngine::Draw, FDropdownEnum::Multi, -60);
-						FColorPicker(Vars::Colors::NavbotPath, FColorPickerEnum::SameLine, {}, { H::Draw.Scale(10), H::Draw.Scale(40) });
-						FColorPicker(Vars::Colors::NavbotPossiblePath, FColorPickerEnum::SameLine, {}, { H::Draw.Scale(10), H::Draw.Scale(40) });
+						FColorPicker(Vars::Colors::NavbotPath, FColorPickerEnum::Left);
+						FColorPicker(Vars::Colors::NavbotPossiblePath, FColorPickerEnum::Right);
 						// debug only and it crashes
 						// FColorPicker(Vars::Colors::NavbotWalkablePath, FColorPickerEnum::SameLine, {}, { H::Draw.Scale(10), H::Draw.Scale(40) });
-						FColorPicker(Vars::Colors::NavbotArea, FColorPickerEnum::SameLine, {}, { H::Draw.Scale(10), H::Draw.Scale(40) });
-						FColorPicker(Vars::Colors::NavbotBlacklist, FColorPickerEnum::SameLine, {}, { H::Draw.Scale(10), H::Draw.Scale(40) });
+						FColorPicker(Vars::Colors::NavbotArea, FColorPickerEnum::Left);
+						FColorPicker(Vars::Colors::NavbotBlacklist, FColorPickerEnum::Right);
 
 						FSlider(Vars::Misc::Movement::NavEngine::StickyIgnoreTime, FSliderEnum::Left);
 						FSlider(Vars::Misc::Movement::NavEngine::StuckDetectTime, FSliderEnum::Right);
@@ -1967,8 +1975,8 @@ void CMenu::MenuMisc(int iTab)
 						FTooltip("Distance at which followbot abandons the target completely.");
 					PopTransparent();
 					FToggle(Vars::Misc::Movement::FollowBot::DrawPath, FToggleEnum::Left);
-					FColorPicker(Vars::Colors::FollowbotPathLine, FColorPickerEnum::SameLine);
-					FColorPicker(Vars::Colors::FollowbotPathBox, FColorPickerEnum::SameLine);
+					FColorPicker(Vars::Colors::FollowbotPathLine, FColorPickerEnum::Left);
+					FColorPicker(Vars::Colors::FollowbotPathBox, FColorPickerEnum::Right);
 				} EndSection();
 				if (Section("Bot Utils"))
 				{
@@ -3875,26 +3883,6 @@ void CMenu::MenuLogs(int iTab)
 					FSlider(Vars::Logging::NotificationTime);
 					FSlider(Vars::Logging::MaxNotifications);
 				} EndSection();
-				if (Section("Cheat Detection"))
-				{
-					FDropdown(Vars::CheatDetection::Methods);
-					PushTransparent(!Vars::CheatDetection::DetectionsRequired.Value);
-					{
-						FSlider(Vars::CheatDetection::DetectionsRequired);
-					}
-					PopTransparent();
-					PushTransparent(!(Vars::CheatDetection::Methods.Value & Vars::CheatDetection::MethodsEnum::PacketChoking));
-					{
-						FSlider(Vars::CheatDetection::MinChoking);
-					}
-					PopTransparent();
-					PushTransparent(!(Vars::CheatDetection::Methods.Value & Vars::CheatDetection::MethodsEnum::AimFlicking));
-					{
-						FSlider(Vars::CheatDetection::MinFlick, FSliderEnum::Left);
-						FSlider(Vars::CheatDetection::MaxNoise, FSliderEnum::Right);
-					}
-					PopTransparent();
-				} EndSection();
 			}
 			/* Column 2 */
 			TableNextColumn();
@@ -5699,7 +5687,6 @@ void CMenu::Render()
 	{
 		DrawNotifications();
 		ManageVars();
-		DrawMenu();
 
 		AddDraggable("Ticks", Vars::Menu::TicksDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ticks);
 		AddDraggable("Crit hack", Vars::Menu::CritsDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::CritHack);
@@ -5709,6 +5696,8 @@ void CMenu::Render()
 		AddDraggable("Seed prediction", Vars::Menu::SeedPredictionDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::SeedPrediction);
 		AddDraggable("Nav bot", Vars::Menu::NavBotDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::NavBot);
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
+
+		DrawMenu();
 
 		F::Render.Cursor = GetMouseCursor();
 		m_bWindowHovered = IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
