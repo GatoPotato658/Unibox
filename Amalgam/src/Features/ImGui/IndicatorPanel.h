@@ -3,6 +3,7 @@
 #include "Render.h"
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
 #include <string>
 
 static inline ImU32 ColorToU32(const Color_t& tColor)
@@ -113,7 +114,7 @@ static inline void DrawIndicatorPanel(
 		H::Draw.Scale(3.f));
 
 	float flClampedProgress = std::clamp(flProgress, 0.f, 1.f);
-	int iBarWidth = static_cast<int>(flPanelWidth * flClampedProgress);
+	int iBarWidth = static_cast<int>(std::ceil(flPanelWidth * flClampedProgress));
 	if (iBarWidth > 0)
 	{
 		ImVec4 vBarColor = ImGui::ColorConvertU32ToFloat4(uBar);
