@@ -25,12 +25,9 @@ static std::map<std::string, int> s_mTraceCount = {};
 //#include "../../Debug/Debug.h"
 #endif
 
-namespace
-{
-	constexpr float kPasstimeHoldTime = 0.18f;
-	constexpr float kPasstimeThrowCooldown = 0.35f;
-	constexpr int kPasstimePassPriorityThreshold = 80;
-}
+static constexpr float PasstimeHoldTime = 0.18f;
+static constexpr float PasstimeThrowCooldown = 0.35f;
+static constexpr int PasstimePassPriorityThreshold = 80;
 
 static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
@@ -275,12 +272,6 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 	return vTargets;
 }
 
-namespace
-{
-	// Passtime goal-throw helpers are intentionally disabled.
-	// Navbot passtime capture now only targets walk-in/endzone goals,
-	// so only teammate pass throwing remains active in projectile aimbot.
-}
 static inline std::vector<Target_t> GetPlayers(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	std::vector<Target_t> vTargets;
@@ -2306,7 +2297,7 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 	if (!bSuccess && m_iWeaponID == TF_WEAPON_PASSTIME_GUN && m_tPasstimeThrow.m_bHolding)
 	{
 		pCmd->buttons &= ~IN_ATTACK;
-		m_tPasstimeThrow.Reset(I::GlobalVars->curtime + kPasstimeThrowCooldown);
+		m_tPasstimeThrow.Reset(I::GlobalVars->curtime + PasstimeThrowCooldown);
 	}
 	if (bSuccess && m_iWeaponID == TF_WEAPON_LASER_POINTER)
 	{
@@ -2898,7 +2889,7 @@ bool CAimbotProjectile::HandlePasstimeThrowInput(CUserCmd* pCmd, const Vec3& vAn
 	if (!pCmd)
 		return false;
 
-	const int iRequiredHoldTicks = std::max(2, TIME_TO_TICKS(kPasstimeHoldTime));
+	const int iRequiredHoldTicks = std::max(2, TIME_TO_TICKS(PasstimeHoldTime));
 	const float flCurtime = I::GlobalVars->curtime;
 	if (!m_tPasstimeThrow.m_bHolding && m_tPasstimeThrow.m_flCooldownUntil > flCurtime)
 		return false;
@@ -2952,7 +2943,7 @@ bool CAimbotProjectile::HandlePasstimeThrowInput(CUserCmd* pCmd, const Vec3& vAn
 	pCmd->buttons &= ~IN_ATTACK;
 	if (Vars::Debug::Logging.Value)
 		SDK::Output("PasstimeThrow", std::format("Release: target={} ticks={} error={:.2f}", iTargetEnt, m_tPasstimeThrow.m_iHoldTicks, flAimError).c_str(), { 120, 255, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-	m_tPasstimeThrow.Reset(flCurtime + kPasstimeThrowCooldown);
+	m_tPasstimeThrow.Reset(flCurtime + PasstimeThrowCooldown);
 	return true;
 }
 
@@ -3035,7 +3026,7 @@ bool CAimbotProjectile::AimPasstimePass(CTFPlayer* pLocal, CTFWeaponBase* pWeapo
 			if (pTeammate->m_iHealth() > pLocal->m_iHealth())
 				iPriority += 20;
 
-			if (iPriority < kPasstimePassPriorityThreshold)
+			if (iPriority < PasstimePassPriorityThreshold)
 				continue;
 		}
 

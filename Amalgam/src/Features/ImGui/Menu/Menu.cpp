@@ -23,19 +23,12 @@
 struct CachedAvatar_t
 {
 	Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
-	double flNextAttempt = 0.0;
+	uint64_t uRevision = 0;
 	bool bLoggedCreateFailure = false;
 	bool bLoggedCreateSuccess = false;
 };
 
-static std::unordered_map<uint32_t, CachedAvatar_t> g_mAvatarTextures;
-
-static void ResetAvatarTexture(uint32_t uAccountID)
-{
-	if (!uAccountID)
-		return;
-	g_mAvatarTextures.erase(uAccountID);
-}
+static std::unordered_map<uint32_t, CachedAvatar_t> s_mAvatarTextures;
 
 static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 {
@@ -46,9 +39,7 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 	if (!pDevice)
 		return static_cast<ImTextureID>(0);
 
-	auto& tCache = g_mAvatarTextures[uAccountID];
-	if (tCache.pTexture)
-		return reinterpret_cast<ImTextureID>(tCache.pTexture.Get());
+	auto& tCache = s_mAvatarTextures[uAccountID];
 
 	const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
 	constexpr Color_t tLogColor = { 175, 150, 255, 255 };
@@ -69,7 +60,7 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 															 uSteamID64,
 															 pool == D3DPOOL_MANAGED ? "MANAGED" : "DEFAULT",
 															 static_cast<uint32_t>(hr));
-					SDK::Output("steamwebapi", sMessage.c_str(), tErrorColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+					SDK::Output("SteamProfileCache", sMessage.c_str(), tErrorColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 				};
 
 			auto TryCreate = [&](D3DPOOL pool, DWORD usage) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
@@ -119,11 +110,10 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 			if (auto pTexture = CreateTexture(pData, uWidth, uHeight))
 			{
 				tCache.pTexture = pTexture;
-				tCache.flNextAttempt = 0.0;
 				if (!tCache.bLoggedCreateSuccess)
 				{
 					const std::string sMessage = std::format("ImGui now displaying avatar for {} ({}x{}).", uSteamID64, uWidth, uHeight);
-					SDK::Output("steamwebapi", sMessage.c_str(), tLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+					SDK::Output("SteamProfileCache", sMessage.c_str(), tLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 					tCache.bLoggedCreateSuccess = true;
 				}
 				return reinterpret_cast<ImTextureID>(tCache.pTexture.Get());
@@ -132,47 +122,19 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 			return static_cast<ImTextureID>(0);
 		};
 
-	// Always consume any finished remote download immediately, even if we're in the retry cooldown.
 	CSteamProfileCache::AvatarImage_t tImage;
 	if (F::SteamProfileCache.TryGetAvatarImage(uAccountID, tImage) && tImage.HasData())
 	{
-		if (ImTextureID pRemoteTex = StoreTexture(tImage.m_pPixels->data(), tImage.m_uWidth, tImage.m_uHeight))
-			return pRemoteTex;
-	}
-
-	const double flNow = SDK::PlatFloatTime();
-	if (flNow < tCache.flNextAttempt)
-		return static_cast<ImTextureID>(0);
-
-	if (I::SteamFriends && I::SteamUtils)
-	{
-		const CSteamID steamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual);
-		const int nAvatar = I::SteamFriends->GetMediumFriendAvatar(steamID);
-		uint32_t uWidth = 0, uHeight = 0;
-		if (nAvatar && I::SteamUtils->GetImageSize(nAvatar, &uWidth, &uHeight) && uWidth && uHeight)
+		if (!tCache.pTexture || tCache.uRevision != tImage.m_uRevision)
 		{
-			std::vector<uint8_t> vRgba(static_cast<size_t>(uWidth) * static_cast<size_t>(uHeight) * 4);
-			if (I::SteamUtils->GetImageRGBA(nAvatar, vRgba.data(), static_cast<int>(vRgba.size())))
+			if (ImTextureID pTexture = StoreTexture(tImage.m_pPixels->data(), tImage.m_uWidth, tImage.m_uHeight))
 			{
-				std::vector<uint8_t> vBgra(vRgba.size());
-				for (uint32_t y = 0; y < uHeight; y++)
-				{
-					for (uint32_t x = 0; x < uWidth; x++)
-					{
-						const size_t uIndex = (static_cast<size_t>(y) * uWidth + x) * 4;
-						vBgra[uIndex + 0] = vRgba[uIndex + 2];
-						vBgra[uIndex + 1] = vRgba[uIndex + 1];
-						vBgra[uIndex + 2] = vRgba[uIndex + 0];
-						vBgra[uIndex + 3] = vRgba[uIndex + 3];
-					}
-				}
-				if (ImTextureID pFriendTex = StoreTexture(vBgra.data(), uWidth, uHeight))
-					return pFriendTex;
+				tCache.uRevision = tImage.m_uRevision;
+				return pTexture;
 			}
 		}
+		return reinterpret_cast<ImTextureID>(tCache.pTexture.Get());
 	}
-
-	tCache.flNextAttempt = flNow + 5.0;
 	return static_cast<ImTextureID>(0);
 }
 
@@ -2268,63 +2230,6 @@ void CMenu::MenuAnticheat(int iTab)
 	// Cheaters
 	case 0:
 	{
-		if (Section("API key"))
-		{
-			static std::string sAPIKeyBuffer = Vars::Config::SteamWebAPIKey.Value;
-			static bool bEditingApiKey = false;
-			static bool bRevealApiKey = false;
-			if (!bEditingApiKey && sAPIKeyBuffer != Vars::Config::SteamWebAPIKey.Value)
-				sAPIKeyBuffer = Vars::Config::SteamWebAPIKey.Value;
-
-			const float flRowHeight = H::Draw.Scale(36);
-			SetCursorPosY(GetCursorPosY() + H::Draw.Scale(4));
-			const ImGuiInputTextFlags nApiKeyFlags = (bRevealApiKey ? 0 : ImGuiInputTextFlags_Password) | ImGuiInputTextFlags_EnterReturnsTrue;
-			bool bSubmitted = false;
-			bool bFinished = false;
-			if (BeginTable("APIKeyRow", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoPadInnerX))
-			{
-				TableSetupColumn("Key", ImGuiTableColumnFlags_WidthStretch);
-				TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, H::Draw.Scale(150));
-				TableNextRow(ImGuiTableRowFlags_None, flRowHeight);
-				TableSetColumnIndex(0);
-				SetCursorPosY(GetCursorPosY() + H::Draw.Scale(2));
-				const float flInputWidth = std::max(GetContentRegionAvail().x - H::Draw.Scale(6), H::Draw.Scale(160));
-				bSubmitted = FInputText("Steam Web API key", sAPIKeyBuffer, flInputWidth, nApiKeyFlags);
-				bFinished = bSubmitted || IsItemDeactivatedAfterEdit();
-				bEditingApiKey = IsItemActive();
-
-				TableSetColumnIndex(1);
-				BeginGroup();
-				PushStyleVar(ImGuiStyleVar_FrameRounding, H::Draw.Scale(8));
-				PushStyleColor(ImGuiCol_Button, F::Render.Background0.Value);
-				PushStyleColor(ImGuiCol_ButtonHovered, F::Render.Background0p5.Value);
-				PushStyleColor(ImGuiCol_ButtonActive, F::Render.Background1.Value);
-				if (IconButton(bRevealApiKey ? ICON_MD_VISIBILITY : ICON_MD_VISIBILITY_OFF, flRowHeight))
-					bRevealApiKey = !bRevealApiKey;
-				PopStyleColor(3);
-				SameLine(0.f, H::Draw.Scale(6));
-				const ImVec2 vGetKeySize = { H::Draw.Scale(90), flRowHeight };
-				if (Button("GET KEY", vGetKeySize))
-					ShellExecuteA(NULL, "open", "https://steamcommunity.com/dev/apikey", NULL, NULL, SW_SHOWNORMAL);
-				PopStyleVar();
-				EndGroup();
-				EndTable();
-			}
-
-			if (bFinished && sAPIKeyBuffer != Vars::Config::SteamWebAPIKey.Value)
-			{
-				Vars::Config::SteamWebAPIKey.Map[DEFAULT_BIND] = sAPIKeyBuffer;
-				Vars::Config::SteamWebAPIKey.Value = sAPIKeyBuffer;
-				SDK::Output("steamwebapi", sAPIKeyBuffer.empty() ? "Cleared API key" : "Saved steamwebapi key", { 175, 150, 255, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-			}
-
-			PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
-			FText("Used for downloading names and avatars via GetPlayerSummaries.");
-			if (Vars::Config::SteamWebAPIKey.Value.empty())
-				FText("Set a key to enable lookups for non-friends.");
-			PopStyleColor();
-		}
-		EndSection();
 		if (Section("Cheater List"))
 		{
 			static std::string cheater_search = "";
@@ -2551,11 +2456,9 @@ void CMenu::MenuAnticheat(int iTab)
 							});
 							PopupSelectable("Refetch profile", ICON_MD_SYNC, tAccent, [&]
 							{
-								ResetAvatarTexture(tEntry.first);
-								F::SteamProfileCache.Invalidate(tEntry.first);
-								F::SteamProfileCache.TouchAvatar(tEntry.first);
+								F::SteamProfileCache.Refresh(tEntry.first);
 								const auto uSteamID64 = CSteamID(tEntry.first, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-								SDK::Output("steamwebapi", std::format("Queued profile refetch for {}", uSteamID64).c_str(), { 175, 150, 255, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+								SDK::Output("SteamProfileCache", std::format("Queued native profile refresh for {}", uSteamID64).c_str(), { 175, 150, 255, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 							});
 
 							Dummy({ 0, H::Draw.Scale(4) });
@@ -3547,11 +3450,9 @@ void CMenu::MenuLogs(int iTab)
 						});
 						fPopupSelectable(std::format("Marked{}", tEntry.m_uAccountID), iPopupRow, "Refetch profile", ICON_MD_SYNC, tAccent, [&]
 						{
-							ResetAvatarTexture(tEntry.m_uAccountID);
-							F::SteamProfileCache.Invalidate(tEntry.m_uAccountID);
-							F::SteamProfileCache.TouchAvatar(tEntry.m_uAccountID);
+							F::SteamProfileCache.Refresh(tEntry.m_uAccountID);
 							const auto uSteamID64 = CSteamID(tEntry.m_uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-							SDK::Output("steamwebapi", std::format("Queued profile refetch for {}", uSteamID64).c_str(), { 175, 150, 255, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
+							SDK::Output("SteamProfileCache", std::format("Queued native profile refresh for {}", uSteamID64).c_str(), { 175, 150, 255, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 						});
 
 						Dummy({ 0, H::Draw.Scale(4) });

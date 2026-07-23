@@ -1159,6 +1159,7 @@
     <ClCompile Include="src\Features\Backtrack\Backtrack.cpp" />
     <ClCompile Include="src\Features\Visuals\CameraWindow\CameraWindow.cpp" />
     <ClCompile Include="src\Features\CheatDetection\CheatDetection.cpp" />
+	<ClCompile Include="src\Hooks\CAvatarImage_ApplyImage.cpp" />
     <ClCompile Include="src\Features\Players\SteamProfileCache.cpp" />
     <ClCompile Include="src\Features\Commands\Commands.cpp" />
     <ClCompile Include="src\Features\Binds\Binds.cpp" />

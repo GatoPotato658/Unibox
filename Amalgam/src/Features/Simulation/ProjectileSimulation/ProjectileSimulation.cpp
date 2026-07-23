@@ -5,9 +5,7 @@
 #include "../../CritHack/CritHack.h"
 #include "../../Backtrack/Backtrack.h"
 
-namespace
-{
-	const char* GetPasstimeThrowSpeedCvar(CTFPlayer* pPlayer)
+static const char* GetPasstimeThrowSpeedCvar(CTFPlayer* pPlayer)
 	{
 		switch (pPlayer ? pPlayer->m_iClass() : TF_CLASS_UNDEFINED)
 		{
@@ -24,7 +22,7 @@ namespace
 		}
 	}
 
-	const char* GetPasstimeThrowArcCvar(CTFPlayer* pPlayer)
+static const char* GetPasstimeThrowArcCvar(CTFPlayer* pPlayer)
 	{
 		switch (pPlayer ? pPlayer->m_iClass() : TF_CLASS_UNDEFINED)
 		{
@@ -40,7 +38,6 @@ namespace
 		default: return "tf_passtime_throwarc_scout";
 		}
 	}
-}
 
 bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, Vec3 vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge)
 {

@@ -8,8 +8,6 @@
 #include "../NavEngine/Controllers/Controller.h"
 #include "../NavEngine/Controllers/FlagController/FlagController.h"
 
-namespace
-{
 	using nav_priority_t = PriorityListEnum::PriorityListEnum;
 
 	enum class job_kind_t
@@ -38,7 +36,7 @@ namespace
 	};
 
 	template <size_t nCount>
-	auto FindBestCandidate(std::array<job_candidate_t, nCount>& aCandidates) -> job_candidate_t*
+	static auto FindBestCandidate(std::array<job_candidate_t, nCount>& aCandidates) -> job_candidate_t*
 	{
 		job_candidate_t* pBestCandidate = nullptr;
 		for (auto& tCandidate : aCandidates)
@@ -53,7 +51,7 @@ namespace
 		return pBestCandidate;
 	}
 
-	auto get_active_priority_score(nav_priority_t ePriority, float flScore, float flBonus = 140.f, float flCleanupScore = 320.f) -> float
+	static auto get_active_priority_score(nav_priority_t ePriority, float flScore, float flBonus = 140.f, float flCleanupScore = 320.f) -> float
 	{
 		if (F::NavEngine.m_eCurrentPriority != ePriority)
 			return flScore;
@@ -61,27 +59,27 @@ namespace
 		return flScore > 0.f ? flScore + flBonus : flCleanupScore;
 	}
 
-	auto has_reload_target() -> bool
+	static auto has_reload_target() -> bool
 	{
 		return F::NavBotReload.m_iLastReloadSlot >= SLOT_PRIMARY && F::NavBotReload.m_iLastReloadSlot <= SLOT_SECONDARY;
 	}
 
-	auto is_spawn_area(CNavArea* pArea) -> bool
+	static auto is_spawn_area(CNavArea* pArea) -> bool
 	{
 		return pArea && (pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
 	}
 
-	auto is_health_job_active() -> bool
+	static auto is_health_job_active() -> bool
 	{
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::GetHealth;
 	}
 
-	auto is_low_prio_health_job_active() -> bool
+	static auto is_low_prio_health_job_active() -> bool
 	{
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::LowPrioGetHealth;
 	}
 
-	auto is_projectile_threat(CBaseEntity* pEntity, int iLocalTeam, float& flOutDistance) -> bool
+	static auto is_projectile_threat(CBaseEntity* pEntity, int iLocalTeam, float& flOutDistance) -> bool
 	{
 		if (!pEntity || pEntity->m_iTeamNum() == iLocalTeam)
 			return false;
@@ -120,7 +118,7 @@ namespace
 		return false;
 	}
 
-	auto get_projectile_escape_score(CTFPlayer* pLocal) -> float
+	static auto get_projectile_escape_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal ||
 			(!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies) &&
@@ -151,7 +149,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::EscapeDanger, flScore);
 	}
 
-	auto get_escape_danger_score(CTFPlayer* pLocal) -> float
+	static auto get_escape_danger_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal)
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
@@ -203,7 +201,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::EscapeDanger, flScore);
 	}
 
-	auto get_escape_spawn_score(CTFPlayer* pLocal) -> float
+	static auto get_escape_spawn_score(CTFPlayer* pLocal) -> float
 	{
 		if (!Vars::Misc::Movement::NavBot::EscapeSpawn.Value)
 			return 0.f;
@@ -218,7 +216,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::EscapeSpawn, 2000.f);
 	}
 
-	auto get_health_score(CTFPlayer* pLocal, bool bLowPrio) -> float
+	static auto get_health_score(CTFPlayer* pLocal, bool bLowPrio) -> float
 	{
 		const auto ePriority = bLowPrio ? PriorityListEnum::LowPrioGetHealth : PriorityListEnum::GetHealth;
 		if (!pLocal || !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::SearchHealth))
@@ -255,7 +253,7 @@ namespace
 		return get_active_priority_score(ePriority, flScore);
 	}
 
-	auto get_ammo_score(CTFPlayer* pLocal) -> float
+	static auto get_ammo_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal || !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::SearchAmmo))
 			return get_active_priority_score(PriorityListEnum::GetAmmo, 0.f);
@@ -307,7 +305,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::GetAmmo, flScore);
 	}
 
-	auto object_needs_engineer_attention(CBaseObject* pBuilding) -> bool
+	static auto object_needs_engineer_attention(CBaseObject* pBuilding) -> bool
 	{
 		if (!pBuilding || pBuilding->m_bPlacing())
 			return false;
@@ -321,7 +319,7 @@ namespace
 		return false;
 	}
 
-	auto get_engineer_score(CTFPlayer* pLocal) -> float
+	static auto get_engineer_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal || !F::NavBotEngineer.IsEngieMode(pLocal))
 			return get_active_priority_score(PriorityListEnum::Engineer, 0.f);
@@ -342,7 +340,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::Engineer, flScore);
 	}
 
-	auto get_run_reload_score(CTFPlayer* pLocal) -> float
+	static auto get_run_reload_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal ||
 			!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies) ||
@@ -363,7 +361,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::RunReload, flScore);
 	}
 
-	auto get_safe_reload_score(CTFPlayer* pLocal) -> float
+	static auto get_safe_reload_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal ||
 			!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) ||
@@ -382,7 +380,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::RunSafeReload, flScore);
 	}
 
-	auto get_melee_score(CTFPlayer* pLocal) -> float
+	static auto get_melee_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal || F::BotUtils.m_iCurrentSlot != SLOT_MELEE || F::NavBotReload.m_iLastReloadSlot != -1)
 			return get_active_priority_score(PriorityListEnum::MeleeAttack, 0.f);
@@ -398,7 +396,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::MeleeAttack, flScore);
 	}
 
-	auto can_capture_objective() -> bool
+	static auto can_capture_objective() -> bool
 	{
 		if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives))
 			return false;
@@ -415,7 +413,7 @@ namespace
 		return true;
 	}
 
-	auto get_capture_score(CTFPlayer* pLocal) -> float
+	static auto get_capture_score(CTFPlayer* pLocal) -> float
 	{
 		float flScore = can_capture_objective() ? 520.f : 0.f;
 		if (!pLocal || !flScore)
@@ -451,7 +449,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::Capture, flScore);
 	}
 
-	auto has_targetable_building(CTFPlayer* pLocal) -> bool
+	static auto has_targetable_building(CTFPlayer* pLocal) -> bool
 	{
 		if (!pLocal)
 			return false;
@@ -468,7 +466,7 @@ namespace
 		return false;
 	}
 
-	auto get_snipe_sentry_score(CTFPlayer* pLocal) -> float
+	static auto get_snipe_sentry_score(CTFPlayer* pLocal) -> float
 	{
 		if (!pLocal ||
 			!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentries))
@@ -489,7 +487,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::SnipeSentry, flScore);
 	}
 
-	auto get_stay_near_score(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> float
+	static auto get_stay_near_score(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> float
 	{
 		if (!pLocal || !pWeapon || !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
 			return get_active_priority_score(PriorityListEnum::StayNear, 0.f);
@@ -511,7 +509,7 @@ namespace
 		return get_active_priority_score(PriorityListEnum::StayNear, flScore);
 	}
 
-	auto get_group_with_others_score() -> float
+	static auto get_group_with_others_score() -> float
 	{
 		if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::GroupWithOthers))
 			return 0.f;
@@ -519,11 +517,10 @@ namespace
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol ? 210.f : 180.f;
 	}
 
-	auto get_roam_score() -> float
+	static auto get_roam_score() -> float
 	{
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol ? 140.f : 110.f;
 	}
-}
 
 void CNavBotJobSystem::RefreshSharedState(CTFPlayer* pLocal)
 {

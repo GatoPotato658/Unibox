@@ -1,5 +1,7 @@
 #include "Core.h"
 
+#include "../Features/Players/SteamProfileCache.h"
+
 #include "../SDK/SDK.h"
 #include "../BytePatches/BytePatches.h"
 #include "../Features/Configs/Configs.h"
@@ -194,6 +196,7 @@ void CCore::Unload()
 	}
 
 	G::Unload = true;
+	F::SteamProfileCache.Shutdown();
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
 	U::BytePatches.Unload();
 	H::Events.Unload();

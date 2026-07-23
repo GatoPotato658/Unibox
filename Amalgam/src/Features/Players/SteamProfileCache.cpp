@@ -1,357 +1,305 @@
 #include "SteamProfileCache.h"
 #include "../Configs/Configs.h"
 
-#include <boost/property_tree/json_parser.hpp>
-#include <winhttp.h>
 #include <wincodec.h>
 #include <wrl/client.h>
 
-#pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "windowscodecs.lib")
-
-#ifndef HTTP_STATUS_UNAUTHORIZED
-#define HTTP_STATUS_UNAUTHORIZED 401
-#endif
-#ifndef HTTP_STATUS_FORBIDDEN
-#define HTTP_STATUS_FORBIDDEN 403
-#endif
-#ifndef HTTP_STATUS_TOO_MANY_REQUESTS
-#define HTTP_STATUS_TOO_MANY_REQUESTS 429
-#endif
 
 using Microsoft::WRL::ComPtr;
 
-constexpr Color_t kLogColor = { 175, 150, 255, 255 };
-constexpr Color_t kErrorColor = { 255, 150, 150, 255 };
+static constexpr Color_t LogColor = { 175, 150, 255, 255 };
+static constexpr Color_t ErrorColor = { 255, 150, 150, 255 };
+static constexpr auto AvatarRefreshAge = std::chrono::days(7);
+static constexpr uint32_t MaxAvatarDimension = 1024;
+static constexpr size_t MaxAvatarBytes = size_t(MaxAvatarDimension) * MaxAvatarDimension * 4;
 
-static double g_flNextSummaryFailLog = 0.0;
-static double g_flNextAvatarFailLog = 0.0;
+using RegisterCallbackFn = void(__cdecl*)(CCallbackBase*, int);
+using UnregisterCallbackFn = void(__cdecl*)(CCallbackBase*);
+
+static bool IsAvatarSizeValid(uint32_t uWidth, uint32_t uHeight)
+{
+	return uWidth && uHeight && uWidth <= MaxAvatarDimension && uHeight <= MaxAvatarDimension
+		&& static_cast<size_t>(uWidth) * uHeight * 4 <= MaxAvatarBytes;
+}
 
 static std::filesystem::path GetAvatarFolder()
 {
 	if (F::Configs.m_sCorePath.empty())
 		return {};
+
 	std::filesystem::path tFolder = std::filesystem::path(F::Configs.m_sCorePath) / "avatars";
 	std::error_code ec;
 	std::filesystem::create_directories(tFolder, ec);
-	if (ec)
-		return {};
-	return tFolder;
+	return ec ? std::filesystem::path{} : tFolder;
 }
 
-static bool WriteAvatarPng(const std::filesystem::path& sPath, const std::vector<uint8_t>& vPixels, uint32_t uWidth, uint32_t uHeight)
+static bool WriteAvatarPng(const std::filesystem::path& tPath, const std::vector<uint8_t>& vPixels, uint32_t uWidth, uint32_t uHeight)
 {
-	if (vPixels.empty() || !uWidth || !uHeight)
-		return false;
+		if (!IsAvatarSizeValid(uWidth, uHeight) || vPixels.size() != static_cast<size_t>(uWidth) * uHeight * 4)
+			return false;
 
-	const HRESULT hrInit = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-	const bool bDidInit = SUCCEEDED(hrInit);
-	if (!bDidInit && hrInit != RPC_E_CHANGED_MODE)
-		return false;
+		const HRESULT hrInitialize = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		const bool bInitialized = SUCCEEDED(hrInitialize);
+		if (!bInitialized && hrInitialize != RPC_E_CHANGED_MODE)
+			return false;
 
-	HRESULT hr = S_OK;
-	ComPtr<IWICImagingFactory> pFactory;
-	hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
-	ComPtr<IWICStream> pStream;
-	if (SUCCEEDED(hr))
-		hr = pFactory->CreateStream(&pStream);
-	std::wstring sWidePath;
-	if (SUCCEEDED(hr))
-	{
-		sWidePath = sPath.wstring();
-		hr = pStream->InitializeFromFilename(sWidePath.c_str(), GENERIC_WRITE);
-	}
-	ComPtr<IWICBitmapEncoder> pEncoder;
-	if (SUCCEEDED(hr))
-		hr = pFactory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &pEncoder);
-	if (SUCCEEDED(hr))
-		hr = pEncoder->Initialize(pStream.Get(), WICBitmapEncoderNoCache);
-	ComPtr<IWICBitmapFrameEncode> pFrame;
-	ComPtr<IPropertyBag2> pProps;
-	if (SUCCEEDED(hr))
-		hr = pEncoder->CreateNewFrame(&pFrame, &pProps);
-	if (SUCCEEDED(hr))
-		hr = pFrame->Initialize(pProps.Get());
-	if (SUCCEEDED(hr))
-		hr = pFrame->SetSize(uWidth, uHeight);
-	WICPixelFormatGUID tFormat = GUID_WICPixelFormat32bppBGRA;
-	if (SUCCEEDED(hr))
-		hr = pFrame->SetPixelFormat(&tFormat);
-	if (SUCCEEDED(hr) && tFormat != GUID_WICPixelFormat32bppBGRA)
-		hr = E_FAIL;
-	if (SUCCEEDED(hr))
-		hr = pFrame->WritePixels(uHeight, uWidth * 4, static_cast<UINT>(vPixels.size()), const_cast<BYTE*>(vPixels.data()));
-	if (SUCCEEDED(hr))
-		hr = pFrame->Commit();
-	if (SUCCEEDED(hr))
-		hr = pEncoder->Commit();
-
-	if (bDidInit)
-		CoUninitialize();
-	return SUCCEEDED(hr);
-}
-
-
-struct ParsedUrl_t
-{
-	std::wstring m_wsHost;
-	std::wstring m_wsPath;
-	INTERNET_PORT m_wPort = 0;
-	bool m_bSecure = false;
-};
-
-static void LogThrottled(const char* sMessage, double& flNextAllowed, double flCooldown, Color_t tColor)
-{
-	const double flNow = SDK::PlatFloatTime();
-	if (flNow < flNextAllowed)
-		return;
-	flNextAllowed = flNow + flCooldown;
-	SDK::Output("steamwebapi", sMessage, tColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-}
-
-static bool CrackUrl(const std::wstring& sUrl, ParsedUrl_t& tOut)
-{
-	URL_COMPONENTS tComponents = {};
-	tComponents.dwStructSize = sizeof(tComponents);
-	tComponents.dwSchemeLength = static_cast<DWORD>(-1);
-	tComponents.dwHostNameLength = static_cast<DWORD>(-1);
-	tComponents.dwUrlPathLength = static_cast<DWORD>(-1);
-	tComponents.dwExtraInfoLength = static_cast<DWORD>(-1);
-	if (!WinHttpCrackUrl(sUrl.c_str(), 0, 0, &tComponents))
-		return false;
-
-	tOut.m_bSecure = tComponents.nScheme == INTERNET_SCHEME_HTTPS;
-	tOut.m_wPort = tComponents.nPort ? tComponents.nPort : (tOut.m_bSecure ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT);
-	tOut.m_wsHost.assign(tComponents.lpszHostName, tComponents.dwHostNameLength);
-	std::wstring sPath(tComponents.lpszUrlPath, tComponents.dwUrlPathLength);
-	std::wstring sExtra(tComponents.lpszExtraInfo, tComponents.dwExtraInfoLength);
-	if (sPath.empty())
-		sPath = L"/";
-	tOut.m_wsPath = sPath + sExtra;
-	return true;
-}
-
-static std::vector<uint8_t> DownloadUrl(const std::wstring& sUrl, DWORD* pStatusCode = nullptr)
-{
-	std::vector<uint8_t> vBuffer;
-	if (pStatusCode)
-		*pStatusCode = 0;
-	ParsedUrl_t tParsed;
-	if (!CrackUrl(sUrl, tParsed))
-		return vBuffer;
-
-	HINTERNET hSession = WinHttpOpen(L"unibox/SteamProfileCache", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-	if (!hSession)
-		return vBuffer;
-
-	WinHttpSetTimeouts(hSession, 5000, 5000, 5000, 5000);
-
-	HINTERNET hConnect = WinHttpConnect(hSession, tParsed.m_wsHost.c_str(), tParsed.m_wPort, 0);
-	if (!hConnect)
-	{
-		WinHttpCloseHandle(hSession);
-		return vBuffer;
-	}
-
-	DWORD dwFlags = tParsed.m_bSecure ? WINHTTP_FLAG_SECURE : 0;
-	HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", tParsed.m_wsPath.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, dwFlags);
-	if (!hRequest)
-	{
-		WinHttpCloseHandle(hConnect);
-		WinHttpCloseHandle(hSession);
-		return vBuffer;
-	}
-
-	BOOL bResult = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-	if (bResult)
-		bResult = WinHttpReceiveResponse(hRequest, nullptr);
-
-	if (bResult)
-	{
-		DWORD dwStatus = 0;
-		DWORD dwStatusSize = sizeof(dwStatus);
-		if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &dwStatus, &dwStatusSize, WINHTTP_NO_HEADER_INDEX))
-		{
-			if (pStatusCode)
-				*pStatusCode = dwStatus;
-			if (dwStatus != HTTP_STATUS_OK)
-				bResult = FALSE;
-		}
-	}
-
-	if (bResult)
-	{
-		DWORD dwBytesAvailable = 0;
-		while (WinHttpQueryDataAvailable(hRequest, &dwBytesAvailable))
-		{
-			if (!dwBytesAvailable)
-				break;
-
-			size_t uOffset = vBuffer.size();
-			vBuffer.resize(uOffset + dwBytesAvailable);
-			DWORD dwBytesRead = 0;
-			if (!WinHttpReadData(hRequest, vBuffer.data() + uOffset, dwBytesAvailable, &dwBytesRead))
-			{
-				vBuffer.clear();
-				break;
-			}
-			vBuffer.resize(uOffset + dwBytesRead);
-		}
-	}
-
-	WinHttpCloseHandle(hRequest);
-	WinHttpCloseHandle(hConnect);
-	WinHttpCloseHandle(hSession);
-	return vBuffer;
-}
-
-static bool DecodeImage(const std::vector<uint8_t>& vSource, std::vector<uint8_t>& vOut, uint32_t& uWidth, uint32_t& uHeight)
-{
-	if (vSource.empty())
-		return false;
-
-	const HRESULT hrInit = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-	const bool bDidInit = SUCCEEDED(hrInit);
-	if (!bDidInit && hrInit != RPC_E_CHANGED_MODE)
-		return false;
-
-	HRESULT hr = S_OK;
-	ComPtr<IWICImagingFactory> pFactory;
-	hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
-	if (SUCCEEDED(hr))
-	{
+		HRESULT hr = S_OK;
+		ComPtr<IWICImagingFactory> pFactory;
+		hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
 		ComPtr<IWICStream> pStream;
-		hr = pFactory->CreateStream(&pStream);
 		if (SUCCEEDED(hr))
-			hr = pStream->InitializeFromMemory(const_cast<BYTE*>(vSource.data()), static_cast<DWORD>(vSource.size()));
+			hr = pFactory->CreateStream(&pStream);
+		if (SUCCEEDED(hr))
+			hr = pStream->InitializeFromFilename(tPath.c_str(), GENERIC_WRITE);
+		ComPtr<IWICBitmapEncoder> pEncoder;
+		if (SUCCEEDED(hr))
+			hr = pFactory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &pEncoder);
+		if (SUCCEEDED(hr))
+			hr = pEncoder->Initialize(pStream.Get(), WICBitmapEncoderNoCache);
+		ComPtr<IWICBitmapFrameEncode> pFrame;
+		ComPtr<IPropertyBag2> pProperties;
+		if (SUCCEEDED(hr))
+			hr = pEncoder->CreateNewFrame(&pFrame, &pProperties);
+		if (SUCCEEDED(hr))
+			hr = pFrame->Initialize(pProperties.Get());
+		if (SUCCEEDED(hr))
+			hr = pFrame->SetSize(uWidth, uHeight);
+		WICPixelFormatGUID tFormat = GUID_WICPixelFormat32bppBGRA;
+		if (SUCCEEDED(hr))
+			hr = pFrame->SetPixelFormat(&tFormat);
+		if (SUCCEEDED(hr) && tFormat != GUID_WICPixelFormat32bppBGRA)
+			hr = E_FAIL;
+		if (SUCCEEDED(hr))
+			hr = pFrame->WritePixels(uHeight, uWidth * 4, static_cast<UINT>(vPixels.size()), const_cast<BYTE*>(vPixels.data()));
+		if (SUCCEEDED(hr))
+			hr = pFrame->Commit();
+		if (SUCCEEDED(hr))
+			hr = pEncoder->Commit();
 
+		if (bInitialized)
+			CoUninitialize();
+		return SUCCEEDED(hr);
+	}
+
+static bool DecodeAvatarPng(const std::filesystem::path& tPath, std::vector<uint8_t>& vPixels, uint32_t& uWidth, uint32_t& uHeight)
+{
+		const HRESULT hrInitialize = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		const bool bInitialized = SUCCEEDED(hrInitialize);
+		if (!bInitialized && hrInitialize != RPC_E_CHANGED_MODE)
+			return false;
+
+		HRESULT hr = S_OK;
+		ComPtr<IWICImagingFactory> pFactory;
+		hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
 		ComPtr<IWICBitmapDecoder> pDecoder;
 		if (SUCCEEDED(hr))
-			hr = pFactory->CreateDecoderFromStream(pStream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, &pDecoder);
-
+			hr = pFactory->CreateDecoderFromFilename(tPath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
 		ComPtr<IWICBitmapFrameDecode> pFrame;
 		if (SUCCEEDED(hr))
 			hr = pDecoder->GetFrame(0, &pFrame);
-
 		ComPtr<IWICFormatConverter> pConverter;
 		if (SUCCEEDED(hr))
-		{
 			hr = pFactory->CreateFormatConverter(&pConverter);
-			if (SUCCEEDED(hr))
-				hr = pConverter->Initialize(pFrame.Get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0.f, WICBitmapPaletteTypeCustom);
-		}
-
+		if (SUCCEEDED(hr))
+			hr = pConverter->Initialize(pFrame.Get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeCustom);
 		if (SUCCEEDED(hr))
 			hr = pConverter->GetSize(&uWidth, &uHeight);
-
+		if (SUCCEEDED(hr) && !IsAvatarSizeValid(uWidth, uHeight))
+			hr = E_FAIL;
 		if (SUCCEEDED(hr))
 		{
-			vOut.resize(static_cast<size_t>(uWidth) * static_cast<size_t>(uHeight) * 4);
-			hr = pConverter->CopyPixels(nullptr, uWidth * 4, static_cast<UINT>(vOut.size()), vOut.data());
+			vPixels.resize(static_cast<size_t>(uWidth) * uHeight * 4);
+			hr = pConverter->CopyPixels(nullptr, uWidth * 4, static_cast<UINT>(vPixels.size()), vPixels.data());
 		}
+
+		if (bInitialized)
+			CoUninitialize();
+		return SUCCEEDED(hr);
 	}
 
-	if (bDidInit)
-		CoUninitialize();
-	return SUCCEEDED(hr);
-}
+class CSteamProfilePersonaCallback final : public CCallbackBase
+	{
+	public:
+	explicit CSteamProfilePersonaCallback(CSteamProfileCache& tCache) : m_tCache(tCache) {}
+	void Run(void* pParameter) override
+	{
+		if (pParameter)
+			m_tCache.HandlePersonaStateChange(*static_cast<PersonaStateChange_t*>(pParameter));
+	}
+		void Run(void*, bool, SteamAPICall_t) override {}
+		int GetCallbackSizeBytes() override { return sizeof(PersonaStateChange_t); }
+	private:
+		CSteamProfileCache& m_tCache;
+	};
+
+class CSteamProfileAvatarCallback final : public CCallbackBase
+	{
+	public:
+	explicit CSteamProfileAvatarCallback(CSteamProfileCache& tCache) : m_tCache(tCache) {}
+	void Run(void* pParameter) override
+	{
+		if (pParameter)
+			m_tCache.HandleAvatarImageLoaded(*static_cast<AvatarImageLoaded_t*>(pParameter));
+	}
+		void Run(void*, bool, SteamAPICall_t) override {}
+		int GetCallbackSizeBytes() override { return sizeof(AvatarImageLoaded_t); }
+	private:
+		CSteamProfileCache& m_tCache;
+	};
+
+static CSteamProfilePersonaCallback* s_pPersonaCallback = nullptr;
+static CSteamProfileAvatarCallback* s_pAvatarCallback = nullptr;
 
 std::filesystem::path CSteamProfileCache::GetAvatarPath(uint32_t uAccountID)
 {
 	if (!uAccountID)
 		return {};
 
-	auto sFolder = GetAvatarFolder();
-	if (sFolder.empty())
+	const auto tFolder = GetAvatarFolder();
+	if (tFolder.empty())
 		return {};
-
-	const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-	return sFolder / (std::to_string(uSteamID64) + ".png");
+	return tFolder / (std::to_string(CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64()) + ".png");
 }
 
 bool CSteamProfileCache::SaveAvatarToDisk(uint32_t uAccountID, const std::vector<uint8_t>& vPixels, uint32_t uWidth, uint32_t uHeight, std::filesystem::path* pOutPath, bool bLog)
 {
-	if (vPixels.empty() || !uWidth || !uHeight)
+	const auto tPath = GetAvatarPath(uAccountID);
+	if (tPath.empty())
 		return false;
-
-	auto sFolder = GetAvatarFolder();
-	if (sFolder.empty())
-		return false;
-
-	std::error_code ec;
-	std::filesystem::create_directories(sFolder, ec);
-	if (ec)
-		return false;
-
-	const auto sPath = sFolder / (std::to_string(CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64()) + ".png");
 	if (pOutPath)
-		*pOutPath = sPath;
+		*pOutPath = tPath;
 
-	std::filesystem::remove(sPath, ec);
-	const bool bSaved = WriteAvatarPng(sPath, vPixels, uWidth, uHeight);
+	auto tTemporaryPath = tPath;
+	tTemporaryPath += ".tmp";
+	std::error_code ec;
+	std::filesystem::remove(tTemporaryPath, ec);
+	const bool bSaved = WriteAvatarPng(tTemporaryPath, vPixels, uWidth, uHeight);
+	const bool bCommitted = bSaved && MoveFileExW(tTemporaryPath.c_str(), tPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+	if (!bCommitted)
+		std::filesystem::remove(tTemporaryPath, ec);
+
 	if (bLog)
 	{
-		if (bSaved)
-		{
-			const std::string sMessage = std::format("Saved avatar to {}", sPath.string());
-			SDK::Output("steamwebapi", sMessage.c_str(), kLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		}
-		else
-		{
-			const std::string sMessage = std::format("Failed to write avatar file {}", sPath.string());
-			SDK::Output("steamwebapi", sMessage.c_str(), kErrorColor, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		}
+		const std::string sMessage = std::format("{} avatar {}", bCommitted ? "Saved" : "Failed to save", tPath.string());
+		SDK::Output("SteamProfileCache", sMessage.c_str(), bCommitted ? LogColor : ErrorColor, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 	}
-	return bSaved;
+	return bCommitted;
+}
+
+void CSteamProfileCache::Initialize()
+{
+	EnsureCallbacksRegistered();
+}
+
+void CSteamProfileCache::Shutdown()
+{
+	std::lock_guard tLock(m_mutex);
+	if (!m_bCallbacksRegistered)
+		return;
+
+	if (m_pUnregisterCallback)
+	{
+		m_pUnregisterCallback(s_pPersonaCallback);
+		m_pUnregisterCallback(s_pAvatarCallback);
+	}
+	m_bCallbacksRegistered = false;
+	m_pUnregisterCallback = nullptr;
+}
+
+void CSteamProfileCache::EnsureCallbacksRegistered()
+{
+	std::lock_guard tLock(m_mutex);
+	if (m_bCallbacksRegistered)
+		return;
+
+	auto RegisterCallback = U::Memory.GetModuleExport<RegisterCallbackFn>("steam_api64.dll", "SteamAPI_RegisterCallback");
+	if (!RegisterCallback)
+		RegisterCallback = U::Memory.GetModuleExport<RegisterCallbackFn>("steam_api.dll", "SteamAPI_RegisterCallback");
+	if (!RegisterCallback)
+		return;
+
+	static CSteamProfilePersonaCallback tPersonaCallback(*this);
+	static CSteamProfileAvatarCallback tAvatarCallback(*this);
+	s_pPersonaCallback = &tPersonaCallback;
+	s_pAvatarCallback = &tAvatarCallback;
+	RegisterCallback(s_pPersonaCallback, PersonaStateChange_t::k_iCallback);
+	RegisterCallback(s_pAvatarCallback, AvatarImageLoaded_t::k_iCallback);
+	m_pUnregisterCallback = U::Memory.GetModuleExport<UnregisterCallbackFn>("steam_api64.dll", "SteamAPI_UnregisterCallback");
+	if (!m_pUnregisterCallback)
+		m_pUnregisterCallback = U::Memory.GetModuleExport<UnregisterCallbackFn>("steam_api.dll", "SteamAPI_UnregisterCallback");
+	m_bCallbacksRegistered = true;
 }
 
 void CSteamProfileCache::Touch(uint32_t uAccountID)
 {
 	if (!uAccountID)
 		return;
-
-	std::unique_lock lock(m_mutex);
-	auto& tEntry = m_mEntries[uAccountID];
-	ProcessFutures(uAccountID, tEntry);
-	EnsureSummary(uAccountID, tEntry);
+	EnsureCallbacksRegistered();
+	std::lock_guard tLock(m_mutex);
+	RequestName(uAccountID, m_mEntries[uAccountID]);
 }
 
 void CSteamProfileCache::TouchAvatar(uint32_t uAccountID)
 {
 	if (!uAccountID)
 		return;
-
-	std::unique_lock lock(m_mutex);
+	EnsureCallbacksRegistered();
+	std::lock_guard tLock(m_mutex);
 	auto& tEntry = m_mEntries[uAccountID];
-	ProcessFutures(uAccountID, tEntry);
-	EnsureSummary(uAccountID, tEntry);
-	EnsureAvatar(uAccountID, tEntry);
+	LoadAvatarFromDisk(uAccountID, tEntry);
+	RequestName(uAccountID, tEntry);
+	RequestAvatar(uAccountID, tEntry, false);
+}
+
+void CSteamProfileCache::Refresh(uint32_t uAccountID)
+{
+	if (!uAccountID)
+		return;
+	EnsureCallbacksRegistered();
+	std::lock_guard tLock(m_mutex);
+	auto& tEntry = m_mEntries[uAccountID];
+	LoadAvatarFromDisk(uAccountID, tEntry);
+	tEntry.m_bNameRequested = false;
+	tEntry.m_bAvatarRequested = false;
+	RequestName(uAccountID, tEntry);
+	RequestAvatar(uAccountID, tEntry, true);
 }
 
 void CSteamProfileCache::Pump()
 {
-	std::unique_lock lock(m_mutex);
-	for (auto& [uAccountID, tEntry] : m_mEntries)
+	EnsureCallbacksRegistered();
+	std::vector<std::tuple<uint32_t, std::shared_ptr<std::vector<uint8_t>>, uint32_t, uint32_t>> vPendingSaves;
+	std::vector<std::pair<uint32_t, int>> vPendingImages;
 	{
-		ProcessFutures(uAccountID, tEntry);
-		EnsureSummary(uAccountID, tEntry);
-		EnsureAvatar(uAccountID, tEntry);
+		std::lock_guard tLock(m_mutex);
+		for (auto& [uAccountID, tEntry] : m_mEntries)
+		{
+			if (tEntry.m_bSavePending && tEntry.m_pAvatarPixels)
+			{
+				tEntry.m_bSavePending = false;
+				vPendingSaves.emplace_back(uAccountID, tEntry.m_pAvatarPixels, tEntry.m_uAvatarWidth, tEntry.m_uAvatarHeight);
+			}
+			if (tEntry.m_iPendingImage > 0)
+			{
+				vPendingImages.emplace_back(uAccountID, tEntry.m_iPendingImage);
+				tEntry.m_iPendingImage = 0;
+			}
+		}
 	}
+	for (const auto& [uAccountID, pPixels, uWidth, uHeight] : vPendingSaves)
+		SaveAvatarToDisk(uAccountID, *pPixels, uWidth, uHeight, nullptr, false);
+	for (const auto& [uAccountID, iImage] : vPendingImages)
+		CaptureSteamAvatar(uAccountID, iImage);
 }
 
 std::string CSteamProfileCache::GetPersonaName(uint32_t uAccountID)
 {
 	if (!uAccountID)
 		return {};
-
-	std::unique_lock lock(m_mutex);
-	auto& tEntry = m_mEntries[uAccountID];
-	ProcessFutures(uAccountID, tEntry);
-	if (!tEntry.m_sPersonaName.empty())
-		return tEntry.m_sPersonaName;
-
-	EnsureSummary(uAccountID, tEntry);
-	return {};
+	Touch(uAccountID);
+	std::lock_guard tLock(m_mutex);
+	return m_mEntries[uAccountID].m_sPersonaName;
 }
 
 bool CSteamProfileCache::TryGetAvatarImage(uint32_t uAccountID, AvatarImage_t& tOutImage)
@@ -359,284 +307,142 @@ bool CSteamProfileCache::TryGetAvatarImage(uint32_t uAccountID, AvatarImage_t& t
 	tOutImage = {};
 	if (!uAccountID)
 		return false;
-
-	std::unique_lock lock(m_mutex);
-	auto& tEntry = m_mEntries[uAccountID];
-	ProcessFutures(uAccountID, tEntry);
-	if (tEntry.m_pAvatarPixels && !tEntry.m_pAvatarPixels->empty() && tEntry.m_uAvatarWidth && tEntry.m_uAvatarHeight)
-	{
-		tOutImage.m_pPixels = tEntry.m_pAvatarPixels;
-		tOutImage.m_uWidth = tEntry.m_uAvatarWidth;
-		tOutImage.m_uHeight = tEntry.m_uAvatarHeight;
-		tOutImage.m_uStride = tEntry.m_uAvatarWidth * 4;
-		return true;
-	}
-
-	EnsureSummary(uAccountID, tEntry);
-	EnsureAvatar(uAccountID, tEntry);
-	return false;
+	TouchAvatar(uAccountID);
+	std::lock_guard tLock(m_mutex);
+	const auto it = m_mEntries.find(uAccountID);
+	if (it == m_mEntries.end() || !it->second.m_pAvatarPixels)
+		return false;
+	const auto& tEntry = it->second;
+	tOutImage = { tEntry.m_pAvatarPixels, tEntry.m_uAvatarWidth, tEntry.m_uAvatarHeight, tEntry.m_uAvatarWidth * 4, tEntry.m_uAvatarRevision };
+	return tOutImage.HasData();
 }
 
-void CSteamProfileCache::Invalidate(uint32_t uAccountID)
+void CSteamProfileCache::CaptureNativeAvatar(uint64_t uSteamID, const uint8_t* pRgba, uint32_t uWidth, uint32_t uHeight)
 {
-	if (!uAccountID)
+	if (!pRgba || !IsAvatarSizeValid(uWidth, uHeight))
+		return;
+	const CSteamID tSteamID(uSteamID);
+	if (tSteamID.GetEAccountType() != k_EAccountTypeIndividual || !tSteamID.GetAccountID())
 		return;
 
-	std::unique_lock lock(m_mutex);
-	if (m_uSummaryInFlight == uAccountID)
+	std::vector<uint8_t> vBgra(static_cast<size_t>(uWidth) * uHeight * 4);
+	for (size_t uIndex = 0; uIndex < vBgra.size(); uIndex += 4)
 	{
-		m_uSummaryInFlight = 0;
-		m_flNextSummaryDispatch = std::max(m_flNextSummaryDispatch, SDK::PlatFloatTime() + 1.0);
+		vBgra[uIndex] = pRgba[uIndex + 2];
+		vBgra[uIndex + 1] = pRgba[uIndex + 1];
+		vBgra[uIndex + 2] = pRgba[uIndex];
+		vBgra[uIndex + 3] = pRgba[uIndex + 3];
 	}
-	m_mEntries.erase(uAccountID);
+	std::lock_guard tLock(m_mutex);
+	StoreAvatar(tSteamID.GetAccountID(), std::move(vBgra), uWidth, uHeight, true);
 }
 
-void CSteamProfileCache::EnsureSummary(uint32_t uAccountID, Entry_t& tEntry)
+void CSteamProfileCache::RequestName(uint32_t uAccountID, Entry_t& tEntry)
 {
-	if (tEntry.m_bSummaryResolved || tEntry.m_fuSummary.valid())
+	if (tEntry.m_bNameRequested || !I::SteamFriends)
 		return;
-
-	const double flNow = SDK::PlatFloatTime();
-	if (tEntry.m_bSummaryFailed && flNow < tEntry.m_dNextSummaryAttempt)
-		return;
-	if (m_uSummaryInFlight)
-		return;
-	if (flNow < m_flNextSummaryDispatch)
-		return;
-
-	const std::string sApiKey = Vars::Config::SteamWebAPIKey.Value;
-	if (sApiKey.empty())
-		return;
-
-	tEntry.m_fuSummary = std::async(std::launch::async, [uAccountID, sApiKey]() -> SummaryResult_t
-	{
-		return FetchSummary(uAccountID, sApiKey);
-	});
-	m_uSummaryInFlight = uAccountID;
+	I::SteamFriends->RequestUserInformation(CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual), true);
+	tEntry.m_bNameRequested = true;
 }
 
-void CSteamProfileCache::EnsureAvatar(uint32_t uAccountID, Entry_t& tEntry)
+void CSteamProfileCache::RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, bool bForce)
 {
-	if (!tEntry.m_bSummaryResolved)
-		return;
-	if (tEntry.m_sAvatarUrl.empty())
-	{
-		if (!tEntry.m_bAvatarUrlWarned)
-		{
-			tEntry.m_bAvatarUrlWarned = true;
-			const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-			const std::string sMessage = std::format("steamwebapi summary returned no avatar URL for {}. Skipping avatar download.", uSteamID64);
-			SDK::Output("steamwebapi", sMessage.c_str(), kErrorColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-		}
-		return;
-	}
-	if (tEntry.m_bAvatarResolved || tEntry.m_fuAvatar.valid())
+	const bool bStale = !tEntry.m_tAvatarTimestamp.time_since_epoch().count() || std::filesystem::file_time_type::clock::now() - tEntry.m_tAvatarTimestamp >= AvatarRefreshAge;
+	if (!I::SteamFriends || (!bForce && !bStale && tEntry.m_pAvatarPixels) || (tEntry.m_bAvatarRequested && !bForce))
 		return;
 
-	const double flNow = SDK::PlatFloatTime();
-	if (tEntry.m_bAvatarFailed && flNow < tEntry.m_dNextAvatarAttempt)
-		return;
-
-	const std::string sUrl = tEntry.m_sAvatarUrl;
-	const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-	SDK::Output("steamwebapi", std::format("Downloading avatar for {}", uSteamID64).c_str(), kLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-	tEntry.m_fuAvatar = std::async(std::launch::async, [uAccountID, sUrl]() -> AvatarResult_t
-	{
-		return FetchAvatar(uAccountID, sUrl);
-	});
+	const CSteamID tSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual);
+	I::SteamFriends->RequestUserInformation(tSteamID, false);
+	tEntry.m_bAvatarRequested = true;
+	if (const int iImage = I::SteamFriends->GetLargeFriendAvatar(tSteamID); iImage > 0)
+		tEntry.m_iPendingImage = iImage;
 }
 
-void CSteamProfileCache::ProcessFutures(uint32_t uAccountID, Entry_t& tEntry)
+void CSteamProfileCache::LoadAvatarFromDisk(uint32_t uAccountID, Entry_t& tEntry)
 {
-	if (tEntry.m_fuSummary.valid() && tEntry.m_fuSummary.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
-	{
-		SummaryResult_t tResult = tEntry.m_fuSummary.get();
-		tEntry.m_fuSummary = {};
-		if (m_uSummaryInFlight == uAccountID)
-		{
-			m_uSummaryInFlight = 0;
-			m_flNextSummaryDispatch = std::max(m_flNextSummaryDispatch, SDK::PlatFloatTime() + 1.0);
-		}
-		if (tResult.m_bSuccess)
-		{
-			tEntry.m_sPersonaName = tResult.m_sPersonaName;
-			tEntry.m_sAvatarUrl = tResult.m_sAvatarUrl;
-			tEntry.m_bSummaryResolved = true;
-			tEntry.m_bSummaryFailed = false;
-			tEntry.m_dNextSummaryAttempt = 0.0;
-			tEntry.m_bAvatarUrlWarned = false;
-			const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-			const std::string sDisplayName = tEntry.m_sPersonaName.empty() ? "(no name)" : tEntry.m_sPersonaName;
-			const std::string sMessage = std::format("steamwebapi refreshed profile for {} ({})", uSteamID64, sDisplayName);
-			SDK::Output("steamwebapi", sMessage.c_str(), kLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-		}
-		else
-		{
-			if (tResult.m_bPermanentFailure)
-			{
-				tEntry.m_bSummaryResolved = true;
-				tEntry.m_bSummaryFailed = false;
-				tEntry.m_dNextSummaryAttempt = 0.0;
-				tEntry.m_sAvatarUrl.clear();
-			}
-			else
-			{
-				tEntry.m_bSummaryFailed = true;
-				const double flDelay = std::max(tResult.m_dRetryDelay, 15.0);
-				tEntry.m_dNextSummaryAttempt = SDK::PlatFloatTime() + flDelay;
-			}
-		}
-	}
+	if (tEntry.m_bDiskChecked)
+		return;
+	tEntry.m_bDiskChecked = true;
+	const auto tPath = GetAvatarPath(uAccountID);
+	std::error_code ec;
+	if (tPath.empty() || !std::filesystem::is_regular_file(tPath, ec))
+		return;
 
-	if (tEntry.m_fuAvatar.valid() && tEntry.m_fuAvatar.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
-	{
-		AvatarResult_t tResult = tEntry.m_fuAvatar.get();
-		tEntry.m_fuAvatar = {};
-		if (tResult.m_bSuccess && !tResult.m_vPixels.empty())
-		{
-			tEntry.m_pAvatarPixels = std::make_shared<std::vector<uint8_t>>(std::move(tResult.m_vPixels));
-			tEntry.m_uAvatarWidth = tResult.m_uWidth;
-			tEntry.m_uAvatarHeight = tResult.m_uHeight;
-			tEntry.m_bAvatarResolved = true;
-			tEntry.m_bAvatarFailed = false;
-			tEntry.m_dNextAvatarAttempt = 0.0;
-			const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-			const std::string sMessage = std::format("steamwebapi downloaded avatar for {} ({}x{})", uSteamID64, tEntry.m_uAvatarWidth, tEntry.m_uAvatarHeight);
-			SDK::Output("steamwebapi", sMessage.c_str(), kLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-			CSteamProfileCache::SaveAvatarToDisk(uAccountID, *tEntry.m_pAvatarPixels, tEntry.m_uAvatarWidth, tEntry.m_uAvatarHeight);
-		}
-		else
-		{
-			tEntry.m_bAvatarFailed = true;
-			const double flDelay = std::max(tResult.m_dRetryDelay, 5.0);
-			tEntry.m_dNextAvatarAttempt = SDK::PlatFloatTime() + flDelay;
-		}
-	}
-}
-
-CSteamProfileCache::SummaryResult_t CSteamProfileCache::FetchSummary(uint32_t uAccountID, std::string sApiKey)
-{
-	SummaryResult_t tResult = {};
-	if (!uAccountID || sApiKey.empty())
-		return tResult;
-
-	const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-	const std::string sUrl = std::format("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}", sApiKey, uSteamID64);
-	DWORD dwStatus = 0;
-	std::vector<uint8_t> vData = DownloadUrl(SDK::ConvertUtf8ToWide(sUrl), &dwStatus);
-	if (dwStatus && dwStatus != HTTP_STATUS_OK)
-	{
-		if (dwStatus == 420 || dwStatus == HTTP_STATUS_TOO_MANY_REQUESTS)
-		{
-			tResult.m_dRetryDelay = 120.0;
-			const std::string sMessage = std::format("steamwebapi rate limited player summary lookups (HTTP {}). Cooling down before retrying.", dwStatus);
-			LogThrottled(sMessage.c_str(), g_flNextSummaryFailLog, 10.0, kErrorColor);
-		}
-		else if (dwStatus == HTTP_STATUS_FORBIDDEN || dwStatus == HTTP_STATUS_UNAUTHORIZED)
-		{
-			tResult.m_dRetryDelay = 300.0;
-			const std::string sMessage = std::format("steamwebapi rejected the configured key (HTTP {}). Double-check the key under Anticheat > Cheaters.", dwStatus);
-			LogThrottled(sMessage.c_str(), g_flNextSummaryFailLog, 10.0, kErrorColor);
-		}
-		else
-		{
-			const std::string sMessage = std::format("steamwebapi returned HTTP {} while resolving player summaries.", dwStatus);
-			LogThrottled(sMessage.c_str(), g_flNextSummaryFailLog, 10.0, kErrorColor);
-		}
-		return tResult;
-	}
-	if (vData.empty())
-	{
-		LogThrottled("steamwebapi returned an empty response when resolving player summaries.", g_flNextSummaryFailLog, 10.0, kErrorColor);
-		return tResult;
-	}
-
-	bool bSawPlayersNode = false;
-	try
-	{
-		std::stringstream ss;
-		ss.write(reinterpret_cast<const char*>(vData.data()), static_cast<std::streamsize>(vData.size()));
-		boost::property_tree::ptree tJson;
-		boost::property_tree::read_json(ss, tJson);
-		if (auto tResponse = tJson.get_child_optional("response.players"))
-		{
-			bSawPlayersNode = true;
-			for (auto& [_, tNode] : *tResponse)
-			{
-				tResult.m_sPersonaName = tNode.get<std::string>("personaname", "");
-				tResult.m_sAvatarUrl = tNode.get<std::string>("avatarfull", tNode.get<std::string>("avatarmedium", ""));
-				tResult.m_bSuccess = true;
-				break;
-			}
-		}
-	}
-	catch (...)
-	{
-		LogThrottled("Failed to parse steamwebapi response for player summaries.", g_flNextSummaryFailLog, 10.0, kErrorColor);
-	}
-
-	if (!tResult.m_bSuccess)
-	{
-		if (bSawPlayersNode)
-			tResult.m_bPermanentFailure = true;
-		const std::string sMessage = std::format("steamwebapi returned no data for SteamID {}. The profile may be disabled (E43) or steamwebapi is having a stroke.", uSteamID64);
-		LogThrottled(sMessage.c_str(), g_flNextSummaryFailLog, 10.0, kErrorColor);
-	}
-
-	return tResult;
-}
-
-CSteamProfileCache::AvatarResult_t CSteamProfileCache::FetchAvatar(uint32_t uAccountID, const std::string& sUrl)
-{
-	AvatarResult_t tResult = {};
-	if (sUrl.empty())
-		return tResult;
-
-	DWORD dwStatus = 0;
-	std::vector<uint8_t> vData = DownloadUrl(SDK::ConvertUtf8ToWide(sUrl), &dwStatus);
-	if (dwStatus && dwStatus != HTTP_STATUS_OK)
-	{
-		const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-		if (dwStatus == HTTP_STATUS_NOT_FOUND)
-		{
-			tResult.m_dRetryDelay = 900.0;
-			const std::string sMessage = std::format("Steam CDN has no avatar for {} yet (HTTP 404). Will retry later.", uSteamID64);
-			LogThrottled(sMessage.c_str(), g_flNextAvatarFailLog, 10.0, kErrorColor);
-		}
-		else if (dwStatus == 420 || dwStatus == HTTP_STATUS_TOO_MANY_REQUESTS)
-		{
-			tResult.m_dRetryDelay = 120.0;
-			const std::string sMessage = std::format("Steam CDN rate limited avatar download for {} (HTTP {}). Cooling down before retrying.", uSteamID64, dwStatus);
-			LogThrottled(sMessage.c_str(), g_flNextAvatarFailLog, 10.0, kErrorColor);
-		}
-		else
-		{
-			const std::string sMessage = std::format("steamwebapi returned HTTP {} while downloading an avatar image for {}.", dwStatus, uSteamID64);
-			LogThrottled(sMessage.c_str(), g_flNextAvatarFailLog, 10.0, kErrorColor);
-		}
-		return tResult;
-	}
-	if (vData.empty())
-	{
-		const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-		const std::string sMessage = std::format("steamwebapi returned an empty avatar payload for {}.", uSteamID64);
-		LogThrottled(sMessage.c_str(), g_flNextAvatarFailLog, 10.0, kErrorColor);
-		return tResult;
-	}
-
-	std::vector<uint8_t> vDecoded;
+	std::vector<uint8_t> vPixels;
 	uint32_t uWidth = 0, uHeight = 0;
-	if (!DecodeImage(vData, vDecoded, uWidth, uHeight))
-	{
-		const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-		const std::string sMessage = std::format("Failed to decode avatar image from steamwebapi for {}.", uSteamID64);
-		LogThrottled(sMessage.c_str(), g_flNextAvatarFailLog, 10.0, kErrorColor);
-		return tResult;
-	}
+	if (!DecodeAvatarPng(tPath, vPixels, uWidth, uHeight))
+		return;
+	const auto tTimestamp = std::filesystem::last_write_time(tPath, ec);
+	StoreAvatar(uAccountID, std::move(vPixels), uWidth, uHeight, false);
+	if (!ec)
+		tEntry.m_tAvatarTimestamp = tTimestamp;
+}
 
-	tResult.m_bSuccess = true;
-	tResult.m_vPixels = std::move(vDecoded);
-	tResult.m_uWidth = uWidth;
-	tResult.m_uHeight = uHeight;
-	return tResult;
+void CSteamProfileCache::CaptureSteamAvatar(uint32_t uAccountID, int iImage, uint32_t uWidth, uint32_t uHeight)
+{
+	if (!I::SteamUtils || iImage <= 0)
+		return;
+	if (!uWidth || !uHeight)
+	{
+		if (!I::SteamUtils->GetImageSize(iImage, &uWidth, &uHeight))
+			return;
+	}
+	if (!IsAvatarSizeValid(uWidth, uHeight))
+		return;
+
+	std::vector<uint8_t> vRgba(static_cast<size_t>(uWidth) * uHeight * 4);
+	if (!I::SteamUtils->GetImageRGBA(iImage, vRgba.data(), static_cast<int>(vRgba.size())))
+		return;
+	CaptureNativeAvatar(CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64(), vRgba.data(), uWidth, uHeight);
+}
+
+void CSteamProfileCache::StoreAvatar(uint32_t uAccountID, std::vector<uint8_t>&& vBgra, uint32_t uWidth, uint32_t uHeight, bool bSave)
+{
+	if (!IsAvatarSizeValid(uWidth, uHeight) || vBgra.size() != static_cast<size_t>(uWidth) * uHeight * 4)
+		return;
+	auto& tEntry = m_mEntries[uAccountID];
+	if (tEntry.m_pAvatarPixels && tEntry.m_uAvatarWidth == uWidth && tEntry.m_uAvatarHeight == uHeight && *tEntry.m_pAvatarPixels == vBgra)
+	{
+		tEntry.m_tAvatarTimestamp = std::filesystem::file_time_type::clock::now();
+		tEntry.m_bAvatarRequested = false;
+		return;
+	}
+	tEntry.m_pAvatarPixels = std::make_shared<std::vector<uint8_t>>(std::move(vBgra));
+	tEntry.m_uAvatarWidth = uWidth;
+	tEntry.m_uAvatarHeight = uHeight;
+	++tEntry.m_uAvatarRevision;
+	tEntry.m_tAvatarTimestamp = std::filesystem::file_time_type::clock::now();
+	tEntry.m_bAvatarRequested = false;
+	tEntry.m_bSavePending = tEntry.m_bSavePending || bSave;
+}
+
+void CSteamProfileCache::HandlePersonaStateChange(const PersonaStateChange_t& tCallback)
+{
+	const CSteamID tSteamID(tCallback.m_ulSteamID);
+	const uint32_t uAccountID = tSteamID.GetAccountID();
+	if (!uAccountID || tSteamID.GetEAccountType() != k_EAccountTypeIndividual)
+		return;
+
+	std::lock_guard tLock(m_mutex);
+	auto it = m_mEntries.find(uAccountID);
+	if (it == m_mEntries.end())
+		return;
+	if (tCallback.m_nChangeFlags & k_EPersonaChangeName)
+	{
+		if (const char* pszName = I::SteamFriends ? I::SteamFriends->GetFriendPersonaName(tSteamID) : nullptr; pszName && *pszName)
+			it->second.m_sPersonaName = pszName;
+	}
+	if (tCallback.m_nChangeFlags & k_EPersonaChangeAvatar)
+	{
+		it->second.m_bAvatarRequested = false;
+		RequestAvatar(uAccountID, it->second, true);
+	}
+}
+
+void CSteamProfileCache::HandleAvatarImageLoaded(const AvatarImageLoaded_t& tCallback)
+{
+	const uint32_t uAccountID = tCallback.m_steamID.GetAccountID();
+	if (!uAccountID || tCallback.m_steamID.GetEAccountType() != k_EAccountTypeIndividual)
+		return;
+	CaptureSteamAvatar(uAccountID, tCallback.m_iImage, static_cast<uint32_t>(tCallback.m_iWide), static_cast<uint32_t>(tCallback.m_iTall));
 }

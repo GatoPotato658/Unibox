@@ -21,10 +21,8 @@
 #include "../NavBot/NavBotCore.h"
 #include "../Aimbot/AutoHeal/AutoHeal.h"
 
-namespace
-{
 	template <size_t t_size>
-	ImFont* LoadFontWithFallback(ImFontAtlas* pFontAtlas, const std::array<const char*, t_size>& vFontPaths, float flSizePixels, ImFontConfig tFontConfig)
+	static ImFont* LoadFontWithFallback(ImFontAtlas* pFontAtlas, const std::array<const char*, t_size>& vFontPaths, float flSizePixels, ImFontConfig tFontConfig)
 	{
 		for (const char* sFontPath : vFontPaths)
 		{
@@ -36,7 +34,6 @@ namespace
 		tFallbackConfig.SizePixels = flSizePixels;
 		return pFontAtlas->AddFontDefault(&tFallbackConfig);
 	}
-}
 
 void CRender::Render(IDirect3DDevice9* pDevice)
 {

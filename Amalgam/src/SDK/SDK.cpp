@@ -34,11 +34,9 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 	return FALSE;
 }
 
-namespace
-{
-	constexpr int k_bsp_header_id = ('V' << 24) | ('B' << 16) | ('S' << 8) | 'P';
-	constexpr int k_bsp_header_lumps = 64;
-	constexpr int k_bsp_lump_entities = 0;
+	static constexpr int BspHeaderID = ('V' << 24) | ('B' << 16) | ('S' << 8) | 'P';
+	static constexpr int BspHeaderLumps = 64;
+	static constexpr int BspLumpEntities = 0;
 
 	struct bsp_lump_t
 	{
@@ -52,17 +50,17 @@ namespace
 	{
 		int m_iIdent = 0;
 		int m_iVersion = 0;
-		bsp_lump_t m_aLumps[k_bsp_header_lumps] = {};
+		bsp_lump_t m_aLumps[BspHeaderLumps] = {};
 		int m_iMapRevision = 0;
 	};
 
-	void SkipEntityWhitespace(const std::string_view sData, size_t& iOffset)
+	static void SkipEntityWhitespace(const std::string_view sData, size_t& iOffset)
 	{
 		while (iOffset < sData.size() && isspace(static_cast<unsigned char>(sData[iOffset])))
 			iOffset++;
 	}
 
-	auto ParseQuotedEntityToken(const std::string_view sData, size_t& iOffset) -> std::string
+	static auto ParseQuotedEntityToken(const std::string_view sData, size_t& iOffset) -> std::string
 	{
 		SkipEntityWhitespace(sData, iOffset);
 		if (iOffset >= sData.size() || sData[iOffset] != '"')
@@ -84,7 +82,7 @@ namespace
 		return sOut;
 	}
 
-	auto TriggerTypeFromClassname(const std::string& sClassname, bool& bRespawnRoomOut) -> TriggerTypeEnum::TriggerTypeEnum
+	static auto TriggerTypeFromClassname(const std::string& sClassname, bool& bRespawnRoomOut) -> TriggerTypeEnum::TriggerTypeEnum
 	{
 		bRespawnRoomOut = false;
 		switch (FNV1A::Hash32(sClassname.c_str()))
@@ -114,7 +112,7 @@ namespace
 		}
 	}
 
-	Vector ParseEntityVector(const std::string& sValue)
+	static Vector ParseEntityVector(const std::string& sValue)
 	{
 		Vector vOut = {};
 		if (sValue.empty())
@@ -124,7 +122,7 @@ namespace
 		return vOut;
 	}
 
-	bool AppendTriggerFromKeyValues(const std::unordered_map<std::string, std::string>& mKeyValues)
+	static bool AppendTriggerFromKeyValues(const std::unordered_map<std::string, std::string>& mKeyValues)
 	{
 		auto itClassname = mKeyValues.find("classname");
 		if (itClassname == mKeyValues.end())
@@ -179,7 +177,7 @@ namespace
 		return true;
 	}
 
-	void AppendPasstimeGoalFromKeyValues(const std::unordered_map<std::string, std::string>& mKeyValues)
+	static void AppendPasstimeGoalFromKeyValues(const std::unordered_map<std::string, std::string>& mKeyValues)
 	{
 		auto itClassname = mKeyValues.find("classname");
 		if (itClassname == mKeyValues.end() || itClassname->second != "func_passtime_goal")
@@ -200,7 +198,7 @@ namespace
 		G::PasstimeGoalStorage.push_back(std::move(tGoal));
 	}
 
-	bool BuildTriggerStorageFromEntityLump(const std::string_view sEntityLump, int& iOutTriggers)
+	static bool BuildTriggerStorageFromEntityLump(const std::string_view sEntityLump, int& iOutTriggers)
 	{
 		iOutTriggers = 0;
 		size_t iOffset = 0;
@@ -242,7 +240,7 @@ namespace
 		return iOutTriggers > 0;
 	}
 
-	bool LoadBspEntityLump(std::string& sOutEntityLump)
+	static bool LoadBspEntityLump(std::string& sOutEntityLump)
 	{
 		const std::string sMapName = SDK::GetLevelName();
 		if (sMapName.empty() || sMapName == "None")
@@ -255,13 +253,13 @@ namespace
 
 		bsp_header_t tHeader = {};
 		const bool bHeaderRead = I::FileSystem->Read(&tHeader, sizeof(tHeader), hFile) == sizeof(tHeader);
-		if (!bHeaderRead || tHeader.m_iIdent != k_bsp_header_id)
+		if (!bHeaderRead || tHeader.m_iIdent != BspHeaderID)
 		{
 			I::FileSystem->Close(hFile);
 			return false;
 		}
 
-		const auto& tEntityLump = tHeader.m_aLumps[k_bsp_lump_entities];
+		const auto& tEntityLump = tHeader.m_aLumps[BspLumpEntities];
 		if (tEntityLump.m_iFileOffset <= 0 || tEntityLump.m_iFileLength <= 0)
 		{
 			I::FileSystem->Close(hFile);
@@ -278,7 +276,6 @@ namespace
 		sOutEntityLump.assign(vEntityData.data(), static_cast<size_t>(tEntityLump.m_iFileLength));
 		return true;
 	}
-}
 
 
 

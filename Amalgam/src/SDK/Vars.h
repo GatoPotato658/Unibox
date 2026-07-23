@@ -171,7 +171,6 @@ public:
 NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Config)
 		CVar(LoadDebugSettings, "Load debug settings", false);
-		CVar(SteamWebAPIKey, "steamwebapi key", std::string(""), NOBIND);
 	NAMESPACE_END(Config)
 	
 	NAMESPACE_BEGIN(Menu)
