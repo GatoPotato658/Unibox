@@ -472,7 +472,7 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::General::TargetSelection, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::General::Target, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::General::Ignore, FDropdownEnum::Right);
-					FDropdown(Vars::Aimbot::General::SmoothCurve, FDropdownEnum::Left);
+					FDropdown(Vars::Aimbot::General::SmoothCurve);
 					FSlider(Vars::Aimbot::General::AimFOV, FSliderEnum::Left);
 					FSlider(Vars::Aimbot::General::MaxTargets, FSliderEnum::Right);
 					FSlider(Vars::Aimbot::General::SmoothCurveAmount, FSliderEnum::Left);
