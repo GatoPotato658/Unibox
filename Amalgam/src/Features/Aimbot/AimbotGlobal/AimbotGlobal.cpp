@@ -13,14 +13,8 @@ inline int GetPriorityIdx(CTFWeaponBase* pWeapon)
 {
 	if (pWeapon->GetSlot() != SLOT_MELEE)
 	{
-		if (Vars::Aimbot::General::PrioritizeFollowbot.Value && pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN)
-			return F::FollowBot.m_tLockedTarget.m_iEntIndex;
-
 		if (F::AutoHeal.m_iAutoSwitch)
 			return F::AutoHeal.m_iTargetIdx;
-
-		if (Vars::Aimbot::General::PrioritizeNavbot.Value && F::NavBotStayNear.m_iStayNearTargetIdx)
-			return F::NavBotStayNear.m_iStayNearTargetIdx;
 	}
 
 	return -1;
@@ -109,7 +103,7 @@ void CAimbotGlobal::SortTargetsPost(std::vector<Target_t>& vTargets, int iMethod
 
 float CAimbotGlobal::GetAimFOV()
 {	// restrict now vs later
-	return Vars::Aimbot::General::LeadAndRestrict.Value ? 180.f : std::min(Vars::Aimbot::General::AimFOV.Value, 180.f);
+	return std::min(Vars::Aimbot::General::AimFOV.Value, 180.f);
 }
 
 bool CAimbotGlobal::EntityCenterInFOV(CBaseEntity* pTarget, const Vec3& vLocalPos, const Vec3& vLocalAngles, float& flFOVTo, Vec3& vPos, Vec3& vAngleTo)
@@ -272,7 +266,7 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 
 #ifdef TEXTMODE
 		auto pResource = H::Entities.GetResource();
-		if (pResource && F::NamedPipe.IsLocalBot(pResource->m_iAccountID(pEntity->entindex())) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::LocalBots))
+		if (pResource && F::NamedPipe.IsLocalBot(pResource->m_iAccountID(pEntity->entindex())))
 			return true;
 #endif
 
@@ -283,12 +277,12 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 				return true;
 		}
 
-		if (iFunctionFlags & ShouldIgnoreEnum::Ignored && F::PlayerUtils.IsIgnored(pPlayer->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Ignored)
+		if (iFunctionFlags & ShouldIgnoreEnum::Ignored && F::PlayerUtils.IsIgnored(pPlayer->entindex())
 			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Unprioritized && !F::PlayerUtils.IsPrioritized(pPlayer->entindex()))
 			return true;
 
-		if (iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Friends && H::Entities.IsFriend(pPlayer->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Friends)
-			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Party && H::Entities.InParty(pPlayer->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Friends)
+		if (iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Friends && H::Entities.IsFriend(pPlayer->entindex())
+			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Party && H::Entities.InParty(pPlayer->entindex())
 			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Invulnerable && pPlayer->IsInvulnerable() && SDK::AttribHookValue(0, "crit_forces_victim_to_laugh", pWeapon) <= 0
 			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Invisible && pPlayer->IsInvisible(Vars::Aimbot::General::IgnoreInvisible.Value / 100.f)
 			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::DeadRinger && pPlayer->m_bFeignDeathReady()
@@ -340,11 +334,11 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 
 		if (auto pOwner = pBuilding->m_hBuilder().Get())
 		{
-			if (iFunctionFlags & ShouldIgnoreEnum::Ignored && F::PlayerUtils.IsIgnored(pOwner->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Ignored))
+			if (iFunctionFlags & ShouldIgnoreEnum::Ignored && F::PlayerUtils.IsIgnored(pOwner->entindex()))
 				return true;
 
-			if (iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Friends && H::Entities.IsFriend(pOwner->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Friends)
-				|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Party && H::Entities.InParty(pOwner->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Friends))
+			if (iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Friends && H::Entities.IsFriend(pOwner->entindex())
+				|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Party && H::Entities.InParty(pOwner->entindex()))
 				return true;
 		}
 
@@ -362,7 +356,7 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 
 		if (auto pOwner = pProjectile->m_hThrower().Get();
 			iFunctionFlags & ShouldIgnoreEnum::Ignored && pOwner
-			&& F::PlayerUtils.IsIgnored(pOwner->entindex()) && !(Vars::Aimbot::General::BypassIgnore.Value & Vars::Aimbot::General::BypassIgnoreEnum::Ignored))
+			&& F::PlayerUtils.IsIgnored(pOwner->entindex()))
 			return true;
 
 		if (pProjectile->m_iType() != TF_GL_MODE_REMOTE_DETONATE || !pProjectile->m_bTouched())

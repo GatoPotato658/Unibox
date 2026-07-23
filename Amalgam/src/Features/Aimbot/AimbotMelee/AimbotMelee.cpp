@@ -133,7 +133,11 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 				switch (Vars::Aimbot::Healing::HealPriority.Value)
 				{
 				case Vars::Aimbot::Healing::HealPriorityEnum::PrioritizeFriends:
-					if (iOwner == I::EngineClient->GetLocalPlayer() || H::Entities.IsFriend(iOwner) || H::Entities.InParty(iOwner))
+					if (iOwner == I::EngineClient->GetLocalPlayer() || H::Entities.IsFriend(iOwner))
+						iPriority = std::numeric_limits<int>::max();
+					break;
+				case Vars::Aimbot::Healing::HealPriorityEnum::PrioritizeParty:
+					if (H::Entities.InParty(iOwner))
 						iPriority = std::numeric_limits<int>::max();
 					break;
 				case Vars::Aimbot::Healing::HealPriorityEnum::PrioritizeTeam:

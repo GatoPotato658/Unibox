@@ -3,8 +3,28 @@
 #include "../Backtrack/Backtrack.h"
 #include "../Misc/Misc.h"
 
+void CAntiCheatCompatibility::EnforceSettings()
+{
+	if (!Active())
+		return;
+
+	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Silent)
+		Vars::Aimbot::General::AimType.Value = Vars::Aimbot::General::AimTypeEnum::Plain;
+	Vars::Aimbot::General::NoSpread.Value = false;
+	Vars::CritHack::ForceCrits.Value = false;
+	Vars::CritHack::AvoidRandomCrits.Value = false;
+	Vars::Misc::Movement::FastAccelerate.Value = false;
+	Vars::Misc::Movement::DuckSpeed.Value = false;
+	Vars::Doubletap::Doubletap.Value = false;
+	Vars::Doubletap::Warp.Value = false;
+	Vars::Fakelag::Fakelag.Value = Vars::Fakelag::FakelagEnum::Off;
+	Vars::AntiAim::Enabled.Value = false;
+}
+
 void CAntiCheatCompatibility::CreateMove(CUserCmd* pCmd)
 {
+	EnforceSettings();
+
 	if (!Active())
 		return;
 

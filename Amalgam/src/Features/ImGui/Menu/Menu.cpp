@@ -16,6 +16,7 @@
 #include "../../Output/Output.h"
 #include "../../World/World.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
+#include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 
 #include <wrl/client.h>
 
@@ -453,6 +454,7 @@ void CMenu::DrawMenu()
 void CMenu::MenuAimbot(int iTab)
 {
 	using namespace ImGui;
+	F::AntiCheatCompatibility.EnforceSettings();
 
 	switch (iTab)
 	{
@@ -471,7 +473,6 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::General::Target, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::General::Ignore, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::General::SmoothCurve, FDropdownEnum::Left);
-					FDropdown(Vars::Aimbot::General::BypassIgnore, FDropdownEnum::Right);
 					FSlider(Vars::Aimbot::General::AimFOV, FSliderEnum::Left);
 					FSlider(Vars::Aimbot::General::MaxTargets, FSliderEnum::Right);
 					FSlider(Vars::Aimbot::General::SmoothCurveAmount, FSliderEnum::Left);
@@ -493,22 +494,28 @@ void CMenu::MenuAimbot(int iTab)
 					PopTransparent();
 					FToggle(Vars::Aimbot::General::AutoShoot, FToggleEnum::Left);
 					FToggle(Vars::Aimbot::General::FOVCircle, FToggleEnum::Right);
-					FToggle(Vars::Aimbot::General::PrioritizeNavbot, FToggleEnum::Left);
-					FToggle(Vars::Aimbot::General::PrioritizeFollowbot, FToggleEnum::Right);
 
 					Divider();
 					FText("Crithack");
 					Divider();
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
 					FToggle(Vars::CritHack::ForceCrits, FToggleEnum::Left);
 					FToggle(Vars::CritHack::AvoidRandomCrits, FToggleEnum::Right);
 					FToggle(Vars::CritHack::AlwaysMeleeCrit, FToggleEnum::Left);
 					FToggle(Vars::CritHack::CritEffects, FToggleEnum::Right);
+					}
+					PopDisabled();
 
 					Divider();
 					FText("Misc");
 					Divider();
 					FToggle(Vars::Aimbot::General::LeadAndRestrict, FToggleEnum::Left);
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
 					FToggle(Vars::Aimbot::General::NoSpread);
+					}
+					PopDisabled();
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -529,10 +536,14 @@ void CMenu::MenuAimbot(int iTab)
 				}
 				if (Section("Backtrack", 8))
 				{
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
 					FSlider(Vars::Backtrack::Latency, FSliderEnum::Left);
 					FSlider(Vars::Backtrack::Interp, FSliderEnum::Right);
 					FSlider(Vars::Backtrack::Window);
 					//FToggle(Vars::Backtrack::PreferOnShot, FToggleEnum::Right);
+					}
+					PopDisabled();
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -1586,6 +1597,7 @@ void CMenu::MenuVisuals(int iTab)
 void CMenu::MenuHvH(int iTab)
 {
 	using namespace ImGui;
+	F::AntiCheatCompatibility.EnforceSettings();
 
 	switch (iTab)
 	{
@@ -1599,6 +1611,8 @@ void CMenu::MenuHvH(int iTab)
 			{
 				if (Section("Doubletap", 8))
 				{
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
 					FToggle(Vars::Doubletap::Doubletap, FToggleEnum::Left);
 					FToggle(Vars::Doubletap::Warp, FToggleEnum::Right);
 					FToggle(Vars::Doubletap::RechargeTicks, FToggleEnum::Left);
@@ -1607,9 +1621,13 @@ void CMenu::MenuHvH(int iTab)
 					FSlider(Vars::Doubletap::WarpRate, FSliderEnum::Right);
 					FSlider(Vars::Doubletap::RechargeLimit, FSliderEnum::Left);
 					FSlider(Vars::Doubletap::PassiveRecharge, FSliderEnum::Right);
+					}
+					PopDisabled();
 				} EndSection();
 				if (Section("Fakelag"))
 				{
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
 					FDropdown(Vars::Fakelag::Fakelag, FSliderEnum::Left);
 					FDropdown(Vars::Fakelag::Options, FDropdownEnum::Right);
 					PushTransparent(Vars::Fakelag::Fakelag.Value != Vars::Fakelag::FakelagEnum::Plain);
@@ -1624,6 +1642,8 @@ void CMenu::MenuHvH(int iTab)
 					PopTransparent();
 					FToggle(Vars::Fakelag::UnchokeOnAttack, FToggleEnum::Left);
 					FToggle(Vars::Fakelag::RetainBlastJump, FToggleEnum::Right);
+					}
+					PopDisabled();
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -1640,6 +1660,8 @@ void CMenu::MenuHvH(int iTab)
 				}
 				if (Section("Antiaim", 8))
 				{
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
 					FToggle(Vars::AntiAim::Enabled);
 					FDropdown(Vars::AntiAim::PitchReal, FDropdownEnum::Left);
 					FDropdown(Vars::AntiAim::PitchFake, FDropdownEnum::Right);
@@ -1674,6 +1696,8 @@ void CMenu::MenuHvH(int iTab)
 					FToggle(Vars::AntiAim::AntiOverlap, FToggleEnum::Left);
 					FToggle(Vars::AntiAim::HidePitchOnShot, FToggleEnum::Right);
 					FToggle(Vars::AntiAim::TauntSpin);
+					}
+					PopDisabled();
 				} EndSection();
 			}
 			/* Column 2 */
@@ -1763,8 +1787,12 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Movement::AutoFaNJump, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::AutoRevJump, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::FastStop, FToggleEnum::Left);
-					FToggle(Vars::Misc::Movement::FastAccelerate, FToggleEnum::Right);
-					FToggle(Vars::Misc::Movement::DuckSpeed, FToggleEnum::Left);
+					PushDisabled(F::AntiCheatCompatibility.Active());
+					{
+						FToggle(Vars::Misc::Movement::FastAccelerate, FToggleEnum::Right);
+						FToggle(Vars::Misc::Movement::DuckSpeed, FToggleEnum::Left);
+					}
+					PopDisabled();
 					FToggle(Vars::Misc::Movement::MovementLock, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::ShieldTurnRate, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::NoPush, FToggleEnum::Right);

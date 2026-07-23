@@ -292,9 +292,6 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(Ignore, "Ignore", 0b00000001000, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Friends", "Party", "Unprioritized", "Invulnerable", "Invisible", "Unsimulated", "Dead ringer", "Vaccinator", "Disguised", "Taunting", "Team", "Sentry busters"),
 				Friends = 1 << 0, Party = 1 << 1, Unprioritized = 1 << 2, Invulnerable = 1 << 3, Invisible = 1 << 4, Unsimulated = 1 << 5, DeadRinger = 1 << 6, Vaccinator = 1 << 7, Disguised = 1 << 8, Taunting = 1 << 9, Team = 1 << 10, SentryBusters = 1 << 11);
-			CVarEnum(BypassIgnore, "Bypass ignore", 0, DROPDOWN_MULTI, nullptr,
-				VA_LIST("Friends", "Ignored", "Local bots"),
-				Friends = 1 << 0, Ignored = 1 << 1, LocalBots = 1 << 2);
 			CVar(AimFOV, "Aim FOV", 180.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 360.f);
 			CVar(MaxTargets, "Max targets", 2, SLIDER_MIN, 1, 6);
 			CVar(IgnoreInvisible, "Ignore invisible", 50.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
@@ -308,8 +305,6 @@ NAMESPACE_BEGIN(Vars)
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
 			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
 			CVar(NoSpread, "No spread", false);
-			CVar(PrioritizeNavbot, "Prioritize navbot target", false);
-			CVar(PrioritizeFollowbot, "Prioritize followbot target", false);
 
 			CVarEnum(AimHoldsFire, "Aim holds fire", 2, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("False", "Minigun only", "Always"),
@@ -457,8 +452,8 @@ NAMESPACE_BEGIN(Vars)
 
 		NAMESPACE_BEGIN(Healing)
 			CVarEnum(HealPriority, "Heal priority", 0, NONE, nullptr,
-				VA_LIST("None", "Prioritize team", "Prioritize friends", "Friends only"),
-				None, PrioritizeTeam, PrioritizeFriends, FriendsOnly);
+				VA_LIST("None", "Prioritize team", "Prioritize friends", "Prioritize party", "Friends only"),
+				None, PrioritizeTeam, PrioritizeFriends, PrioritizeParty, FriendsOnly);
 			CVarEnum(DangerIgnore, "Danger ignore", 0b1000, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Friends", "Party", "Unprioritized", "Ignored"),
 				Friends = 1 << 0, Party = 1 << 1, Unprioritized = 1 << 2, Ignored = 1 << 3,
