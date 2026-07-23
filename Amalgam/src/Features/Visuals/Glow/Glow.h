@@ -15,8 +15,8 @@ private:
 
 	void DrawModel(CBaseEntity* pEntity);
 
-	void RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
-	void RenderFakeAngle(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
+	void RenderBacktrack(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
+	void RenderFakeAngle(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 
 	IMaterial* m_pMatGlowColor;
 	ITexture* m_pRenderBuffer1;
@@ -56,10 +56,10 @@ public:
 	void Store(CTFPlayer* pLocal);
 	void RenderFirst();
 	void RenderSecond();
-	void RenderHandler(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
+	void RenderHandler(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
 
 	void RenderViewmodel(void* rcx, int flags);
-	void RenderViewmodel(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
+	void RenderViewmodel(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
 
 	void Initialize();
 	void Unload();

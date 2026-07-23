@@ -19,6 +19,12 @@ static inline bool GetDistanceThing(float flDistance, const Glow_t& tGlow, Color
 	return tColorOut.a;
 }
 
+static void ReplayModel(void* pModelRender, const DrawModelState_t& tState, const ModelRenderInfo_t& tInfo, matrix3x4* pBoneToWorld)
+{
+	static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
+	IVModelRender_DrawModelExecute->Call<void>(pModelRender, tState, tInfo, pBoneToWorld);
+}
+
 void CGlow::Begin()
 {
 	m_tOriginalColor = I::RenderView->GetColorModulation();
@@ -234,7 +240,7 @@ void CGlow::RenderSecond()
 	}
 }
 
-void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
+void CGlow::RenderBacktrack(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
 {
 	auto pEntity = I::ClientEntityList->GetClientEntity(pInfo.entity_index)->As<CTFPlayer>();
 	if (!pEntity || !pEntity->IsPlayer())
@@ -258,8 +264,7 @@ void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInf
 			return;
 
 		I::RenderView->SetBlend(flBlend * flOriginalBlend);
-		static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
-		IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, pBoneToWorld);
+		ReplayModel(pModelRender, pState, pInfo, pBoneToWorld);
 	};
 
 	Vector vEntityOrigin = pEntity->GetAbsOrigin();
@@ -287,24 +292,22 @@ void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInf
 		}
 	}
 }
-void CGlow::RenderFakeAngle(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
+void CGlow::RenderFakeAngle(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
 {
-	static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
-	IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, F::FakeAngle.aBones);
+	ReplayModel(pModelRender, pState, pInfo, F::FakeAngle.aBones);
 }
-void CGlow::RenderHandler(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld)
+void CGlow::RenderHandler(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld)
 {
 	if (!m_iFlags)
 	{
-		static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
-		IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, pBoneToWorld);
+		ReplayModel(pModelRender, pState, pInfo, pBoneToWorld);
 	}
 	else
 	{
 		if (pInfo.entity_index != I::EngineClient->GetLocalPlayer())
-			RenderBacktrack(pState, pInfo);
+			RenderBacktrack(pModelRender, pState, pInfo);
 		else
-			RenderFakeAngle(pState, pInfo);
+			RenderFakeAngle(pModelRender, pState, pInfo);
 	}
 }
 
@@ -336,7 +339,7 @@ void CGlow::RenderViewmodel(void* rcx, int flags)
 	SecondEnd(pGroup->m_tGlow, pRenderContext, w, h);
 	pRenderContext->CullMode(G::FlipViewmodels ? MATERIAL_CULLMODE_CW : MATERIAL_CULLMODE_CCW);
 }
-void CGlow::RenderViewmodel(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld)
+void CGlow::RenderViewmodel(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld)
 {
 	if (!F::Groups.GroupsActive())
 		return;
@@ -354,12 +357,12 @@ void CGlow::RenderViewmodel(const DrawModelState_t& pState, const ModelRenderInf
 	const int w = H::Draw.m_nScreenW, h = H::Draw.m_nScreenH;
 
 	FirstBegin(pRenderContext);
-	IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, pBoneToWorld);
+	IVModelRender_DrawModelExecute->Call<void>(pModelRender, pState, pInfo, pBoneToWorld);
 	FirstEnd(pRenderContext);
 	SecondBegin(pRenderContext, w, h);
 	I::RenderView->SetColorModulation(pGroup->m_tColor);
 	I::RenderView->SetBlend(pGroup->m_tColor.a / 255.f);
-	IVModelRender_DrawModelExecute->Call<void>(I::ModelRender, pState, pInfo, pBoneToWorld);
+	IVModelRender_DrawModelExecute->Call<void>(pModelRender, pState, pInfo, pBoneToWorld);
 	SecondEnd(pGroup->m_tGlow, pRenderContext, w, h);
 }
 

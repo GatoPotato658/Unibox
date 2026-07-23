@@ -11,8 +11,8 @@ private:
 
 	void DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderContext* pRenderContext, int iModel = ModelEnum::Visible, bool bTwoModel = false);
 
-	void RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
-	void RenderFakeAngle(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
+	void RenderBacktrack(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
+	void RenderFakeAngle(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 
 	struct ChamsInfo_t
 	{
@@ -34,10 +34,10 @@ private:
 public:
 	void Store(CTFPlayer* pLocal);
 	void RenderMain();
-	void RenderHandler(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
+	void RenderHandler(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
 
 	bool RenderViewmodel(void* rcx, int flags, int* iReturn);
-	bool RenderViewmodel(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
+	bool RenderViewmodel(void* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
 
 	bool m_bRendering = false;
 
