@@ -1699,14 +1699,6 @@ void CMenu::MenuHvH(int iTab)
 				{
 					FToggle(Vars::AutoPeek::Enabled);
 				} EndSection();
-				if (Section("Speedhack", 8))
-				{
-					PushTransparent(Vars::Speedhack::Scale.Value == 1);
-					{
-						FSlider(Vars::Speedhack::Scale);
-					}
-					PopTransparent();
-				} EndSection();
 			}
 			EndTable();
 		}

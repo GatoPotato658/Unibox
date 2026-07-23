@@ -11,7 +11,6 @@ private:
 	void Recharge(CTFPlayer* pLocal);
 	void Warp();
 	void Doubletap(CTFPlayer* pLocal, CUserCmd* pCmd);
-	void Speedhack();
 	bool ValidWeapon(CTFWeaponBase* pWeapon);
 
 	void ManagePacket(CUserCmd* pCmd);
@@ -53,7 +52,6 @@ public:
 	bool m_bRecharge = false;
 	bool m_bRechargeQueue = false;
 	bool m_bAntiWarp = false;
-	bool m_bSpeedhack = false;
 
 	int m_iShiftedTicks = 0;
 	int m_iShiftedGoal = 0;

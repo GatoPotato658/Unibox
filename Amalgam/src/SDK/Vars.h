@@ -521,10 +521,6 @@ NAMESPACE_BEGIN(Vars)
 		CVar(Enabled, VA_LIST("Enabled", "Auto peek"), false);
 	NAMESPACE_END(AutoPeek)
 
-	NAMESPACE_BEGIN(Speedhack)
-		CVar(Scale, VA_LIST("Scale", "SpeedHack scale"), 1, NONE, 1, 50);
-	NAMESPACE_END(Speedhack)
-
 	NAMESPACE_BEGIN(AntiAim, Antiaim)
 		CVar(Enabled, VA_LIST("Enabled", "Antiaim enabled"), false);
 		CVarEnum(PitchReal, "Real pitch", 0, NONE, nullptr,

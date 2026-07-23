@@ -330,7 +330,7 @@ void CCritHack::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	if (pWeapon->GetWeaponID() == TF_WEAPON_MINIGUN && pCmd->buttons & IN_ATTACK)
 		pCmd->buttons &= ~IN_ATTACK2;
 
-	bool bAttacking = G::Attacking /*== 1*/ || F::Ticks.m_bDoubletap || F::Ticks.m_bSpeedhack;
+	bool bAttacking = G::Attacking /*== 1*/ || F::Ticks.m_bDoubletap;
 	if (m_bMelee)
 	{
 		bAttacking = G::CanPrimaryAttack && pCmd->buttons & IN_ATTACK;

@@ -16,7 +16,7 @@ MAKE_SIGNATURE(Con_NXPrintf, "engine.dll", "48 89 54 24 ? 4C 89 44 24 ? 4C 89 4C
 
 void CTicks::Reset()
 {
-	m_bSpeedhack = m_bDoubletap = m_bRecharge = m_bWarp = false;
+	m_bDoubletap = m_bRecharge = m_bWarp = false;
 	m_iShiftedTicks = m_iShiftedGoal = 0;
 }
 
@@ -42,7 +42,7 @@ void CTicks::Recharge(CTFPlayer* pLocal)
 	}
 
 	if (!Vars::Doubletap::RechargeTicks.Value && !bPassive && !m_bRechargeQueue
-		|| m_bDoubletap || m_bWarp || m_iShiftedTicks == m_iMaxShift || m_bSpeedhack)
+		|| m_bDoubletap || m_bWarp || m_iShiftedTicks == m_iMaxShift)
 		return;
 
 	m_bRecharge = true;
@@ -57,7 +57,7 @@ void CTicks::Warp()
 
 	m_bWarp = false;
 	if (!Vars::Doubletap::Warp.Value
-		|| !m_iShiftedTicks || m_bDoubletap || m_bRecharge || m_bSpeedhack)
+		|| !m_iShiftedTicks || m_bDoubletap || m_bRecharge)
 		return;
 
 	m_bWarp = true;
@@ -70,7 +70,7 @@ void CTicks::Doubletap(CTFPlayer* pLocal, CUserCmd* pCmd)
 		return;
 
 	if (!Vars::Doubletap::Doubletap.Value
-		|| m_iWait || m_bWarp || m_bRecharge || m_bSpeedhack)
+		|| m_iWait || m_bWarp || m_bRecharge)
 		return;
 
 	int iTicks = std::min(m_iShiftedTicks + 1, 22);
@@ -86,15 +86,6 @@ void CTicks::Doubletap(CTFPlayer* pLocal, CUserCmd* pCmd)
 	m_iShiftedGoal = std::max(m_iShiftedTicks - Vars::Doubletap::TickLimit.Value + 1, 0);
 	if (Vars::Doubletap::AntiWarp.Value)
 		m_bAntiWarp = pLocal->m_hGroundEntity();
-}
-
-void CTicks::Speedhack()
-{
-	m_bSpeedhack = Vars::Speedhack::Scale.Value != 1;
-	if (!m_bSpeedhack)
-		return;
-
-	m_bDoubletap = m_bWarp = m_bRecharge = false;
 }
 
 static Vec3 s_vVelocity = {};
@@ -172,8 +163,6 @@ void CTicks::SendMoveFunc()
 	moveMsg.m_nBackupCommands = std::clamp(nExtraCommands, 2, MAX_BACKUP_COMMANDS);
 
 	int nNumCmds = moveMsg.m_nNewCommands + moveMsg.m_nBackupCommands;
-
-	if (!m_bSpeedhack)
 	{
 		const int iAllowedNewCommands = std::max(m_iMaxUsrCmdProcessTicks - m_iShiftedTicks, 0);
 		const int iCmdCount = nNumCmds - 3;
@@ -313,12 +302,6 @@ void CTicks::Move(float accumulated_extra_samples, bool bFinalTick)
 		MoveFunc(accumulated_extra_samples, false);
 	m_iShiftedTicks = std::max(m_iShiftedTicks, 0) + 1;
 
-	if (m_bSpeedhack)
-	{
-		m_iShiftedTicks = Vars::Speedhack::Scale.Value;
-		m_iShiftedGoal = 0;
-	}
-
 	m_iShiftedGoal = std::clamp(m_iShiftedGoal, 0, m_iMaxShift);
 	if (m_iShiftedTicks > m_iShiftedGoal) // normal use/doubletap/teleport
 	{
@@ -352,7 +335,6 @@ void CTicks::MoveManage()
 
 	Recharge(pLocal);
 	Warp();
-	Speedhack();
 
 	if (!m_bRecharge)
 		m_iWait = std::max(m_iWait, 0);
@@ -398,7 +380,7 @@ void CTicks::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 
 void CTicks::ManagePacket(CUserCmd* pCmd)
 {
-	if (!m_bDoubletap && !m_bWarp && !m_bSpeedhack)
+	if (!m_bDoubletap && !m_bWarp)
 	{
 		static bool bWasSet = false;
 		bool bCanChoke = CanChoke(true); // failsafe
@@ -413,7 +395,7 @@ void CTicks::ManagePacket(CUserCmd* pCmd)
 	}
 	else
 	{
-		if ((m_bSpeedhack || m_bWarp) && G::Attacking == 1)
+		if (m_bWarp && G::Attacking == 1)
 		{
 			G::SendPacket = true;
 			return;
@@ -472,7 +454,7 @@ int CTicks::GetTicks(CTFWeaponBase* pWeapon)
 		return m_iShiftedTicks - m_iShiftedGoal;
 
 	if (!Vars::Doubletap::Doubletap.Value
-		|| m_iWait || m_bWarp || m_bRecharge || m_bSpeedhack || F::AutoRocketJump.IsRunning())
+		|| m_iWait || m_bWarp || m_bRecharge || F::AutoRocketJump.IsRunning())
 		return 0;
 
 	int iTicks = std::min(m_iShiftedTicks + 1, 22);
@@ -540,7 +522,7 @@ Vec3* CTicks::GetShootAngle()
 
 bool CTicks::IsTimingUnsure()
 {	// actually knowing when we'll shoot would be better than this, but this is fine for now
-	return m_bTimingUnsure || m_bSpeedhack /*|| m_bWarp*/;
+	return m_bTimingUnsure /*|| m_bWarp*/;
 }
 
 void CTicks::Draw(CTFPlayer* pLocal)
@@ -550,7 +532,6 @@ void CTicks::Draw(CTFPlayer* pLocal)
 	static Color_t tBarColor = {};
 	static float flCachedProgress = 0.f;
 	static bool bCachedFooter = false;
-	static bool bCachedSpeedhack = false;
 	static bool bCachedValid = false;
 
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks))
@@ -569,30 +550,17 @@ void CTicks::Draw(CTFPlayer* pLocal)
 			return;
 		}
 
-		if (m_bSpeedhack)
-		{
-			sRightText = std::format("x{}", Vars::Speedhack::Scale.Value);
-			tBarColor = Color_t(100, 255, 100, 255);
-			flCachedProgress = 1.f;
-			bCachedFooter = false;
-			bCachedSpeedhack = true;
-			bCachedValid = true;
-		}
-		else
-		{
-			const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
-			const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
-			const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
-			const int iTicks = std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks);
-			const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
-			flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
-			sRightText = std::format("{} / {}", iTicks, iMaxTicks);
-			tBarColor = m_iWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255);
-			flCachedProgress = flCurrentProgress;
-			bCachedFooter = m_iWait != 0;
-			bCachedSpeedhack = false;
-			bCachedValid = true;
-		}
+		const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
+		const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
+		const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
+		const int iTicks = std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks);
+		const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
+		flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
+		sRightText = std::format("{} / {}", iTicks, iMaxTicks);
+		tBarColor = m_iWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255);
+		flCachedProgress = flCurrentProgress;
+		bCachedFooter = m_iWait != 0;
+		bCachedValid = true;
 	}
 
 	if (!bCachedValid)
@@ -608,22 +576,6 @@ void CTicks::Draw(CTFPlayer* pLocal)
 		static_cast<float>(dtPos.x) - flPanelWidth / 2.f,
 		static_cast<float>(dtPos.y)
 	};
-
-	if (bCachedSpeedhack)
-	{
-		DrawIndicatorPanel(
-			pDrawList,
-			vPanelPos,
-			flPanelWidth,
-			flPanelHeight,
-			"Speedhack",
-			sRightText.c_str(),
-			Vars::Menu::Theme::Active.Value,
-			Vars::Menu::Theme::Active.Value,
-			tBarColor,
-			flCachedProgress);
-		return;
-	}
 
 	DrawIndicatorPanel(
 		pDrawList,

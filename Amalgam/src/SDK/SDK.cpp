@@ -785,7 +785,7 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 	case Soldier_s_TheConcheror:
 	case Scout_s_BonkAtomicPunch:
 	case Scout_s_CritaCola:
-		EWeaponType::UNKNOWN;
+		return EWeaponType::UNKNOWN;
 	}
 
 	switch (pWeapon->GetWeaponID())
