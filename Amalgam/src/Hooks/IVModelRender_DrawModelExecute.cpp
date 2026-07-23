@@ -21,9 +21,9 @@ MAKE_HOOK(IVModelRender_DrawModelExecute, U::Memory.GetVirtual(I::ModelRender, 1
 		return CALL_ORIGINAL(rcx, pState, pInfo, pBoneToWorld);
 
 	if (F::Chams.m_bRendering)
-		return F::Chams.RenderHandler(pState, pInfo, pBoneToWorld);
+		return F::Chams.RenderHandler(rcx, pState, pInfo, pBoneToWorld);
 	if (F::Glow.m_bRendering)
-		return F::Glow.RenderHandler(pState, pInfo, pBoneToWorld);
+		return F::Glow.RenderHandler(rcx, pState, pInfo, pBoneToWorld);
 
 	if (F::Chams.m_mEntities.contains(pInfo.entity_index))
 		return;
@@ -31,8 +31,8 @@ MAKE_HOOK(IVModelRender_DrawModelExecute, U::Memory.GetVirtual(I::ModelRender, 1
 	auto pEntity = I::ClientEntityList->GetClientEntity(pInfo.entity_index)->As<CBaseEntity>();
 	if (pEntity && pEntity->IsWearableVM() /*pEntity->IsViewmodel()*/)
 	{
-		F::Glow.RenderViewmodel(pState, pInfo, pBoneToWorld);
-		if (F::Chams.RenderViewmodel(pState, pInfo, pBoneToWorld))
+		F::Glow.RenderViewmodel(rcx, pState, pInfo, pBoneToWorld);
+		if (F::Chams.RenderViewmodel(rcx, pState, pInfo, pBoneToWorld))
 			return;
 	}
 
