@@ -18,7 +18,9 @@ void CAntiCheatCompatibility::EnforceSettings()
 	Vars::Doubletap::Doubletap.Value = false;
 	Vars::Doubletap::Warp.Value = false;
 	Vars::Fakelag::Fakelag.Value = Vars::Fakelag::FakelagEnum::Off;
-	Vars::AntiAim::Enabled.Value = false;
+	const auto pLocal = H::Entities.GetLocal();
+	if (!Vars::AntiAim::TauntSpin.Value || !pLocal || !pLocal->IsTaunting())
+		Vars::AntiAim::Enabled.Value = false;
 }
 
 void CAntiCheatCompatibility::CreateMove(CUserCmd* pCmd)

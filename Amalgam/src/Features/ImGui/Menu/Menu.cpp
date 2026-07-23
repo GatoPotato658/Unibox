@@ -1657,9 +1657,9 @@ void CMenu::MenuHvH(int iTab)
 					FToggle(Vars::AntiAim::MinWalk, FToggleEnum::Left);
 					FToggle(Vars::AntiAim::AntiOverlap, FToggleEnum::Left);
 					FToggle(Vars::AntiAim::HidePitchOnShot, FToggleEnum::Right);
-					FToggle(Vars::AntiAim::TauntSpin);
 					}
 					PopDisabled();
+					FToggle(Vars::AntiAim::TauntSpin);
 				} EndSection();
 			}
 			/* Column 2 */
