@@ -152,6 +152,18 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 		}
 		break;
 	}
+	case TF_WEAPON_MECHANICAL_ARM:
+	{
+		auto pOwner = pWeapon->m_hOwner().Get()->As<CTFPlayer>();
+		if (pOwner && pOwner->IsPlayer() && pOwner->m_iMetalCount() >= 65)
+		{
+			auto uType = FNV1A::Hash32Const("models/weapons/w_models/w_drg_ball.mdl");
+			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 40.f, 15.f, -10.f }, vPos, vAngle, 0.f, 0.f, bInterp);
+			tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, Vec3(), 700.f, 0.f, 1.2f };
+			return true;
+		}
+		break;
+	}
 	case TF_WEAPON_PARTICLE_CANNON:
 	case TF_WEAPON_RAYGUN:
 	case TF_WEAPON_DRG_POMSON:

@@ -765,6 +765,12 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 
 			break;
 		}
+		case TF_WEAPON_MECHANICAL_ARM:
+		{
+			auto pOwner = pWeapon->m_hOwner().Get()->As<CTFPlayer>();
+			if (pOwner && pOwner->IsPlayer() && pOwner->m_iMetalCount() >= 65)
+				*pSecondaryType = EWeaponType::PROJECTILE;
+		}
 		}
 	}
 

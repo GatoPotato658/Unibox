@@ -105,7 +105,11 @@ private:
 
 	int CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, bool bUpdate = true);
 	bool RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	bool RunMechArm(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 
+	std::vector<Target_t> GetProjectiles(CTFPlayer* pLocal);
+
+	bool CanHitProjectile(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, Target_t& tTarget, int iSimTicks);
 	bool CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pProjectile);
 	bool TestAngle(CBaseEntity* pProjectile, const Vec3& vPoint, Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags);
 
@@ -185,7 +189,7 @@ public:
 	bool HandlePasstimeThrowInput(CUserCmd* pCmd, const Vec3& vAngle, int iTargetEnt);
 
 	int m_iLastTickCancel = 0;
-	int m_iSentryGunLock = 0;
+	int m_iAimLock = 0;
 };
 
 ADD_FEATURE(CAimbotProjectile, AimbotProjectile);

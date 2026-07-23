@@ -1233,10 +1233,12 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 	{
 		switch (pWeapon->GetWeaponID())
 		{
+		case TF_WEAPON_MECHANICAL_ARM:
 		case TF_WEAPON_LASER_POINTER:
 			if (pCmd->buttons & IN_ATTACK2 && G::CanSecondaryAttack)
 				F::Visuals.ProjectileTrace(pLocal, pWeapon, false);
 			break;
+
 		case TF_WEAPON_BAT_WOOD:
 		case TF_WEAPON_BAT_GIFTWRAP:
 			if (!G::Throwing)

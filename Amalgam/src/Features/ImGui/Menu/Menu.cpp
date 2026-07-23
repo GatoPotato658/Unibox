@@ -609,7 +609,8 @@ void CMenu::MenuAimbot(int iTab)
 						FSlider(Vars::Aimbot::Projectile::AutoRelease);
 					}
 					PopTransparent();
-					FToggle(Vars::Aimbot::Projectile::GrapplingHookAim);
+					FToggle(Vars::Aimbot::Projectile::GrapplingHookAim, FSliderEnum::Left);
+					FSlider(Vars::Aimbot::Projectile::AutoSCMetalAmount, FSliderEnum::Right);
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{

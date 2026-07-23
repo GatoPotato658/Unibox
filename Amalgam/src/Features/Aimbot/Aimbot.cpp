@@ -106,10 +106,13 @@ void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	F::AutoDetonate.Run(pLocal, pCmd);
 	F::AutoAirblast.Run(pLocal, pWeapon, pCmd);
 	F::AutoHeal.Run(pLocal, pWeapon, pCmd);
-	if (pWeapon->GetWeaponID() == TF_WEAPON_LASER_POINTER)
+
+	auto iWeaponID = pWeapon->GetWeaponID();
+	if (iWeaponID == TF_WEAPON_LASER_POINTER ||
+		iWeaponID == TF_WEAPON_MECHANICAL_ARM)
 	{
 		RunAimbot(pLocal, pWeapon, pCmd, true);
-		if (F::AimbotProjectile.m_iSentryGunLock == 0)
+		if (F::AimbotProjectile.m_iAimLock == 0)
 			RunAimbot(pLocal, pWeapon, pCmd);
 	}
 	else
@@ -118,7 +121,7 @@ void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		RunAimbot(pLocal, pWeapon, pCmd, true);
 	}
 
-	auto iWeaponID = pWeapon->GetWeaponID();
+	
 	if (m_eRanType == EWeaponType::UNKNOWN && (!Vars::Aimbot::General::AimType.Value || (G::CanPrimaryAttack || G::CanSecondaryAttack) && (!(pCmd->buttons & IN_ATTACK) || (iWeaponID != TF_WEAPON_COMPOUND_BOW && iWeaponID != TF_WEAPON_PIPEBOMBLAUNCHER && iWeaponID != TF_WEAPON_CANNON))) || pWeapon->GetWeaponID() == TF_WEAPON_GRAPPLINGHOOK)
 		F::AimbotProjectile.RunGrapplingHook(pLocal, pWeapon, pCmd);
 }

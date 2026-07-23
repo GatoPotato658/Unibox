@@ -359,6 +359,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(SplashRadius, "Splash radius", 100.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(AutoRelease, "Auto release", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(GrapplingHookAim, "Grappling hook aim", false);
+			CVar(AutoSCMetalAmount, "Auto short circuit min metal", 0, SLIDER_CLAMP, 0, 195, 65);
 
 			CVar(GroundSamples, "Samples", 33, NOSAVE | DEBUGVAR, 3, 66);
 			CVar(GroundStraightFuzzyValue, "Straight fuzzy value", 100.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 500.f, 25.f);
