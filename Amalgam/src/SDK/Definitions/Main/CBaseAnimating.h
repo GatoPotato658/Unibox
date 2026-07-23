@@ -64,6 +64,8 @@ public:
 	void GetHitboxInfo(matrix3x4* aBones, int nHitbox, Vec3* pCenter = nullptr, Vec3* pMins = nullptr, Vec3* pMaxs = nullptr, matrix3x4* pMatrix = nullptr, Vec3 vOffset = {});
 };
 
+using InternalDrawModelFn = int(__fastcall*)(CBaseAnimating*, int);
+
 class CBaseAnimatingOverlay : public CBaseAnimating
 {
 public:

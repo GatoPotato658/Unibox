@@ -82,4 +82,6 @@ public:
 	virtual void GetMaterialOverride(IMaterial** ppOutForcedMaterial, OverrideType_t* pOutOverrideType) = 0;
 };
 
+using DrawModelExecuteFn = void(__fastcall*)(IVModelRender*, const DrawModelState_t&, const ModelRenderInfo_t&, matrix3x4*);
+
 MAKE_INTERFACE_VERSION(IVModelRender, ModelRender, "engine.dll", "VEngineModel016");

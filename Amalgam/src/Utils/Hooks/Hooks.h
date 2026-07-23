@@ -3,7 +3,6 @@
 #include <MinHook/MinHook.h>
 #include <unordered_map>
 #include <string>
-#include <utility>
 
 class CHook
 {
@@ -23,12 +22,6 @@ public:
 	inline T As() const
 	{
 		return reinterpret_cast<T>(m_pOriginal);
-	}
-
-	template <typename T, typename... Args>
-	inline T Call(Args&&... args) const
-	{
-		return reinterpret_cast<T(__fastcall*)(Args&&...)>(m_pOriginal)(std::forward<Args>(args)...);
 	}
 };
 
