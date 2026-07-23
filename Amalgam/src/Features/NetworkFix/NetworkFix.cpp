@@ -1,5 +1,7 @@
 #include "NetworkFix.h"
 
+using CLReadPacketsFn = void(__fastcall*)(bool);
+
 void CReadPacketState::Store()
 {
 	m_flFrameTimeClientState = I::ClientState->m_frameTime;
@@ -24,7 +26,7 @@ void CNetworkFix::FixInputDelay(bool bFinalTick)
 	m_tBackup.Store();
 
 	static auto CL_ReadPackets = U::Hooks.m_mHooks["CL_ReadPackets"];
-	CL_ReadPackets->Call<void>(bFinalTick);
+	CL_ReadPackets->As<CLReadPacketsFn>()(bFinalTick);
 
 	m_tState.Store();
 	m_tBackup.Restore();

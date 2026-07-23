@@ -2,6 +2,8 @@
 
 #include "../../Visuals/Materials/Materials.h"
 
+using CViewRenderRenderViewFn = void(__fastcall*)(void*, const CViewSetup&, ClearFlags_t, RenderViewInfo_t);
+
 // Draws camera to the screen
 void CCameraWindow::Draw()
 {
@@ -57,7 +59,8 @@ void CCameraWindow::RenderCustomView(void* rcx, const CViewSetup& pViewSetup, IT
 	pRenderContext->SetRenderTarget(pTexture);
 
 	static auto CViewRender_RenderView = U::Hooks.m_mHooks["CViewRender_RenderView"];
-	CViewRender_RenderView->Call<void>(rcx, pViewSetup, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, RENDERVIEW_UNSPECIFIED);
+	CViewRender_RenderView->As<CViewRenderRenderViewFn>()(
+		rcx, pViewSetup, static_cast<ClearFlags_t>(VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH), RENDERVIEW_UNSPECIFIED);
 
 	pRenderContext->PopRenderTargetAndViewport();
 	pRenderContext->Release();

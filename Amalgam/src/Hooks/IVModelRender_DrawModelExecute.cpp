@@ -11,7 +11,7 @@ MAKE_SIGNATURE(CBaseViewModel_DrawModel, "client.dll", "40 53 55 56 48 83 EC ? 8
 static bool s_bDrawingViewmodel = false;
 
 MAKE_HOOK(IVModelRender_DrawModelExecute, U::Memory.GetVirtual(I::ModelRender, 19), void,
-	void* rcx, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld)
+	IVModelRender* rcx, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld)
 {
 	DEBUG_RETURN(IVModelRender_DrawModelExecute, rcx, pState, pInfo, pBoneToWorld);
 
@@ -28,7 +28,8 @@ MAKE_HOOK(IVModelRender_DrawModelExecute, U::Memory.GetVirtual(I::ModelRender, 1
 	if (F::Chams.m_mEntities.contains(pInfo.entity_index))
 		return;
 
-	auto pEntity = I::ClientEntityList->GetClientEntity(pInfo.entity_index)->As<CBaseEntity>();
+	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+	auto pEntity = pEntityBase ? pEntityBase->As<CBaseEntity>() : nullptr;
 	if (pEntity && pEntity->IsWearableVM() /*pEntity->IsViewmodel()*/)
 	{
 		F::Glow.RenderViewmodel(rcx, pState, pInfo, pBoneToWorld);
@@ -42,7 +43,7 @@ MAKE_HOOK(IVModelRender_DrawModelExecute, U::Memory.GetVirtual(I::ModelRender, 1
 
 #ifndef TEXTMODE
 MAKE_HOOK(CBaseAnimating_InternalDrawModel, S::CBaseAnimating_InternalDrawModel(), int,
-	void* rcx, int flags)
+	CBaseAnimating* rcx, int flags)
 {
 	DEBUG_RETURN(CBaseAnimating_InternalDrawModel, rcx, flags);
 
