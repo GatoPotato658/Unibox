@@ -194,7 +194,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(PingDisplay, "Ping display", DragBox_t(), VISUAL | NOBIND);
 		CVar(ConditionsDisplay, "Conditions display", DragBox_t(), VISUAL | NOBIND);
 		CVar(SeedPredictionDisplay, "Seed prediction display", DragBox_t(), VISUAL | NOBIND);
-		CVar(NavBotDisplay, "Navbot display", DragBox_t(), VISUAL | NOBIND);
+		CVar(NavBotDisplay, "Navbot display", DragBox_t(), VISUAL | NOSAVE | DEBUGVAR | NOBIND);
 
 		CVar(Scale, "Scale", 1.f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
 		CVar(CheapText, "Cheap text", false, NOBIND);
@@ -257,9 +257,9 @@ NAMESPACE_BEGIN(Vars)
 		CVar(RealPath, "Real path color", Color_t(255, 255, 255, 0), NOSAVE | DEBUGVAR);
 		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
 
-		CVar(NavbotPath, "Navbot path color", Color_t(255, 255, 0, 255), VISUAL);
-		CVar(NavbotArea, "Navbot area color", Color_t(0, 255, 0, 255), VISUAL);
-		CVar(NavbotBlacklist, "Navbot blacklisted color", Color_t(255, 0, 0, 255), VISUAL);
+		CVar(NavbotPath, "Navbot path color", Color_t(255, 255, 0, 255), VISUAL | NOSAVE | DEBUGVAR);
+		CVar(NavbotArea, "Navbot area color", Color_t(0, 255, 0, 255), VISUAL | NOSAVE | DEBUGVAR);
+		CVar(NavbotBlacklist, "Navbot blacklisted color", Color_t(255, 0, 0, 255), VISUAL | NOSAVE | DEBUGVAR);
 		CVar(FollowbotPathLine, "Followbot path line color", Color_t(255, 255, 0, 255), VISUAL);
 		CVar(FollowbotPathBox, "Followbot path box color", Color_t(255, 255, 0, 255), VISUAL);
 		CVar(EdgebugPath, "Auto edgebug path color", Color_t(255, 255, 255, 255), VISUAL);
@@ -803,64 +803,64 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(MovementLock, "Movement lock", false);
 
 			NAMESPACE_BEGIN(NavEngine)
-				CVar(Enabled, VA_LIST("Enabled", "Nav engine enabled"), false);
-				CVar(PathInSetup, "Path in setup time", false);
-				CVarEnum(Draw, "Draw", 0b011, VISUAL | DROPDOWN_MULTI, nullptr,
+				CVar(Enabled, VA_LIST("Enabled", "Nav engine enabled"), false, NOSAVE | DEBUGVAR);
+				CVar(PathInSetup, "Path in setup time", false, NOSAVE | DEBUGVAR);
+				CVarEnum(Draw, "Draw", 0b011, VISUAL | NOSAVE | DEBUGVAR | DROPDOWN_MULTI, nullptr,
 					VA_LIST("Path", "Areas", "Blacklisted zones"),
 					Path = 1 << 0, Area = 1 << 1, Blacklist = 1 << 2);
-				CVarEnum(LookAtPath, "Look at path", 0, NONE, nullptr,
+				CVarEnum(LookAtPath, "Look at path", 0, NOSAVE | DEBUGVAR, nullptr,
 					VA_LIST("Off", "Plain", "Silent", "Legit", "Legit silent"),
 					Off, Plain, Silent, Legit, LegitSilent);
 
-				CVar(StickyIgnoreTime, "Sticky ignore time", 15, SLIDER_MIN, 15, 100, 5, "%is");
-				CVar(StuckDetectTime, "Stuck detect time", 1, SLIDER_MIN, 1, 26, 1, "%is");
-				CVar(StuckBlacklistTime, "Stuck blacklist time", 90, SLIDER_MIN, 20, 600, 20, "%is");
-				CVar(StuckExpireTime, "Stuck expire time", 20, SLIDER_MIN, 5, 100, 5, "%is");
-				CVar(StuckTime, "Stuck time", 0.25f, SLIDER_MIN, 0.25f, 0.9f, 0.05f, "%gs");
+				CVar(StickyIgnoreTime, "Sticky ignore time", 15, NOSAVE | DEBUGVAR | SLIDER_MIN, 15, 100, 5, "%is");
+				CVar(StuckDetectTime, "Stuck detect time", 1, NOSAVE | DEBUGVAR | SLIDER_MIN, 1, 26, 1, "%is");
+				CVar(StuckBlacklistTime, "Stuck blacklist time", 90, NOSAVE | DEBUGVAR | SLIDER_MIN, 20, 600, 20, "%is");
+				CVar(StuckExpireTime, "Stuck expire time", 20, NOSAVE | DEBUGVAR | SLIDER_MIN, 5, 100, 5, "%is");
+				CVar(StuckTime, "Stuck time", 0.25f, NOSAVE | DEBUGVAR | SLIDER_MIN, 0.25f, 0.9f, 0.05f, "%gs");
 
-				CVar(VischeckEnabled, "Vischeck enabled", true);
-				CVar(VischeckTime, "Vischeck time", 0.25f, SLIDER_MIN, 0.005f, 3.f, 0.005f, "%gs");
-				CVar(VischeckCacheTime, "Vischeck cache time", 45, SLIDER_MIN, 10, 500, 10, "%is");
+				CVar(VischeckEnabled, "Vischeck enabled", true, NOSAVE | DEBUGVAR);
+				CVar(VischeckTime, "Vischeck time", 0.25f, NOSAVE | DEBUGVAR | SLIDER_MIN, 0.005f, 3.f, 0.005f, "%gs");
+				CVar(VischeckCacheTime, "Vischeck cache time", 45, NOSAVE | DEBUGVAR | SLIDER_MIN, 10, 500, 10, "%is");
 			NAMESPACE_END(NavEngine)
 
 			NAMESPACE_BEGIN(BotUtils)
-				CVar(LookAtPathSpeed, "Look at path speed", 25, SLIDER_CLAMP, 0, 120);
-				CVarEnum(WeaponSlot, "Force weapon", 0, NONE, nullptr,
+				CVar(LookAtPathSpeed, "Look at path speed", 25, NOSAVE | DEBUGVAR | SLIDER_CLAMP, 0, 120);
+				CVarEnum(WeaponSlot, "Force weapon", 0, NOSAVE | DEBUGVAR, nullptr,
 					VA_LIST("Off", "Best", "Primary", "Secondary", "Melee", "PDA"),
 					Off, Best, Primary, Secondary, Melee, PDA);
 			
-				CVarEnum(AutoScope, "Auto scope", 0, NONE, nullptr,
+				CVarEnum(AutoScope, "Auto scope", 0, NOSAVE | DEBUGVAR, nullptr,
 					VA_LIST("Off", "Simple", "MoveSim"),
 					Off, Simple, MoveSim);
-				CVar(AutoScopeCancelTime, "Auto scope cancel time", 3, SLIDER_MIN, 1, 5, 1, "%is");
+				CVar(AutoScopeCancelTime, "Auto scope cancel time", 3, NOSAVE | DEBUGVAR | SLIDER_MIN, 1, 5, 1, "%is");
 				CVar(AutoScopeUseCachedResults, "Auto scope use cached results", true, NOSAVE | DEBUGVAR);
 				CVar(LookAtPathDebug, "Look at path debug", false, NOSAVE | DEBUGVAR);
 			NAMESPACE_END(BotUtils)
 
 			NAMESPACE_BEGIN(NavBot)
-				CVar(Enabled, VA_LIST("Enabled", "Navbot enabled"), false);
-				CVarEnum(Blacklist, "Blacklist", 0b0111111, DROPDOWN_MULTI, "None",
+				CVar(Enabled, VA_LIST("Enabled", "Navbot enabled"), false, NOSAVE | DEBUGVAR);
+				CVarEnum(Blacklist, "Blacklist", 0b0111111, NOSAVE | DEBUGVAR | DROPDOWN_MULTI, "None",
 					VA_LIST("Normal threats", "Dormant threats", "##Divider", "Players", "Stickies", "Projectiles", "Sentries"),
 					NormalThreats = 1 << 0, DormantThreats = 1 << 1, Players = 1 << 2, Stickies = 1 << 3, Projectiles = 1 << 4, Sentries = 1 << 5);
 
-				CVar(BlacklistDelay, "Blacklist normal scan delay", 0.5f, SLIDER_MIN, 0.1f, 1.f, 0.1f, "%gs");
-				CVar(BlacklistDormantDelay, "Blacklist dormant scan delay", 1.f, SLIDER_MIN, 0.5f, 5.f, 0.5f, "%gs");
-				CVar(BlacklistSlightDangerLimit, "Blacklist slight danger limit", 2, SLIDER_MIN, 1, 10);
+				CVar(BlacklistDelay, "Blacklist normal scan delay", 0.5f, NOSAVE | DEBUGVAR | SLIDER_MIN, 0.1f, 1.f, 0.1f, "%gs");
+				CVar(BlacklistDormantDelay, "Blacklist dormant scan delay", 1.f, NOSAVE | DEBUGVAR | SLIDER_MIN, 0.5f, 5.f, 0.5f, "%gs");
+				CVar(BlacklistSlightDangerLimit, "Blacklist slight danger limit", 2, NOSAVE | DEBUGVAR | SLIDER_MIN, 1, 10);
 
-				CVar(SmartJump, "Smart jump", true);
-				CVar(EscapeSpawn, "Escape spawn", true);
+				CVar(SmartJump, "Smart jump", true, NOSAVE | DEBUGVAR);
+				CVar(EscapeSpawn, "Escape spawn", true, NOSAVE | DEBUGVAR);
 
-				CVarEnum(RechargeDT, "Recharge DT", 0, NONE, nullptr,
+				CVarEnum(RechargeDT, "Recharge DT", 0, NOSAVE | DEBUGVAR, nullptr,
 					VA_LIST("Off", "On", "If not fakelagging"),
 					Off, Always, WaitForFL);
-				CVar(RechargeDTDelay, "Recharge DT delay", 5, SLIDER_MIN, 0, 10, 1, "%is");
+				CVar(RechargeDTDelay, "Recharge DT delay", 5, NOSAVE | DEBUGVAR | SLIDER_MIN, 0, 10, 1, "%is");
 
-				CVarEnum(Preferences, "Preferences", 0b100001111110111, DROPDOWN_MULTI, nullptr,
+				CVarEnum(Preferences, "Preferences", 0b100001111110111, NOSAVE | DEBUGVAR | DROPDOWN_MULTI, nullptr,
 					VA_LIST("Get health", "Get ammo", "Reload weapons", "Stalk enemies", "Defend objectives", "Capture objectives", "Help capture objectives", "Escape danger", "Safe capping", "Target sentries", "Auto engie", "##Divider", "Target sentries low range", "Help capture objective friend only", "Dont escape danger with intel", "Group with others"),
 					SearchHealth = 1 << 0, SearchAmmo = 1 << 1, ReloadWeapons = 1 << 2, StalkEnemies = 1 << 3, DefendObjectives = 1 << 4, CaptureObjectives = 1 << 5, HelpCaptureObjectives = 1 << 6, EscapeDanger = 1 << 7, SafeCapping = 1 << 8, TargetSentries = 1 << 9, AutoEngie = 1 << 10, TargetSentriesLowRange = 1 << 11, HelpFriendlyCaptureObjectives = 1 << 12, DontEscapeDangerIntel = 1 << 13, GroupWithOthers = 1 << 14);
-				CVar(MeleeTargetRange, "Melee target range", 600, NONE, 150, 4000, 50);
-				CVar(DangerOverlay, "Danger overlay", false);
-				CVar(DangerOverlayMaxDist, "Danger overlay max distance", 2000.f, SLIDER_MIN, 500.f, 6000.f, 250.f, "%0.0f");
+				CVar(MeleeTargetRange, "Melee target range", 600, NOSAVE | DEBUGVAR, 150, 4000, 50);
+				CVar(DangerOverlay, "Danger overlay", false, NOSAVE | DEBUGVAR);
+				CVar(DangerOverlayMaxDist, "Danger overlay max distance", 2000.f, NOSAVE | DEBUGVAR | SLIDER_MIN, 500.f, 6000.f, 250.f, "%0.0f");
 
 				CVar(StickyDangerRange, "Sticky danger range", 600, NOSAVE | DEBUGVAR, 50, 1500, 50);
 				CVar(ProjectileDangerRange, "Projectile danger range", 600, NOSAVE | DEBUGVAR, 50, 1500, 50);

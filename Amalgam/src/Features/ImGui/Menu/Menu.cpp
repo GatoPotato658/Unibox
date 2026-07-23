@@ -1894,6 +1894,9 @@ void CMenu::MenuMisc(int iTab)
 	// Navbot
 	case 1:
 	{
+		if (!Vars::Debug::Options.Value || !Vars::Config::LoadDebugSettings.Value)
+			break;
+
 		if (BeginTable("NavbotTable", 2))
 		{
 			/* Column 1 */
@@ -4965,7 +4968,7 @@ void CMenu::MenuSearch(std::string sSearch)
 		vVars.clear();
 		for (auto& pBase : G::Vars)
 		{
-			if (!Vars::Debug::Options[DEFAULT_BIND] && pBase->m_iFlags & DEBUGVAR)
+			if ((!Vars::Debug::Options[DEFAULT_BIND] || !Vars::Config::LoadDebugSettings[DEFAULT_BIND]) && pBase->m_iFlags & DEBUGVAR)
 				continue;
 
 			std::vector<const char*> vSearch = { pBase->Name(), pBase->Section() };
