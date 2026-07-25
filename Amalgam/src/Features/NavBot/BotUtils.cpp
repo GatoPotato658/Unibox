@@ -408,10 +408,8 @@ void CBotUtils::SetSlot(CTFPlayer* pLocal, int iSlot)
 
 void CBotUtils::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
-	const bool bBotActive = Vars::Misc::Movement::NavBot::Enabled.Value ||
-		(Vars::Misc::Movement::FollowBot::Enabled.Value && Vars::Misc::Movement::FollowBot::Targets.Value);
-	const bool bForceWeapon = Vars::Misc::Movement::BotUtils::WeaponSlot.Value;
-	if ((!bBotActive && !bForceWeapon) || !pLocal->IsAlive() || !pWeapon)
+	if ((!Vars::Misc::Movement::NavBot::Enabled.Value && !(Vars::Misc::Movement::FollowBot::Enabled.Value && Vars::Misc::Movement::FollowBot::Targets.Value)) ||
+		!pLocal->IsAlive() || !pWeapon)
 	{
 		Reset();
 		return;
@@ -420,11 +418,6 @@ void CBotUtils::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	m_tClosestEnemy = UpdateCloseEnemies(pLocal, pWeapon);
 	m_iCurrentSlot = pWeapon->GetSlot();
 	UpdateBestSlot(pLocal);
-	if (bForceWeapon && m_iCurrentSlot != m_iBestSlot)
-		SetSlot(pLocal, m_iBestSlot);
-
-	if (!bBotActive)
-		return;
 
 	if (!F::NavEngine.IsNavMeshLoaded() || (pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT) && !F::Misc.m_bAntiAFK))
 	{
