@@ -27,6 +27,12 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 
 	CALL_ORIGINAL(rcx, curStage);
 
+
+#ifndef TEXTMODE
+	if (curStage == FRAME_RENDER_START)
+		F::Materials.ServicePendingOperation();
+#endif
+
 	if (G::Unload) 
 		return;
 

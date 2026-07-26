@@ -157,7 +157,7 @@ void CCore::Load()
 		return;
 
 #ifndef TEXTMODE
-	F::Materials.LoadMaterials();
+	F::Materials.RequestLoad();
 #endif
 	H::ConVars.Modify(Vars::Misc::Exploits::UnlockCVars.Value);
 #ifndef TEXTMODE
@@ -197,6 +197,13 @@ void CCore::Unload()
 
 	G::Unload = true;
 	F::SteamProfileCache.Shutdown();
+
+#ifndef TEXTMODE
+	F::Materials.RequestUnload();
+	for (int i = 0; i < 200 && !F::Materials.IsUnloadComplete(); ++i)
+		Sleep(10);
+#endif
+
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
 	U::BytePatches.Unload();
 	H::Events.Unload();
@@ -221,14 +228,11 @@ void CCore::Unload()
 		}
 	}
 
-	Sleep(250);
 #ifdef DEBUG_UNI
 	F::Visuals.RemoveUni();
 #endif
 	F::EnginePrediction.Unload();
 	H::ConVars.Restore();
-	F::Materials.UnloadMaterials();
-
 	if (m_bFailed2)
 	{
 		LogFailText();

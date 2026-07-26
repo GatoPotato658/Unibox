@@ -1,6 +1,8 @@
 #pragma once
 #include "../../../SDK/SDK.h"
 
+#include <atomic>
+
 struct Material_t
 {
 	IMaterial* m_pMaterial;
@@ -19,9 +21,21 @@ struct Material_t
 class CMaterials
 {
 public:
+	enum class PendingOperation : uint8_t
+	{
+		None,
+		Load,
+		Reload,
+		Unload
+	};
+
 	void LoadMaterials();
 	void UnloadMaterials();
 	void ReloadMaterials();
+	void RequestLoad();
+	void RequestUnload();
+	void ServicePendingOperation();
+	bool IsUnloadComplete() const;
 
 	IMaterial* Create(char const* szName, KeyValues* pKV);
 	IMaterial* create_from_vmt(const char* name, const std::string& vmt);
@@ -39,6 +53,10 @@ public:
 	std::unordered_map<uint32_t, Material_t> m_mMaterials = {};
 
 	bool m_bLoaded = false;
+
+private:
+	std::atomic<PendingOperation> m_ePendingOperation = PendingOperation::None;
+	std::atomic_bool m_bUnloadComplete = false;
 };
 
 ADD_FEATURE(CMaterials, Materials);
