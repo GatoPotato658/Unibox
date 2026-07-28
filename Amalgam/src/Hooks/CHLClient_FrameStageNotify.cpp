@@ -14,6 +14,7 @@
 #include "../Features/Visuals/Chams/Chams.h"
 #include "../Features/Visuals/Glow/Glow.h"
 #include "../Features/Visuals/Groups/Groups.h"
+#include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
 #ifdef TEXTMODE
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
