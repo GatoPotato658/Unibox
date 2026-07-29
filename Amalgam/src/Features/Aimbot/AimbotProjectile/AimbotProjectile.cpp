@@ -2439,7 +2439,7 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 	}
 	if (bSuccess)
 	{
-		if (TF_WEAPON_LASER_POINTER)
+		if (m_iWeaponID == TF_WEAPON_LASER_POINTER)
 		{
 			m_iAimLock = 2;
 			if (m_pSentryGun)

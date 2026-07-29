@@ -103,7 +103,7 @@ void CAimbotGlobal::SortTargetsPost(std::vector<Target_t>& vTargets, int iMethod
 
 float CAimbotGlobal::GetAimFOV()
 {	// restrict now vs later
-	return std::min(Vars::Aimbot::General::AimFOV.Value, 180.f);
+	return Vars::Aimbot::General::LeadAndRestrict.Value ? 180.f : std::min(Vars::Aimbot::General::AimFOV.Value, 180.f);
 }
 
 bool CAimbotGlobal::EntityCenterInFOV(CBaseEntity* pTarget, const Vec3& vLocalPos, const Vec3& vLocalAngles, float& flFOVTo, Vec3& vPos, Vec3& vAngleTo)
@@ -239,7 +239,7 @@ bool CAimbotGlobal::ShouldAimAtAngle(Vec3 vAngles)
 	if (!Vars::Aimbot::General::LeadAndRestrict.Value)
 		return true;
 
-	return Math::CalcFov(I::EngineClient->GetViewAngles(), vAngles) <= GetAimFOV();
+	return Math::CalcFov(I::EngineClient->GetViewAngles(), vAngles) <= std::min(Vars::Aimbot::General::AimFOV.Value, 180.f);
 }
 
 bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iFunctionFlags, int iTargetFlags, int iIgnoreFlags)
