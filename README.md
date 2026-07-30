@@ -16,6 +16,7 @@
   [![Freetype AVX2](.github/assets/freetype_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseFreetypeAVX2.zip)
   [![PDB Freetype AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseFreetypeAVX2PDB.zip)
   <br>
+  ## these are usually outdated
   <!--
   [![Textmode](.github/assets/textmode.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmode.zip)
   [![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodePDB.zip)
