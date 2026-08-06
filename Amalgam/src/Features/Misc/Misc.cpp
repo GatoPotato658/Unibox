@@ -1048,7 +1048,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 
 		if (iVictim == iLocalPlayer
 			&& m_bAutoBalanceTeamChangePending
-			&& Vars::Misc::Automation::AntiAutobalance.Value == Vars::Misc::Automation::AntiAutobalanceEnum::RetryOnDeath)
+			&& Vars::Misc::Automation::AntiAutobalance.Value)
 		{
 			auto pResource = H::Entities.GetResource();
 			if (pResource)

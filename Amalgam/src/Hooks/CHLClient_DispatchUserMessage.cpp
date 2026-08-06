@@ -145,16 +145,10 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 
 			if (FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#TF_Autobalance_TeamChangePending"))
 			{
-				switch (Vars::Misc::Automation::AntiAutobalance.Value)
+				if (Vars::Misc::Automation::AntiAutobalance.Value)
 				{
-				case Vars::Misc::Automation::AntiAutobalanceEnum::Retry:
-					I::EngineClient->ClientCmd_Unrestricted("retry");
-					break;
-				case Vars::Misc::Automation::AntiAutobalanceEnum::RetryOnDeath:
 					F::Misc.SetAutoBalanceTeamChangePending(true);
-					break;
-				default:
-					break;
+					I::EngineClient->ClientCmd_Unrestricted("retry");
 				}
 			}
 			else if (FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#GameUI_vote_failed_vote_in_progress"))

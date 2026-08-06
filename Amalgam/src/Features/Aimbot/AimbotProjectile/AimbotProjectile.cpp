@@ -275,7 +275,6 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 static inline std::vector<Target_t> GetPlayers(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	std::vector<Target_t> vTargets;
-	const auto iSort = Vars::Aimbot::General::TargetSelection.Value;
 
 	const Vec3 vLocalPos = F::Ticks.GetShootPos();
 	const Vec3 vLocalAngles = I::EngineClient->GetViewAngles();
@@ -2105,7 +2104,7 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 			return false;
 	}
 
-	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon);
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon, Vars::Aimbot::General::TargetSelectionProjectile.Value);
 	if (vTargets.empty())
 		return false;
 
@@ -2595,7 +2594,7 @@ void CAimbotProjectile::RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		return;
 	}
 
-	auto vTargets = F::AimbotGlobal.ManageTargets(GetPlayers, pLocal, m_pGrapplingHook);
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetPlayers, pLocal, m_pGrapplingHook, Vars::Aimbot::General::TargetSelectionProjectile.Value);
 	if (vTargets.empty()) return;
 
 	m_iWeaponID = TF_WEAPON_GRAPPLINGHOOK;
@@ -2998,7 +2997,7 @@ splash: if (HandleSplash(mSplashHistory)) break;
 
 bool CAimbotProjectile::AutoAirblast(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CBaseEntity* pProjectile)
 {
-	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon);
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon, Vars::Aimbot::General::TargetSelectionProjectile.Value);
 	if (vTargets.empty())
 		return false;
 

@@ -281,7 +281,13 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(AimType, "Aim type", 0, NONE, nullptr,
 				VA_LIST("Off", "Plain", "Smooth", "Silent", "Locking", "Assistive", "Legit", "SmoothVelocity"),
 				Off, Plain, Smooth, Silent, Locking, Assistive, Legit, SmoothVelocity);
-			CVarEnum(TargetSelection, "Target selection", 0, NONE, nullptr,
+			CVarEnum(TargetSelectionHitscan, "Hitscan selection", 0, NONE, nullptr,
+				VA_LIST("FOV", "Distance", "Hybrid", "Most health", "Least health"),
+				FOV, Distance, Hybrid, MostHealth, LeastHealth);
+			CVarEnum(TargetSelectionProjectile, "Projectile selection", 0, NONE, nullptr,
+				VA_LIST("FOV", "Distance", "Hybrid", "Most health", "Least health"),
+				FOV, Distance, Hybrid, MostHealth, LeastHealth);
+			CVarEnum(TargetSelectionMelee, "Melee selection", 1, NONE, nullptr,
 				VA_LIST("FOV", "Distance", "Hybrid", "Most health", "Least health"),
 				FOV, Distance, Hybrid, MostHealth, LeastHealth);
 			CVarEnum(Target, "Target", 0b0000001, DROPDOWN_MULTI, nullptr,
@@ -920,9 +926,7 @@ I dont think this is a good idea to disable simulations completely:
 				Off, Yaw, Pitch, Fake);
 			CVar(AcceptItemDrops, "Auto accept item drops", false);
 			CVar(AntiAFK, "Anti-AFK", false);
-			CVarEnum(AntiAutobalance, "Anti-autobalance", 0, NONE, nullptr,
-				VA_LIST("Off", "Retry", "Retry on death"),
-				Off, Retry, RetryOnDeath);
+			CVar(AntiAutobalance, "Anti-autobalance", false);
 			CVar(AutoRetry, "Auto retry", false);
 			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 			CVar(TauntControl, "Taunt control", false);

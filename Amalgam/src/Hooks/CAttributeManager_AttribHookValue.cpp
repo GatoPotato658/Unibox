@@ -29,6 +29,9 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 		}
 	}
 
+	if (!econent || !name)
+		return value;
+
 	return CALL_ORIGINAL(value, name, econent, buffer, isGlobalConstString);
 }
 #endif

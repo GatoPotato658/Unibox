@@ -430,8 +430,10 @@ void CMenu::MenuAimbot(int iTab)
 			{
 				if (Section("General"))
 				{
-					FDropdown(Vars::Aimbot::General::AimType, FDropdownEnum::Left);
-					FDropdown(Vars::Aimbot::General::TargetSelection, FDropdownEnum::Right);
+					FDropdown(Vars::Aimbot::General::AimType);
+					FDropdown(Vars::Aimbot::General::TargetSelectionHitscan, FDropdownEnum::Left);
+					FDropdown(Vars::Aimbot::General::TargetSelectionProjectile, FDropdownEnum::Right);
+					FDropdown(Vars::Aimbot::General::TargetSelectionMelee, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::General::Target, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::General::Ignore, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::General::SmoothCurve);
@@ -1339,7 +1341,7 @@ void CMenu::MenuVisuals(int iTab)
 						FText("Debug", { 5, 5 });
 						if (FPopupButton("Debug", { 0, -5 }))
 						{
-							FToggle(Vars::Visuals::Thirdperson::Scale, FToggleEnum::Left);
+							FToggle(Vars::Visuals::Thirdperson::Scale);
 
 							EndPopup();
 						}
@@ -1827,7 +1829,7 @@ void CMenu::MenuMisc(int iTab)
 					FDropdown(Vars::Misc::Automation::AntiBackstab); // pitch/fake _might_ slip up some auto backstabs
 					FToggle(Vars::Misc::Automation::AcceptItemDrops);
 					FToggle(Vars::Misc::Automation::AntiAFK, FToggleEnum::Left);
-					FDropdown(Vars::Misc::Automation::AntiAutobalance, FDropdownEnum::Right);
+					FToggle(Vars::Misc::Automation::AntiAutobalance, FToggleEnum::Right);
 					FToggleSlider(Vars::Misc::Automation::AutoRetry, Vars::Misc::Automation::AutoRetryHealth);
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);

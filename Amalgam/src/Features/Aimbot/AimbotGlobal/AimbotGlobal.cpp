@@ -55,26 +55,26 @@ void CAimbotGlobal::SortTargetsPre(std::vector<Target_t>& vTargets, int iMethod)
 {
 	switch (iMethod)
 	{
-	case Vars::Aimbot::General::TargetSelectionEnum::FOV:
+	case Vars::Aimbot::General::TargetSelectionHitscanEnum::FOV:
 		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
 		{
 			return a.m_flFOVTo < b.m_flFOVTo;
 		});
 		break;
-	case Vars::Aimbot::General::TargetSelectionEnum::Distance:
-	case Vars::Aimbot::General::TargetSelectionEnum::Hybrid:
+	case Vars::Aimbot::General::TargetSelectionHitscanEnum::Distance:
+	case Vars::Aimbot::General::TargetSelectionHitscanEnum::Hybrid:
 		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
 		{
 			return a.m_flDistTo < b.m_flDistTo;
 		});
 		break;
-	case Vars::Aimbot::General::TargetSelectionEnum::MostHealth:
+	case Vars::Aimbot::General::TargetSelectionHitscanEnum::MostHealth:
 		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
 		{
 			return GetTargetHealth(a.m_pEntity) > GetTargetHealth(b.m_pEntity);
 		});
 		break;
-	case Vars::Aimbot::General::TargetSelectionEnum::LeastHealth:
+	case Vars::Aimbot::General::TargetSelectionHitscanEnum::LeastHealth:
 		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
 		{
 			return GetTargetHealth(a.m_pEntity) < GetTargetHealth(b.m_pEntity);
@@ -87,7 +87,7 @@ void CAimbotGlobal::SortTargetsPost(std::vector<Target_t>& vTargets, int iMethod
 {
 	switch (iMethod)
 	{
-	case Vars::Aimbot::General::TargetSelectionEnum::Hybrid:
+	case Vars::Aimbot::General::TargetSelectionHitscanEnum::Hybrid:
 		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
 		{
 			return a.m_flFOVTo < b.m_flFOVTo;

@@ -845,7 +845,7 @@ void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pC
 		break;
 	}
 
-	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon);
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon, Vars::Aimbot::General::TargetSelectionHitscan.Value);
 	if (vTargets.empty())
 		return;
 
