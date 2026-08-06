@@ -433,7 +433,7 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::General::AimType);
 					FDropdown(Vars::Aimbot::General::TargetSelectionHitscan, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::General::TargetSelectionProjectile, FDropdownEnum::Right);
-					FDropdown(Vars::Aimbot::General::TargetSelectionMelee, FDropdownEnum::Right);
+					FDropdown(Vars::Aimbot::General::TargetSelectionMelee);
 					FDropdown(Vars::Aimbot::General::Target, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::General::Ignore, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::General::SmoothCurve);
