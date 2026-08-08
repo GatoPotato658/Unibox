@@ -1,6 +1,7 @@
 #include "Core.h"
 
 #include "../Features/Players/SteamProfileCache.h"
+#include "../Features/Misc/TelemetryBlocker/TelemetryBlocker.h"
 
 #include "../SDK/SDK.h"
 #include "../BytePatches/BytePatches.h"
@@ -156,6 +157,8 @@ void CCore::Load()
 	if (m_bUnload = m_bFailed2 = !U::Hooks.Initialize() || !U::BytePatches.Initialize() || !H::Events.Initialize())
 		return;
 
+	F::TelemetryBlocker.Initialize();
+
 #ifndef TEXTMODE
 	F::Materials.RequestLoad();
 #endif
@@ -208,6 +211,7 @@ void CCore::Unload()
 	U::BytePatches.Unload();
 	H::Events.Unload();
 	F::NavEngine.shutdown();
+	F::TelemetryBlocker.Unload();
 
 	if (F::Menu.m_bIsOpen)
 		I::MatSystemSurface->SetCursorAlwaysVisible(false);

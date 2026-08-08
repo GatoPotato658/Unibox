@@ -258,6 +258,7 @@
     <ClCompile Include="src\Features\AntiCheatCompatibility\AntiCheatCompatibility.cpp" />
     <ClCompile Include="src\Features\Debug\Debug.cpp" />
     <ClCompile Include="src\Hooks\CTFGrapplingHook_ItemPostFrame.cpp" />
+    <ClCompile Include="src\Hooks\CAvatarImage_ApplyImage.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Utils\UtlVector\UtlVector.h" />

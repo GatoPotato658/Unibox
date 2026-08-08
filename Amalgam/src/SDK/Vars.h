@@ -1197,6 +1197,12 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(AntiCheatCritHack, "Anti-cheat crit hack", false, NOSAVE | DEBUGVAR);
 		NAMESPACE_END(Game)
 
+		NAMESPACE_BEGIN(TelemetryBlocker)
+			CVarEnum(Mode, "Telemetry blocker mode", 2, NONE, nullptr,
+				VA_LIST("Lite", "Balanced", "Aggressive"),
+				Lite = 0, Balanced = 1, Aggressive = 2);
+		NAMESPACE_END(TelemetryBlocker)
+
 		NAMESPACE_BEGIN(Queueing)
 			CVarEnum(ForceRegions, "Force regions", 0b0, DROPDOWN_MULTI, nullptr, // i'm not sure all of these are actually used for tf2 servers (they are)
 				VA_LIST("Atlanta", "Chicago", "Dallas", "Los Angeles", "Seattle", "Virginia", "##Divider", "Amsterdam", "Falkenstein", "Frankfurt", "Helsinki", "London", "Madrid", "Paris", "Stockholm", "Vienna", "Warsaw", "##Divider", "Buenos Aires", "Lima", "Santiago", "Sao Paulo", "##Divider", "Chennai", "Dubai", "Hong Kong", "Mumbai", "Seoul", "Singapore", "Tokyo", "##Divider", "Sydney", "##Divider", "Johannesburg"),
