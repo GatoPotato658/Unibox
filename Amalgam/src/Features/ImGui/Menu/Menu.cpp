@@ -1888,6 +1888,10 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Sound::RemoveDSP, FToggleEnum::Right);
 					FToggle(Vars::Misc::Sound::GiantWeaponSounds);
 				} EndSection();
+				if (Section("Telemetry"))
+				{
+					FDropdown(Vars::Misc::TelemetryBlocker::Mode);
+				} EndSection();
 			}
 			EndTable();
 		}
