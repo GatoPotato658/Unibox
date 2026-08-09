@@ -17,16 +17,20 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 	const auto dwRetAddr = uintptr_t(_ReturnAddress());
 	const auto dwDesired = S::CTFPlayer_FireEvent_AttribHookValue_Call();
 
-	if (dwRetAddr == dwDesired && Vars::Visuals::Effects::SpellFootsteps.Value && econent
-		&& reinterpret_cast<CBaseEntity*>(econent)->entindex() == I::EngineClient->GetLocalPlayer()
-		&& name && FNV1A::Hash32(name) == FNV1A::Hash32Const("halloween_footstep_type"))
+	if (dwRetAddr == dwDesired && name && FNV1A::Hash32(name) == FNV1A::Hash32Const("halloween_footstep_type"))
 	{
-		switch (Vars::Visuals::Effects::SpellFootsteps.Value)
+		if (Vars::Visuals::Effects::SpellFootsteps.Value && econent
+			&& reinterpret_cast<CBaseEntity*>(econent)->entindex() == I::EngineClient->GetLocalPlayer())
 		{
-		case Vars::Visuals::Effects::SpellFootstepsEnum::Color: return ColorToInt(Vars::Colors::SpellFootstep.Value);
-		case Vars::Visuals::Effects::SpellFootstepsEnum::Team: return 1;
-		case Vars::Visuals::Effects::SpellFootstepsEnum::Halloween: return 2;
+			switch (Vars::Visuals::Effects::SpellFootsteps.Value)
+			{
+			case Vars::Visuals::Effects::SpellFootstepsEnum::Color: return ColorToInt(Vars::Colors::SpellFootstep.Value);
+			case Vars::Visuals::Effects::SpellFootstepsEnum::Team: return 1;
+			case Vars::Visuals::Effects::SpellFootstepsEnum::Halloween: return 2;
+			}
 		}
+
+		return value;
 	}
 
 	if (!econent || !name)

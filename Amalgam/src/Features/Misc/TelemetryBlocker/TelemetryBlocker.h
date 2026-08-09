@@ -8,24 +8,27 @@ public:
 	void Unload();
 
 private:
-	uintptr_t GetUploaderAddress();
 	void ApplyConVarToBeDisabled(const char* sName, int& iOriginal, bool& bFound);
+	void ApplyFloatConVarToBeDisabled(const char* sName, float& flOriginal, bool& bFound);
 	void RestoreConVar(const char* sName, int iOriginal, bool bFound);
-	void PatchGateByte();
-	void RestoreGateByte();
-	void PatchVTableSlots();
-	void RestoreVTableSlots();
+	void RestoreFloatConVar(const char* sName, float flOriginal, bool bFound);
 
 	int m_iTfStatsTrackOrig = 1;
+	int m_iSteamworksStatsDisableOrig = 0;
+	int m_iSteamworksSessionIdClientOrig = 0;
+	int m_iSteamworksSessionIdServerOrig = 0;
 	int m_iClSaveScreenshotsOrig = 0;
 	int m_iClSteamScreenshotsOrig = 0;
+	int m_iReplayEnableOrig = 0;
+	float m_flTfMatchmakingOgsOddsOrig = 0.05f;
 	bool m_bTfStatsTrackFound = false;
+	bool m_bSteamworksStatsDisableFound = false;
+	bool m_bSteamworksSessionIdClientFound = false;
+	bool m_bSteamworksSessionIdServerFound = false;
 	bool m_bClSaveScreenshotsFound = false;
 	bool m_bClSteamScreenshotsFound = false;
-
-	uint8_t m_uGateByteOrig = 0;
-	uintptr_t m_uGateByteAddr = 0;
-	std::vector<std::pair<uintptr_t, uintptr_t>> m_vVTablePatches;
+	bool m_bReplayEnableFound = false;
+	bool m_bTfMatchmakingOgsOddsFound = false;
 };
 
 ADD_FEATURE(CTelemetryBlocker, TelemetryBlocker);
