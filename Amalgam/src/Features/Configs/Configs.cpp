@@ -192,7 +192,8 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 	for (auto it = v.begin(); it != v.end();)
 	{
 		auto uHash = FNV1A::Hash32(it->first.c_str());
-		bool bValid = uHash != FNV1A::Hash32Const("None") && (uHash == FNV1A::Hash32Const("Original") || F::Materials.m_mMaterials.contains(uHash));
+		bool bValid = uHash != FNV1A::Hash32Const("None")
+			&& (!F::Materials.m_bLoaded || uHash == FNV1A::Hash32Const("Original") || F::Materials.m_mMaterials.contains(uHash));
 		if (bValid)
 		{
 			int i = 0; for (auto& s : v | std::views::keys)
@@ -404,6 +405,7 @@ CConfigs::CConfigs()
 	m_sVisualsPath = m_sConfigPath + "Visuals\\";
 	m_sCorePath = m_sConfigPath + "Core\\";
 	m_sMaterialsPath = m_sConfigPath + "Materials\\";
+	m_sStatePath = m_sConfigPath + "active.cfg";
 
 	if (!std::filesystem::exists(m_sConfigPath))
 		std::filesystem::create_directory(m_sConfigPath);
@@ -416,6 +418,35 @@ CConfigs::CConfigs()
 
 	if (!std::filesystem::exists(m_sMaterialsPath))
 		std::filesystem::create_directory(m_sMaterialsPath);
+
+	LoadState();
+}
+
+void CConfigs::LoadState()
+{
+	try
+	{
+		if (!std::filesystem::exists(m_sStatePath))
+			return;
+
+		boost::property_tree::ptree tRead;
+		read_json(m_sStatePath, tRead);
+		m_sCurrentConfig = tRead.get("Config", m_sCurrentConfig);
+		m_sCurrentVisuals = tRead.get("Visuals", m_sCurrentVisuals);
+	}
+	catch (...) {}
+}
+
+void CConfigs::SaveState() const
+{
+	try
+	{
+		boost::property_tree::ptree tWrite;
+		tWrite.put("Config", m_sCurrentConfig);
+		tWrite.put("Visuals", m_sCurrentVisuals);
+		write_json(m_sStatePath, tWrite);
+	}
+	catch (...) {}
 }
 
 #define IsType(t) pBase->m_iType == typeid(t).hash_code()
@@ -443,7 +474,7 @@ static inline void LoadMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
 		for (auto& sKey : *tMap | std::views::keys)
 		{
 			int iBind = std::stoi(sKey);
-			if (iBind == DEFAULT_BIND || F::Binds.m_vBinds.size() > iBind && !(pVar->m_iFlags & NOBIND))
+			if (iBind == DEFAULT_BIND || iBind >= 0 && F::Binds.m_vBinds.size() > iBind && !(pVar->m_iFlags & NOBIND))
 			{
 				F::Configs.LoadJson(*tMap, sKey, pVar, iBind);
 				if (iBind != DEFAULT_BIND)
@@ -460,6 +491,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 {
 	try
 	{
+		std::scoped_lock lock(F::Binds.m_mMutex);
 		boost::property_tree::ptree tWrite;
 		{
 			boost::property_tree::ptree tSub;
@@ -545,6 +577,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 		write_json(m_sConfigPath + sConfigName + m_sConfigExtension, tWrite);
 
 		m_sCurrentConfig = sConfigName; m_sCurrentVisuals = "";
+		SaveState();
 		if (bNotify)
 			SDK::Output("unibox", std::format("Config {} saved", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}
@@ -561,6 +594,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 {
 	try
 	{
+		std::scoped_lock lock(F::Binds.m_mMutex);
 		if (!std::filesystem::exists(m_sConfigPath + sConfigName + m_sConfigExtension))
 		{
 			if (sConfigName == std::string("default"))
@@ -591,8 +625,8 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 				LoadJson(tChild, "Not", tBind.m_bNot);
 				LoadJson(tChild, "Active", tBind.m_bActive);
 				LoadJson(tChild, "Parent", tBind.m_iParent);
-				if (F::Binds.m_vBinds.size() == tBind.m_iParent)
-					tBind.m_iParent = DEFAULT_BIND - 1; // prevent infinite loop
+				if (tBind.m_iParent < DEFAULT_BIND || tBind.m_iParent >= F::Binds.m_vBinds.size())
+					tBind.m_iParent = DEFAULT_BIND;
 
 				F::Binds.m_vBinds.push_back(tBind);
 			}
@@ -600,6 +634,21 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 		else
 			SDK::Output("unibox", "Config binds not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
+		// Reject self-references and cycles from hand-edited/old configs before
+		// bind evaluation can recurse through the graph.
+		for (int i = 0; i < F::Binds.m_vBinds.size(); i++)
+		{
+			std::vector<bool> vSeen(F::Binds.m_vBinds.size());
+			for (int iBind = i; iBind != DEFAULT_BIND; iBind = F::Binds.m_vBinds[iBind].m_iParent)
+			{
+				if (iBind < 0 || iBind >= F::Binds.m_vBinds.size() || vSeen[iBind])
+				{
+					F::Binds.m_vBinds[i].m_iParent = DEFAULT_BIND;
+					break;
+				}
+				vSeen[iBind] = true;
+			}
+		}
 		if (auto tSub = tRead.get_child_optional("Vars");
 			tSub || (tSub = tRead.get_child_optional("ConVars")))
 		{
@@ -665,6 +714,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 		H::Fonts.Reload();
 
 		m_sCurrentConfig = sConfigName; m_sCurrentVisuals = "";
+		SaveState();
 		if (bNotify)
 			SDK::Output("unibox", std::format("Config {} loaded", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}
@@ -695,6 +745,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 {
 	try
 	{
+		std::scoped_lock lock(F::Binds.m_mMutex);
 		boost::property_tree::ptree tWrite;
 
 		{
@@ -757,6 +808,8 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 		}
 
 		write_json(m_sVisualsPath + sConfigName + m_sConfigExtension, tWrite);
+		m_sCurrentVisuals = sConfigName;
+		SaveState();
 
 		if (bNotify)
 			SDK::Output("unibox", std::format("Visual config {} saved", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
@@ -773,6 +826,7 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 {
 	try
 	{
+		std::scoped_lock lock(F::Binds.m_mMutex);
 		if (!std::filesystem::exists(m_sVisualsPath + sConfigName + m_sConfigExtension))
 			return false;
 
@@ -842,6 +896,7 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		F::Binds.SetVars(nullptr, nullptr, false);
 
 		m_sCurrentVisuals = sConfigName;
+		SaveState();
 		if (bNotify)
 			SDK::Output("unibox", std::format("Visual config {} loaded", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}

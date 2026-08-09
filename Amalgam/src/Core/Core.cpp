@@ -166,7 +166,10 @@ void CCore::Load()
 #ifndef TEXTMODE
 	H::Fonts.Reload();
 #endif
+	const auto sVisualConfig = F::Configs.m_sCurrentVisuals;
 	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
+	if (!sVisualConfig.empty())
+		F::Configs.LoadVisual(sVisualConfig, false);
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
 	SDK::Output("unibox", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }

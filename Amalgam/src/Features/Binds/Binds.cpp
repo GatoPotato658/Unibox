@@ -17,6 +17,7 @@ static inline void SetMain(BaseVar*& pBase, int iBind)
 #define Set(t, b) if (IsType(t)) SetMain<t>(pBase, b);
 
 static std::unordered_mapset<BaseVar*> s_mVars = {};
+static std::unordered_mapset<BaseVar*> s_mValidVars = {};
 static bool s_bUI = false, s_bMenu = false;
 
 static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
@@ -24,7 +25,8 @@ static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
 	const bool bDefault = iBind == DEFAULT_BIND;
 	for (auto pBase : vVars)
 	{
-		if (s_mVars.contains(pBase) || pBase->m_iFlags & (NOSAVE | NOBIND) && !bDefault)
+		if (!pBase || !s_mValidVars.contains(pBase)
+			|| s_mVars.contains(pBase) || pBase->m_iFlags & (NOSAVE | NOBIND) && !bDefault)
 			continue;
 
 		s_mVars[pBase];
@@ -43,9 +45,10 @@ static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
 	}
 }
 
-static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, std::vector<Bind_t>& vBinds, bool bManage = true)
+static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
+	std::vector<Bind_t>& vBinds, std::vector<bool>& vVisiting, bool bManage)
 {
-	if (vBinds.empty())
+	if (vBinds.empty() || iParent < DEFAULT_BIND || iParent >= vBinds.size())
 		return;
 
 	for (int i = 0; i < vBinds.size(); i++)
@@ -53,6 +56,9 @@ static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		auto& tBind = vBinds[i];
 		if (iParent != tBind.m_iParent || !tBind.m_bEnabled)
 			continue;
+		if (vVisiting[i])
+			continue;
+		vVisiting[i] = true;
 
 		if (bManage)
 		{
@@ -174,15 +180,30 @@ static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 
 		if (tBind.m_bActive)
 		{
-			GetBinds(i, pLocal, pWeapon, vBinds, bManage);
+			GetBinds(i, pLocal, pWeapon, vBinds, vVisiting, bManage);
 			LoopVars(i, tBind.m_vVars);
 		}
+		vVisiting[i] = false;
 	}
+}
+
+static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
+	std::vector<Bind_t>& vBinds, bool bManage = true)
+{
+	std::vector<bool> vVisiting(vBinds.size());
+	GetBinds(iParent, pLocal, pWeapon, vBinds, vVisiting, bManage);
 }
 
 void CBinds::SetVars(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, bool bManage)
 {
+	std::scoped_lock lock(m_mMutex);
 	s_mVars.clear();
+	s_mValidVars.clear();
+	for (auto pBase : G::Vars)
+	{
+		if (pBase)
+			s_mValidVars[pBase];
+	}
 	s_bUI = I::EngineVGui->IsGameUIVisible() || I::MatSystemSurface->IsCursorVisible() && !I::EngineClient->IsPlayingDemo();
 #ifndef TEXTMODE
 	s_bMenu = F::Menu.m_bIsOpen && !ImGui::GetIO().WantTextInput && !F::Menu.m_bInKeybind;
@@ -199,6 +220,8 @@ void CBinds::Run()
 {
 	if (G::Unload)
 		return;
+
+	std::scoped_lock lock(m_mMutex);
 
 	auto pLocal = H::Entities.GetLocal();
 	auto pWeapon = H::Entities.GetWeapon();
@@ -240,6 +263,7 @@ void CBinds::Run()
 
 bool CBinds::GetBind(int iID, Bind_t* pBind)
 {
+	std::scoped_lock lock(m_mMutex);
 	if (iID > DEFAULT_BIND && iID < m_vBinds.size())
 	{
 		*pBind = m_vBinds[iID];
@@ -251,6 +275,7 @@ bool CBinds::GetBind(int iID, Bind_t* pBind)
 
 void CBinds::AddBind(int iBind, Bind_t& tBind)
 {
+	std::scoped_lock lock(m_mMutex);
 	if (iBind == DEFAULT_BIND || iBind >= m_vBinds.size())
 		m_vBinds.push_back(tBind);
 	else
@@ -281,6 +306,7 @@ static inline void RemoveMain(BaseVar*& pBase, int iBind)
 
 void CBinds::RemoveBind(int iBind, bool bForce)
 {
+	std::scoped_lock lock(m_mMutex);
 	if (!bForce)
 	{
 		for (auto& pBase : G::Vars)
@@ -354,6 +380,7 @@ void CBinds::RemoveBind(int iBind, bool bForce)
 
 int CBinds::GetParent(int iBind)
 {
+	std::scoped_lock lock(m_mMutex);
 	if (iBind > DEFAULT_BIND && iBind < m_vBinds.size())
 		return m_vBinds[iBind].m_iParent;
 	return DEFAULT_BIND;
@@ -361,12 +388,14 @@ int CBinds::GetParent(int iBind)
 
 bool CBinds::HasChildren(int iBind)
 {
+	std::scoped_lock lock(m_mMutex);
 	auto it = std::ranges::find_if(m_vBinds, [&](const auto& tBind) { return iBind == tBind.m_iParent; });
 	return it != m_vBinds.end();
 }
 
 bool CBinds::WillBeEnabled(int iBind)
 {
+	std::scoped_lock lock(m_mMutex);
 	Bind_t tBind;
 	while (GetBind(iBind, &tBind))
 	{
@@ -406,6 +435,10 @@ static inline void SwapMain(BaseVar*& pBase, int iBind1, int iBind2)
 
 void CBinds::Move(int i1, int i2)
 {
+	std::scoped_lock lock(m_mMutex);
+	if (i1 <= DEFAULT_BIND || i2 <= DEFAULT_BIND || i1 >= m_vBinds.size() || i2 >= m_vBinds.size() || i1 == i2)
+		return;
+
 	auto& tBind1 = m_vBinds[i1];
 	auto& tBind2 = m_vBinds[i2];
 	auto tTemp = tBind1;

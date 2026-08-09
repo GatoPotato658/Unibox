@@ -29,7 +29,12 @@ public:
 	std::string m_sVisualsPath;
 	std::string m_sCorePath;
 	std::string m_sMaterialsPath;
+	std::string m_sStatePath;
 	const std::string m_sConfigExtension = ".json";
+
+private:
+	void LoadState();
+	void SaveState() const;
 };
 
 ADD_FEATURE(CConfigs, Configs);

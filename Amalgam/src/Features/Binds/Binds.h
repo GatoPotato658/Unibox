@@ -1,5 +1,6 @@
 #pragma once
 #include "../../SDK/SDK.h"
+#include <mutex>
 
 Enum(Bind, Key, Class, WeaponType, ItemSlot, Misc)
 namespace BindEnum
@@ -48,6 +49,7 @@ public:
 
 	std::vector<Bind_t> m_vBinds = {};
 	bool m_bDisplay = false;
+	std::recursive_mutex m_mMutex;
 };
 
 ADD_FEATURE(CBinds, Binds);
