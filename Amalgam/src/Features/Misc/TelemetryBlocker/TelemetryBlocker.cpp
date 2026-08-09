@@ -115,7 +115,7 @@ MAKE_HOOK(CSteamWorksGameStatsUploader_EndSession, S::CSteamWorksGameStatsUpload
 		*pSessionId = 0;
 
 		const auto iResult = CALL_ORIGINAL(rcx);
-		S::CSteamWorksGameStatsUploader_ResetSession().Call<void>(rcx);
+		S::CSteamWorksGameStatsUploader_ResetSession.Call<void>(rcx);
 		return iResult;
 	}
 
