@@ -17,7 +17,6 @@ static inline void SetMain(BaseVar*& pBase, int iBind)
 #define Set(t, b) if (IsType(t)) SetMain<t>(pBase, b);
 
 static std::unordered_mapset<BaseVar*> s_mVars = {};
-static std::unordered_mapset<BaseVar*> s_mValidVars = {};
 static bool s_bUI = false, s_bMenu = false;
 
 static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
@@ -25,8 +24,7 @@ static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
 	const bool bDefault = iBind == DEFAULT_BIND;
 	for (auto pBase : vVars)
 	{
-		if (!pBase || !s_mValidVars.contains(pBase)
-			|| s_mVars.contains(pBase) || pBase->m_iFlags & (NOSAVE | NOBIND) && !bDefault)
+		if (s_mVars.contains(pBase) || pBase->m_iFlags & (NOSAVE | NOBIND) && !bDefault)
 			continue;
 
 		s_mVars[pBase];
@@ -46,9 +44,9 @@ static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
 }
 
 static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
-	std::vector<Bind_t>& vBinds, std::vector<bool>& vVisiting, bool bManage)
+	std::vector<Bind_t>& vBinds, bool bManage = true)
 {
-	if (vBinds.empty() || iParent < DEFAULT_BIND || iParent >= vBinds.size())
+	if (vBinds.empty())
 		return;
 
 	for (int i = 0; i < vBinds.size(); i++)
@@ -56,10 +54,6 @@ static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		auto& tBind = vBinds[i];
 		if (iParent != tBind.m_iParent || !tBind.m_bEnabled)
 			continue;
-		if (vVisiting[i])
-			continue;
-		vVisiting[i] = true;
-
 		if (bManage)
 		{
 			switch (tBind.m_iType)
@@ -180,30 +174,16 @@ static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 
 		if (tBind.m_bActive)
 		{
-			GetBinds(i, pLocal, pWeapon, vBinds, vVisiting, bManage);
+			GetBinds(i, pLocal, pWeapon, vBinds, bManage);
 			LoopVars(i, tBind.m_vVars);
 		}
-		vVisiting[i] = false;
 	}
-}
-
-static inline void GetBinds(int iParent, CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
-	std::vector<Bind_t>& vBinds, bool bManage = true)
-{
-	std::vector<bool> vVisiting(vBinds.size());
-	GetBinds(iParent, pLocal, pWeapon, vBinds, vVisiting, bManage);
 }
 
 void CBinds::SetVars(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, bool bManage)
 {
 	std::scoped_lock lock(m_mMutex);
 	s_mVars.clear();
-	s_mValidVars.clear();
-	for (auto pBase : G::Vars)
-	{
-		if (pBase)
-			s_mValidVars[pBase];
-	}
 	s_bUI = I::EngineVGui->IsGameUIVisible() || I::MatSystemSurface->IsCursorVisible() && !I::EngineClient->IsPlayingDemo();
 #ifndef TEXTMODE
 	s_bMenu = F::Menu.m_bIsOpen && !ImGui::GetIO().WantTextInput && !F::Menu.m_bInKeybind;

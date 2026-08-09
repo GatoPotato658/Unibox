@@ -625,7 +625,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 				LoadJson(tChild, "Not", tBind.m_bNot);
 				LoadJson(tChild, "Active", tBind.m_bActive);
 				LoadJson(tChild, "Parent", tBind.m_iParent);
-				if (tBind.m_iParent < DEFAULT_BIND || tBind.m_iParent >= F::Binds.m_vBinds.size())
+				if (tBind.m_iParent < DEFAULT_BIND)
 					tBind.m_iParent = DEFAULT_BIND;
 
 				F::Binds.m_vBinds.push_back(tBind);
@@ -636,6 +636,11 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 
 		// Reject self-references and cycles from hand-edited/old configs before
 		// bind evaluation can recurse through the graph.
+		for (auto& tBind : F::Binds.m_vBinds)
+		{
+			if (tBind.m_iParent >= F::Binds.m_vBinds.size())
+				tBind.m_iParent = DEFAULT_BIND;
+		}
 		for (int i = 0; i < F::Binds.m_vBinds.size(); i++)
 		{
 			std::vector<bool> vSeen(F::Binds.m_vBinds.size());
