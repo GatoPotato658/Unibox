@@ -254,6 +254,9 @@ NAMESPACE_BEGIN(Vars)
 		CVar(ShotPathIgnoreZ, "Shot path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
 		CVar(SplashRadius, "Splash radius color", Color_t(255, 255, 255, 0), VISUAL);
 		CVar(SplashRadiusIgnoreZ, "Splash radius ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(BestPath, "Best path color", Color_t(255, 255, 255, 0), VISUAL);
+		CVar(BestPathIgnoreZ, "Best path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(AimPosColor, "Aim pos color", Color_t(255, 255, 255, 255), VISUAL);
 		CVar(RealPath, "Real path color", Color_t(255, 255, 255, 0), NOSAVE | DEBUGVAR);
 		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
 
@@ -706,6 +709,9 @@ NAMESPACE_BEGIN(Vars)
 			CVarValues(ProjectilePath, "Projectile path", 0, VISUAL, nullptr,
 				"Off", "Line", "Separators", "Spaced", "Arrows", "Boxes");
 			CVar(SwingLines, "Swing lines", false, VISUAL);
+			CVarValues(BestPath, "Best path", 0, VISUAL, nullptr,
+				"Off", "Line", "Separators", "Spaced", "Arrows", "Boxes");
+			CVar(BestAimPos, "Draw best aim pos", false, VISUAL);
 			CVar(PlayerDrawDuration, VA_LIST("Draw duration", "Player path draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 			CVar(ProjectileDrawDuration, VA_LIST("Draw duration", "Projectile path draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 

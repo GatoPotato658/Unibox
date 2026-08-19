@@ -1524,6 +1524,13 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 
 bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType, uint8_t iFlags)
 {
+	m_vPlainAngles = { flPitch, flYaw, 0.f };
+	if (!m_bBlockAimAnglesDraw && m_flAimAnglesSetTime != I::GlobalVars->curtime)
+	{
+		m_vAimAngles = m_vPlainAngles;
+		m_flAimAnglesSetTime = I::GlobalVars->curtime;
+	}
+
 	bool bReturn = false;
 	if (m_iWeaponID == TF_WEAPON_LASER_POINTER) // Check if we can even laser point there
 	{
@@ -1535,8 +1542,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 			return false;
 	}
 
-	Vec3 vPlainAngles = { flPitch, flYaw, 0.f };
-	Vec3 vAngles; Aim(G::CurrentUserCmd->viewangles, vPlainAngles, vAngles);
+	Vec3 vAngles; Aim(G::CurrentUserCmd->viewangles, m_vPlainAngles, vAngles);
 	m_tInfo.m_pTarget->m_vPos = vOrigin;
 
 	int iOriginalSimTime = iSimTime;
@@ -1565,7 +1571,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 			[[fallthrough]];
 		case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		{
-			if (TestAngle(vPoint, vPlainAngles, iSimTime, iType, true))
+			if (TestAngle(vPoint, m_vPlainAngles, iSimTime, iType, true))
 				bReturn = m_iResult = 2;
 		}
 		}
@@ -1850,6 +1856,12 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	{
 direct: if (HandleDirect(mDirectHistory)) break;
 splash: if (HandleSplash(mSplashHistory)) break;
+	}
+	if (!m_bBestPlayerPathSet) 
+	{
+		if (!m_tMoveStorage.m_pPlayer->GetAbsVelocity().IsZero(10.f))
+			m_vBestPlayerPath = m_tMoveStorage.m_vPath;
+		m_bBestPlayerPathSet = true;
 	}
 	F::MoveSim.Restore(m_tMoveStorage);
 	if (!F::AimbotGlobal.ShouldAimAtAngle(m_vAngleTo))
@@ -2150,7 +2162,13 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 				G::OriginalCmd.buttons |= IN_USE;
 			}
 		}
-		if (!iResult) continue;
+		if (!iResult) 
+		{ 
+			if (m_flAimAnglesSetTime != I::GlobalVars->curtime && m_bBestPlayerPathSet)
+				m_bBlockAimAnglesDraw = true;
+			continue;
+		}
+		m_vAimAngles = m_vPlainAngles;
 		if (iResult == 2)
 		{
 			G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
@@ -2423,6 +2441,10 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 	if (m_iWeaponID != TF_WEAPON_PASSTIME_GUN || !pLocal->m_bHasPasstimeBall())
 		m_tPasstimeThrow.Reset();
 
+	m_vBestPlayerPath.clear();
+	m_bBestPlayerPathSet = false;
+	m_bBlockAimAnglesDraw = false;
+
 	int iOldAimType = Vars::Aimbot::General::AimType.Value;
 	bool bOldAutoShoot = Vars::Aimbot::General::AutoShoot.Value;
 	if (F::AutoHeal.m_iAutoSwitch != 0)
@@ -2430,13 +2452,25 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 		Vars::Aimbot::General::AimType.Value = Vars::Aimbot::General::AimTypeEnum::Silent;
 		Vars::Aimbot::General::AutoShoot.Value = true;
 	}
+
 	const bool bSuccess = m_iWeaponID == TF_WEAPON_MECHANICAL_ARM ? RunMechArm(pLocal, pWeapon, pCmd) : RunMain(pLocal, pWeapon, pCmd);
-	if (!bSuccess && m_iWeaponID == TF_WEAPON_PASSTIME_GUN && m_tPasstimeThrow.m_bHolding)
+	if (!bSuccess)
 	{
-		pCmd->buttons &= ~IN_ATTACK;
-		m_tPasstimeThrow.Reset(I::GlobalVars->curtime + PasstimeThrowCooldown);
+		if (Vars::Visuals::Prediction::BestPath.Value && !m_vBestPlayerPath.empty())
+		{
+			if (Vars::Colors::BestPathIgnoreZ.Value.a)
+				G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPathIgnoreZ.Value, Vars::Visuals::Prediction::BestPath.Value);
+			if (Vars::Colors::BestPath.Value.a)
+				G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
+		}
+
+		if (m_iWeaponID == TF_WEAPON_PASSTIME_GUN && m_tPasstimeThrow.m_bHolding)
+		{
+			pCmd->buttons &= ~IN_ATTACK;
+			m_tPasstimeThrow.Reset(I::GlobalVars->curtime + PasstimeThrowCooldown);
+		}
 	}
-	if (bSuccess)
+	else
 	{
 		if (m_iWeaponID == TF_WEAPON_LASER_POINTER)
 		{
@@ -2954,6 +2988,12 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 direct: if (HandleDirect(mDirectHistory)) break;
 splash: if (HandleSplash(mSplashHistory)) break;
 	}
+	if (!m_bBestPlayerPathSet)
+	{
+		if (!m_tMoveStorage.m_pPlayer->GetAbsVelocity().IsZero(10.f))
+			m_vBestPlayerPath = m_tMoveStorage.m_vPath;
+		m_bBestPlayerPathSet = true;
+	}
 	F::MoveSim.Restore(m_tMoveStorage);
 
 	tTarget.m_vPos = m_vTarget;
@@ -3003,6 +3043,9 @@ bool CAimbotProjectile::AutoAirblast(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 	m_iWeaponID = pWeapon->GetWeaponID();
 	m_iMethod = Vars::Aimbot::General::AimTypeEnum::Silent;
+	m_vBestPlayerPath.clear();
+	m_bBestPlayerPathSet = false;
+	m_bBlockAimAnglesDraw = false;
 
 	//if (!G::AimTarget.m_iEntIndex)
 	//	G::AimTarget = { vTargets.front().m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
@@ -3013,13 +3056,27 @@ bool CAimbotProjectile::AutoAirblast(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 		m_vPlayerPath.clear(); m_vProjectilePath.clear(); m_vBoxes.clear();
 
 		const bool bResult = CanHit(tTarget, pLocal, pWeapon, pProjectile);
-		if (!bResult) continue;
+		if (!bResult) 
+		{ 
+			if (m_flAimAnglesSetTime != I::GlobalVars->curtime && m_bBestPlayerPathSet)
+				m_bBlockAimAnglesDraw = true;
+			continue; 
+		}
 
+		m_vAimAngles = m_vPlainAngles;
 		G::Attacking = true;
 		DrawVisuals(1, tTarget, m_vPlayerPath, m_vProjectilePath, m_vBoxes);
 
 		Aim(pCmd, tTarget.m_vAngleTo);
 		return true;
+	}
+
+	if (Vars::Visuals::Prediction::BestPath.Value && !m_vBestPlayerPath.empty())
+	{
+		if (Vars::Colors::BestPathIgnoreZ.Value.a)
+			G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPathIgnoreZ.Value, Vars::Visuals::Prediction::BestPath.Value);
+		if (Vars::Colors::BestPath.Value.a)
+			G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
 	}
 
 	return false;

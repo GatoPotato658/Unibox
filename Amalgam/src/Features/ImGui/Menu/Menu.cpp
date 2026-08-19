@@ -464,10 +464,10 @@ void CMenu::MenuAimbot(int iTab)
 					Divider();
 					PushDisabled(F::AntiCheatCompatibility.Active());
 					{
-					FToggle(Vars::CritHack::ForceCrits, FToggleEnum::Left);
-					FToggle(Vars::CritHack::AvoidRandomCrits, FToggleEnum::Right);
-					FToggle(Vars::CritHack::AlwaysMeleeCrit, FToggleEnum::Left);
-					FToggle(Vars::CritHack::CritEffects, FToggleEnum::Right);
+						FToggle(Vars::CritHack::ForceCrits, FToggleEnum::Left);
+						FToggle(Vars::CritHack::AvoidRandomCrits, FToggleEnum::Right);
+						FToggle(Vars::CritHack::AlwaysMeleeCrit, FToggleEnum::Left);
+						FToggle(Vars::CritHack::CritEffects, FToggleEnum::Right);
 					}
 					PopDisabled();
 
@@ -477,7 +477,7 @@ void CMenu::MenuAimbot(int iTab)
 					FToggle(Vars::Aimbot::General::LeadAndRestrict, FToggleEnum::Left);
 					PushDisabled(F::AntiCheatCompatibility.Active());
 					{
-					FToggle(Vars::Aimbot::General::NoSpread);
+						FToggle(Vars::Aimbot::General::NoSpread);
 					}
 					PopDisabled();
 				} EndSection();
@@ -502,10 +502,10 @@ void CMenu::MenuAimbot(int iTab)
 				{
 					PushDisabled(F::AntiCheatCompatibility.Active());
 					{
-					FSlider(Vars::Backtrack::Latency, FSliderEnum::Left);
-					FSlider(Vars::Backtrack::Interp, FSliderEnum::Right);
-					FSlider(Vars::Backtrack::Window);
-					//FToggle(Vars::Backtrack::PreferOnShot, FToggleEnum::Right);
+						FSlider(Vars::Backtrack::Latency, FSliderEnum::Left);
+						FSlider(Vars::Backtrack::Interp, FSliderEnum::Right);
+						FSlider(Vars::Backtrack::Window);
+						//FToggle(Vars::Backtrack::PreferOnShot, FToggleEnum::Right);
 					}
 					PopDisabled();
 				} EndSection();
@@ -1159,6 +1159,11 @@ void CMenu::MenuVisuals(int iTab)
 					FColorPicker(Vars::Colors::ProjectilePath, FColorPickerEnum::SameLine, { H::Draw.Scale(-10), H::Draw.Scale(-20) }, { H::Draw.Scale(10), H::Draw.Scale(20) });
 					SameLine(); DebugDummy({ 0, H::Draw.Scale(48) });
 					FToggle(Vars::Visuals::Prediction::SwingLines);
+					FDropdown(Vars::Visuals::Prediction::BestPath, FDropdownEnum::Left, -10);
+					FColorPicker(Vars::Colors::BestPathIgnoreZ, FColorPickerEnum::SameLine, { 0, H::Draw.Scale(20) }, { H::Draw.Scale(10), H::Draw.Scale(20) });
+					FColorPicker(Vars::Colors::BestPath, FColorPickerEnum::SameLine, { H::Draw.Scale(-10), H::Draw.Scale(-20) }, { H::Draw.Scale(10), H::Draw.Scale(20) });
+					FColorPicker(Vars::Colors::AimPosColor);
+					FToggle(Vars::Visuals::Prediction::BestAimPos, FToggleEnum::Right);
 					FSlider(Vars::Visuals::Prediction::PlayerDrawDuration, FSliderEnum::Left, !Vars::Visuals::Prediction::PlayerDrawDuration[DEFAULT_BIND] ? "timed" : "%g");
 					FSlider(Vars::Visuals::Prediction::ProjectileDrawDuration, FSliderEnum::Right, !Vars::Visuals::Prediction::ProjectileDrawDuration[DEFAULT_BIND] ? "timed" : "%g");
 				} EndSection();

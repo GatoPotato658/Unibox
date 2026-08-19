@@ -39,7 +39,7 @@ private:
 	std::vector<PickupData_t> m_vPickups = {};
 	std::vector<Vec3> m_vAngles = {};
 	std::vector<KeyValues*> m_v_world_texture_key_values = {};
-
+	Vec3 m_vPrevAimAngles = {};
 
 #ifdef DEBUG_UNI
 	struct ImageArrayInfo_t
@@ -71,6 +71,7 @@ public:
 	std::vector<DrawBox_t> GetHitboxes(matrix3x4* aBones, CBaseAnimating* pEntity, std::vector<int> vHitboxes = {}, int iTarget = -1);
 	void DrawEffects();
 	void DrawHitboxes(int iStore = 0);
+	void DrawBestAimPos(CTFPlayer* pLocal);
 
 	void FOV(CTFPlayer* pLocal, CViewSetup* pView);
 	void ThirdPerson(CTFPlayer* pLocal, CViewSetup* pView);

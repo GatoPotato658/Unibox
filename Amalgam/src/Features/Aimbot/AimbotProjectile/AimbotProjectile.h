@@ -141,6 +141,7 @@ private:
 	} m_tPasstimeThrow;
 
 	float m_flTimeTo = std::numeric_limits<float>::max();
+	std::vector<Vec3> m_vBestPlayerPath = {};
 	std::vector<Vec3> m_vPlayerPath = {};
 	std::vector<Vec3> m_vProjectilePath = {};
 	std::vector<DrawBox_t> m_vBoxes = {};
@@ -148,12 +149,15 @@ private:
 	Vec3 m_vPredicted = {};
 	Vec3 m_vTarget = {};
 	Vec3 m_vShootPos = {};
+	Vec3 m_vPlainAngles = {};
 
 	int m_iWeaponID = -1;
 	int m_iMethod = -1;
 	int m_iResult = false;
 	bool m_bUpdate = true;
-	
+	bool m_bBestPlayerPathSet = false;
+	bool m_bBlockAimAnglesDraw = false;
+
 	struct GrappleInfo_t
 	{
 		float m_flRanTime = 0.f;
@@ -190,6 +194,8 @@ public:
 
 	int m_iLastTickCancel = 0;
 	int m_iAimLock = 0;
+	Vec3 m_vAimAngles = {};
+	float m_flAimAnglesSetTime = 0.f;
 };
 
 ADD_FEATURE(CAimbotProjectile, AimbotProjectile);

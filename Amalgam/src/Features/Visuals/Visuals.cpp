@@ -692,6 +692,43 @@ void CVisuals::DrawHitboxes(int iStore)
 	}
 }
 
+void CVisuals::DrawBestAimPos(CTFPlayer* pLocal)
+{
+	if (!Vars::Visuals::Prediction::BestAimPos.Value || !Vars::Colors::AimPosColor.Value.a || F::AimbotProjectile.m_flAimAnglesSetTime < I::GlobalVars->curtime - TICK_INTERVAL)
+	{
+		if (I::GlobalVars->curtime - F::AimbotProjectile.m_flAimAnglesSetTime > 0.5f)
+			m_vPrevAimAngles = {};
+		return;
+	}
+
+	// Smoothing
+	if (!m_vPrevAimAngles.IsZero())
+	{
+		float flFov = Math::CalcFov(m_vPrevAimAngles, F::AimbotProjectile.m_vAimAngles);
+		m_vPrevAimAngles = m_vPrevAimAngles.LerpAngle(F::AimbotProjectile.m_vAimAngles, Math::RemapVal(flFov, 180.f, 5.f, 0.6f, 0.05f));
+	}
+	else m_vPrevAimAngles = F::AimbotProjectile.m_vAimAngles;
+	
+	Vec3 vPoint;
+	{
+		Vec3 vStartPos = pLocal->GetEyePosition();
+		Vec3 vForward; Math::AngleVectors(m_vPrevAimAngles, &vForward);
+		Vec3 vEndPos = vStartPos + vForward * 8192;
+
+		CGameTrace trace = {};
+		CTraceFilterHitscan filter(pLocal);
+		SDK::Trace(vStartPos, vEndPos, MASK_SHOT, &filter, &trace);
+		vPoint = trace.endpos;
+	}
+
+	Vec3 vScreen;
+	if (SDK::W2S(vPoint, vScreen))
+	{
+		Color_t tColor = Vars::Colors::AimPosColor.Value.Lerp(Vars::Colors::AimPosColor.Value.IsColorDark() ? Color_t{ 255, 255, 255, 255 } : Color_t{ 0, 0, 0, 0 }, 0.35f, LerpEnum::NoAlpha);
+		H::Draw.FillRectOutline(vScreen.x, vScreen.y, 10, 10, tColor, Vars::Colors::AimPosColor.Value);
+	}
+}
+
 MAKE_HOOK(CBaseAnimating_DrawServerHitboxes, S::CBaseAnimating_DrawServerHitboxes(), void,
 	void* rcx, float duration, bool monocolor)
 {

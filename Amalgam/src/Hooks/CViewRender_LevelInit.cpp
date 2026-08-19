@@ -13,6 +13,7 @@
 #include "../Features/NavBot/NavEngine/NavEngine.h"
 #include "../Features/Killstreak/Killstreak.h"
 #include "../Features/FollowBot/FollowBot.h"
+#include "../Features/Aimbot/AimbotProjectile/AimbotProjectile.h"
 
 MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	void* rcx)
@@ -39,5 +40,5 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::BotUtils.Reset();
 	F::FollowBot.Reset();
 
-	G::WranglerSecondFireTime = 0.f;
+	G::WranglerSecondFireTime = F::AimbotProjectile.m_flAimAnglesSetTime = 0.f;
 }

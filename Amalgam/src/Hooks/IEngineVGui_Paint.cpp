@@ -45,6 +45,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 			F::AntiAim.Draw(pLocal);
 			F::Visuals.DrawPickupTimers();
 			F::ESP.Draw();
+			F::Visuals.DrawBestAimPos(pLocal);
 			F::OffscreenArrows.Draw(pLocal);
 			F::Aimbot.Draw(pLocal);
 
