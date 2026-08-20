@@ -1859,7 +1859,7 @@ splash: if (HandleSplash(mSplashHistory)) break;
 	}
 	if (!m_bBestPlayerPathSet) 
 	{
-		if (!m_tMoveStorage.m_pPlayer->GetAbsVelocity().IsZero(10.f))
+		if (tTarget.m_pEntity && !tTarget.m_pEntity->GetAbsVelocity().IsZero(10.f))
 			m_vBestPlayerPath = m_tMoveStorage.m_vPath;
 		m_bBestPlayerPathSet = true;
 	}
@@ -2990,7 +2990,7 @@ splash: if (HandleSplash(mSplashHistory)) break;
 	}
 	if (!m_bBestPlayerPathSet)
 	{
-		if (!m_tMoveStorage.m_pPlayer->GetAbsVelocity().IsZero(10.f))
+		if (tTarget.m_pEntity && !tTarget.m_pEntity->GetAbsVelocity().IsZero(10.f))
 			m_vBestPlayerPath = m_tMoveStorage.m_vPath;
 		m_bBestPlayerPathSet = true;
 	}
