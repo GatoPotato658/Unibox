@@ -90,6 +90,7 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::NavEngine.Run(pLocal, pWeapon, pCmd);
 		F::BotUtils.HandleSmartJump(pLocal, pCmd);
 		F::CritHack.Run(pLocal, pWeapon, pCmd);
+		F::CritHack.CacheDrawInfo(pLocal);
 		F::NoSpread.Run(pLocal, pWeapon, pCmd);
 		F::Misc.RunPost(pLocal, pCmd);
 		F::Misc.AutoFaNJump(pLocal, pWeapon, pCmd);

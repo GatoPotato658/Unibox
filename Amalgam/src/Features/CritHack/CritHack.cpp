@@ -612,141 +612,148 @@ MAKE_HOOK(CTFGameStats_FindPlayerStats, S::CTFGameStats_FindPlayerStats(), void*
 }
 #endif
 
-void CCritHack::Draw(CTFPlayer* pLocal)
+void CCritHack::CacheDrawInfo(CTFPlayer* pLocal)
 {
-	struct CritIndicatorCache_t
-	{
-		std::string m_sLeftText = {};
-		std::string m_sRightText = {};
-		Color_t m_tLeftColor = {};
-		Color_t m_tRightColor = {};
-		Color_t m_tBarColor = {};
-		float m_flProgress = 0.f;
-		bool m_bDrawFooter = false;
-		bool m_bValid = false;
-	};
-
-	static CritIndicatorCache_t tCache = {};
-	static float flCurrentProgress = 0.f;
-
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) || !I::EngineClient->IsInGame())
 	{
-		tCache = {};
-		flCurrentProgress = 0.f;
+		std::lock_guard<std::mutex> lock(m_tDrawMutex);
+		m_tDrawCache = {};
 		return;
 	}
 
+	if (!pLocal)
+		return;
+
 	auto pWeapon = H::Entities.GetWeapon();
-	if (pLocal)
+	if (!pWeapon || !pLocal->IsAlive() || pLocal->IsAGhost())
 	{
-		if (!pWeapon || !pLocal->IsAlive() || pLocal->IsAGhost())
-		{
-			tCache = {};
-			flCurrentProgress = 0.f;
-			return;
-		}
+		std::lock_guard<std::mutex> lock(m_tDrawMutex);
+		m_tDrawCache = {};
+		return;
+	}
 
-		float flTargetProgress = 0.f;
-		std::string sLeftText = "Calculating";
-		std::string sRightText = "";
-		Color_t tLeftColor = Vars::Menu::Theme::Active.Value;
-		Color_t tRightColor = Vars::Menu::Theme::Active.Value;
-		Color_t tBarColor = Color_t(0, 255, 100, 255);
+	std::string sLeftText = "Calculating";
+	std::string sRightText = "";
+	Color_t tLeftColor = Vars::Menu::Theme::Active.Value;
+	Color_t tRightColor = Vars::Menu::Theme::Active.Value;
+	Color_t tBarColor = Color_t(0, 255, 100, 255);
+	float flTargetProgress = 0.f;
 
-		if (!WeaponCanCrit(pWeapon, true))
+	if (!WeaponCanCrit(pWeapon, true))
+	{
+		sLeftText = "Cannot crit";
+		sRightText = "DISABLED";
+		tLeftColor = Color_t(255, 255, 255, 255);
+		tRightColor = Color_t(200, 40, 40, 255);
+		tBarColor = Color_t(200, 40, 40, 255);
+		flTargetProgress = 1.f;
+	}
+	else
+	{
+		const float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
+		if (!pWeapon->AreRandomCritsEnabled())
 		{
-			sLeftText = "Cannot crit";
+			sLeftText = "Random crits";
 			sRightText = "DISABLED";
-			tLeftColor = Color_t(255, 255, 255, 255);
 			tRightColor = Color_t(200, 40, 40, 255);
 			tBarColor = Color_t(200, 40, 40, 255);
 			flTargetProgress = 1.f;
 		}
-		else
+		else if (F::AntiCheatCompatibility.Active())
 		{
-			const float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
-			if (!pWeapon->AreRandomCritsEnabled())
+			sLeftText = "Anticheat";
+			sRightText = "COMPAT";
+			tRightColor = Color_t(255, 150, 0, 255);
+			tBarColor = Color_t(255, 150, 0, 255);
+			flTargetProgress = 1.f;
+		}
+		else if (pWeapon->m_flCritTime() > flTickBase)
+		{
+			const float flTime = pWeapon->m_flCritTime() - flTickBase;
+			sLeftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
+			sRightText = "STREAMING";
+			tRightColor = Color_t(100, 255, 255, 255);
+			tBarColor = Color_t(100, 255, 255, 255);
+			flTargetProgress = std::clamp(flTime / TF_DAMAGE_CRIT_DURATION_RAPID, 0.f, 1.f);
+		}
+		else if (pLocal->IsCritBoosted())
+		{
+			sLeftText = "Crit Boosted";
+			sRightText = "READY";
+			tRightColor = Color_t(100, 255, 255, 255);
+			tBarColor = Color_t(100, 255, 255, 255);
+			flTargetProgress = 1.f;
+		}
+		else if (!m_bCritBanned || m_bMelee)
+		{
+			sLeftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
+			if (pWeapon->IsRapidFire() && flTickBase < pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
 			{
-				sLeftText = "Random crits";
-				sRightText = "DISABLED";
-				tRightColor = Color_t(200, 40, 40, 255);
-				tBarColor = Color_t(200, 40, 40, 255);
-				flTargetProgress = 1.f;
-			}
-			else if (F::AntiCheatCompatibility.Active())
-			{
-				sLeftText = "Anticheat";
-				sRightText = "COMPAT";
-				tRightColor = Color_t(255, 150, 0, 255);
+				const float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - flTickBase;
+				sRightText = std::format("WAIT {:.2f}s", flTime);
+				tRightColor = m_iAvailableCrits > 0 ? Color_t(40, 200, 40, 255) : Color_t(200, 40, 40, 255);
 				tBarColor = Color_t(255, 150, 0, 255);
-				flTargetProgress = 1.f;
+				flTargetProgress = std::clamp(flTime, 0.f, 1.f);
 			}
-			else if (pWeapon->m_flCritTime() > flTickBase)
+			else if (m_iAvailableCrits >= m_iPotentialCrits)
 			{
-				const float flTime = pWeapon->m_flCritTime() - flTickBase;
-				sLeftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
-				sRightText = "STREAMING";
-				tRightColor = Color_t(100, 255, 255, 255);
-				tBarColor = Color_t(100, 255, 255, 255);
-				flTargetProgress = std::clamp(flTime / TF_DAMAGE_CRIT_DURATION_RAPID, 0.f, 1.f);
-			}
-			else if (pLocal->IsCritBoosted())
-			{
-				sLeftText = "Crit Boosted";
 				sRightText = "READY";
-				tRightColor = Color_t(100, 255, 255, 255);
-				tBarColor = Color_t(100, 255, 255, 255);
+				tRightColor = Color_t(40, 200, 40, 255);
 				flTargetProgress = 1.f;
 			}
-			else if (!m_bCritBanned || m_bMelee)
+			else if (m_iPotentialCrits > 0)
 			{
-				sLeftText = std::format("Crits: {} / {}", std::max(0, m_iAvailableCrits), m_iPotentialCrits);
-				if (pWeapon->IsRapidFire() && flTickBase < pWeapon->m_flLastRapidFireCritCheckTime() + 1.f)
-				{
-					const float flTime = pWeapon->m_flLastRapidFireCritCheckTime() + 1.f - flTickBase;
-					sRightText = std::format("WAIT {:.2f}s", flTime);
-					tRightColor = m_iAvailableCrits > 0 ? Color_t(40, 200, 40, 255) : Color_t(200, 40, 40, 255);
-					tBarColor = Color_t(255, 150, 0, 255);
-					flTargetProgress = std::clamp(flTime, 0.f, 1.f);
-				}
-				else if (m_iAvailableCrits >= m_iPotentialCrits)
-				{
-					sRightText = "READY";
-					tRightColor = Color_t(40, 200, 40, 255);
-					flTargetProgress = 1.f;
-				}
-				else if (m_iPotentialCrits > 0)
-				{
-					const float flBucket = pWeapon->m_flCritTokenBucket();
-					static auto bucketCap = H::ConVars.FindVar("tf_weapon_criticals_bucket_cap");
-					const int iDamageNeeded = static_cast<int>(std::ceil(m_flCost - flBucket));
-					sRightText = std::format("DMG: {}", std::max(0, iDamageNeeded));
-					tRightColor = m_iAvailableCrits > 0 ? Color_t(40, 200, 40, 255) : Color_t(200, 40, 40, 255);
-					flTargetProgress = bucketCap ? std::clamp(flBucket / bucketCap->GetFloat(), 0.f, 1.f) : 0.f;
-				}
-			}
-			else
-			{
-				sLeftText = std::format("DMG: {}", static_cast<int>(std::ceil(m_flDamageTilFlip)));
-				sRightText = "BANNED";
-				tRightColor = Color_t(200, 40, 40, 255);
-				tBarColor = Color_t(200, 40, 40, 255);
-				flTargetProgress = 0.2f;
-			}
-
-			if (m_flDamage <= 0.f && sRightText.empty())
-			{
-				sLeftText = "Calculating";
-				flTargetProgress = 0.f;
+				const float flBucket = pWeapon->m_flCritTokenBucket();
+				static auto bucketCap = H::ConVars.FindVar("tf_weapon_criticals_bucket_cap");
+				const int iDamageNeeded = static_cast<int>(std::ceil(m_flCost - flBucket));
+				sRightText = std::format("DMG: {}", std::max(0, iDamageNeeded));
+				tRightColor = m_iAvailableCrits > 0 ? Color_t(40, 200, 40, 255) : Color_t(200, 40, 40, 255);
+				flTargetProgress = bucketCap ? std::clamp(flBucket / bucketCap->GetFloat(), 0.f, 1.f) : 0.f;
 			}
 		}
+		else
+		{
+			sLeftText = std::format("DMG: {}", static_cast<int>(std::ceil(m_flDamageTilFlip)));
+			sRightText = "BANNED";
+			tRightColor = Color_t(200, 40, 40, 255);
+			tBarColor = Color_t(200, 40, 40, 255);
+			flTargetProgress = 0.2f;
+		}
 
-		flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, ImGui::GetIO().DeltaTime * 10.f);
-		tCache = { sLeftText, sRightText, tLeftColor, tRightColor, tBarColor, flCurrentProgress, F::Ticks.m_iWait > 0, true };
+		if (m_flDamage <= 0.f && sRightText.empty())
+		{
+			sLeftText = "Calculating";
+			flTargetProgress = 0.f;
+		}
 	}
 
-	if (!tCache.m_bValid)
+	CritDrawCache_t tCache = { sLeftText, sRightText, tLeftColor, tRightColor, tBarColor, flTargetProgress, F::Ticks.m_iWait > 0, true };
+	std::lock_guard<std::mutex> lock(m_tDrawMutex);
+	m_tDrawCache = tCache;
+}
+
+void CCritHack::Draw()
+{
+	static float flCurrentProgress = 0.f;
+
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) || !I::EngineClient->IsInGame())
+	{
+		flCurrentProgress = 0.f;
 		return;
+	}
+
+	CritDrawCache_t tCache;
+	{
+		std::lock_guard<std::mutex> lock(m_tDrawMutex);
+		tCache = m_tDrawCache;
+	}
+	if (!tCache.m_bValid)
+	{
+		flCurrentProgress = 0.f;
+		return;
+	}
+
+	flCurrentProgress = std::lerp(flCurrentProgress, tCache.m_flTargetProgress, ImGui::GetIO().DeltaTime * 10.f);
 
 	const ImVec2 vPanelPos =
 	{
@@ -755,5 +762,5 @@ void CCritHack::Draw(CTFPlayer* pLocal)
 	};
 	const float flPanelWidth = H::Draw.Scale(180.f);
 	const float flPanelHeight = H::Draw.Scale(29.f);
-	DrawIndicatorPanel(ImGui::GetBackgroundDrawList(), vPanelPos, flPanelWidth, flPanelHeight, tCache.m_sLeftText.c_str(), tCache.m_sRightText.c_str(), tCache.m_tLeftColor, tCache.m_tRightColor, tCache.m_tBarColor, tCache.m_flProgress, tCache.m_bDrawFooter, "Not Ready");
+	DrawIndicatorPanel(ImGui::GetBackgroundDrawList(), vPanelPos, flPanelWidth, flPanelHeight, tCache.m_sLeftText.c_str(), tCache.m_sRightText.c_str(), tCache.m_tLeftColor, tCache.m_tRightColor, tCache.m_tBarColor, flCurrentProgress, tCache.m_bDrawFooter, "Not Ready");
 }

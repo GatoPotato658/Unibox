@@ -1,5 +1,6 @@
 #pragma once
 #include "../../SDK/SDK.h"
+#include <mutex>
 
 Enum(CritRequest, Any, Crit, Skip);
 
@@ -55,12 +56,27 @@ private:
 
 	//float m_flLastDamageTime = 0.f;
 
+	struct CritDrawCache_t
+	{
+		std::string m_sLeftText = {};
+		std::string m_sRightText = {};
+		Color_t m_tLeftColor = {};
+		Color_t m_tRightColor = {};
+		Color_t m_tBarColor = {};
+		float m_flTargetProgress = 0.f;
+		bool m_bDrawFooter = false;
+		bool m_bValid = false;
+	};
+	CritDrawCache_t m_tDrawCache = {};
+	std::mutex m_tDrawMutex = {};
+
 public:
 	float GetCost(CTFWeaponBase* pWeapon);
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal);
 	void Store();
-	void Draw(CTFPlayer* pLocal);
+	void CacheDrawInfo(CTFPlayer* pLocal);
+	void Draw();
 
 	bool WeaponCanCrit(CTFWeaponBase* pWeapon, bool bWeaponOnly = false);
 	int PredictCmdNum(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);

@@ -63,7 +63,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	if (I::EngineClient->IsInGame() && !SDK::CleanScreenshot())
 	{
 		CTFPlayer* pLocal = H::Entities.GetLocal();
-		F::CritHack.Draw(pLocal);
+		F::CritHack.Draw();
 		F::Ticks.Draw(pLocal);
 #ifdef DEBUG_VACCINATOR
 		F::AutoHeal.Draw(pLocal);

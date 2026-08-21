@@ -163,7 +163,6 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 			return true;
 		}
 
-		// nav crumbs can stop short of the teleporter hitbox - walk the rest directly onto the pad
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
 			F::NavEngine.CancelPath();
 
@@ -174,14 +173,14 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 
 		if (m_flOnEntranceSince && flCurTime - m_flOnEntranceSince > 4.f)
 		{
-			// standing on it without getting teleported means there is no linked exit
 			m_eState = EState::CampDispenser;
 			m_iCampIdx = -1;
 			m_flScanClock = 0.f;
 			return true;
 		}
 
-		SDK::WalkTo(pCmd, pLocal, pEntrance->GetAbsOrigin());
+		if (flDist > 55.f)
+			SDK::WalkTo(pCmd, pLocal, pEntrance->GetAbsOrigin());
 		return true;
 	}
 	case EState::CampExit:
