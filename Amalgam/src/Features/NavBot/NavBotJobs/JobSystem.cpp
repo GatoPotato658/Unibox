@@ -633,6 +633,7 @@ void CNavBotJobSystem::Reset()
 	F::NavBotCapture.Reset();
 	F::NavBotRoam.Reset();
 	F::NavBotDanger.ResetSpawn();
+	F::NavBotMVMSniper.Reset();
 }
 
 auto CNavBotJobSystem::TryEscapeSpawn(CTFPlayer* pLocal) -> bool

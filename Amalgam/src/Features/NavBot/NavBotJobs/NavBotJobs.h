@@ -270,7 +270,7 @@ private:
 
 	CBaseObject* FindClosestTeleporter(CTFPlayer* pLocal, int iObjectMode);
 	CBaseObject* FindClosestDispenser(CTFPlayer* pLocal);
-	bool CampAt(CTFPlayer* pLocal, CBaseEntity* pAnchor);
+	bool CampAt(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseEntity* pAnchor);
 
 	EState m_eState = EState::ToEntrance;
 	int m_iEntranceIdx = -1;
@@ -281,7 +281,7 @@ private:
 	float m_flPairClock = 0.f;
 
 public:
-	bool Run(CTFPlayer* pLocal);
+	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal);
 	void Reset();
 };
 

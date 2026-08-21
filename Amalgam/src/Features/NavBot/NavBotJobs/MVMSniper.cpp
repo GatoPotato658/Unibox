@@ -84,25 +84,29 @@ CBaseObject* CNavBotMVMSniper::FindClosestDispenser(CTFPlayer* pLocal)
 	return pBest;
 }
 
-bool CNavBotMVMSniper::CampAt(CTFPlayer* pLocal, CBaseEntity* pAnchor)
+bool CNavBotMVMSniper::CampAt(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseEntity* pAnchor)
 {
 	if (!pAnchor)
 		return false;
 
-	const float flDist = pLocal->GetAbsOrigin().DistTo(pAnchor->GetAbsOrigin());
+	const Vector vAnchorOrigin = pAnchor->GetAbsOrigin();
+	const float flDist = pLocal->GetAbsOrigin().DistTo(vAnchorOrigin);
 	if (flDist > 150.f)
 	{
-		F::NavEngine.NavTo(pAnchor->GetAbsOrigin(), PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
+		F::NavEngine.NavTo(vAnchorOrigin, PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
 		return true;
 	}
 
 	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
 		F::NavEngine.CancelPath();
 
+	if (flDist > 40.f)
+		SDK::WalkTo(pCmd, pLocal, vAnchorOrigin);
+
 	return true;
 }
 
-bool CNavBotMVMSniper::Run(CTFPlayer* pLocal)
+bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 {
 	if (!pLocal || !pLocal->IsAlive())
 	{
@@ -135,7 +139,7 @@ bool CNavBotMVMSniper::Run(CTFPlayer* pLocal)
 					m_iCampIdx = pDispenser->entindex();
 					m_eState = EState::CampDispenser;
 					m_flScanClock = 0.f;
-					return CampAt(pLocal, pDispenser);
+					return CampAt(pCmd, pLocal, pDispenser);
 				}
 				return false;
 			}
@@ -152,26 +156,32 @@ bool CNavBotMVMSniper::Run(CTFPlayer* pLocal)
 		}
 		m_flLastEntranceDist = flDist;
 
-		if (flDist <= 100.f)
+		if (flDist > 250.f)
 		{
-			if (!m_flOnEntranceSince)
-				m_flOnEntranceSince = flCurTime;
-
-			if (flCurTime - m_flOnEntranceSince > 4.f)
-			{
-				m_eState = EState::CampDispenser;
-				m_iCampIdx = -1;
-				m_flScanClock = 0.f;
-				return true;
-			}
-
-			if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
-				F::NavEngine.CancelPath();
+			m_flOnEntranceSince = 0.f;
+			F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
 			return true;
 		}
 
-		m_flOnEntranceSince = 0.f;
-		F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
+		// nav crumbs can stop short of the teleporter hitbox - walk the rest directly onto the pad
+		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
+			F::NavEngine.CancelPath();
+
+		if (!m_flOnEntranceSince && flDist <= 100.f)
+			m_flOnEntranceSince = flCurTime;
+		else if (flDist > 100.f)
+			m_flOnEntranceSince = 0.f;
+
+		if (m_flOnEntranceSince && flCurTime - m_flOnEntranceSince > 4.f)
+		{
+			// standing on it without getting teleported means there is no linked exit
+			m_eState = EState::CampDispenser;
+			m_iCampIdx = -1;
+			m_flScanClock = 0.f;
+			return true;
+		}
+
+		SDK::WalkTo(pCmd, pLocal, pEntrance->GetAbsOrigin());
 		return true;
 	}
 	case EState::CampExit:
@@ -195,7 +205,7 @@ bool CNavBotMVMSniper::Run(CTFPlayer* pLocal)
 			}
 		}
 
-		return CampAt(pLocal, pExit);
+		return CampAt(pCmd, pLocal, pExit);
 	}
 	case EState::CampDispenser:
 	{
@@ -230,7 +240,7 @@ bool CNavBotMVMSniper::Run(CTFPlayer* pLocal)
 			}
 		}
 
-		return CampAt(pLocal, pDispenser);
+		return CampAt(pCmd, pLocal, pDispenser);
 	}
 	}
 

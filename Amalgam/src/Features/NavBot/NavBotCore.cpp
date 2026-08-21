@@ -185,19 +185,22 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	}
 
 	auto pGameRules = I::TFGameRules();
-	if ((Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::MVMSniper) && pGameRules && pGameRules->m_bPlayingMannVsMachine()
-		&& pLocal->m_iClass() == TF_CLASS_SNIPER)
+	if ((Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::MVMSniper) && pGameRules && pGameRules->m_bPlayingMannVsMachine())
 	{
+		// let buybot drive while it is working, no matter which class we currently are
 		if (F::Misc.IsBuyBotBusy())
 			return;
 
-		if (F::NavBotMVMSniper.Run(pLocal))
+		if (pLocal->m_iClass() == TF_CLASS_SNIPER)
 		{
-			m_tIdleTimer.Update();
-			m_tAntiStuckTimer.Update();
+			if (F::NavBotMVMSniper.Run(pCmd, pLocal))
+			{
+				m_tIdleTimer.Update();
+				m_tAntiStuckTimer.Update();
+			}
+			UpdateRunReloadInput(pCmd, false);
+			return;
 		}
-		UpdateRunReloadInput(pCmd, false);
-		return;
 	}
 
 	// Recharge doubletap every n seconds

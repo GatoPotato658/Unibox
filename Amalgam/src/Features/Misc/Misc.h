@@ -101,6 +101,7 @@ private:
 	bool m_bBuybotCashLimitReached = false;
 	bool m_bBuybotFinishedUpgrades = false;
 	Vec3 m_vBuybotStationTarget = {};
+	float m_flBuybotStallClock = 0.f;
 
 public:
 	struct ProfileDumpResult_t
