@@ -1,7 +1,6 @@
 #include "NavEngine.h"
 #include "../Hazards/Hazards.h"
 #include "../NavRuntime.h"
-#include <cassert>
 
 float CMap::GetBlacklistPenalty(const BlacklistReason_t& tReason) const
 {
@@ -40,7 +39,7 @@ static float GetNearestAreaScore(const CNavArea& tArea, const Vector& vPos, bool
 	const float flPlanarDistSqr = flDx * flDx + flDy * flDy;
 
 	const bool bOverlapping = tArea.IsOverlapping(vPos);
-	const bool bTightOverlap = bOverlapping && flVerticalOutside <= 18.0f;
+	const bool bTightOverlap = bOverlapping && flVerticalOutside <= 24.0f && flVerticalToSurface <= 45.0f;
 	if (pIsTightOverlap) *pIsTightOverlap = bTightOverlap;
 
 	float flScore = flPlanarDistSqr + (flVerticalToSurface * flVerticalToSurface * 6.0f) + (flVerticalOutside * flVerticalOutside * (bLocalOrigin ? 18.0f : 10.0f));
@@ -178,306 +177,103 @@ SolveContext CMap::BuildSolveContext()
 	return tCtx;
 }
 
-std::array<uint8_t, 20> CMap::ComputeNavMeshSha() const
-{
-	boost::uuids::detail::sha1 tSha;
-	auto Add = [&tSha](const auto& value)
-		{ tSha.process_bytes(&value, sizeof(value)); };
-
-	const uint32_t uAreaCount = static_cast<uint32_t>(m_navfile.m_vAreas.size());
-	Add(uAreaCount);
-	for (const auto& tArea : m_navfile.m_vAreas)
-	{
-		Add(tArea.m_uId);
-		Add(tArea.m_iAttributeFlags);
-		Add(tArea.m_iTFAttributeFlags);
-		Add(tArea.m_vNwCorner);
-		Add(tArea.m_vSeCorner);
-		Add(tArea.m_vCenter);
-		Add(tArea.m_flInvDxCorners);
-		Add(tArea.m_flInvDyCorners);
-		Add(tArea.m_flNeZ);
-		Add(tArea.m_flSwZ);
-		Add(tArea.m_flMinZ);
-		Add(tArea.m_flMaxZ);
-		const uint32_t uConnectionCount = static_cast<uint32_t>(tArea.m_vConnections.size());
-		Add(uConnectionCount);
-		for (const auto& tConnection : tArea.m_vConnections)
-			Add(tConnection.m_uId);
-	}
-
-	boost::uuids::detail::sha1::digest_type aDigest{};
-	tSha.get_digest(aDigest);
-	std::array<uint8_t, 20> aResult{};
-	std::copy(std::begin(aDigest), std::end(aDigest), aResult.begin());
-	return aResult;
-}
-
-size_t CMap::AddCrumbGraphNode(CNavArea* pArea, const Vector& vPos)
-{
-	const size_t uNode = m_vCrumbGraph.size();
-	m_vCrumbGraph.push_back({ pArea, vPos });
-	m_mAreaCrumbNodes[pArea].push_back(uNode);
-	return uNode;
-}
-
-void CMap::AddCrumbGraphEdge(size_t uFrom, size_t uTo, bool bBidirectional, bool bRequiresDrop,
-	float flDropHeight, float flApproachDistance, const Vector& vApproachDir)
-{
-	if (uFrom >= m_vCrumbGraph.size() || uTo >= m_vCrumbGraph.size() || uFrom == uTo)
-		return;
-
-	auto Add = [&](size_t uA, size_t uB, bool bDrop, const Vector& vDir)
-		{
-			const Vector vDelta = m_vCrumbGraph[uB].m_vPos - m_vCrumbGraph[uA].m_vPos;
-			const float flCost = std::max(vDelta.Length(), 1.f) + (bDrop ? flDropHeight * 3.25f : 0.f);
-			m_vCrumbGraph[uA].m_vEdges.push_back({ uB, flCost, bDrop, bDrop ? flDropHeight : 0.f,
-				bDrop ? flApproachDistance : 0.f, bDrop ? vDir : Vector{} });
-		};
-
-	Add(uFrom, uTo, bRequiresDrop, vApproachDir);
-	if (bBidirectional)
-		Add(uTo, uFrom, false, {});
-}
-
-size_t CMap::FindNearestCrumbGraphNode(CNavArea* pArea, const Vector& vPos) const
-{
-	const auto it = m_mAreaCrumbNodes.find(pArea);
-	if (it == m_mAreaCrumbNodes.end() || it->second.empty())
-		return std::numeric_limits<size_t>::max();
-
-	float flBest = FLT_MAX;
-	size_t uBest = std::numeric_limits<size_t>::max();
-	for (const size_t uNode : it->second)
-	{
-		const float flDist = m_vCrumbGraph[uNode].m_vPos.DistToSqr(vPos);
-		if (flDist < flBest)
-		{
-			flBest = flDist;
-			uBest = uNode;
-		}
-	}
-	return uBest;
-}
-
-void CMap::BuildCrumbGraph()
-{
-	m_vCrumbGraph.clear();
-	m_mAreaCrumbNodes.clear();
-	m_vCrumbPathNodes.clear();
-
-	constexpr float flMaxEdgeLength = 100.f;
-	constexpr float flGridPitch = flMaxEdgeLength / 1.41421356237f;
-	std::unordered_map<CNavArea*, std::vector<size_t>> mGridNodes;
-
-	for (auto& tArea : m_navfile.m_vAreas)
-	{
-		const float flWidth = std::max(tArea.m_vSeCorner.x - tArea.m_vNwCorner.x, 0.f);
-		const float flHeight = std::max(tArea.m_vSeCorner.y - tArea.m_vNwCorner.y, 0.f);
-		const int iColumns = std::max(static_cast<int>(std::ceil(flWidth / flGridPitch)), 1);
-		const int iRows = std::max(static_cast<int>(std::ceil(flHeight / flGridPitch)), 1);
-		auto& vNodes = mGridNodes[&tArea];
-		vNodes.resize(static_cast<size_t>((iColumns + 1) * (iRows + 1)));
-
-		for (int iY = 0; iY <= iRows; ++iY)
-		{
-			const float flY = std::lerp(tArea.m_vNwCorner.y, tArea.m_vSeCorner.y, static_cast<float>(iY) / iRows);
-			for (int iX = 0; iX <= iColumns; ++iX)
-			{
-				const float flX = std::lerp(tArea.m_vNwCorner.x, tArea.m_vSeCorner.x, static_cast<float>(iX) / iColumns);
-				const size_t uNode = AddCrumbGraphNode(&tArea, { flX, flY, tArea.GetZ(flX, flY) });
-				vNodes[static_cast<size_t>(iY * (iColumns + 1) + iX)] = uNode;
-
-				for (const auto [iDx, iDy] : { std::pair{ -1, 0 }, std::pair{ 0, -1 }, std::pair{ -1, -1 }, std::pair{ 1, -1 } })
-				{
-					const int iPrevX = iX + iDx;
-					const int iPrevY = iY + iDy;
-					if (iPrevX < 0 || iPrevY < 0 || iPrevX > iColumns || iPrevY > iRows) continue;
-					const size_t uPrevious = vNodes[static_cast<size_t>(iPrevY * (iColumns + 1) + iPrevX)];
-					AddCrumbGraphEdge(uNode, uPrevious, true);
-				}
-			}
-		}
-	}
-
-	for (auto& tArea : m_navfile.m_vAreas)
-	{
-		for (const auto& tConnection : tArea.m_vConnections)
-		{
-			CNavArea* pNextArea = tConnection.m_pArea;
-			if (!pNextArea || !IsAreaValid(pNextArea) || !HasDirectConnection(&tArea, pNextArea))
-				continue;
-
-			const bool bOneWay = IsOneWay(&tArea, pNextArea);
-			const NavPoints_t tPoints = DeterminePoints(&tArea, pNextArea, bOneWay);
-			const DropdownHint_t tDrop = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext, bOneWay);
-			const size_t uFromGrid = FindNearestCrumbGraphNode(&tArea, tDrop.m_vAdjustedPos);
-			const size_t uToGrid = FindNearestCrumbGraphNode(pNextArea, tPoints.m_vCenterNext);
-			const size_t uFromPortal = AddCrumbGraphNode(&tArea, tDrop.m_vAdjustedPos);
-			const size_t uToPortal = AddCrumbGraphNode(pNextArea, tPoints.m_vCenterNext);
-			AddCrumbGraphEdge(uFromGrid, uFromPortal, true);
-			AddCrumbGraphEdge(uToGrid, uToPortal, true);
-			AddCrumbGraphEdge(uFromPortal, uToPortal, false, tDrop.m_bRequiresDrop, tDrop.m_flDropHeight,
-				tDrop.m_flApproachDistance, tDrop.m_vApproachDir);
-		}
-	}
-
-#ifdef _DEBUG
-	for (const auto& tNode : m_vCrumbGraph)
-	{
-		assert(IsAreaValid(tNode.m_pNavArea));
-		for (const auto& tEdge : tNode.m_vEdges)
-		{
-			assert(tEdge.m_uTo < m_vCrumbGraph.size());
-			const auto& tNext = m_vCrumbGraph[tEdge.m_uTo];
-			if (tNode.m_pNavArea == tNext.m_pNavArea && !tEdge.m_bRequiresDrop)
-				assert(tNode.m_vPos.DistTo(tNext.m_vPos) <= 100.01f);
-			else if (tNode.m_pNavArea != tNext.m_pNavArea)
-				assert(HasDirectConnection(tNode.m_pNavArea, tNext.m_pNavArea));
-		}
-	}
-#endif
-}
-
 bool CMap::RefreshCrumbGraph(bool bForce)
 {
-	std::lock_guard lock(m_mutex);
-	if (m_eState != NavStateEnum::Active)
-		return false;
-
-	const auto aSha = ComputeNavMeshSha();
-	if (!bForce && !m_vCrumbGraph.empty() && aSha == m_aCrumbGraphSha)
-		return false;
-
-	m_mVischeckCache.clear();
-	m_mConnectionStuckTime.clear();
-	BuildCrumbGraph();
-	m_aCrumbGraphSha = aSha;
-	return true;
-}
-
-bool CMap::IsGraphEdgeUsable(const CrumbGraphNode_t& tFrom, const CrumbGraphEdge_t& tEdge, const SolveContext& tCtx,
-	float& flCost) const
-{
-	if (tEdge.m_uTo >= m_vCrumbGraph.size()) return false;
-	const auto& tTo = m_vCrumbGraph[tEdge.m_uTo];
-	if (!tTo.m_pNavArea || tTo.m_pNavArea->IsBlocked(tCtx.m_iTeam)) return false;
-	if (!tCtx.m_bCanJump && !tEdge.m_bRequiresDrop && tTo.m_vPos.z - tFrom.m_vPos.z > 18.f) return false;
-
-	const auto itHazard = tCtx.m_mHazardCosts.find(tTo.m_pNavArea);
-	if (itHazard != tCtx.m_mHazardCosts.end() && !std::isfinite(itHazard->second)) return false;
-
-	if (tFrom.m_pNavArea != tTo.m_pNavArea)
-	{
-		const auto tKey = std::pair<CNavArea*, CNavArea*>(tFrom.m_pNavArea, tTo.m_pNavArea);
-		if (const auto it = m_mVischeckCache.find(tKey); it != m_mVischeckCache.end()
-			&& it->second.m_eVischeckState == VischeckStateEnum::NotVisible
-			&& (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > tCtx.m_iTickcount))
-			return false;
-	}
-
-	flCost = tEdge.m_flCost;
-	if (itHazard != tCtx.m_mHazardCosts.end())
-		flCost += std::clamp(itHazard->second * 0.28f, 0.f, 650.f);
-	if (m_bSkipSpawn && (tFrom.m_pNavArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)
-		|| tTo.m_pNavArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)))
-		flCost += 5000.f;
-	return std::isfinite(flCost) && flCost > 0.f;
+	(void)bForce;
+	return false;
 }
 
 int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
 	const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost)
 {
 	vOutPath.clear();
-	if (!pStartArea || !pEndArea || m_vCrumbGraph.empty()) return 2;
-	const size_t uStart = FindNearestCrumbGraphNode(pStartArea, vStart);
-	const size_t uEnd = FindNearestCrumbGraphNode(pEndArea, vEnd);
-	if (uStart == std::numeric_limits<size_t>::max() || uEnd == std::numeric_limits<size_t>::max()) return 2;
+	if (!pStartArea || !pEndArea || !IsAreaValid(pStartArea) || !IsAreaValid(pEndArea)) return 2;
 
-	if (m_vCrumbPathNodes.size() != m_vCrumbGraph.size())
-		m_vCrumbPathNodes.assign(m_vCrumbGraph.size(), {});
-	if (++m_uCrumbQueryId == 0)
-	{
-		m_uCrumbQueryId = 1;
-		for (auto& tNode : m_vCrumbPathNodes) tNode.m_uQueryId = 0;
-	}
+	std::vector<CNavArea*> vAreas;
+	float flAreaCost = 0.f;
+	const int iResult = Solve(pStartArea, pEndArea, tCtx, vAreas, &flAreaCost);
+	if ((iResult != 0 && iResult != 3) || vAreas.empty()) return iResult == 3 ? 3 : 1;
+	if (pflCost) *pflCost = flAreaCost;
 
-	auto Init = [&](size_t uNode) -> CrumbPathNode_t&
+	auto PushCrumb = [&vOutPath](CachedPathCrumb_t tCrumb)
 		{
-			auto& tNode = m_vCrumbPathNodes[uNode];
-			if (tNode.m_uQueryId != m_uCrumbQueryId)
-			{
-				tNode = {};
-				tNode.m_uQueryId = m_uCrumbQueryId;
-			}
-			return tNode;
+			if (!vOutPath.empty() && vOutPath.back().m_vPos.DistToSqr(tCrumb.m_vPos) < 1.f) return;
+			vOutPath.push_back(std::move(tCrumb));
 		};
 
-	using QueueNode = std::pair<float, size_t>;
-	std::priority_queue<QueueNode, std::vector<QueueNode>, std::greater<QueueNode>> tOpen;
-	auto& tStart = Init(uStart);
-	tStart.m_flG = vStart.DistTo(m_vCrumbGraph[uStart].m_vPos);
-	tStart.m_flF = tStart.m_flG + m_vCrumbGraph[uStart].m_vPos.DistTo(vEnd);
-	tOpen.push({ tStart.m_flF, uStart });
+	CachedPathCrumb_t tStart{};
+	tStart.m_pNavArea = pStartArea;
+	tStart.m_vPos = pStartArea->GetNearestPoint(Vector2D(vStart.x, vStart.y));
+	PushCrumb(tStart);
 
-	while (!tOpen.empty())
+	for (size_t i = 0; i + 1 < vAreas.size(); ++i)
 	{
-		const auto [flF, uCurrent] = tOpen.top();
-		tOpen.pop();
-		auto& tCurrentPath = Init(uCurrent);
-		if (flF > tCurrentPath.m_flF) continue;
-		if (uCurrent == uEnd)
+		const std::vector<CachedPathCrumb_t>* pEdgeCrumbs = GetEdgeCrumbs(vAreas[i], vAreas[i + 1], tCtx);
+		if (!pEdgeCrumbs || pEdgeCrumbs->empty())
 		{
-			std::vector<size_t> vNodes;
-			for (size_t uNode = uEnd; uNode != std::numeric_limits<size_t>::max(); uNode = Init(uNode).m_uParent)
-				vNodes.push_back(uNode);
-			std::reverse(vNodes.begin(), vNodes.end());
-			for (size_t i = 0; i < vNodes.size(); ++i)
-			{
-				const auto& tGraphNode = m_vCrumbGraph[vNodes[i]];
-				const auto& tPathNode = Init(vNodes[i]);
-				CachedPathCrumb_t tCrumb{};
-				tCrumb.m_pNavArea = tGraphNode.m_pNavArea;
-				tCrumb.m_vPos = tGraphNode.m_vPos;
-				if (tPathNode.m_pIncoming)
-				{
-					tCrumb.m_vApproachDir = tPathNode.m_pIncoming->m_vApproachDir;
-					tCrumb.m_bRequiresDrop = tPathNode.m_pIncoming->m_bRequiresDrop;
-					tCrumb.m_flDropHeight = tPathNode.m_pIncoming->m_flDropHeight;
-					tCrumb.m_flApproachDistance = tPathNode.m_pIncoming->m_flApproachDistance;
-				}
-				vOutPath.push_back(tCrumb);
-			}
-			CachedPathCrumb_t tEnd{};
-			tEnd.m_pNavArea = pEndArea;
-			tEnd.m_vPos = vEnd;
-			if (!vOutPath.empty())
-			{
-				Vector vDir = vEnd - vOutPath.back().m_vPos; vDir.z = 0.f;
-				if (vDir.Normalize() > 0.01f) tEnd.m_vApproachDir = vDir;
-			}
-			vOutPath.push_back(tEnd);
-			if (pflCost) *pflCost = tCurrentPath.m_flG + m_vCrumbGraph[uEnd].m_vPos.DistTo(vEnd);
-			return uStart == uEnd ? 3 : 0;
+			CachedPathCrumb_t tFallback{};
+			tFallback.m_pNavArea = vAreas[i + 1];
+			tFallback.m_vPos = vAreas[i + 1]->m_vCenter;
+			PushCrumb(tFallback);
+			continue;
 		}
-
-		const auto& tCurrent = m_vCrumbGraph[uCurrent];
-		for (const auto& tEdge : tCurrent.m_vEdges)
-		{
-			float flEdgeCost = 0.f;
-			if (!IsGraphEdgeUsable(tCurrent, tEdge, tCtx, flEdgeCost)) continue;
-			auto& tNext = Init(tEdge.m_uTo);
-			const float flG = tCurrentPath.m_flG + flEdgeCost;
-			if (flG >= tNext.m_flG) continue;
-			tNext.m_flG = flG;
-			tNext.m_flF = flG + m_vCrumbGraph[tEdge.m_uTo].m_vPos.DistTo(vEnd);
-			tNext.m_uParent = uCurrent;
-			tNext.m_pIncoming = &tEdge;
-			tOpen.push({ tNext.m_flF, tEdge.m_uTo });
-		}
+		for (const auto& tCached : *pEdgeCrumbs)
+			PushCrumb(tCached);
 	}
 
-	return 1;
+	CachedPathCrumb_t tEnd{};
+	tEnd.m_pNavArea = pEndArea;
+	tEnd.m_vPos = vEnd;
+	if (!vOutPath.empty())
+	{
+		Vector vDir = vEnd - vOutPath.back().m_vPos; vDir.z = 0.f;
+		if (vDir.Normalize() > 0.01f) tEnd.m_vApproachDir = vDir;
+	}
+	PushCrumb(tEnd);
+
+	return pStartArea == pEndArea ? 3 : 0;
+}
+
+const std::vector<CachedPathCrumb_t>* CMap::GetEdgeCrumbs(CNavArea* pFrom, CNavArea* pTo, const SolveContext& tCtx)
+{
+	if (!pFrom || !pTo || !IsAreaValid(pFrom) || !IsAreaValid(pTo)) return nullptr;
+	const auto tKey = std::pair<CNavArea*, CNavArea*>(pFrom, pTo);
+
+	auto it = m_mVischeckCache.find(tKey);
+	if (it != m_mVischeckCache.end() && !it->second.m_vCrumbs.empty()
+		&& (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > tCtx.m_iTickcount))
+		return &it->second.m_vCrumbs;
+
+	const bool bIsOneWay = IsOneWay(pFrom, pTo);
+	const NavPoints_t tPoints = DeterminePoints(pFrom, pTo, bIsOneWay);
+	const DropdownHint_t tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext);
+
+	const float flUpDelta = tPoints.m_vCenterNext.z - tPoints.m_vCenter.z;
+	if (flUpDelta > PLAYER_CROUCHED_JUMP_HEIGHT)
+	{
+		auto& tEntry = m_mVischeckCache[tKey];
+		tEntry.m_iExpireTick = tCtx.m_iTickcount + static_cast<int>(90.f / (I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.f / 66.f)));
+		tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
+		tEntry.m_bPassable = false;
+		tEntry.m_bStuckBlacklist = false;
+		tEntry.m_flCachedCost = std::numeric_limits<float>::max();
+		tEntry.m_tPoints = tPoints;
+		tEntry.m_tDropdown = tDropdown;
+		tEntry.m_vCrumbs.clear();
+		return nullptr;
+	}
+
+	CachedConnection_t& tEntry = m_mVischeckCache[tKey];
+	tEntry.m_iExpireTick = tCtx.m_iTickcount + static_cast<int>(static_cast<float>(tCtx.m_iVischeckCacheSeconds) / (I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.f / 66.f)));
+	tEntry.m_eVischeckState = VischeckStateEnum::Visible;
+	tEntry.m_bPassable = true;
+	tEntry.m_bStuckBlacklist = false;
+	tEntry.m_tPoints = tPoints;
+	tEntry.m_tDropdown = tDropdown;
+	tEntry.m_flCachedCost = EvaluateConnectionCost(pFrom, pTo, tPoints, tDropdown, tCtx.m_iTeam);
+	CacheConnectionCrumbs(tEntry, pFrom, pTo, tPoints, tDropdown);
+	m_mConnectionStuckTime.erase(tKey);
+	return &tEntry.m_vCrumbs;
 }
 
 void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::vector<AdjacentEntry>& vOut)
@@ -555,7 +351,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		{
 			const bool bIsOneWay = IsOneWay(pCurrentArea, pNextArea);
 			tPoints = DeterminePoints(pCurrentArea, pNextArea, bIsOneWay);
-			tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext, bIsOneWay);
+			tDropdown = HandleDropdown(tPoints.m_vCenter, tPoints.m_vCenterNext);
 
 			const float flUpDelta = tPoints.m_vCenterNext.z - tPoints.m_vCenter.z;
 			if (!tCtx.m_bCanJump && flUpDelta > 18.0f)
@@ -661,76 +457,40 @@ NavPoints_t CMap::DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, b
 	const auto vCurrentClosest = pCurrentArea->GetNearestPoint(Vector2D(vNextCenter.x, vNextCenter.y));
 	const auto vNextClosest = pNextArea->GetNearestPoint(Vector2D(vCurrentCenter.x, vCurrentCenter.y));
 
-	Vector vTransition = vCurrentClosest;
-	if (vTransition.x != vCurrentCenter.x && vTransition.y != vCurrentCenter.y
-		&& vTransition.x != vNextCenter.x && vTransition.y != vNextCenter.y)
+	Vector vGate = vCurrentClosest;
+	if (vGate.x != vCurrentCenter.x && vGate.y != vCurrentCenter.y
+		&& vGate.x != vNextCenter.x && vGate.y != vNextCenter.y)
 	{
-		vTransition = vNextClosest;
-		vTransition.z = pCurrentArea->GetNearestPoint(Vector2D(vNextClosest.x, vNextClosest.y)).z;
+		vGate = vNextClosest;
+		vGate.z = pCurrentArea->GetNearestPoint(Vector2D(vNextClosest.x, vNextClosest.y)).z;
 	}
 
-	Vector vTransitionOffset = vCurrentCenter - vTransition;
-	vTransitionOffset.z = 0.f;
-	if (const float flTransitionLength = vTransitionOffset.Length(); flTransitionLength > 0.01f)
-		vTransition += vTransitionOffset * (std::min(18.0f, flTransitionLength * 0.5f) / flTransitionLength);
-	vTransition.z = pCurrentArea->GetNearestPoint(Vector2D(vTransition.x, vTransition.y)).z;
-
-	Vector vCenterNext = pNextArea->GetNearestPoint(Vector2D(vTransition.x, vTransition.y));
-	Vector vNextOffset = vNextCenter - vCenterNext;
-	vNextOffset.z = 0.f;
-	if (const float flNextLength = vNextOffset.Length(); flNextLength > 0.01f)
-		vCenterNext += vNextOffset * (std::min(18.0f, flNextLength * 0.5f) / flNextLength);
-	vCenterNext.z = pNextArea->GetNearestPoint(Vector2D(vCenterNext.x, vCenterNext.y)).z;
-
-	return NavPoints_t(vCurrentCenter, vTransition, vCenterNext, vNextCenter);
+	const Vector vCenterNext = pNextArea->GetNearestPoint(Vector2D(vGate.x, vGate.y));
+	return NavPoints_t(vCurrentCenter, vGate, vCenterNext, vNextCenter);
 }
 
-DropdownHint_t CMap::HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos, bool bIsOneWay)
+DropdownHint_t CMap::HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos)
 {
 	DropdownHint_t tHint{};
 	tHint.m_vAdjustedPos = vCurrentPos;
 
-	const Vector vToTarget = vNextPos - vCurrentPos;
-	const float flHeightDiff = vToTarget.z;
-
-	Vector vHorizontal = vToTarget;
+	Vector vHorizontal = vNextPos - vCurrentPos;
+	const float flHeightDiff = vHorizontal.z;
 	vHorizontal.z = 0.f;
 	const float flHorizontalLength = vHorizontal.Length();
-	if (flHorizontalLength <= 1.f) return tHint;
-
-	constexpr float kSmallDropGrace = 18.f;
-	if (flHeightDiff < 0.f && -flHeightDiff > kSmallDropGrace)
-	{
-		const float flDropDistance = -flHeightDiff;
-		const Vector vDirection = vHorizontal / flHorizontalLength;
-
-		tHint.m_bRequiresDrop = true;
-		tHint.m_flDropHeight = flDropDistance;
-		tHint.m_vApproachDir = vDirection;
-
-		float flAdvance = std::clamp(flDropDistance * 0.5f, PLAYER_WIDTH * 0.85f, PLAYER_WIDTH * 2.5f);
-		flAdvance = std::min(flAdvance, flHorizontalLength * 0.95f);
-		const float flMinAdvance = std::min(flHorizontalLength * 0.95f,
-			std::max(PLAYER_WIDTH * (bIsOneWay ? 0.5f : 0.75f),
-			flHorizontalLength * (bIsOneWay ? 0.35f : 0.5f)));
-		flAdvance = std::clamp(flAdvance, flMinAdvance, flHorizontalLength * 0.95f);
-
-		tHint.m_flApproachDistance = flAdvance;
-		tHint.m_vAdjustedPos = vCurrentPos + vDirection * flAdvance;
-		tHint.m_vAdjustedPos.z = vCurrentPos.z;
+	if (flHorizontalLength <= 1.f || -flHeightDiff <= PLAYER_JUMP_HEIGHT)
 		return tHint;
-	}
 
-	if (!bIsOneWay && flHeightDiff > 0.f)
-	{
-		const Vector vDirection = vHorizontal / flHorizontalLength;
-		const float flRetreat = std::clamp(flHeightDiff * 0.35f, PLAYER_WIDTH * 0.3f, PLAYER_WIDTH);
-		tHint.m_vAdjustedPos = vCurrentPos - vDirection * flRetreat;
-		tHint.m_vAdjustedPos.z = vCurrentPos.z;
-		tHint.m_vApproachDir = -vDirection;
-		tHint.m_flApproachDistance = flRetreat;
-	}
+	const Vector vDirection = vHorizontal / flHorizontalLength;
+	tHint.m_bRequiresDrop = true;
+	tHint.m_flDropHeight = -flHeightDiff;
+	tHint.m_vApproachDir = vDirection;
 
+	float flAdvance = std::clamp(tHint.m_flDropHeight * 0.5f, PLAYER_WIDTH * 0.85f, PLAYER_WIDTH * 1.5f);
+	flAdvance = std::min(flAdvance, flHorizontalLength * 0.95f);
+	tHint.m_flApproachDistance = flAdvance;
+	tHint.m_vAdjustedPos = vCurrentPos + vDirection * flAdvance;
+	tHint.m_vAdjustedPos.z = vCurrentPos.z;
 	return tHint;
 }
 
@@ -777,14 +537,6 @@ void CMap::CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CN
 
 	AppendSegment(tDropdown.m_bRequiresDrop ? tPoints.m_vCenterNext : tDropdown.m_vAdjustedPos,
 		tPoints.m_vNext, pTo, false, 0.f, 0.f, {});
-}
-
-const std::vector<CachedPathCrumb_t>* CMap::GetConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo) const
-{
-	const auto it = m_mVischeckCache.find({ pFrom, pTo });
-	if (it == m_mVischeckCache.end() || it->second.m_vCrumbs.empty())
-		return nullptr;
-	return &it->second.m_vCrumbs;
 }
 
 bool CMap::IsOneWay(CNavArea* pFrom, CNavArea* pTo) const

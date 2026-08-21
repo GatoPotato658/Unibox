@@ -237,4 +237,5 @@ public:
 	float		 m_flVehicleLeanVel;
 	float		 m_flVehicleLeanPos;
 	Vec3		 m_vecSmoothedUp;
+	char		 m_ucUnknown[32];
 };

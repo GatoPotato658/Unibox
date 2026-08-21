@@ -1823,6 +1823,23 @@ void CMenu::MenuMisc(int iTab)
 						FDropdown(Vars::Misc::MannVsMachine::BuyBotClass, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Sniper", "Spy" }, { 1, 3, 7, 4, 6, 9, 2, 8 }, FDropdownEnum::Right);
 					}
 					PopTransparent();
+					FDropdown(Vars::Misc::MannVsMachine::ChatCommands::Mode);
+					FTooltip("Allows running cat_mvm_* commands through party or in-game chat.\nOff - disabled\nParty - party members can use them\nFriends - only friends can use them\nCustom tag - only players with the tag below can use them");
+					PushTransparent(!Vars::Misc::MannVsMachine::ChatCommands::Mode.Value || Vars::Misc::MannVsMachine::ChatCommands::Mode.Value != Vars::Misc::MannVsMachine::ChatCommands::ModeEnum::CustomTag);
+					{
+						std::vector<const char*> vEntries = { "None" };
+						std::vector<int> vValues = { -1 };
+						for (int i = 0; i < F::PlayerUtils.m_vTags.size(); i++)
+						{
+							if (!F::PlayerUtils.m_vTags[i].m_bAssignable)
+								continue;
+
+							vEntries.push_back(F::PlayerUtils.m_vTags[i].m_sName.c_str());
+							vValues.push_back(i);
+						}
+						FDropdown(Vars::Misc::MannVsMachine::ChatCommands::Tag, vEntries, vValues);
+					}
+					PopTransparent();
 				} EndSection();
 			}
 
@@ -1881,6 +1898,7 @@ void CMenu::MenuMisc(int iTab)
 						if (FPopupButton("Debug", { 0, -5 }))
 						{
 							FToggle(Vars::Misc::Game::AntiCheatCritHack);
+							FDropdown(Vars::Misc::TelemetryBlocker::Mode);
 
 							EndPopup();
 						}
@@ -1892,10 +1910,6 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Sound::HitsoundAlways, FToggleEnum::Left);
 					FToggle(Vars::Misc::Sound::RemoveDSP, FToggleEnum::Right);
 					FToggle(Vars::Misc::Sound::GiantWeaponSounds);
-				} EndSection();
-				if (Section("Telemetry"))
-				{
-					FDropdown(Vars::Misc::TelemetryBlocker::Mode);
 				} EndSection();
 			}
 			EndTable();

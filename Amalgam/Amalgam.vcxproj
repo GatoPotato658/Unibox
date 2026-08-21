@@ -1137,6 +1137,7 @@
     <ClCompile Include="src\Features\NavBot\NavBotJobs\GroupWithOthers.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\JobSystem.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Melee.cpp" />
+    <ClCompile Include="src\Features\NavBot\NavBotJobs\MVMSniper.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\NavJobUtils.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Reload.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Roam.cpp" />

@@ -1708,12 +1708,18 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 
 	m_tMoveStorage = {};
 	if (!F::MoveSim.Initialize(tTarget.m_pEntity, m_tMoveStorage) && tTarget.m_iTargetType == TargetEnum::Player)
+	{
+		F::MoveSim.Restore(m_tMoveStorage);
 		return false;
+	}
 
 	m_tProjInfo = {};
 	if (!F::ProjSim.GetInfo(pLocal, pWeapon, {}, m_tProjInfo, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum)
 		|| !F::ProjSim.Initialize(m_tProjInfo, false))
+	{
+		F::MoveSim.Restore(m_tMoveStorage);
 		return false;
+	}
 
 	m_tInfo = { pLocal, pWeapon, &tTarget };
 	m_vShootPos = pLocal->GetShootPos();
@@ -2841,12 +2847,18 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 {
 	m_tMoveStorage = {};
 	if (!F::MoveSim.Initialize(tTarget.m_pEntity, m_tMoveStorage) && tTarget.m_iTargetType == TargetEnum::Player)
+	{
+		F::MoveSim.Restore(m_tMoveStorage);
 		return false;
+	}
 
 	m_tProjInfo = {};
 	F::ProjSim.GetInfo(pProjectile, m_tProjInfo);
 	if (!F::ProjSim.Initialize(m_tProjInfo, false, true))
+	{
+		F::MoveSim.Restore(m_tMoveStorage);
 		return false;
+	}
 
 	m_tInfo = { pLocal, m_tProjInfo.m_pWeapon, &tTarget, pProjectile };
 	m_tInfo.m_flLatency = F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke());

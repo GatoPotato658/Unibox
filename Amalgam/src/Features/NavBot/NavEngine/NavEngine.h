@@ -21,7 +21,8 @@ Enum(PriorityList, None,
 	MVMTank,
 	MVMCombat,
 	MVMMoney,
-	MVMFrontline
+	MVMFrontline,
+	MVMSniper
 )
 
 enum class PathSolveResult : int
@@ -69,7 +70,6 @@ private:
 	CNavArea* m_pLastProgressArea = nullptr;
 
 	Timer m_tOffMeshTimer = {};
-	Timer m_tCrumbGraphCheckTimer = {};
 	Vector m_vOffMeshTarget = {};
 
 	bool m_bRepathRequested = false;
@@ -96,8 +96,9 @@ private:
 	void RecordStuckFailure();
 	void ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
 	void PollPathWorker();
-	bool RefreshCrumbGraph();
 	bool BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CTFPlayer* pLocal);
+	bool StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCrumbs, CTFPlayer* pLocal);
+	bool SolveInline();
 	void UpdateRespawnRooms();
 	void ClearPathState();
 	void RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector& vLocalOrigin);

@@ -702,6 +702,28 @@ namespace ImGui
 		return FSelectable(sLabel, &tColor, flRounding, bSelected, iFlags, vSize);
 	}
 
+	inline void FCheckboxTick(const ImVec2& vBoxMin, float flAlpha = 1.f)
+	{
+		ImDrawList* pDrawList = GetWindowDrawList();
+		const float flThickness = H::Draw.Scale(2);
+		const ImVec2 vCheckA = vBoxMin + ImVec2(H::Draw.Scale(2.5f), H::Draw.Scale(6.5f));
+		const ImVec2 vCheckB = vBoxMin + ImVec2(H::Draw.Scale(5.0f), H::Draw.Scale(9.0f));
+		const ImVec2 vCheckC = vBoxMin + ImVec2(H::Draw.Scale(9.0f), H::Draw.Scale(3.0f));
+		const ImVec2 vDirAB = vCheckB - vCheckA;
+		const ImVec2 vDirBC = vCheckC - vCheckB;
+		const float flExtend = flThickness * 0.5f;
+		const ImVec2 vStart = vCheckA - vDirAB * (ImInvLength(vDirAB, 0.f) * flExtend);
+		const ImVec2 vEnd = vCheckC + vDirBC * (ImInvLength(vDirBC, 0.f) * flExtend);
+
+		ImColor tCheck = F::Render.Background0;
+		tCheck.Value.w *= flAlpha * GetStyle().Alpha;
+		pDrawList->PathClear();
+		pDrawList->PathLineToMergeDuplicate(vStart);
+		pDrawList->PathLineToMergeDuplicate(vCheckB);
+		pDrawList->PathLineToMergeDuplicate(vEnd);
+		pDrawList->PathStroke(tCheck, ImDrawFlags_None, flThickness);
+	}
+
 	inline void FCheckboxIcon(const ImVec2& vPos, bool bActive, float flAlpha = 1.f)
 	{
 		ImDrawList* pDrawList = GetWindowDrawList();
@@ -718,15 +740,7 @@ namespace ImGui
 		pDrawList->AddRectFilled(vBoxMin, vBoxMax, tFill, flRounding);
 		pDrawList->AddRect(vBoxMin, vBoxMax, tBorder, flRounding, ImDrawFlags_None, H::Draw.Scale(1));
 		if (bActive)
-		{
-			ImColor tCheck = F::Render.Background0;
-			tCheck.Value.w *= flAlpha * GetStyle().Alpha;
-			ImVec2 vCheckA = vBoxMin + ImVec2(H::Draw.Scale(2.5f), H::Draw.Scale(6.5f));
-			ImVec2 vCheckB = vBoxMin + ImVec2(H::Draw.Scale(5.0f), H::Draw.Scale(9.0f));
-			ImVec2 vCheckC = vBoxMin + ImVec2(H::Draw.Scale(9.0f), H::Draw.Scale(3.0f));
-			pDrawList->AddLine(vCheckA, vCheckB, tCheck, H::Draw.Scale(2));
-			pDrawList->AddLine(vCheckB, vCheckC, tCheck, H::Draw.Scale(2));
-		}
+			FCheckboxTick(vBoxMin, flAlpha);
 	}
 
 	inline bool FBeginMenu(const char* sLabel, ImVec4* pColor, float flRounding = H::Draw.Scale(4), bool bEnabled = true)
@@ -1241,15 +1255,7 @@ namespace ImGui
 		pDrawList->AddRectFilled(vBoxMin, vBoxMax, tFill, flRounding);
 		pDrawList->AddRect(vBoxMin, vBoxMax, tBorder, flRounding, ImDrawFlags_None, H::Draw.Scale(1));
 		if (flToggleAnim > 0.01f)
-		{
-			ImColor tCheck = F::Render.Background0;
-			tCheck.Value.w *= flToggleAnim * GetStyle().Alpha;
-			ImVec2 vCheckA = vBoxMin + ImVec2(H::Draw.Scale(2.5f), H::Draw.Scale(6.5f));
-			ImVec2 vCheckB = vBoxMin + ImVec2(H::Draw.Scale(5.0f), H::Draw.Scale(9.0f));
-			ImVec2 vCheckC = vBoxMin + ImVec2(H::Draw.Scale(9.0f), H::Draw.Scale(3.0f));
-			pDrawList->AddLine(vCheckA, vCheckB, tCheck, H::Draw.Scale(2));
-			pDrawList->AddLine(vCheckB, vCheckC, tCheck, H::Draw.Scale(2));
-		}
+			FCheckboxTick(vBoxMin, flToggleAnim);
 
 		for (size_t i = 0; i < iWraps; i++)
 		{

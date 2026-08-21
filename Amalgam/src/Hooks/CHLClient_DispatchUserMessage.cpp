@@ -5,6 +5,8 @@
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
 #include "../Features/Aimbot/AutoHeal/AutoHeal.h"
+#include "../Features/Commands/Commands.h"
+#include "../Features/Players/PlayerUtils.h"
 
 //#define DEBUG_VISUALS
 #ifdef DEBUG_VISUALS
@@ -81,6 +83,7 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 		char sName[256]; msgData.ReadString(sName, sizeof(sName));
 		char sMsg[256]; msgData.ReadString(sMsg, sizeof(sMsg));
 
+		F::Commands.RunChat(sMsg, F::PlayerUtils.GetAccountID(iEntityID), false);
 		F::Misc.OnChatMessage(iEntityID, sName, sMsg);
 		break;
 	}

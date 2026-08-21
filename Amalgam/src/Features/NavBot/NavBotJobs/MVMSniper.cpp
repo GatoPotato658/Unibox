@@ -1,0 +1,250 @@
+#include "NavBotJobs.h"
+
+static CBaseObject* GetTeleporter(int iIdx, int iObjectMode)
+{
+	if (iIdx <= 0)
+		return nullptr;
+
+	auto pEntity = I::ClientEntityList->GetClientEntity(iIdx);
+	if (!pEntity || pEntity->GetClassID() != ETFClassID::CObjectTeleporter)
+		return nullptr;
+
+	auto pTeleporter = pEntity->As<CObjectTeleporter>();
+	if (pTeleporter->m_iObjectMode() != iObjectMode || pTeleporter->m_bPlacing() || pTeleporter->m_bCarried() || pTeleporter->m_bDisabled())
+		return nullptr;
+
+	return pTeleporter;
+}
+
+static CBaseObject* GetDispenser(int iIdx)
+{
+	if (iIdx <= 0)
+		return nullptr;
+
+	auto pEntity = I::ClientEntityList->GetClientEntity(iIdx);
+	if (!pEntity || pEntity->GetClassID() != ETFClassID::CObjectDispenser)
+		return nullptr;
+
+	auto pDispenser = pEntity->As<CObjectDispenser>();
+	if (pDispenser->m_bPlacing() || pDispenser->m_bCarried() || pDispenser->m_bDisabled())
+		return nullptr;
+
+	return pDispenser;
+}
+
+CBaseObject* CNavBotMVMSniper::FindClosestTeleporter(CTFPlayer* pLocal, int iObjectMode)
+{
+	CBaseObject* pBest = nullptr;
+	float flBestDist = FLT_MAX;
+	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
+
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
+	{
+		if (!pEntity || pEntity->IsDormant() || pEntity->GetClassID() != ETFClassID::CObjectTeleporter)
+			continue;
+
+		auto pTeleporter = pEntity->As<CObjectTeleporter>();
+		if (pTeleporter->m_iObjectMode() != iObjectMode || pTeleporter->m_bPlacing() || pTeleporter->m_bCarried() || pTeleporter->m_bDisabled())
+			continue;
+
+		const float flDist = vLocalOrigin.DistToSqr(pTeleporter->GetAbsOrigin());
+		if (flDist >= flBestDist)
+			continue;
+
+		flBestDist = flDist;
+		pBest = pTeleporter;
+	}
+
+	return pBest;
+}
+
+CBaseObject* CNavBotMVMSniper::FindClosestDispenser(CTFPlayer* pLocal)
+{
+	CBaseObject* pBest = nullptr;
+	float flBestDist = FLT_MAX;
+	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
+
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
+	{
+		if (!pEntity || pEntity->IsDormant() || pEntity->GetClassID() != ETFClassID::CObjectDispenser)
+			continue;
+
+		auto pDispenser = pEntity->As<CObjectDispenser>();
+		if (pDispenser->m_bPlacing() || pDispenser->m_bCarried() || pDispenser->m_bDisabled())
+			continue;
+
+		const float flDist = vLocalOrigin.DistToSqr(pDispenser->GetAbsOrigin());
+		if (flDist >= flBestDist)
+			continue;
+
+		flBestDist = flDist;
+		pBest = pDispenser;
+	}
+
+	return pBest;
+}
+
+bool CNavBotMVMSniper::CampAt(CTFPlayer* pLocal, CBaseEntity* pAnchor)
+{
+	if (!pAnchor)
+		return false;
+
+	const float flDist = pLocal->GetAbsOrigin().DistTo(pAnchor->GetAbsOrigin());
+	if (flDist > 150.f)
+	{
+		F::NavEngine.NavTo(pAnchor->GetAbsOrigin(), PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
+		return true;
+	}
+
+	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
+		F::NavEngine.CancelPath();
+
+	return true;
+}
+
+bool CNavBotMVMSniper::Run(CTFPlayer* pLocal)
+{
+	if (!pLocal || !pLocal->IsAlive())
+	{
+		Reset();
+		return false;
+	}
+
+	const float flCurTime = I::GlobalVars->curtime;
+
+	switch (m_eState)
+	{
+	case EState::ToEntrance:
+	{
+		auto pEntrance = GetTeleporter(m_iEntranceIdx, 0);
+		if (!pEntrance)
+		{
+			if (flCurTime >= m_flScanClock)
+			{
+				pEntrance = FindClosestTeleporter(pLocal, 0);
+				m_iEntranceIdx = pEntrance ? pEntrance->entindex() : -1;
+				m_flLastEntranceDist = FLT_MAX;
+				m_flOnEntranceSince = 0.f;
+				m_flScanClock = flCurTime + 2.f;
+			}
+
+			if (!pEntrance)
+			{
+				if (auto pDispenser = FindClosestDispenser(pLocal))
+				{
+					m_iCampIdx = pDispenser->entindex();
+					m_eState = EState::CampDispenser;
+					m_flScanClock = 0.f;
+					return CampAt(pLocal, pDispenser);
+				}
+				return false;
+			}
+		}
+
+		const float flDist = pLocal->GetAbsOrigin().DistTo(pEntrance->GetAbsOrigin());
+
+		if (m_flLastEntranceDist < 200.f && flDist - m_flLastEntranceDist > 400.f)
+		{
+			m_eState = EState::CampExit;
+			m_iCampIdx = -1;
+			m_flScanClock = 0.f;
+			return true;
+		}
+		m_flLastEntranceDist = flDist;
+
+		if (flDist <= 100.f)
+		{
+			if (!m_flOnEntranceSince)
+				m_flOnEntranceSince = flCurTime;
+
+			if (flCurTime - m_flOnEntranceSince > 4.f)
+			{
+				m_eState = EState::CampDispenser;
+				m_iCampIdx = -1;
+				m_flScanClock = 0.f;
+				return true;
+			}
+
+			if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
+				F::NavEngine.CancelPath();
+			return true;
+		}
+
+		m_flOnEntranceSince = 0.f;
+		F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
+		return true;
+	}
+	case EState::CampExit:
+	{
+		auto pExit = GetTeleporter(m_iCampIdx, 1);
+		if (!pExit)
+		{
+			if (flCurTime >= m_flScanClock)
+			{
+				pExit = FindClosestTeleporter(pLocal, 1);
+				m_iCampIdx = pExit ? pExit->entindex() : -1;
+				m_flScanClock = flCurTime + 2.f;
+			}
+
+			if (!pExit)
+			{
+				m_eState = EState::CampDispenser;
+				m_iCampIdx = -1;
+				m_flScanClock = 0.f;
+				return true;
+			}
+		}
+
+		return CampAt(pLocal, pExit);
+	}
+	case EState::CampDispenser:
+	{
+		auto pDispenser = GetDispenser(m_iCampIdx);
+		if (!pDispenser)
+		{
+			if (flCurTime >= m_flScanClock)
+			{
+				pDispenser = FindClosestDispenser(pLocal);
+				m_iCampIdx = pDispenser ? pDispenser->entindex() : -1;
+				m_flScanClock = flCurTime + 2.f;
+			}
+
+			if (!pDispenser)
+			{
+				m_eState = EState::ToEntrance;
+				m_iEntranceIdx = -1;
+				m_flScanClock = 0.f;
+				return true;
+			}
+		}
+
+		if (flCurTime >= m_flPairClock)
+		{
+			m_flPairClock = flCurTime + 5.f;
+			if (FindClosestTeleporter(pLocal, 0) && FindClosestTeleporter(pLocal, 1))
+			{
+				m_eState = EState::ToEntrance;
+				m_iEntranceIdx = -1;
+				m_flScanClock = 0.f;
+				return true;
+			}
+		}
+
+		return CampAt(pLocal, pDispenser);
+	}
+	}
+
+	Reset();
+	return false;
+}
+
+void CNavBotMVMSniper::Reset()
+{
+	m_eState = EState::ToEntrance;
+	m_iEntranceIdx = -1;
+	m_iCampIdx = -1;
+	m_flLastEntranceDist = FLT_MAX;
+	m_flOnEntranceSince = 0.f;
+	m_flScanClock = 0.f;
+	m_flPairClock = 0.f;
+}

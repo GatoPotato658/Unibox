@@ -13,6 +13,7 @@
 #include "../../Features/Killstreak/Killstreak.h"
 #include "../../Features/NavBot/NavEngine/NavEngine.h"
 #include "../../Features/NavBot/NavBotJobs/NavBotJobs.h"
+#include "../../Features/Commands/Commands.h"
 #ifdef TEXTMODE
 #include "../../Features/Misc/NamedPipe/NamedPipe.h"
 #endif
@@ -20,8 +21,8 @@
 
 bool CEventListener::Initialize()
 {
-	std::vector<const char*> vEvents = { 
-		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify"
+	std::vector<const char*> vEvents = {
+		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify", "party_chat"
 	};
 
 	for (auto szEvent : vEvents)
@@ -30,6 +31,9 @@ bool CEventListener::Initialize()
 
 		if (!I::GameEventManager->FindListener(this, szEvent))
 		{
+			if (!strcmp(szEvent, "party_chat")) // depends on game state, not critical
+				continue;
+
 			U::Core.AppendFailText(std::format("Failed to add listener: {}", szEvent).c_str());
 			m_bFailed = true;
 		}
@@ -115,6 +119,16 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 #endif
 		F::NavEngine.CancelPath();
 		F::NavBotDanger.ResetSpawn();
+		F::NavBotMVMSniper.Reset();
+		return;
+	}
+	case FNV1A::Hash32Const("party_chat"):
+	{
+		if (pEvent->GetInt("type") != 1) // k_eTFPartyChatType_MemberChat
+			return;
+
+		const uint64_t uSteamID = std::strtoull(pEvent->GetString("steamid"), nullptr, 10);
+		F::Commands.RunChat(pEvent->GetString("text"), uint32_t(uSteamID & 0xFFFFFFFFull), true);
 		return;
 	}
 	case FNV1A::Hash32Const("revive_player_notify"):

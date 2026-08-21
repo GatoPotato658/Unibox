@@ -37,6 +37,9 @@ bool CNavBotReload::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	if (!tReloadrunCooldown.Run(1.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload;
 
+	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload && F::NavEngine.IsPathing())
+		return true;
+
 	// Get closest enemy to vicheck
 	const auto tClosestEnemy = NavJobUtils::FindClosestTargetEnemy(pLocal, pWeapon);
 	if (!tClosestEnemy.m_pPlayer)
@@ -61,6 +64,9 @@ bool CNavBotReload::RunSafe(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	// Re-calc only every once in a while
 	if (!tReloadrunCooldown.Run(1.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload;
+
+	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload && F::NavEngine.IsPathing())
+		return true;
 
 	// If pathing try to avoid going to our current destination until we fully reload
 	Vector vCurrentDestination;

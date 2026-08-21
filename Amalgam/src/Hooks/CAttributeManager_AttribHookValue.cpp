@@ -9,6 +9,18 @@ static inline int ColorToInt(Color_t col)
     return col.r << 16 | col.g << 8 | col.b;
 }
 
+static int AttribHookIntOriginal(void* pOriginal, int value, const char* name, void* econent, void* buffer, bool isGlobalConstString)
+{
+    __try
+    {
+        return reinterpret_cast<int(__fastcall*)(int, const char*, void*, void*, bool)>(pOriginal)(value, name, econent, buffer, isGlobalConstString);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return value;
+    }
+}
+
 MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(), int,
 	int value, const char* name, void* econent, void* buffer, bool isGlobalConstString)
 {
@@ -36,6 +48,6 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 	if (!econent || !name)
 		return value;
 
-	return CALL_ORIGINAL(value, name, econent, buffer, isGlobalConstString);
+	return AttribHookIntOriginal(Hook.As<void*>(), value, name, econent, buffer, isGlobalConstString);
 }
 #endif

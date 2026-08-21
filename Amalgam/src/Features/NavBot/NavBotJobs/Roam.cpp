@@ -105,6 +105,13 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 			if (auto pClosestNav = F::NavEngine.FindClosestNavArea(vTarget))
 			{
+				if (m_pDefendSpotArea && F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol
+					&& F::NavEngine.IsPathing() && m_pDefendSpotArea->m_vCenter.DistTo(vLocalOrigin) > 250.f)
+				{
+					m_bDefending = true;
+					return true;
+				}
+
 				const auto [pClosestEnemy, flBestDist] = FindClosestThreatToArea(pLocal, pWeapon, pClosestNav);
 
 				Vector vVischeckPoint;
@@ -126,6 +133,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 					}
 					if (F::NavEngine.NavTo(tHidingSpot.first->m_vCenter, PriorityListEnum::Patrol, true, !F::NavEngine.IsPathing()))
 					{
+						m_pDefendSpotArea = tHidingSpot.first;
 						m_bDefending = true;
 						return true;
 					}
@@ -344,6 +352,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 void CNavBotRoam::Reset()
 {
 	m_pCurrentTargetArea = nullptr;
+	m_pDefendSpotArea = nullptr;
 	m_pLastConnectedSeed = nullptr;
 	m_pLastMap = nullptr;
 	m_iConsecutiveFails = 0;

@@ -151,6 +151,9 @@ class CNavBotDanger
 {
 private:
 	CNavArea* m_pSpawnExitArea = nullptr;
+	CNavArea* m_pEscapeTargetArea = nullptr;
+	Timer m_tEscapeRefresh{};
+	CNavArea* m_pProjectileTargetArea = nullptr;
 public:
 	bool EscapeDanger(CTFPlayer* pLocal);
 	bool EscapeProjectiles(CTFPlayer* pLocal);
@@ -190,6 +193,7 @@ private:
 	int m_iPositionInFormation = -1;
 	float m_flFormationDistance = 120.0f;
 	Timer m_tUpdateFormationTimer;
+	Timer m_tFormationNavTimer{};
 	std::vector<std::pair<uint32_t, Vector>> m_vLocalBotPositions;
 public:
 	void UpdateLocalBotPositions(CTFPlayer* pLocal);
@@ -219,6 +223,7 @@ private:
 	std::unordered_set<CNavArea*> m_sConnectedAreas;
 
 	CNavArea* m_pCurrentTargetArea = nullptr;
+	CNavArea* m_pDefendSpotArea = nullptr;
 	CNavArea* m_pLastConnectedSeed = nullptr;
 	void* m_pLastMap = nullptr;
 
@@ -253,6 +258,33 @@ public:
 	std::wstring m_sFollowTargetName = {};
 };
 
+class CNavBotMVMSniper
+{
+private:
+	enum class EState
+	{
+		ToEntrance,
+		CampExit,
+		CampDispenser
+	};
+
+	CBaseObject* FindClosestTeleporter(CTFPlayer* pLocal, int iObjectMode);
+	CBaseObject* FindClosestDispenser(CTFPlayer* pLocal);
+	bool CampAt(CTFPlayer* pLocal, CBaseEntity* pAnchor);
+
+	EState m_eState = EState::ToEntrance;
+	int m_iEntranceIdx = -1;
+	int m_iCampIdx = -1;
+	float m_flLastEntranceDist = FLT_MAX;
+	float m_flOnEntranceSince = 0.f;
+	float m_flScanClock = 0.f;
+	float m_flPairClock = 0.f;
+
+public:
+	bool Run(CTFPlayer* pLocal);
+	void Reset();
+};
+
 ADD_FEATURE(CNavBotCapture, NavBotCapture);
 ADD_FEATURE(CNavBotEngineer, NavBotEngineer);
 ADD_FEATURE(CNavBotDanger, NavBotDanger);
@@ -263,3 +295,4 @@ ADD_FEATURE(CNavBotReload, NavBotReload);
 ADD_FEATURE(CNavBotRoam, NavBotRoam);
 ADD_FEATURE(CNavBotSnipe, NavBotSnipe);
 ADD_FEATURE(CNavBotStayNear, NavBotStayNear);
+ADD_FEATURE(CNavBotMVMSniper, NavBotMVMSniper);

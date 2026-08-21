@@ -202,6 +202,9 @@ void CTelemetryBlocker::RestoreFloatConVar(const char* sName, float flOriginal, 
 
 void CTelemetryBlocker::Initialize()
 {
+	if (Vars::Misc::TelemetryBlocker::Mode.Value <= Vars::Misc::TelemetryBlocker::ModeEnum::Off)
+		return;
+
 	ApplyConVarToBeDisabled("tf_stats_track", m_iTfStatsTrackOrig, m_bTfStatsTrackFound);
 	ApplyConVarToBeDisabled("steamworks_stats_disable", m_iSteamworksStatsDisableOrig, m_bSteamworksStatsDisableFound);
 	ApplyConVarToBeDisabled("steamworks_sessionid_client", m_iSteamworksSessionIdClientOrig, m_bSteamworksSessionIdClientFound);

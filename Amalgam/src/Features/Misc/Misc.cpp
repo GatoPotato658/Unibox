@@ -1851,6 +1851,19 @@ bool CMisc::BuyBotWalkAwayFromStation(CTFPlayer* pLocal, CUserCmd* pCmd, const V
 	return true;
 }
 
+static bool HasVaccinator(CTFPlayer* pLocal)
+{
+	for (int i = 0; i < MAX_WEAPONS; i++)
+	{
+		const auto pWeapon = pLocal->GetWeaponFromSlot(i);
+		if (!pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_MEDIGUN)
+			continue;
+		if (pWeapon->As<CWeaponMedigun>()->GetMedigunType() == MEDIGUN_RESIST)
+			return true;
+	}
+	return false;
+}
+
 void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
 	if (!Vars::Misc::MannVsMachine::BuyBot.Value)
@@ -1869,6 +1882,9 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 		ResetBuyBot();
 		return;
 	}
+
+	if (!HasVaccinator(pLocal))
+		m_bBuybotCashLimitReached = true;
 
 	if (Vars::Misc::MannVsMachine::MaxCash.Value > 0 && pLocal->m_nCurrency() >= Vars::Misc::MannVsMachine::MaxCash.Value)
 		m_bBuybotCashLimitReached = true;
@@ -2139,6 +2155,31 @@ void CMisc::ResetBuyBot()
 	m_bBuybotCashLimitReached = false;
 	m_bBuybotFinishedUpgrades = false;
 	m_vBuybotStationTarget = {};
+}
+
+void CMisc::MvMFix()
+{
+	auto pGameRules = I::TFGameRules();
+	if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine())
+	{
+		SDK::Output("cat_mvm_fix", "Not in Mann vs. Machine");
+		return;
+	}
+
+	Vars::Misc::MannVsMachine::BuyBot.Value = true;
+	m_bBuybotCashLimitReached = true;
+	m_bBuybotFinishedUpgrades = false;
+	m_vBuybotStationTarget = {};
+	m_bBuybotUsingNav = false;
+	m_flBuybotStationPathStart = 0.f;
+
+	SDK::Output("cat_mvm_fix", "Buybot marked as funded, reconnecting");
+	I::EngineClient->ClientCmd_Unrestricted("retry");
+}
+
+bool CMisc::IsBuyBotBusy() const
+{
+	return Vars::Misc::MannVsMachine::BuyBot.Value && !m_bBuybotFinishedUpgrades;
 }
 
 void CMisc::OnBuyBotClassChangeBlocked()

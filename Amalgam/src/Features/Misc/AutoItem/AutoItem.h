@@ -97,6 +97,7 @@ public:
 	}
 
 	void Rent(item_definition_index_t iItemDef);
+	void MvmRent();
 	void Run(CTFPlayer* pLocal);
 };
 

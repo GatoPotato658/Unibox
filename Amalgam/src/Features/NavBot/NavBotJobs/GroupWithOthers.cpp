@@ -202,6 +202,9 @@ bool CNavBotGroup::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		iConsecutiveFailures = 0;
 	vLastTargetPos = vTargetPos;
 	// Try to navigate to our position in formation
+	if (!m_tFormationNavTimer.Run(0.5f) && F::NavEngine.IsPathing())
+		return true;
+
 	if (F::NavEngine.NavTo(vTargetPos, PriorityListEnum::Patrol, true, !F::NavEngine.IsPathing()))
 		return true;
 

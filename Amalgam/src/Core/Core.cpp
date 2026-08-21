@@ -157,8 +157,6 @@ void CCore::Load()
 	if (m_bUnload = m_bFailed2 = !U::Hooks.Initialize() || !U::BytePatches.Initialize() || !H::Events.Initialize())
 		return;
 
-	F::TelemetryBlocker.Initialize();
-
 #ifndef TEXTMODE
 	F::Materials.RequestLoad();
 #endif
@@ -170,6 +168,7 @@ void CCore::Load()
 	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
 	if (!sVisualConfig.empty())
 		F::Configs.LoadVisual(sVisualConfig, false);
+	F::TelemetryBlocker.Initialize();
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
 	SDK::Output("unibox", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }

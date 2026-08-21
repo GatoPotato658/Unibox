@@ -9,6 +9,7 @@ class CCommands
 {
 public:
     bool Run(const char* sCmd, std::deque<const char*>& vArgs);
+    void RunChat(const std::string& sMsg, uint32_t uAccountID, bool bPartyChat);
 };
 
 ADD_FEATURE(CCommands, Commands);

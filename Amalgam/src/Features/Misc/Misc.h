@@ -138,6 +138,8 @@ public:
 	void SetAutoBalanceTeamChangePending(bool bPending) { m_bAutoBalanceTeamChangePending = bPending; }
 	void AutoMvmReadyUp();
 	void OnBuyBotClassChangeBlocked();
+	void MvMFix();
+	bool IsBuyBotBusy() const;
 	void OnVoteStart(int iCaller, int iTarget, const std::string& sTarget);
 	void OnChatMessage(int iEntIndex, const std::string& sName, const std::string& sMsg);
 	std::string ReplaceTags(std::string sMsg, std::string sTarget = "", std::string sInitiator = "", std::string sKiller = "", std::string sVictim = "");

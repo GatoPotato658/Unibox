@@ -209,6 +209,7 @@
     <ClCompile Include="src\Features\NavBot\NavBotJobs\StayNear.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Capture.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Melee.cpp" />
+    <ClCompile Include="src\Features\NavBot\NavBotJobs\MVMSniper.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\GetSupplies.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Reload.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotJobs\Engineer.cpp" />

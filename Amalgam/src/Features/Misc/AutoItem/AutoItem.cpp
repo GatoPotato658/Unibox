@@ -71,6 +71,29 @@ void CAutoItem::Rent(item_definition_index_t iItemDef)
 	S::CStorePage_DoPreviewItem.Call<void>(nullptr, iItemDef);
 }
 
+void CAutoItem::MvmRent()
+{
+	constexpr item_definition_index_t iVaccinator = 998;
+	constexpr item_definition_index_t iHeatmaker = 752;
+
+	auto pInventoryManager = I::TFInventoryManager();
+	if (!pInventoryManager)
+	{
+		SDK::Output("cat_mvm_rent", "Inventory manager unavailable", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		return;
+	}
+
+	auto pLocalInventory = pInventoryManager->GetLocalInventory();
+	if (!pLocalInventory)
+	{
+		SDK::Output("cat_mvm_rent", "Local inventory unavailable", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		return;
+	}
+
+	EquipItem(pInventoryManager, pLocalInventory, TF_CLASS_MEDIC, SLOT_SECONDARY, iVaccinator, true, true);
+	EquipItem(pInventoryManager, pLocalInventory, TF_CLASS_SNIPER, SLOT_PRIMARY, iHeatmaker, true, true);
+}
+
 item_definition_index_t CAutoItem::SelectNoisemaker(CTFPlayerInventory* pLocalInventory)
 {
 	for (auto iItemDef : kPreferredNoisemakerDefs)

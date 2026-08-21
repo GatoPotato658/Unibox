@@ -103,14 +103,16 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 		if (bInLowDanger && !bInMediumDanger && !bInHighDanger && F::NavEngine.m_eCurrentPriority != 0)
 			return false;
 
-		static CNavArea* pTargetArea = nullptr;
 		// Already escaping and our target is still valid: keep moving, but recover if pathing was lost.
-		if (bActiveEscapeJob && pTargetArea && !pBlacklist->contains(pTargetArea))
+		if (bActiveEscapeJob && m_pEscapeTargetArea && !pBlacklist->contains(m_pEscapeTargetArea))
 		{
 			if (F::NavEngine.IsPathing())
 				return true;
 
-			if (F::NavEngine.NavTo(pTargetArea->m_vCenter, PriorityListEnum::EscapeDanger))
+			if (F::NavEngine.NavTo(m_pEscapeTargetArea->m_vCenter, PriorityListEnum::EscapeDanger))
+				return true;
+
+			if (!m_tEscapeRefresh.Run(1.f))
 				return true;
 		}
 
@@ -196,7 +198,8 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 			if (F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
 			{
-				pTargetArea = pArea;
+				m_pEscapeTargetArea = pArea;
+				m_tEscapeRefresh.Update();
 				return true;
 			}
 		}
@@ -222,7 +225,8 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 						break;
 					if (F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
 					{
-						pTargetArea = pArea;
+						m_pEscapeTargetArea = pArea;
+						m_tEscapeRefresh.Update();
 						return true;
 					}
 				}
@@ -231,7 +235,10 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 	}
 	// No longer in danger
 	else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger)
+	{
+		m_pEscapeTargetArea = nullptr;
 		F::NavEngine.CancelPath();
+	}
 
 	return false;
 }
@@ -278,8 +285,6 @@ static bool IsPositionSafe(Vector vPos, int iLocalTeam)
 
 bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 {
-	static CNavArea* pProjectileTargetArea = nullptr;
-
 	if (!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies) &&
 		!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles))
 		return false;
@@ -291,7 +296,7 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 	// Check if current position is unsafe
 	if (IsPositionSafe(pLocal->GetAbsOrigin(), pLocal->m_iTeamNum()))
 	{
-		pProjectileTargetArea = nullptr;
+		m_pProjectileTargetArea = nullptr;
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger)
 			F::NavEngine.CancelPath();
 		return false;
@@ -302,14 +307,17 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 	if (bActiveEscapeJob && F::NavEngine.IsPathing() && !tProjectileRepathCooldown.Run(0.35f))
 		return true;
 
-	if (bActiveEscapeJob && pProjectileTargetArea &&
-		F::NavEngine.GetFreeBlacklist()->find(pProjectileTargetArea) == F::NavEngine.GetFreeBlacklist()->end() &&
-		IsPositionSafe(pProjectileTargetArea->m_vCenter, pLocal->m_iTeamNum()))
+	if (bActiveEscapeJob && m_pProjectileTargetArea &&
+		F::NavEngine.GetFreeBlacklist()->find(m_pProjectileTargetArea) == F::NavEngine.GetFreeBlacklist()->end() &&
+		IsPositionSafe(m_pProjectileTargetArea->m_vCenter, pLocal->m_iTeamNum()))
 	{
 		if (F::NavEngine.IsPathing())
 			return true;
 
-		if (F::NavEngine.NavTo(pProjectileTargetArea->m_vCenter, PriorityListEnum::EscapeDanger))
+		if (F::NavEngine.NavTo(m_pProjectileTargetArea->m_vCenter, PriorityListEnum::EscapeDanger))
+			return true;
+
+		if (!m_tEscapeRefresh.Run(1.f))
 			return true;
 	}
 
@@ -350,7 +358,8 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 	{
 		if (F::NavEngine.NavTo(tAreaScore.m_pArea->m_vCenter, PriorityListEnum::EscapeDanger))
 		{
-			pProjectileTargetArea = tAreaScore.m_pArea;
+			m_pProjectileTargetArea = tAreaScore.m_pArea;
+			m_tEscapeRefresh.Update();
 			return true;
 		}
 	}
@@ -403,4 +412,6 @@ bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 void CNavBotDanger::ResetSpawn()
 {
 	m_pSpawnExitArea = nullptr;
+	m_pEscapeTargetArea = nullptr;
+	m_pProjectileTargetArea = nullptr;
 }

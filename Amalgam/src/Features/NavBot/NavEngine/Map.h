@@ -1,8 +1,6 @@
 #pragma once
 #include "FileReader/CNavFile.h"
 #include <boost/container_hash/hash.hpp>
-#include <boost/uuid/detail/sha1.hpp>
-#include <array>
 #include <queue>
 #include <mutex>
 
@@ -130,8 +128,7 @@ public:
 		const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost);
 
 	NavPoints_t DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, bool bIsOneWay);
-	DropdownHint_t HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos, bool bIsOneWay);
-	const std::vector<CachedPathCrumb_t>* GetConnectionCrumbs(CNavArea* pFrom, CNavArea* pTo) const;
+	DropdownHint_t HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos);
 
 	bool IsOneWay(CNavArea* pFrom, CNavArea* pTo) const;
 	bool HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const;
@@ -158,46 +155,6 @@ public:
 	}
 
 private:
-	struct CrumbGraphEdge_t
-	{
-		size_t m_uTo = 0;
-		float m_flCost = 0.f;
-		bool m_bRequiresDrop = false;
-		float m_flDropHeight = 0.f;
-		float m_flApproachDistance = 0.f;
-		Vector m_vApproachDir = {};
-	};
-
-	struct CrumbGraphNode_t
-	{
-		CNavArea* m_pNavArea = nullptr;
-		Vector m_vPos = {};
-		std::vector<CrumbGraphEdge_t> m_vEdges;
-	};
-
-	struct CrumbPathNode_t
-	{
-		float m_flG = std::numeric_limits<float>::max();
-		float m_flF = std::numeric_limits<float>::max();
-		size_t m_uParent = std::numeric_limits<size_t>::max();
-		const CrumbGraphEdge_t* m_pIncoming = nullptr;
-		uint32_t m_uQueryId = 0;
-	};
-
-	std::vector<CrumbGraphNode_t> m_vCrumbGraph;
-	std::unordered_map<CNavArea*, std::vector<size_t>> m_mAreaCrumbNodes;
-	std::vector<CrumbPathNode_t> m_vCrumbPathNodes;
-	std::array<uint8_t, 20> m_aCrumbGraphSha = {};
-	uint32_t m_uCrumbQueryId = 0;
-
-	std::array<uint8_t, 20> ComputeNavMeshSha() const;
-	void BuildCrumbGraph();
-	size_t AddCrumbGraphNode(CNavArea* pArea, const Vector& vPos);
-	void AddCrumbGraphEdge(size_t uFrom, size_t uTo, bool bBidirectional, bool bRequiresDrop = false,
-		float flDropHeight = 0.f, float flApproachDistance = 0.f, const Vector& vApproachDir = {});
-	size_t FindNearestCrumbGraphNode(CNavArea* pArea, const Vector& vPos) const;
-	bool IsGraphEdgeUsable(const CrumbGraphNode_t& tFrom, const CrumbGraphEdge_t& tEdge, const SolveContext& tCtx,
-		float& flCost) const;
 	struct PathNode_t
 	{
 		float m_g = std::numeric_limits<float>::max();
@@ -213,6 +170,7 @@ private:
 	struct AdjacentEntry { CNavArea* m_pArea; float m_flCost; };
 	void GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::vector<AdjacentEntry>& vOut);
 	size_t GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const;
+	const std::vector<CachedPathCrumb_t>* GetEdgeCrumbs(CNavArea* pFrom, CNavArea* pTo, const SolveContext& tCtx);
 	void CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CNavArea* pTo, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown) const;
 	float EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown, int iTeam) const;
 };

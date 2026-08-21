@@ -119,14 +119,14 @@ static bool ShouldJumpForNavObstacle(CTFPlayer* pLocal, const Vector& vMoveDir, 
 	CGameTrace lowTrace{};
 	const Vector vStart = vOrigin + Vector(0.f, 0.f, 18.f);
 	const Vector vEnd = vStart + vMoveDir * 54.f;
-	SDK::TraceHull(vStart, vEnd, Vector(-18.f, -18.f, 0.f), Vector(18.f, 18.f, 36.f), MASK_PLAYERSOLID, &filter, &lowTrace);
+	SDK::TraceHull(vStart, vEnd, Vector(-23.99f, -23.99f, 0.f), Vector(23.99f, 23.99f, 36.f), MASK_PLAYERSOLID, &filter, &lowTrace);
 	if (lowTrace.fraction >= 1.f)
 		return false;
 
 	CGameTrace highTrace{};
 	const Vector vHighStart = vOrigin + Vector(0.f, 0.f, PLAYER_JUMP_HEIGHT);
 	const Vector vHighEnd = vHighStart + vMoveDir * 54.f;
-	SDK::TraceHull(vHighStart, vHighEnd, Vector(-18.f, -18.f, 0.f), Vector(18.f, 18.f, 36.f), MASK_PLAYERSOLID, &filter, &highTrace);
+	SDK::TraceHull(vHighStart, vHighEnd, Vector(-23.99f, -23.99f, 0.f), Vector(23.99f, 23.99f, 36.f), MASK_PLAYERSOLID, &filter, &highTrace);
 	return highTrace.fraction > lowTrace.fraction + 0.2f;
 }
 
@@ -178,18 +178,24 @@ bool CNavEngine::IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFro
 	Vector vDelta = vTo - vFrom; vDelta.z = 0.f;
 	if (vDelta.Length() < 16.f) return true;
 
-	Vector vStart = vFrom; vStart.z += PLAYER_JUMP_HEIGHT;
-	Vector vEnd = vTo;     vEnd.z += PLAYER_JUMP_HEIGHT;
+	Vector vRight(-vDelta.y, vDelta.x, 0.f);
+	vRight.Normalize();
+	const Vector vOffset = vRight * HALF_PLAYER_WIDTH;
+
+	Vector vStart = vFrom; vStart.z += PLAYER_CROUCHED_JUMP_HEIGHT;
+	Vector vEnd = vTo;     vEnd.z += PLAYER_CROUCHED_JUMP_HEIGHT;
+
 	CTraceFilterNavigation tFilter(pLocal);
 	CGameTrace tTrace{};
-	SDK::Trace(vStart, vEnd, nMask, &tFilter, &tTrace);
-	return tTrace.fraction > 0.12f;
+	SDK::Trace(vStart - vOffset, vEnd - vOffset, nMask, &tFilter, &tTrace);
+	if (tTrace.DidHit()) return false;
+	SDK::Trace(vStart + vOffset, vEnd + vOffset, nMask, &tFilter, &tTrace);
+	return !tTrace.DidHit();
 }
 
 bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority, bool bShouldRepath, bool bNavToLocal, bool bIgnoreTraces)
 {
 	if (!m_pMap || !m_pPathWorker) return false;
-	RefreshCrumbGraph();
 
 	auto pLocal = H::Entities.GetLocal();
 	if (!pLocal) return false;
@@ -250,11 +256,16 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 
 bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CTFPlayer* pLocal)
 {
-	if (tResult.m_vCrumbs.empty()) return false;
+	return StoreValidatedCrumbs(tResult.m_vCrumbs, pLocal);
+}
+
+bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCrumbs, CTFPlayer* pLocal)
+{
+	if (vCrumbs.empty()) return false;
 
 	m_vCrumbs.clear();
-	m_vCrumbs.reserve(tResult.m_vCrumbs.size());
-	for (const auto& tCached : tResult.m_vCrumbs)
+	m_vCrumbs.reserve(vCrumbs.size());
+	for (const auto& tCached : vCrumbs)
 	{
 		if (!tCached.m_pNavArea || !m_pMap->IsAreaValid(tCached.m_pNavArea))
 		{
@@ -273,17 +284,7 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 		m_vCrumbs.push_back(tCrumb);
 	}
 
-	if (m_vCrumbs.size() >= 2)
-	{
-		const Vector vLocalOrigin = pLocal->GetAbsOrigin();
-		const Vector vFirst = m_vCrumbs[0].m_vPos;
-		const Vector vSecond = m_vCrumbs[1].m_vPos;
-		const Vector vToSecond = vSecond - vFirst;
-		if (vToSecond.LengthSqr() > 0.001f && (vLocalOrigin - vFirst).Dot(vToSecond) > 0.f)
-			m_vCrumbs.erase(m_vCrumbs.begin());
-	}
-
-	if (!tResult.m_bIgnoreTraces && !m_vCrumbs.empty())
+	if (!m_bIgnoreTraces && !m_vCrumbs.empty())
 	{
 		const int iExpire = TICKCOUNT_TIMESTAMP(std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45));
 		std::lock_guard lock(m_pMap->m_mutex);
@@ -336,27 +337,6 @@ bool CNavEngine::BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CT
 		}
 	}
 
-	return true;
-}
-
-bool CNavEngine::RefreshCrumbGraph()
-{
-	if (!m_pMap || !m_tCrumbGraphCheckTimer.Run(0.5f))
-		return false;
-	if (!m_pMap->RefreshCrumbGraph(false))
-		return false;
-
-	const bool bWasPathing = IsPathing();
-	const auto ePriority = m_eCurrentPriority;
-	m_uWorldGeneration++;
-	if (m_pPathWorker) m_pPathWorker->CancelAll();
-	ClearPathState();
-	m_uPendingRequestId = 0;
-	if (bWasPathing && ePriority != PriorityListEnum::None)
-	{
-		m_bRepathRequested = true;
-		m_iNextRepathTick = TICKCOUNT_TIMESTAMP(0.05f);
-	}
 	return true;
 }
 
@@ -714,16 +694,45 @@ void CNavEngine::AbandonPath(const std::string& sReason)
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
 	if (m_bRepathOnFail || bStuck)
 	{
-		m_bRepathRequested = true;
-		const float flDelay = (sReason.find("Blacklisted") != std::string::npos
-			|| sReason.find("Stuck") != std::string::npos) ? 0.45f : 0.2f;
-		m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(flDelay));
+		if (SolveInline())
+			m_bRepathRequested = false;
+		else
+		{
+			m_bRepathRequested = true;
+			const float flDelay = (sReason.find("Blacklisted") != std::string::npos
+				|| sReason.find("Stuck") != std::string::npos) ? 0.45f : 0.2f;
+			m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(flDelay));
+		}
 		m_bRepathOnFail = false;
 	}
 	else
 	{
 		m_eCurrentPriority = PriorityListEnum::None;
 	}
+}
+
+bool CNavEngine::SolveInline()
+{
+	auto pLocal = H::Entities.GetLocal();
+	if (!pLocal || !m_pMap || !IsReady()) return false;
+	if (F::Ticks.m_bWarp || F::Ticks.m_bDoubletap) return false;
+	if (!GetLocalNavArea()) return false;
+
+	CNavArea* pDestArea = FindClosestNavArea(m_vLastDestination, false);
+	if (!pDestArea) return false;
+
+	std::vector<CachedPathCrumb_t> vCrumbs;
+	{
+		std::lock_guard lock(m_pMap->m_mutex);
+		const int iResult = m_pMap->SolveCrumbs(pLocal->GetAbsOrigin(), m_pLocalArea, m_vLastDestination, pDestArea,
+			CMap::BuildSolveContext(), vCrumbs, nullptr);
+		if (iResult != 0 && iResult != 3) return false;
+	}
+
+	if (!StoreValidatedCrumbs(vCrumbs, pLocal) || m_vCrumbs.empty()) return false;
+
+	m_uPendingRequestId = 0;
+	return true;
 }
 
 void CNavEngine::RecordStuckFailure()
@@ -848,7 +857,6 @@ void CNavEngine::UpdateRespawnRooms()
 					m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
 			}
 
-	m_pMap->RefreshCrumbGraph(false);
 	m_bUpdatedRespawnRooms = true;
 }
 
@@ -926,7 +934,6 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (!m_bUpdatedRespawnRooms) UpdateRespawnRooms();
 
-	RefreshCrumbGraph();
 	PollPathWorker();
 
 	if (!pLocal->IsAlive() || F::FollowBot.m_bActive)
@@ -1038,8 +1045,8 @@ StuckPhase CNavEngine::TickStuckSample(const Vector& vLocalOrigin, const Vector&
 	m_iNoProgressSamples++;
 
 	const float flDetectTime = std::clamp(static_cast<float>(Vars::Misc::Movement::NavEngine::StuckDetectTime.Value), 0.8f, 8.f);
-	if (!m_tLastProgressTimer.Check(flDetectTime * 0.35f)) return StuckPhase::Idle;
-	if (!m_tLastProgressTimer.Check(flDetectTime * 0.55f)) return StuckPhase::Nudge;
+	if (!m_tLastProgressTimer.Check(flDetectTime * 0.30f)) return StuckPhase::Idle;
+	if (!m_tLastProgressTimer.Check(flDetectTime * 0.40f)) return StuckPhase::Nudge;
 	if (!m_tLastProgressTimer.Check(flDetectTime)) return StuckPhase::Jump;
 	return StuckPhase::Fail;
 }
@@ -1163,14 +1170,12 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 	}
 
 	constexpr float kDefaultReachRadius = 50.f;
-	constexpr float kDropReachRadius = 28.f;
 
 	Vector vCrumbTarget{};
 	Vector vMoveTarget{};
 	Vector vMoveDir{};
 	bool bDropCrumb = false;
 	bool bHasMoveDir = false;
-	float flReachRadius = kDefaultReachRadius;
 	size_t nConsumed = 0;
 	int iLoopLimit = 32;
 
@@ -1221,8 +1226,8 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			if (bDropCrumb)
 			{
 				float flPush = tActive.m_flApproachDistance;
-				if (flPush <= 0.f) flPush = std::clamp(tActive.m_flDropHeight * 0.5f, PLAYER_WIDTH * 0.8f, PLAYER_WIDTH * 2.5f);
-				else flPush = std::clamp(flPush, PLAYER_WIDTH * 0.8f, PLAYER_WIDTH * 2.5f);
+				if (flPush <= 0.f) flPush = std::clamp(tActive.m_flDropHeight * 0.5f, PLAYER_WIDTH * 0.8f, PLAYER_WIDTH * 1.5f);
+				else flPush = std::clamp(flPush, PLAYER_WIDTH * 0.8f, PLAYER_WIDTH * 1.5f);
 				vMoveTarget += vMoveDir * flPush;
 			}
 		}
@@ -1232,14 +1237,12 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		}
 		m_vCurrentPathDir = vMoveDir;
 
-		flReachRadius = bDropCrumb ? kDropReachRadius : kDefaultReachRadius;
-
 		Vector vDelta = vCrumbTarget - vLocalOrigin;
 		Vector vDeltaPlanar = vDelta; vDeltaPlanar.z = 0.f;
 		const float flVerticalDelta = std::fabs(vDelta.z);
 		const float flVerticalTol = std::clamp(PLAYER_JUMP_HEIGHT * 0.75f, 26.f, 42.f);
 
-		if (!bDropCrumb && vDeltaPlanar.LengthSqr() < flReachRadius * flReachRadius && flVerticalDelta <= flVerticalTol)
+		if (!bDropCrumb && vDeltaPlanar.LengthSqr() < kDefaultReachRadius * kDefaultReachRadius && flVerticalDelta <= flVerticalTol)
 		{
 			m_tLastCrumb = tActive;
 			nConsumed++;
@@ -1290,6 +1293,18 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 
 	if (!bDropCrumb && !NavRuntime::CanUseNavJump(pLocal, pWeapon) && ShouldJumpForNavObstacle(pLocal, vMoveDir, vCrumbTarget))
 	{
+		CNavArea* pFrom = m_tLastCrumb.m_pNavArea ? m_tLastCrumb.m_pNavArea : m_pLocalArea;
+		CNavArea* pTo = m_tCurrentCrumb.m_pNavArea ? m_tCurrentCrumb.m_pNavArea : m_pLocalArea;
+		if (pFrom && pTo && m_pMap->IsAreaValid(pFrom) && m_pMap->IsAreaValid(pTo))
+		{
+			std::lock_guard lock(m_pMap->m_mutex);
+			auto& tEntry = m_pMap->m_mVischeckCache[std::pair<CNavArea*, CNavArea*>(pFrom, pTo)];
+			tEntry.m_iExpireTick = TICKCOUNT_TIMESTAMP(3.f);
+			tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
+			tEntry.m_bPassable = false;
+			tEntry.m_bStuckBlacklist = true;
+			tEntry.m_flCachedCost = std::numeric_limits<float>::max();
+		}
 		AbandonPath("Path requires jump while scoped/revved");
 		return;
 	}
@@ -1320,12 +1335,12 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 				return true;
 			}();
 
-		const bool bShouldJumpNow = ePhase == StuckPhase::Jump
-			|| (ePhase == StuckPhase::Nudge && m_iNoProgressSamples >= 2)
+		const bool bShouldJumpNow = ePhase == StuckPhase::Nudge
+			|| ePhase == StuckPhase::Jump
 			|| ShouldJumpForNavObstacle(pLocal, vMoveDir, vCrumbTarget);
 		m_bUnstucking = m_bUnstucking || bShouldJumpNow;
 
-		if (bShouldJumpNow && bCanJump && NavRuntime::CanIssueNavJump(pWeapon, pCmd) && pLocal->OnSolid() && tLastJump.Check(0.35f))
+		if (bShouldJumpNow && bCanJump && NavRuntime::CanIssueNavJump(pWeapon, pCmd) && pLocal->OnSolid() && tLastJump.Check(0.25f))
 		{
 			F::BotUtils.ForceJump();
 			m_iStuckJumpAttempts++;
@@ -1335,6 +1350,7 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		switch (ePhase)
 		{
 		case StuckPhase::Nudge:
+			m_iStuckSide *= -1;
 			if (bHasMoveDir)
 			{
 				Vector vSide(-vMoveDir.y, vMoveDir.x, 0.f);
@@ -1348,8 +1364,7 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 				Vector vSide(-vMoveDir.y, vMoveDir.x, 0.f);
 				vMoveTarget += vSide * (PLAYER_WIDTH * 0.65f * static_cast<float>(m_iStuckSide));
 			}
-			if (m_iNoProgressSamples % 2 == 0)
-				m_iStuckSide *= -1;
+			m_iStuckSide *= -1;
 			break;
 
 		case StuckPhase::Fail:
