@@ -373,16 +373,24 @@ void CGlow::Initialize()
 {
 	int nWidth, nHeight; I::MatSystemSurface->GetScreenSize(nWidth, nHeight);
 
-	if (!m_pMatGlowColor)
+	if (!m_pMatGlowColor || m_pMatGlowColor->IsErrorMaterial())
 	{
-		m_pMatGlowColor = I::MaterialSystem->FindMaterial("dev/glow_color", TEXTURE_GROUP_OTHER);
-		m_pMatGlowColor->IncrementReferenceCount();
+		if (m_pMatGlowColor)
+			m_pMatGlowColor->DecrementReferenceCount();
+
+		m_pMatGlowColor = nullptr;
+		auto pMaterial = I::MaterialSystem->FindMaterial("dev/glow_color", TEXTURE_GROUP_OTHER);
+		if (pMaterial && !pMaterial->IsErrorMaterial())
+		{
+			m_pMatGlowColor = pMaterial;
+			m_pMatGlowColor->IncrementReferenceCount();
+		}
 	}
 
-	if (!m_pRenderBuffer1)
+	auto fCreateBuffer = [&](const char* sName, ITexture* pOld)
 	{
-		m_pRenderBuffer1 = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
-			"RenderBuffer1",
+		auto pNew = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
+			sName,
 			nWidth, nHeight,
 			RT_SIZE_LITERAL,
 			IMAGE_FORMAT_RGB888,
@@ -390,22 +398,12 @@ void CGlow::Initialize()
 			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT | TEXTUREFLAGS_EIGHTBITALPHA,
 			CREATERENDERTARGETFLAGS_HDR
 		);
-		m_pRenderBuffer1->IncrementReferenceCount();
-	}
-
-	if (!m_pRenderBuffer2)
-	{
-		m_pRenderBuffer2 = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
-			"RenderBuffer2",
-			nWidth, nHeight,
-			RT_SIZE_LITERAL,
-			IMAGE_FORMAT_RGB888,
-			MATERIAL_RT_DEPTH_SHARED,
-			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT | TEXTUREFLAGS_EIGHTBITALPHA,
-			CREATERENDERTARGETFLAGS_HDR
-		);
-		m_pRenderBuffer2->IncrementReferenceCount();
-	}
+		if (pNew && pNew != pOld)
+			pNew->IncrementReferenceCount();
+		return pNew;
+	};
+	m_pRenderBuffer1 = fCreateBuffer("RenderBuffer1", m_pRenderBuffer1);
+	m_pRenderBuffer2 = fCreateBuffer("RenderBuffer2", m_pRenderBuffer2);
 
 	if (!m_pMatHaloAddToScreen)
 	{
@@ -441,7 +439,6 @@ void CGlow::Unload()
 	if (m_pMatGlowColor)
 	{
 		m_pMatGlowColor->DecrementReferenceCount();
-		m_pMatGlowColor->DeleteIfUnreferenced();
 		m_pMatGlowColor = nullptr;
 	}
 

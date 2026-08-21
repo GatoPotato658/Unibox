@@ -28,14 +28,11 @@ MAKE_HOOK(CTFInput_ApplyMouse, S::CTFInput_ApplyMouse(), void,
 
 	float flOldYaw = pCmd->viewangles.y;
 	float& flNewYaw = viewangles.y;
-	float flDiff = abs(flOldYaw) - abs(flNewYaw);
-	if (flDiff > flCap)
-	{
-		if (flNewYaw > flOldYaw)
-			flNewYaw = flOldYaw + flCap;
-		else
-			flNewYaw = flOldYaw - flCap;
-	}
+	const float flDelta = Math::ShortDist(flNewYaw, flOldYaw);
+	if (flDelta > flCap)
+		flNewYaw = flOldYaw + flCap;
+	else if (flDelta < -flCap)
+		flNewYaw = flOldYaw - flCap;
 }
 
 MAKE_HOOK(CTFInput_CAM_CapYaw, S::CTFInput_CAM_CapYaw(), float,

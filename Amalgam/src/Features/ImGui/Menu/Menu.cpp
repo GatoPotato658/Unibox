@@ -596,7 +596,7 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::Projectile::SplashPrediction, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::Projectile::Hitboxes, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::Projectile::Modifiers, FDropdownEnum::Right);
-					FSlider(Vars::Aimbot::Projectile::MaxSimulationTime, FSliderEnum::Left);
+					FSlider(Vars::Aimbot::Projectile::MaxSimulationTime, FSliderEnum::Left); FTooltip("Longer = less accuracy, shorter = less shoot candidates");
 					PushTransparent(!Vars::Aimbot::Projectile::StrafePrediction.Value);
 					{
 						FSlider(Vars::Aimbot::Projectile::HitChance, FSliderEnum::Right);

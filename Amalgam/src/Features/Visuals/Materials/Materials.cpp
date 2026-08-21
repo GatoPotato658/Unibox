@@ -36,6 +36,39 @@ bool CMaterials::IsUnloadComplete() const
 	return m_bUnloadComplete.load();
 }
 
+static inline void RemoveVars(Material_t& tMaterial)
+{
+	tMaterial.m_bStored = false;
+	tMaterial.m_phongtint = nullptr;
+	tMaterial.m_envmaptint = nullptr;
+	tMaterial.m_bInvertCull = false;
+	tMaterial.m_bBlockOccluded = false;
+}
+
+static inline void StoreVars(Material_t& tMaterial)
+{
+	if (tMaterial.m_bStored || !tMaterial.m_pMaterial)
+		return;
+
+	tMaterial.m_bStored = true;
+
+	bool bFound; auto $phongtint = tMaterial.m_pMaterial->FindVar("$phongtint", &bFound, false);
+	if (bFound)
+		tMaterial.m_phongtint = $phongtint;
+
+	auto $envmaptint = tMaterial.m_pMaterial->FindVar("$envmaptint", &bFound, false);
+	if (bFound)
+		tMaterial.m_envmaptint = $envmaptint;
+
+	auto $invertcull = tMaterial.m_pMaterial->FindVar("$invertcull", &bFound, false);
+	if (bFound && $invertcull && $invertcull->GetIntValueInternal())
+		tMaterial.m_bInvertCull = true;
+
+	auto $blockoccluded = tMaterial.m_pMaterial->FindVar("$blockoccluded", &bFound, false);
+	if (bFound && $blockoccluded && $blockoccluded->GetIntValueInternal())
+		tMaterial.m_bBlockOccluded = true;
+}
+
 void CMaterials::ServicePendingOperation()
 {
 	const PendingOperation operation = m_ePendingOperation.exchange(PendingOperation::None);
@@ -49,8 +82,13 @@ void CMaterials::ServicePendingOperation()
 			LoadMaterials();
 		break;
 	case PendingOperation::Reload:
-		UnloadMaterials();
-		LoadMaterials();
+		if (!m_bLoaded)
+			LoadMaterials();
+		for (auto& tMaterial : m_mMaterials | std::views::values)
+			RemoveVars(tMaterial);
+		I::MaterialSystem->ReloadMaterials();
+		F::Glow.Initialize();
+		F::CameraWindow.Initialize();
 		break;
 	case PendingOperation::Unload:
 		UnloadMaterials();
@@ -97,39 +135,6 @@ void CMaterials::StoreStruct(const std::string& sName, const std::string& sVMT, 
 	tMaterial.m_bLocked = bLocked;
 
 	m_mMaterials[FNV1A::Hash32(sName.c_str())] = tMaterial;
-}
-
-static inline void StoreVars(Material_t& tMaterial)
-{
-	if (tMaterial.m_bStored || !tMaterial.m_pMaterial)
-		return;
-
-	tMaterial.m_bStored = true;
-
-	bool bFound; auto $phongtint = tMaterial.m_pMaterial->FindVar("$phongtint", &bFound, false);
-	if (bFound)
-		tMaterial.m_phongtint = $phongtint;
-	
-	auto $envmaptint = tMaterial.m_pMaterial->FindVar("$envmaptint", &bFound, false);
-	if (bFound)
-		tMaterial.m_envmaptint = $envmaptint;
-	
-	auto $invertcull = tMaterial.m_pMaterial->FindVar("$invertcull", &bFound, false);
-	if (bFound && $invertcull && $invertcull->GetIntValueInternal())
-		tMaterial.m_bInvertCull = true;
-	
-	auto $blockoccluded = tMaterial.m_pMaterial->FindVar("$blockoccluded", &bFound, false);
-	if (bFound && $blockoccluded && $blockoccluded->GetIntValueInternal())
-		tMaterial.m_bBlockOccluded = true;
-}
-
-static inline void RemoveVars(Material_t& tMaterial)
-{
-	tMaterial.m_bStored = false;
-	tMaterial.m_phongtint = nullptr;
-	tMaterial.m_envmaptint = nullptr;
-	tMaterial.m_bInvertCull = false;
-	tMaterial.m_bBlockOccluded = false;
 }
 
 static inline std::string to_lower(std::string value)
