@@ -50,16 +50,8 @@ bool CMVMController::IsSupportedClass(CTFPlayer* pLocal) const
 {
 	if (!pLocal)
 		return false;
-
-	switch (pLocal->m_iClass())
-	{
-	case TF_CLASS_PYRO:
-	case TF_CLASS_SCOUT:
-	case TF_CLASS_SNIPER:
-		return true;
-	default:
-		return false;
-	}
+	const int iClass = pLocal->m_iClass();
+	return iClass >= TF_CLASS_SCOUT && iClass <= TF_CLASS_ENGINEER;
 }
 
 bool CMVMController::PrimaryHasAmmo() const
@@ -117,20 +109,66 @@ bool CMVMController::GetRobotTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, C
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
-		if (!pEntity || pEntity->IsDormant() || !pEntity->IsPlayer())
+		if (!pEntity || !pEntity->IsPlayer())
 			continue;
 
 		auto pPlayer = pEntity->As<CTFPlayer>();
 		if (!pPlayer->IsAlive() || pPlayer == pLocal || pPlayer->m_iTeamNum() == pLocal->m_iTeamNum())
 			continue;
 
-		const Vector vOrigin = pEntity->GetAbsOrigin();
+		Vector vOrigin;
+		if (pEntity->IsDormant())
+		{
+			if (!F::BotUtils.GetDormantOrigin(pEntity->entindex(), &vOrigin))
+				continue;
+		}
+		else
+		{
+			vOrigin = pEntity->GetAbsOrigin();
+		}
+
 		const float flDistance = vLocalOrigin.DistTo(vOrigin);
 		if (flDistance >= flBestDistance)
 			continue;
 
 		flBestDistance = flDistance;
 		pOut = pEntity;
+	}
+
+	if (!pOut)
+	{
+		for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
+		{
+			if (!pEntity)
+				continue;
+			const ETFClassID iClass = pEntity->GetClassID();
+			if (iClass != ETFClassID::CObjectSentrygun && iClass != ETFClassID::CObjectDispenser && iClass != ETFClassID::CObjectTeleporter)
+				continue;
+			if (iClass == ETFClassID::CObjectTeleporter)
+			{
+				auto pTele = pEntity->As<CObjectTeleporter>();
+				if (pTele && pTele->m_iObjectMode() != 1)
+					continue;
+			}
+			Vector vOrigin;
+			if (pEntity->IsDormant())
+			{
+				if (!F::BotUtils.GetDormantOrigin(pEntity->entindex(), &vOrigin))
+					continue;
+			}
+			else
+			{
+				auto pObject = pEntity->As<CBaseObject>();
+				if (!pObject || pObject->m_bCarried() || pObject->m_bBuilding() || pObject->m_bPlacing())
+					continue;
+				vOrigin = pEntity->GetAbsOrigin();
+			}
+			const float flDistance = vLocalOrigin.DistTo(vOrigin);
+			if (flDistance >= flBestDistance)
+				continue;
+			flBestDistance = flDistance;
+			pOut = pEntity;
+		}
 	}
 
 	return pOut != nullptr;
@@ -262,29 +300,84 @@ bool CMVMController::RunCombat(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase*
 	m_eTask = MVMTaskEnum::Combat;
 	const Vector vTarget = pTarget->GetCenter();
 	const float flDistance = pLocal->GetAbsOrigin().DistTo(vTarget);
-	const float flRange = GetPrimaryRange(pLocal, pWeapon);
+	const int iClass = pLocal->m_iClass();
+	float flRange = GetPrimaryRange(pLocal, pWeapon);
+	if (iClass == TF_CLASS_SCOUT || iClass == TF_CLASS_PYRO)
+		flRange = 110.f;
+	else if (iClass == TF_CLASS_SPY)
+		flRange = 800.f;
 
-	if (pLocal->m_iClass() == TF_CLASS_SCOUT)
+	if (iClass == TF_CLASS_SCOUT)
 	{
 		auto pSecondary = pLocal->GetWeaponFromSlot(SLOT_SECONDARY);
 		if (IsMadMilk(pSecondary) && SlotHasShot(SLOT_SECONDARY) && flDistance <= 620.f)
 			F::BotUtils.SetSlot(pLocal, SLOT_SECONDARY);
+		else if (iClass == TF_CLASS_SCOUT && flDistance <= 90.f)
+			F::BotUtils.SetSlot(pLocal, SLOT_MELEE);
 		else
 			F::BotUtils.SetSlot(pLocal, SLOT_PRIMARY);
+	}
+	else if (iClass == TF_CLASS_SPY)
+	{
+		if (pTarget->IsBuilding())
+		{
+			auto pBuilding = pTarget->As<CBaseObject>();
+			if (!pBuilding->m_bHasSapper() && flDistance < 130.f)
+			{
+				F::BotUtils.SetSlot(pLocal, SLOT_SECONDARY);
+				pCmd->viewangles = Math::CalcAngle(pLocal->GetEyePosition(), vTarget);
+				if (flDistance < 90.f && IsVisibleToShoot(pLocal, pTarget))
+					pCmd->buttons |= IN_ATTACK;
+				if (flDistance > flRange * 0.8f)
+					F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 220.f);
+				return true;
+			}
+		}
+		if (pTarget->IsPlayer())
+		{
+			auto pTargPlayer = pTarget->As<CTFPlayer>();
+			Vec3 vFwd; Math::AngleVectors(pTargPlayer->GetEyeAngles(), &vFwd);
+			vFwd.z = 0.f; Vec3 vToLocal = pLocal->GetAbsOrigin() - pTargPlayer->GetAbsOrigin(); vToLocal.z = 0.f;
+			bool bBehind = vFwd.Normalize() > 0.01f && vToLocal.Normalize() > 0.01f && vFwd.Dot(vToLocal) < -0.3f;
+			auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
+			bool bReady = pKnife && pKnife->GetWeaponID() == TF_WEAPON_KNIFE && pKnife->As<CTFKnife>()->m_bReadyToBackstab();
+			if ((bReady || bBehind) && flDistance < 200.f)
+				F::BotUtils.SetSlot(pLocal, SLOT_MELEE);
+			else
+				F::BotUtils.SetSlot(pLocal, SLOT_PRIMARY);
+		}
+		else
+			F::BotUtils.SetSlot(pLocal, SLOT_PRIMARY);
+	}
+	else if (iClass == TF_CLASS_PYRO && flDistance <= 85.f)
+	{
+		F::BotUtils.SetSlot(pLocal, SLOT_MELEE);
 	}
 	else
 		F::BotUtils.SetSlot(pLocal, SLOT_PRIMARY);
 
 	pCmd->viewangles = Math::CalcAngle(pLocal->GetEyePosition(), vTarget);
 
-	if (flDistance > flRange * 0.8f)
-		F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 220.f);
-	else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
-		F::NavEngine.CancelPath();
+	if (iClass == TF_CLASS_PYRO || iClass == TF_CLASS_SCOUT)
+	{
+		if (flDistance > 85.f)
+			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 150.f);
+		else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
+			F::NavEngine.CancelPath();
+	}
+	else
+	{
+		if (flDistance > flRange * 0.8f)
+			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 220.f);
+		else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
+			F::NavEngine.CancelPath();
+	}
 
 	if (F::BotUtils.m_iCurrentSlot == SLOT_SECONDARY && IsMadMilk(pWeapon) && G::CanPrimaryAttack && flDistance <= 620.f && IsVisibleToShoot(pLocal, pTarget))
 		pCmd->buttons |= IN_ATTACK;
 	else if (F::BotUtils.m_iCurrentSlot == SLOT_PRIMARY && PrimaryHasAmmo() && flDistance <= flRange && IsVisibleToShoot(pLocal, pTarget))
+		pCmd->buttons |= IN_ATTACK;
+	else if (F::BotUtils.m_iCurrentSlot == SLOT_MELEE && flDistance <= 90.f && IsVisibleToShoot(pLocal, pTarget))
 		pCmd->buttons |= IN_ATTACK;
 
 	return true;
@@ -313,15 +406,35 @@ bool CMVMController::RunFrontline(CTFPlayer* pLocal)
 		return false;
 
 	Vector vTarget = {};
-	if (!GetFrontlineTarget(pLocal, vTarget) || vTarget.IsZero())
+	bool bHasTarget = GetFrontlineTarget(pLocal, vTarget) && !vTarget.IsZero();
+	if (!bHasTarget)
+	{
+		RefreshSpawnAnchors(pLocal);
+		if (!m_vSpawnAnchors.empty())
+		{
+			vTarget = m_vSpawnAnchors.front();
+			bHasTarget = true;
+		}
+		else if (auto pArea = F::NavEngine.GetLocalNavArea(pLocal->GetAbsOrigin()))
+		{
+			vTarget = pArea->m_vCenter;
+			Vector vFwd; Math::AngleVectors(pLocal->GetEyeAngles(), &vFwd);
+			vFwd.z = 0.f; vFwd.Normalize();
+			vTarget += vFwd * 600.f;
+			if (auto pNear = F::NavEngine.FindClosestNavArea(vTarget, false))
+				vTarget = pNear->m_vCenter;
+			bHasTarget = true;
+		}
+	}
+	if (!bHasTarget || vTarget.IsZero())
 		return false;
 
 	m_eTask = MVMTaskEnum::Frontline;
 	const float flDistance = pLocal->GetAbsOrigin().DistTo(vTarget);
-	if (flDistance < 420.f && pLocal->m_iClass() != TF_CLASS_SNIPER)
+	if (flDistance < 120.f)
 		return true;
 
-	return F::NavEngine.NavTo(vTarget, PriorityListEnum::MVMFrontline, true, flDistance > 300.f);
+	return F::NavEngine.NavTo(vTarget, PriorityListEnum::MVMFrontline, true, flDistance > 180.f);
 }
 
 void CMVMController::Update()
@@ -362,6 +475,29 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (!m_bActive || !IsSupportedClass(pLocal) || !pCmd || !pWeapon)
 		return false;
 
+	const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+	const int iClass = pLocal->m_iClass();
+	const bool bScoutPyro = iClass == TF_CLASS_SCOUT || iClass == TF_CLASS_PYRO;
+	const bool bSpy = iClass == TF_CLASS_SPY;
+	const bool bFrontline = iClass == TF_CLASS_SNIPER || iClass == TF_CLASS_HEAVYWEAPONS || iClass == TF_CLASS_DEMOMAN || iClass == TF_CLASS_SOLDIER;
+
+	if (bScoutPyro || bSpy)
+	{
+		if (flHealth < 0.56f)
+		{
+			if (F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Health | GetSupplyEnum::Forced))
+			{
+				m_eTask = MVMTaskEnum::Health;
+				return true;
+			}
+			if (F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced))
+			{
+				m_eTask = MVMTaskEnum::Ammo;
+				return true;
+			}
+		}
+	}
+
 	CBaseEntity* pTank = nullptr;
 	if (GetTankTarget(pTank))
 		return RunTank(pCmd, pLocal, pWeapon, pTank);
@@ -374,17 +510,31 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (GetMoneyTarget(pLocal, pMoney) && RunMoney(pCmd, pLocal, pMoney))
 		return true;
 
-	const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
-	if (flHealth < 0.35f && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Health | GetSupplyEnum::Forced))
+	if (bFrontline)
 	{
-		m_eTask = MVMTaskEnum::Health;
-		return true;
+		if (flHealth < 0.78f && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Health | GetSupplyEnum::Forced))
+		{
+			m_eTask = MVMTaskEnum::Health;
+			return true;
+		}
+		if (!DesiredCombatWeaponCanFire(pLocal, pWeapon) && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced))
+		{
+			m_eTask = MVMTaskEnum::Ammo;
+			return true;
+		}
 	}
-
-	if (!DesiredCombatWeaponCanFire(pLocal, pWeapon) && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced))
+	else if (!bScoutPyro && !bSpy)
 	{
-		m_eTask = MVMTaskEnum::Ammo;
-		return true;
+		if (flHealth < 0.35f && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Health | GetSupplyEnum::Forced))
+		{
+			m_eTask = MVMTaskEnum::Health;
+			return true;
+		}
+		if (!DesiredCombatWeaponCanFire(pLocal, pWeapon) && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced))
+		{
+			m_eTask = MVMTaskEnum::Ammo;
+			return true;
+		}
 	}
 
 	return RunFrontline(pLocal);

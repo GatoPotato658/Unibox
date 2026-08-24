@@ -8,7 +8,7 @@ MAKE_SIGNATURE(CTFPartyClient_LoadSavedCasualCriteria, "client.dll", "48 83 79 ?
 MAKE_SIGNATURE(CTFPartyClient_BInQueueForMatchGroup, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B F9 8B DA 8B CA E8 ? ? ? ? 84 C0", 0x0);
 MAKE_SIGNATURE(CTFPartyClient_RequestQueueForMatch, "client.dll", "40 55 56 48 81 EC ? ? ? ? 48 63 F2", 0x0);
 MAKE_SIGNATURE(CTFPartyClient_CancelMatchQueueRequest, "client.dll", "40 55 56 48 83 EC ? 48 63 F2", 0x0);
-MAKE_SIGNATURE(CTFPartyClient_PromoteToLeader, "client.dll", "55 48 89 E5 41 56 41 55 41 54 53 48 89 FB 48 83 EC 40 48 8B 7F 30 48 89 75 A8 48 85 FF 74 ?? 44 0F B6 63 40 45 84 E4 75 ?? 48 83 C4 40 45 31 E4 5B 44 89 E0 41 5C 41 5D 41 5E 5D C3 0F 1F 40 00 48 8B 07 4C 8D 75 A8 4C 89 F6 FF 90 88 00 00 00 83 F8 FF 74 ?? 4C 8D 6D B0 BE AF 19 00 00", 0x0);
+MAKE_SIGNATURE(CTFPartyClient_PromoteToLeader, "client.dll", "48 89 54 24 10 53 48 83 EC 50 48 8B D9 48 8B 49 30 48 85 C9 0F 84 ?? ?? ?? ?? 80 7B 40 00 0F 84 ?? ?? ?? ?? 48 81 C1 B8 00 00 00 48 8D 54 24 68 48 8B 01 FF 50 20 83 F8 FF 0F 84 ?? ?? ?? ?? BA AF 19 00 00 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B 4C 24 40 48 8B 43 38", 0x0);
 MAKE_SIGNATURE(CCasualCriteriaHelper_CCasualCriteriaHelper, "client.dll", "48 89 5C 24 ? 56 57 41 57 48 83 EC ? 0F 57 C0", 0x0);
 MAKE_SIGNATURE(CTFGroupMatchCriteriaProto_DefaultInstance, "client.dll", "48 8B 05 ? ? ? ? 48 8B 50 ? 48 8D 4C 24 ? E8 ? ? ? ? 44 8B 44 24", 0x0);
 MAKE_SIGNATURE(Protobuf_RepeatedStrings_Reserve, "client.dll", "89 54 24 10 53 48 83 EC 20 8B 41 10 48 8B D9 3B C2 7D ?? 03 C0", 0x0);

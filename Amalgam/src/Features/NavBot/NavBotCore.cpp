@@ -400,6 +400,8 @@ static std::wstring BuildJobLabel()
 		return L"MvM frontline";
 	case PriorityListEnum::MVMSniper:
 		return L"MvM sniper";
+	case PriorityListEnum::BuyBot:
+		return L"Buy bot";
 	default:
 		return L"None";
 	}

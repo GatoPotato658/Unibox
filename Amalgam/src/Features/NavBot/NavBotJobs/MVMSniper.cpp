@@ -40,19 +40,56 @@ CBaseObject* CNavBotMVMSniper::FindClosestTeleporter(CTFPlayer* pLocal, int iObj
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
 	{
-		if (!pEntity || pEntity->IsDormant() || pEntity->GetClassID() != ETFClassID::CObjectTeleporter)
+		if (!pEntity || pEntity->GetClassID() != ETFClassID::CObjectTeleporter)
 			continue;
 
 		auto pTeleporter = pEntity->As<CObjectTeleporter>();
 		if (pTeleporter->m_iObjectMode() != iObjectMode || pTeleporter->m_bPlacing() || pTeleporter->m_bCarried() || pTeleporter->m_bDisabled())
 			continue;
 
-		const float flDist = vLocalOrigin.DistToSqr(pTeleporter->GetAbsOrigin());
+		Vector vOrigin;
+		if (pEntity->IsDormant())
+		{
+			if (!F::BotUtils.GetDormantOrigin(pEntity->entindex(), &vOrigin))
+				continue;
+		}
+		else
+			vOrigin = pTeleporter->GetAbsOrigin();
+
+		const float flDist = vLocalOrigin.DistToSqr(vOrigin);
 		if (flDist >= flBestDist)
 			continue;
 
 		flBestDist = flDist;
 		pBest = pTeleporter;
+	}
+
+	if (!pBest)
+	{
+		for (int i = 1; i <= I::ClientEntityList->GetHighestEntityIndex(); ++i)
+		{
+			auto pEntity = I::ClientEntityList->GetClientEntity(i);
+			if (!pEntity || pEntity->GetClassID() != ETFClassID::CObjectTeleporter)
+				continue;
+			auto pTeleporter = pEntity->As<CObjectTeleporter>();
+			if (pTeleporter->m_iObjectMode() != iObjectMode || pTeleporter->m_bPlacing() || pTeleporter->m_bCarried() || pTeleporter->m_bDisabled())
+				continue;
+			if (pTeleporter->m_iTeamNum() != pLocal->m_iTeamNum())
+				continue;
+			Vector vOrigin;
+			if (pEntity->IsDormant())
+			{
+				if (!F::BotUtils.GetDormantOrigin(i, &vOrigin))
+					continue;
+			}
+			else
+				vOrigin = pTeleporter->GetAbsOrigin();
+			const float flDist = vLocalOrigin.DistToSqr(vOrigin);
+			if (flDist >= flBestDist)
+				continue;
+			flBestDist = flDist;
+			pBest = pTeleporter;
+		}
 	}
 
 	return pBest;
@@ -66,19 +103,56 @@ CBaseObject* CNavBotMVMSniper::FindClosestDispenser(CTFPlayer* pLocal)
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
 	{
-		if (!pEntity || pEntity->IsDormant() || pEntity->GetClassID() != ETFClassID::CObjectDispenser)
+		if (!pEntity || pEntity->GetClassID() != ETFClassID::CObjectDispenser)
 			continue;
 
 		auto pDispenser = pEntity->As<CObjectDispenser>();
 		if (pDispenser->m_bPlacing() || pDispenser->m_bCarried() || pDispenser->m_bDisabled())
 			continue;
 
-		const float flDist = vLocalOrigin.DistToSqr(pDispenser->GetAbsOrigin());
+		Vector vOrigin;
+		if (pEntity->IsDormant())
+		{
+			if (!F::BotUtils.GetDormantOrigin(pEntity->entindex(), &vOrigin))
+				continue;
+		}
+		else
+			vOrigin = pDispenser->GetAbsOrigin();
+
+		const float flDist = vLocalOrigin.DistToSqr(vOrigin);
 		if (flDist >= flBestDist)
 			continue;
 
 		flBestDist = flDist;
 		pBest = pDispenser;
+	}
+
+	if (!pBest)
+	{
+		for (int i = 1; i <= I::ClientEntityList->GetHighestEntityIndex(); ++i)
+		{
+			auto pEntity = I::ClientEntityList->GetClientEntity(i);
+			if (!pEntity || pEntity->GetClassID() != ETFClassID::CObjectDispenser)
+				continue;
+			auto pDispenser = pEntity->As<CObjectDispenser>();
+			if (pDispenser->m_bPlacing() || pDispenser->m_bCarried() || pDispenser->m_bDisabled())
+				continue;
+			if (pDispenser->m_iTeamNum() != pLocal->m_iTeamNum())
+				continue;
+			Vector vOrigin;
+			if (pEntity->IsDormant())
+			{
+				if (!F::BotUtils.GetDormantOrigin(i, &vOrigin))
+					continue;
+			}
+			else
+				vOrigin = pDispenser->GetAbsOrigin();
+			const float flDist = vLocalOrigin.DistToSqr(vOrigin);
+			if (flDist >= flBestDist)
+				continue;
+			flBestDist = flDist;
+			pBest = pDispenser;
+		}
 	}
 
 	return pBest;
@@ -182,19 +256,38 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 
 		if (m_flOnEntranceSince && flCurTime - m_flOnEntranceSince > 4.f)
 		{
-			if (!FindClosestTeleporter(pLocal, 1))
+			if (auto pExit = FindClosestTeleporter(pLocal, 1))
+			{
+				const float flDistToExit = pLocal->GetAbsOrigin().DistTo(pExit->GetAbsOrigin());
+				if (flDistToExit > 180.f)
+				{
+					m_eState = EState::CampExit;
+					m_iCampIdx = pExit->entindex();
+					m_flScanClock = 0.f;
+					return CampAt(pCmd, pLocal, pExit);
+				}
+				m_flOnEntranceSince = flCurTime;
+			}
+			else
 			{
 				m_eState = EState::CampDispenser;
 				m_iCampIdx = -1;
 				m_flScanClock = 0.f;
 				return true;
 			}
-
-			m_flOnEntranceSince = flCurTime;
 		}
 
 		if (flDist > 55.f)
-			SDK::WalkTo(pCmd, pLocal, pEntrance->GetAbsOrigin());
+		{
+			Vector vTarget = pEntrance->GetAbsOrigin();
+			bool bExpandedClose = pEntrance->IsDormant() || F::NavEngine.FindClosestNavArea(vTarget, true) != nullptr;
+			if (flDist <= 120.f && bExpandedClose)
+			{
+				SDK::WalkTo(pCmd, pLocal, vTarget);
+				return true;
+			}
+			SDK::WalkTo(pCmd, pLocal, vTarget);
+		}
 		return true;
 	}
 	case EState::CampExit:
@@ -244,12 +337,20 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 		if (flCurTime >= m_flPairClock)
 		{
 			m_flPairClock = flCurTime + 5.f;
-			if (FindClosestTeleporter(pLocal, 0) && FindClosestTeleporter(pLocal, 1))
+			if (auto pEntrance = FindClosestTeleporter(pLocal, 0))
 			{
-				m_eState = EState::ToEntrance;
-				m_iEntranceIdx = -1;
-				m_flScanClock = 0.f;
-				return true;
+				if (auto pExit = FindClosestTeleporter(pLocal, 1))
+				{
+					float flDistExit = pLocal->GetAbsOrigin().DistTo(pExit->GetAbsOrigin());
+					if (flDistExit < 220.f)
+					{
+						return CampAt(pCmd, pLocal, pExit);
+					}
+					m_eState = EState::CampExit;
+					m_iCampIdx = pExit->entindex();
+					m_flScanClock = 0.f;
+					return CampAt(pCmd, pLocal, pExit);
+				}
 			}
 		}
 

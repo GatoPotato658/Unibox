@@ -22,7 +22,8 @@ Enum(PriorityList, None,
 	MVMCombat,
 	MVMMoney,
 	MVMFrontline,
-	MVMSniper
+	MVMSniper,
+	BuyBot
 )
 
 enum class PathSolveResult : int

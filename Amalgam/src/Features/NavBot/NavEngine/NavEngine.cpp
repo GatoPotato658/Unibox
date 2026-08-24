@@ -27,6 +27,35 @@ static float GetAreaVerticalOutside(CNavArea* pArea, const Vector& vPos)
 	return flBelow + flAbove;
 }
 
+static bool IsOverlappingExpandedLocal(const CNavArea* pArea, const Vector& vPos, float flExpand = HALF_PLAYER_WIDTH)
+{
+	if (!pArea) return false;
+	return pArea->IsOverlapping(vPos, flExpand);
+}
+
+static bool CanHullFallToAreaLocal(const Vector& vPos, const CNavArea* pArea, CTFPlayer* pLocal)
+{
+	if (!pArea || !pLocal) return true;
+	const float flNearestX = std::clamp(vPos.x, pArea->m_vNwCorner.x, pArea->m_vSeCorner.x);
+	const float flNearestY = std::clamp(vPos.y, pArea->m_vNwCorner.y, pArea->m_vSeCorner.y);
+	const float flAreaZ = pArea->GetZ(flNearestX, flNearestY);
+	const float flDelta = vPos.z - flAreaZ;
+	if (flDelta < -16.0f) return false;
+	if (flDelta < 0.0f) return true;
+	Vector vStart = vPos; vStart.z += 1.0f;
+	Vector vEnd = Vector(flNearestX, flNearestY, flAreaZ + 2.0f);
+	if (vStart.z < vEnd.z) return false;
+	CGameTrace trace{};
+	CTraceFilterNavigation filter(pLocal);
+	SDK::TraceHull(vStart, vEnd, pLocal->m_vecMins(), pLocal->m_vecMaxs(), MASK_PLAYERSOLID, &filter, &trace);
+	if (trace.fraction >= 1.0f) return true;
+	if (!trace.DidHit()) return true;
+	const float flHitZ = trace.endpos.z;
+	if (std::fabs(flHitZ - (flAreaZ + 2.0f)) <= 28.0f) return true;
+	if (flHitZ > flAreaZ + 36.0f) return false;
+	return true;
+}
+
 static float GetAreaLocalScore(CNavArea* pArea, const Vector& vPos)
 {
 	if (!pArea) return FLT_MAX;
@@ -35,8 +64,18 @@ static float GetAreaLocalScore(CNavArea* pArea, const Vector& vPos)
 	const float flSurfaceDelta = std::fabs(vNearest.z - vPos.z);
 	const float flOutside = GetAreaVerticalOutside(pArea, vPos);
 	float flScore = vPlanar.LengthSqr() + (flSurfaceDelta * flSurfaceDelta * 6.0f) + (flOutside * flOutside * 18.0f);
-	if (pArea->IsOverlapping(vPos)) flScore *= 0.45f;
-	if (pArea->IsOverlapping(vPos) && flOutside <= 18.0f) flScore *= 0.15f;
+	const bool bOverlappingExpanded = IsOverlappingExpandedLocal(pArea, vPos, HALF_PLAYER_WIDTH);
+	const bool bOverlappingStrict = pArea->IsOverlapping(vPos);
+	if (bOverlappingExpanded) flScore *= 0.45f;
+	if (bOverlappingStrict && flOutside <= 18.0f) flScore *= 0.15f;
+	else if (bOverlappingExpanded && flOutside <= 28.0f) flScore *= 0.35f;
+
+	const float flDelta = vPos.z - vNearest.z;
+	if (flDelta < -18.0f)
+		flScore += flDelta * flDelta * 28.0f;
+	else if (flDelta < -6.0f)
+		flScore += flDelta * flDelta * 10.0f;
+
 	return flScore;
 }
 
@@ -143,6 +182,12 @@ bool CNavEngine::IsSetupTime()
 	static bool bSetupTime = false;
 	if (Vars::Misc::Movement::NavEngine::PathInSetup.Value)
 		return false;
+
+	if (auto pGameRules = I::TFGameRules(); pGameRules && pGameRules->m_bPlayingMannVsMachine())
+	{
+		bSetupTime = false;
+		return false;
+	}
 
 	auto pLocal = H::Entities.GetLocal();
 	if (pLocal && pLocal->IsAlive() && tCheckTimer.Run(0.5f))
@@ -409,10 +454,15 @@ CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
 	static Timer tRefresh{};
 
 	const bool bAreaInvalid = !m_pLocalArea || !m_pMap->IsAreaValid(m_pLocalArea);
-	const bool bOutsideXY = !bAreaInvalid && !m_pLocalArea->IsOverlapping(vLocalOrigin);
+	const bool bOutsideXY = !bAreaInvalid && !IsOverlappingExpandedLocal(m_pLocalArea, vLocalOrigin, HALF_PLAYER_WIDTH);
 	const float flVerticalOutside = !bAreaInvalid ? GetAreaVerticalOutside(m_pLocalArea, vLocalOrigin) : FLT_MAX;
-	const float flSurfaceDelta = !bAreaInvalid ? std::fabs(GetNearestPointOnArea(m_pLocalArea, vLocalOrigin).z - vLocalOrigin.z) : FLT_MAX;
-	const bool bNeedsRefresh = bAreaInvalid || bOutsideXY || flVerticalOutside > 24.0f || flSurfaceDelta > PLAYER_HEIGHT;
+	const Vector vNearestCur = !bAreaInvalid ? GetNearestPointOnArea(m_pLocalArea, vLocalOrigin) : Vector{};
+	const float flSurfaceDelta = !bAreaInvalid ? std::fabs(vNearestCur.z - vLocalOrigin.z) : FLT_MAX;
+	const float flDeltaZ = !bAreaInvalid ? (vLocalOrigin.z - vNearestCur.z) : FLT_MAX;
+	const bool bAboveArea = !bAreaInvalid && flDeltaZ < -12.0f;
+	auto pLocalEnt = H::Entities.GetLocal();
+	const bool bCurrentFallBlocked = !bAreaInvalid && pLocalEnt && flDeltaZ >= 0.0f && !CanHullFallToAreaLocal(vLocalOrigin, m_pLocalArea, pLocalEnt);
+	const bool bNeedsRefresh = bAreaInvalid || bOutsideXY || bAboveArea || bCurrentFallBlocked || flVerticalOutside > 24.0f || flSurfaceDelta > PLAYER_HEIGHT;
 
 	if (bNeedsRefresh || tRefresh.Run(0.10f))
 	{
@@ -423,7 +473,12 @@ CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
 		{
 			const float flCur = GetAreaLocalScore(m_pLocalArea, vLocalOrigin);
 			const float flNew = GetAreaLocalScore(pBest, vLocalOrigin);
-			if (bNeedsRefresh || (pBest != m_pLocalArea && flNew + 4.0f < flCur))
+			const float flCurDelta = vLocalOrigin.z - GetNearestPointOnArea(m_pLocalArea, vLocalOrigin).z;
+			const float flNewDelta = vLocalOrigin.z - GetNearestPointOnArea(pBest, vLocalOrigin).z;
+			const bool bCurAbove = flCurDelta < -10.0f;
+			const bool bNewBelow = flNewDelta >= -6.0f;
+			const bool bPreferNewBelow = bCurAbove && bNewBelow;
+			if (bNeedsRefresh || bPreferNewBelow || (pBest != m_pLocalArea && flNew + 4.0f < flCur))
 				m_pLocalArea = pBest;
 		}
 	}
@@ -1244,6 +1299,40 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		Vector vDeltaPlanar = vDelta; vDeltaPlanar.z = 0.f;
 		const float flVerticalDelta = std::fabs(vDelta.z);
 		const float flVerticalTol = std::clamp(PLAYER_JUMP_HEIGHT * 0.75f, 26.f, 42.f);
+
+		if (!bDropCrumb && !bResetHeight)
+		{
+			const float flBelow = vLocalOrigin.z - vCrumbTarget.z;
+			if (flBelow > 40.0f && vDeltaPlanar.LengthSqr() < 280.0f * 280.0f)
+			{
+				if (tActive.m_pNavArea && !CanHullFallToAreaLocal(vLocalOrigin, tActive.m_pNavArea, pLocal))
+				{
+					const bool bStacked = m_pLocalArea && IsOverlappingExpandedLocal(m_pLocalArea, vLocalOrigin, HALF_PLAYER_WIDTH)
+						&& IsOverlappingExpandedLocal(tActive.m_pNavArea, vLocalOrigin, HALF_PLAYER_WIDTH);
+					if (bStacked)
+					{
+						m_tLastCrumb = tActive;
+						nConsumed++;
+						continue;
+					}
+				}
+			}
+			if (tActive.m_pNavArea && tActive.m_pNavArea != m_pLocalArea)
+			{
+				CGameTrace tTrace{}; CTraceFilterNavigation f(pLocal);
+				SDK::TraceHull(vLocalOrigin, vCrumbTarget, pLocal->m_vecMins(), pLocal->m_vecMaxs(), MASK_PLAYERSOLID, &f, &tTrace);
+				if (tTrace.fraction < 0.85f && std::fabs(tTrace.endpos.z - vCrumbTarget.z) > 36.0f)
+				{
+					const bool bStacked = m_pLocalArea && m_pLocalArea->IsOverlapping(vCrumbTarget, 8.0f) && tActive.m_pNavArea->IsOverlapping(vCrumbTarget, 8.0f);
+					if (bStacked && !tActive.m_bRequiresDrop)
+					{
+						m_tLastCrumb = tActive;
+						nConsumed++;
+						continue;
+					}
+				}
+			}
+		}
 
 		if (!bDropCrumb && vDeltaPlanar.LengthSqr() < kDefaultReachRadius * kDefaultReachRadius && flVerticalDelta <= flVerticalTol)
 		{
