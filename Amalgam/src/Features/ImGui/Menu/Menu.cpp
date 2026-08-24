@@ -13,6 +13,10 @@
 #include "../../Resolver/Resolver.h"
 #include "../../Visuals/Visuals.h"
 #include "../../Misc/Misc.h"
+#include "../../Misc/AutoQueue/MvmQueue.h"
+#if __has_include("../../Misc/ProfileStalker/ProfileStalker.h")
+#include "../../Misc/ProfileStalker/ProfileStalker.h"
+#endif
 #include "../../Output/Output.h"
 #include "../../World/World.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
@@ -2141,6 +2145,18 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
 					FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Right);
 					FSlider(Vars::Misc::Queueing::QueueDelay);
+					F::MvmQueue.Refresh();
+					PushTransparent(!Vars::Misc::Queueing::AutoMannUpQueue.Value);
+					{
+						FDropdown(Vars::Misc::Queueing::MannUpTourIndex, F::MvmQueue.m_tTourDropdown.m_vEntries, {}, FDropdownEnum::NoSanitization);
+						FToggle(Vars::Misc::Queueing::MannUpUncompleted, FToggleEnum::Left);
+					}
+					PopTransparent();
+					PushTransparent(!Vars::Misc::Queueing::AutoBootCampQueue.Value || F::MvmQueue.m_tBootcampDropdown.m_vEntries.empty());
+					{
+						FDropdown(Vars::Misc::Queueing::BootcampMissionBits, F::MvmQueue.m_tBootcampDropdown.m_vEntries, {}, FDropdownEnum::Multi | FDropdownEnum::NoSanitization);
+					}
+					PopTransparent();
 				} EndSection();
 				if (Section("Casual automation", 8))
 				{
@@ -2182,6 +2198,24 @@ void CMenu::MenuMisc(int iTab)
 					}
 					PopTransparent();
 				} EndSection();
+				#if __has_include("../../Misc/ProfileStalker/ProfileStalker.h")
+				if (Section("Profile stalker", 8))
+				{
+					FToggle(Vars::Misc::Queueing::StalkerEnable, FToggleEnum::Left);
+					PushTransparent(!Vars::Misc::Queueing::StalkerEnable.Value);
+					{
+						FSlider(Vars::Misc::Queueing::StalkerInterval);
+						const auto vStatusLines = F::ProfileStalker.GetStatusLines();
+						for (auto& sLine : vStatusLines)
+							FText(TruncateText(sLine, int(GetWindowWidth() - GetStyle().WindowPadding.x * 2)).c_str());
+						if (!vStatusLines.empty())
+							Dummy({ 0.f, H::Draw.Scale(4) });
+						if (FButton("RELOAD", FButtonEnum::Fit))
+							F::ProfileStalker.ForceReload();
+					}
+					PopTransparent();
+				} EndSection();
+				#endif
 			}
 			EndTable();
 		}

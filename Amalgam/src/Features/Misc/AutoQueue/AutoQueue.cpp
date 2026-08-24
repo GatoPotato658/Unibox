@@ -1,4 +1,5 @@
 #include "AutoQueue.h"
+#include "MvmQueue.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../NavBot/NavEngine/NavEngine.h"
 #include "../Misc.h"
@@ -112,8 +113,18 @@ void CAutoQueue::Run()
 	}
 
 	// Auto Mann Up queue
-	if (Vars::Misc::Queueing::AutoMannUpQueue.Value)
+	static bool bWasMannUpEnabled = false;
+	if (!Vars::Misc::Queueing::AutoMannUpQueue.Value)
 	{
+		if (bWasMannUpEnabled)
+		{
+			F::MvmQueue.ClearMannUpCriteria();
+			bWasMannUpEnabled = false;
+		}
+	}
+	else
+	{
+		bWasMannUpEnabled = true;
 		if (!I::TFPartyClient->BInQueueForMatchGroup(k_eTFMatchGroup_MvM_MannUp))
 		{
 			bool bInGame = I::EngineClient->IsInGame();
@@ -132,9 +143,49 @@ void CAutoQueue::Run()
 
 			if (bShouldQueue && (!bIsLoadingMap || !Vars::Misc::Queueing::RQLTM.Value) && !bInGame)
 			{
+				F::MvmQueue.ApplyMannUpCriteria();
 				I::TFPartyClient->RequestQueueForMatch(k_eTFMatchGroup_MvM_MannUp);
 				flLastQueueTimeMannUp = flCurrentTime;
 				bQueuedOnceMannUp = true;
+			}
+		}
+	}
+
+	// Auto Boot Camp queue
+	static bool bWasBootCampEnabled = false;
+	if (!Vars::Misc::Queueing::AutoBootCampQueue.Value)
+	{
+		if (bWasBootCampEnabled)
+		{
+			F::MvmQueue.ClearBootcampCriteria();
+			bWasBootCampEnabled = false;
+		}
+	}
+	else
+	{
+		bWasBootCampEnabled = true;
+		if (!I::TFPartyClient->BInQueueForMatchGroup(k_eTFMatchGroup_MvM_Practice))
+		{
+			bool bInGame = I::EngineClient->IsInGame();
+			bool bIsLoadingMap = I::EngineClient->IsDrawingLoadingImage();
+			if (bIsLoadingMap && Vars::Misc::Queueing::RQLTM.Value)
+				return;
+
+			float flQueueDelay = Vars::Misc::Queueing::QueueDelay.Value == 0 ? 20.0f : Vars::Misc::Queueing::QueueDelay.Value * 60.0f;
+
+			static float flLastQueueTimeBootCamp = 0.0f;
+			static bool bQueuedOnceBootCamp = false;
+
+			bool bShouldQueue = !bQueuedOnceBootCamp || (flCurrentTime - flLastQueueTimeBootCamp >= flQueueDelay);
+			if (!bIsConnectedNow && !bIsLoadingMap)
+				bShouldQueue = true;
+
+			if (bShouldQueue && (!bIsLoadingMap || !Vars::Misc::Queueing::RQLTM.Value) && !bInGame)
+			{
+				F::MvmQueue.ApplyBootcampCriteria();
+				I::TFPartyClient->RequestQueueForMatch(k_eTFMatchGroup_MvM_Practice);
+				flLastQueueTimeBootCamp = flCurrentTime;
+				bQueuedOnceBootCamp = true;
 			}
 		}
 	}

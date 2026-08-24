@@ -1266,6 +1266,12 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(RQIgnoreFriends, "Ignore Friends", false);
 			CVar(RQnoAbandon, "RQ w/o abandon", false);
 			CVar(AutoMannUpQueue, "Auto MannUp queue", false);
+			CVar(AutoBootCampQueue, "Auto BootCamp queue", false);
+			CVar(MannUpTourIndex, "MannUp tour", 0);
+			CVar(MannUpUncompleted, "Only uncompleted missions", false);
+			CVar(BootcampMissionBits, "BootCamp missions", 0b0);
+			CVar(StalkerEnable, "Profile stalker", false);
+			CVar(StalkerInterval, "Stalker interval", 15, SLIDER_CLAMP, 5, 120, 1, "%is");
 		NAMESPACE_END(Queueing)
 
 		NAMESPACE_BEGIN(MannVsMachine, Mann vs. Machine)

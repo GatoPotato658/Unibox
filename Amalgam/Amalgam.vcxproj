@@ -1157,6 +1157,8 @@
     <ClCompile Include="src\Features\Debug\Debug.cpp" />
     <ClCompile Include="src\Features\Output\Output.cpp" />
     <ClCompile Include="src\Features\Misc\AutoQueue\AutoQueue.cpp" />
+    <ClCompile Include="src\Features\Misc\AutoQueue\MvmQueue.cpp" />
+    <ClCompile Include="src\Features\Misc\ProfileStalker\ProfileStalker.cpp" Condition="Exists('src\Features\Misc\ProfileStalker\ProfileStalker.cpp')" />
     <ClCompile Include="src\Features\Backtrack\Backtrack.cpp" />
     <ClCompile Include="src\Features\Visuals\CameraWindow\CameraWindow.cpp" />
     <ClCompile Include="src\Features\CheatDetection\CheatDetection.cpp" />
@@ -1510,6 +1512,8 @@
     <ClInclude Include="src\Features\ImGui\Easings\Easings.h" />
     <ClInclude Include="src\Features\Output\Output.h" />
     <ClInclude Include="src\Features\Misc\AutoQueue\AutoQueue.h" />
+    <ClInclude Include="src\Features\Misc\AutoQueue\MvmQueue.h" />
+    <ClInclude Include="src\Features\Misc\ProfileStalker\ProfileStalker.h" Condition="Exists('src\Features\Misc\ProfileStalker\ProfileStalker.h')" />
     <ClInclude Include="src\Features\Backtrack\Backtrack.h" />
     <ClInclude Include="src\Features\CheatDetection\CheatDetection.h" />
     <ClInclude Include="src\Features\Players\SteamProfileCache.h" />

@@ -100,6 +100,7 @@ private:
 	bool m_bBuybotUsingNav = false;
 	bool m_bBuybotCashLimitReached = false;
 	bool m_bBuybotFinishedUpgrades = false;
+	int m_iBuybotPriorityStep = 0;
 	Vec3 m_vBuybotStationTarget = {};
 	float m_flBuybotStallClock = 0.f;
 

@@ -34,6 +34,7 @@
 #include "ISteamMusic.h"
 #include "ISteamMusicRemote.h"
 #include "ISteamHTTP.h"
+#include "ISteamGameCoordinator.h"
 #include "ISteamController.h"
 #include "ISteamUGC.h"
 #include "ISteamAppList.h"

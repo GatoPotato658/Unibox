@@ -71,6 +71,11 @@ void CAutoItem::Rent(item_definition_index_t iItemDef)
 	S::CStorePage_DoPreviewItem.Call<void>(nullptr, iItemDef);
 }
 
+void CAutoItem::EquipWeapon(CTFInventoryManager* pInventoryManager, CTFPlayerInventory* pLocalInventory, int iClass, int iSlot, item_definition_index_t iItemDef)
+{
+	EquipItem(pInventoryManager, pLocalInventory, iClass, iSlot, iItemDef, true, true);
+}
+
 void CAutoItem::MvmRent()
 {
 	constexpr item_definition_index_t iVaccinator = 998;

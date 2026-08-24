@@ -134,6 +134,15 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 
 			if (!pEntrance)
 			{
+				// PLEASE STOP GOING TO DISPENCER WHEN TELE IS UP PUSSY
+				if (auto pExit = FindClosestTeleporter(pLocal, 1))
+				{
+					m_iCampIdx = pExit->entindex();
+					m_eState = EState::CampExit;
+					m_flScanClock = 0.f;
+					return CampAt(pCmd, pLocal, pExit);
+				}
+
 				if (auto pDispenser = FindClosestDispenser(pLocal))
 				{
 					m_iCampIdx = pDispenser->entindex();
@@ -173,10 +182,15 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 
 		if (m_flOnEntranceSince && flCurTime - m_flOnEntranceSince > 4.f)
 		{
-			m_eState = EState::CampDispenser;
-			m_iCampIdx = -1;
-			m_flScanClock = 0.f;
-			return true;
+			if (!FindClosestTeleporter(pLocal, 1))
+			{
+				m_eState = EState::CampDispenser;
+				m_iCampIdx = -1;
+				m_flScanClock = 0.f;
+				return true;
+			}
+
+			m_flOnEntranceSince = flCurTime;
 		}
 
 		if (flDist > 55.f)

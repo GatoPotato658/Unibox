@@ -1,5 +1,6 @@
 #include "Misc.h"
 #include "../Configs/Configs.h"
+#include "AutoItem/AutoItem.h"
 
 #include <array>
 
@@ -2009,8 +2010,110 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 			return;
 		}
 
-		constexpr int iMaxUpgradeIndex = 128;
+		if (pLocal->m_iClass() == TF_CLASS_SCOUT)
+		{
+			static Timer tScoutEquipTimer{};
+			if (tScoutEquipTimer.Run(3.f))
+			{
+				if (auto pInventoryManager = I::TFInventoryManager())
+					if (auto pLocalInventory = pInventoryManager->GetLocalInventory())
+					{
+						F::AutoItem.EquipWeapon(pInventoryManager, pLocalInventory, TF_CLASS_SCOUT, SLOT_PRIMARY, Scout_m_ForceANature);
+						F::AutoItem.EquipWeapon(pInventoryManager, pLocalInventory, TF_CLASS_SCOUT, SLOT_SECONDARY, Scout_s_MadMilk);
+					}
+			}
+		}
+
 		constexpr int iMaxUpgradeLevels = 10;
+
+		// todo: actually turn indexes into names and organize properly :)
+		static const std::vector<std::pair<int, int>> s_vSniperPlan =
+		{
+			{17, 0}, {35, 0}, {2, 0}, {5, 0}, {6, 0}, {12, 0}, {13, 0}, {40, 0}, {41, 0},
+			{52, -1}, {53, -1}, {54, -1}, {51, -1}, {56, -1}
+		};
+		static const std::vector<std::pair<int, int>> s_vPyroPlan =
+		{
+			{52, -1}, {53, -1}, {54, -1}, {51, -1}, {56, -1},
+			{30, 0}, {31, 0}, {33, 0}, {0, 0}, {2, 0}, {5, 0}, {6, 0}
+		};
+		static const std::vector<std::pair<int, int>> s_vHeavyPlan =
+		{
+			{52, -1}, {53, -1}, {54, -1}, {51, -1}, {56, -1},
+			{0, 0}, {2, 0}, {5, 0}, {6, 0}, {11, 0}, {12, 0}, {13, 0}, {41, 0}
+		};
+		static const std::vector<std::pair<int, int>> s_vScoutPlan =
+		{
+			{52, -1}, {53, -1}, {54, -1}, {51, -1}, {55, -1}, {56, -1},
+			{46, 1},
+			{0, 0}, {2, 0}, {5, 0}, {6, 0}, {12, 0}
+		};
+		static const std::vector<std::pair<int, int>> s_vEngineerPlan =
+		{
+			{22, 5}, {20, 5},
+			{52, -1}, {53, -1}, {54, -1}, {51, -1}, {57, -1}, {56, -1},
+			{4, 2}, {0, 2}
+		};
+		static const std::vector<std::pair<int, int>> s_vSoldierPlan =
+		{
+			{52, -1}, {0, 0}, {53, -1}, {2, 0}, {54, -1}, {5, 0}, {51, -1}, {6, 0}, {56, -1}, {47, 0}, {33, 0}
+		};
+		static const std::vector<std::pair<int, int>> s_vDemomanPlan =
+		{
+			{52, -1}, {0, 0}, {53, -1}, {2, 0}, {54, -1}, {5, 0}, {51, -1}, {8, 0}, {56, -1}, {27, 0}, {33, 0}
+		};
+		static const std::vector<std::pair<int, int>> s_vSpyPlan =
+		{
+			{37, 4}, {52, -1}, {53, -1}, {54, -1}, {51, -1}, {4, 2}, {0, 2}
+		};
+
+		const std::vector<std::pair<int, int>>* pPlan = nullptr;
+		switch (pLocal->m_iClass())
+		{
+		case TF_CLASS_SNIPER:	pPlan = &s_vSniperPlan; break;
+		case TF_CLASS_PYRO:		pPlan = &s_vPyroPlan; break;
+		case TF_CLASS_HEAVYWEAPONS:	pPlan = &s_vHeavyPlan; break;
+		case TF_CLASS_SCOUT:	pPlan = &s_vScoutPlan; break;
+		case TF_CLASS_ENGINEER:	pPlan = &s_vEngineerPlan; break;
+		case TF_CLASS_SOLDIER:	pPlan = &s_vSoldierPlan; break;
+		case TF_CLASS_DEMOMAN:	pPlan = &s_vDemomanPlan; break;
+		case TF_CLASS_SPY:		pPlan = &s_vSpyPlan; break;
+		default: break;
+		}
+
+		if (pPlan)
+		{
+			if (m_iBuybotPriorityStep >= static_cast<int>(pPlan->size()))
+			{
+				m_bBuybotFinishedUpgrades = true;
+				m_bBuybotUsingNav = false;
+				m_vBuybotStationTarget = {};
+				return;
+			}
+
+			const auto& [iUpgrade, iSlot] = (*pPlan)[m_iBuybotPriorityStep++];
+
+			I::EngineClient->ServerCmdKeyValues(new KeyValues("MvM_UpgradesBegin"));
+			for (int iLevel = 0; iLevel < iMaxUpgradeLevels; iLevel++)
+			{
+				KeyValues* kv = new KeyValues("MVM_Upgrade");
+				KeyValues* sub = kv->FindKey("Upgrade", true);
+				sub->SetInt("itemslot", iSlot);
+				sub->SetInt("upgrade", iUpgrade);
+				sub->SetInt("count", 1);
+				I::EngineClient->ServerCmdKeyValues(kv);
+			}
+			{
+				KeyValues* kv = new KeyValues("MvM_UpgradesDone");
+				kv->SetInt("num_upgrades", iMaxUpgradeLevels);
+				I::EngineClient->ServerCmdKeyValues(kv);
+			}
+
+			m_flBuybotClock = flCurTime + 0.05f;
+			return;
+		}
+
+		constexpr int iMaxUpgradeIndex = 128;
 		const int aSlots[] = { 0, -1 };
 		const int iSlot = aSlots[m_iBuybotUpgradeSlotStep % std::size(aSlots)];
 
@@ -2162,6 +2265,7 @@ void CMisc::ResetBuyBot()
 	m_bBuybotUsingNav = false;
 	m_bBuybotCashLimitReached = false;
 	m_bBuybotFinishedUpgrades = false;
+	m_iBuybotPriorityStep = 0;
 	m_vBuybotStationTarget = {};
 	m_flBuybotStallClock = 0.f;
 }

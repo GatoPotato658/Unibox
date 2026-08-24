@@ -27,14 +27,12 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 	{
 	case VotePass:
 	case VoteFailed:
-		if (Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Defend ||
-			Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Assist)
-		{
-			msgData.SeekRelative(4);
-			F::AutoVote.OnVoteEnd(msgData.ReadLong());
-			msgData.Reset();
-		}
+	{
+		msgData.SeekRelative(4);
+		const int iVoteID = msgData.ReadLong();
+		F::AutoVote.OnVoteEnd(iVoteID);
 		break;
+	}
 	case CallVoteFailed:
 	{
 		if (Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Kick)

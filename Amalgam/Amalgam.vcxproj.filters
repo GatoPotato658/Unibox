@@ -44,6 +44,8 @@
     <ClCompile Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoHeal\AutoHeal.cpp" />
     <ClCompile Include="src\Features\Misc\AutoQueue\AutoQueue.cpp" />
+    <ClCompile Include="src\Features\Misc\AutoQueue\MvmQueue.cpp" />
+    <ClCompile Include="src\Features\Misc\ProfileStalker\ProfileStalker.cpp" Condition="Exists('src\Features\Misc\ProfileStalker\ProfileStalker.cpp')" />
     <ClCompile Include="src\Features\Backtrack\Backtrack.cpp" />
     <ClCompile Include="src\Features\CheatDetection\CheatDetection.cpp" />
     <ClCompile Include="src\Features\CritHack\CritHack.cpp" />
@@ -446,6 +448,8 @@
     <ClInclude Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.h" />
     <ClInclude Include="src\Features\Aimbot\AutoHeal\AutoHeal.h" />
     <ClInclude Include="src\Features\Misc\AutoQueue\AutoQueue.h" />
+    <ClInclude Include="src\Features\Misc\AutoQueue\MvmQueue.h" />
+    <ClInclude Include="src\Features\Misc\ProfileStalker\ProfileStalker.h" Condition="Exists('src\Features\Misc\ProfileStalker\ProfileStalker.h')" />
     <ClInclude Include="src\Features\Backtrack\Backtrack.h" />
     <ClInclude Include="src\Features\CheatDetection\CheatDetection.h" />
     <ClInclude Include="src\Features\CritHack\CritHack.h" />
@@ -733,3 +737,5 @@
     <Library Include="include\freetype\freetype.lib" />
   </ItemGroup>
 </Project>
+
+

@@ -11,3 +11,4 @@ MAKE_INTERFACE_NULL(ISteamUser, SteamUser);
 MAKE_INTERFACE_NULL(ISteamNetworkingUtils, SteamNetworkingUtils);
 // Needed by AutoQueue and NullInterfaces
 MAKE_INTERFACE_NULL(ISteamMatchmakingServers, SteamMatchmakingServers);
+MAKE_INTERFACE_NULL(ISteamGameCoordinator, SteamGameCoordinator);

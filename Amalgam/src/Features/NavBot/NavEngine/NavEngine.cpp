@@ -185,6 +185,9 @@ bool CNavEngine::IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFro
 	Vector vStart = vFrom; vStart.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 	Vector vEnd = vTo;     vEnd.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 
+	if (std::fabs(vEnd.z - vStart.z) <= PLAYER_JUMP_HEIGHT)
+		vEnd.z = vStart.z;
+
 	CTraceFilterNavigation tFilter(pLocal);
 	CGameTrace tTrace{};
 	SDK::Trace(vStart - vOffset, vEnd - vOffset, nMask, &tFilter, &tTrace);
