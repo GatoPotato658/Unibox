@@ -384,6 +384,7 @@ void CGlow::Initialize()
 		{
 			m_pMatGlowColor = pMaterial;
 			m_pMatGlowColor->IncrementReferenceCount();
+			F::Materials.m_mMatList[m_pMatGlowColor];
 		}
 	}
 
