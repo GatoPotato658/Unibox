@@ -115,6 +115,15 @@ uintptr_t CMemory::FindSignature(const char* szModule, const char* szPattern)
 	return 0x0;
 }
 
+uintptr_t CMemory::FindOptionalSignature(const char* szModule, const char* szPattern)
+{
+	const auto dwAddress = FindSignature(szModule, szPattern);
+	if (!dwAddress || FindSignatureAtAddress(dwAddress, szPattern, dwAddress))
+		return 0x0;
+
+	return dwAddress;
+}
+
 std::string CMemory::GetModuleName(uintptr_t uAddress)
 {
 	HMODULE hModule;
@@ -230,7 +239,7 @@ std::string CMemory::GenerateSignatureAtAddress(uintptr_t uAddress, size_t maxLe
 	std::string sPattern;
 	std::string sModule = GetModuleName(uAddress);
 
-	uintptr_t uMinAddr, uMaxAddr;
+	uintptr_t uMinAddr = 0x0, uMaxAddr = 0x0;
 	if (const auto hMod = GetModuleHandleA(sModule.c_str()))
 	{
 		uMinAddr = (uintptr_t)hMod;

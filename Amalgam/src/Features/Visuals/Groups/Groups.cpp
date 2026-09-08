@@ -3,6 +3,8 @@
 #include "../../Players/PlayerUtils.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 
+#include <algorithm>
+
 static inline bool ShouldTargetTeam(Group_t& tGroup, int iBit, CBaseEntity* pEntity, CTFPlayer* pLocal)
 {
 	if (!(tGroup.m_iTargets & iBit))
@@ -455,11 +457,11 @@ bool CGroups::GetGroup(CBaseEntity* pEntity, CTFPlayer* pLocal, Group_t*& pGroup
 	if (!GroupsActive())
 		return false;
 
-	for (int i = int(m_vGroups.size() - 1); i >= 0; i--) // reverse so back groups have higher priority
+	for (int i = static_cast<int>(std::min(m_vGroups.size(), size_t(MAX_GROUPS))) - 1; i >= 0; i--) // reverse so back groups have higher priority
 	{
 		auto& tGroup = m_vGroups[i];
 
-		if (!(Vars::ESP::ActiveGroups.Value & 1 << i))
+		if (!(static_cast<unsigned int>(Vars::ESP::ActiveGroups.Value) & (1u << i)))
 			continue;
 
 		if (!ShouldTarget(tGroup, pEntity, pLocal, bModels))
@@ -477,11 +479,11 @@ bool CGroups::GetGroup(int iType, Group_t*& pGroup, CBaseEntity* pEntity)
 	if (!GroupsActive())
 		return false;
 
-	for (int i = int(m_vGroups.size() - 1); i >= 0; i--) // reverse so back groups have higher priority
+	for (int i = static_cast<int>(std::min(m_vGroups.size(), size_t(MAX_GROUPS))) - 1; i >= 0; i--) // reverse so back groups have higher priority
 	{
 		auto& tGroup = m_vGroups[i];
 
-		if (!(Vars::ESP::ActiveGroups.Value & 1 << i))
+		if (!(static_cast<unsigned int>(Vars::ESP::ActiveGroups.Value) & (1u << i)))
 			continue;
 
 		if (!(tGroup.m_iTargets & iType) || pEntity && (tGroup.m_iConditions & ConditionsEnum::Dormant ? !pEntity->IsDormant() : pEntity->IsDormant()))
@@ -499,11 +501,11 @@ bool CGroups::GetGroup(int iType)
 	if (!GroupsActive())
 		return false;
 
-	for (int i = int(m_vGroups.size() - 1); i >= 0; i--) // reverse so back groups have higher priority
+	for (int i = static_cast<int>(std::min(m_vGroups.size(), size_t(MAX_GROUPS))) - 1; i >= 0; i--) // reverse so back groups have higher priority
 	{
 		auto& tGroup = m_vGroups[i];
 
-		if (!(Vars::ESP::ActiveGroups.Value & 1 << i))
+		if (!(static_cast<unsigned int>(Vars::ESP::ActiveGroups.Value) & (1u << i)))
 			continue;
 
 		if (!(tGroup.m_iTargets & iType))

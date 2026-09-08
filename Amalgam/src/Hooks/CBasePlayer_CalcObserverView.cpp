@@ -14,7 +14,8 @@ MAKE_HOOK(CBasePlayer_CalcObserverView, S::CBasePlayer_CalcObserverView(), void,
 		return CALL_ORIGINAL(rcx, eyeOrigin, eyeAngles, fov);
 
 	auto pPlayer = reinterpret_cast<CBasePlayer*>(rcx);
-	auto pTarget = pPlayer->m_hObserverTarget()->As<CTFPlayer>();
+	auto pTargetEntity = pPlayer->m_hObserverTarget().Get();
+	auto pTarget = pTargetEntity ? pTargetEntity->As<CTFPlayer>() : nullptr;
 	if (!pTarget || !pTarget->IsPlayer())
 		return CALL_ORIGINAL(rcx, eyeOrigin, eyeAngles, fov);
 

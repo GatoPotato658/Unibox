@@ -17,8 +17,9 @@ MAKE_HOOK(CHLTVCamera_CalcView, S::CHLTVCamera_CalcView(), void,
 	if (F::Spectate.HasTarget())
 		pHLTVCamera->m_nCameraMode = Vars::Visuals::Thirdperson::Enabled.Value ? OBS_MODE_THIRDPERSON : OBS_MODE_FIRSTPERSON;
 
-	auto pEntity = I::ClientEntityList->GetClientEntity(pHLTVCamera->m_iTraget1)->As<CTFPlayer>();
-	if (!pEntity)
+	auto pEntityBase = I::ClientEntityList->GetClientEntity(pHLTVCamera->m_iTraget1);
+	auto pEntity = pEntityBase ? pEntityBase->As<CTFPlayer>() : nullptr;
+	if (!pEntity || !pEntity->IsPlayer())
 		return CALL_ORIGINAL(rcx, origin, angles, fov);
 
 	auto pGameRules = I::TFGameRules();

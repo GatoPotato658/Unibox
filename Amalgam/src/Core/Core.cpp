@@ -154,7 +154,10 @@ void CCore::Load()
 	if (m_bUnload = m_bFailed = !U::Signatures.Initialize() || !U::Interfaces.Initialize() || !CheckDXLevel())
 		return;
 
-	if (m_bUnload = m_bFailed2 = !U::Hooks.Initialize() || !U::BytePatches.Initialize() || !H::Events.Initialize())
+	const bool bHooksInitialized = U::Hooks.Initialize();
+	const bool bBytePatchesInitialized = U::BytePatches.Initialize();
+	const bool bEventsInitialized = H::Events.Initialize();
+	if (m_bUnload = m_bFailed2 = !bHooksInitialized || !bBytePatchesInitialized || !bEventsInitialized)
 		return;
 
 #ifndef TEXTMODE
@@ -191,7 +194,9 @@ void CCore::Loop()
 
 void CCore::Unload()
 {
+	G::Unload = true;
 #ifdef TEXTMODE
+	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
 	F::NamedPipe.Shutdown();
 #endif
 	if (m_bFailed)
@@ -200,7 +205,6 @@ void CCore::Unload()
 		return;
 	}
 
-	G::Unload = true;
 	F::SteamProfileCache.Shutdown();
 
 #ifndef TEXTMODE
@@ -209,7 +213,9 @@ void CCore::Unload()
 		Sleep(10);
 #endif
 
+#ifndef TEXTMODE
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
+#endif
 	U::BytePatches.Unload();
 	H::Events.Unload();
 	F::NavEngine.shutdown();

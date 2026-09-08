@@ -10,6 +10,27 @@
 #include <filesystem>
 #include <fstream>
 
+static std::filesystem::path GetMaterialFilePath(const char* sName)
+{
+	if (!sName || !*sName)
+		return {};
+
+	try
+	{
+		const std::filesystem::path tName(sName);
+		if (tName == "." || tName == ".." || tName.has_root_name() || tName.has_root_directory() || tName.has_parent_path())
+			return {};
+
+		const std::filesystem::path tDirectory = std::filesystem::path(F::Configs.m_sMaterialsPath).lexically_normal();
+		const std::filesystem::path tPath = (tDirectory / (tName.string() + ".vmt")).lexically_normal();
+		return tPath.parent_path() == tDirectory ? tPath : std::filesystem::path{};
+	}
+	catch (...)
+	{
+		return {};
+	}
+}
+
 IMaterial* CMaterials::Create(char const* szName, KeyValues* pKV)
 {
 	IMaterial* pMaterial = I::MaterialSystem->CreateMaterial(szName, pKV);
@@ -255,11 +276,16 @@ void CMaterials::LoadMaterials()
 			"\n}",
 		true);
 	// user materials
-	for (auto& tEntry : std::filesystem::directory_iterator(F::Configs.m_sMaterialsPath))
+	std::error_code tError;
+	for (std::filesystem::directory_iterator tIterator(F::Configs.m_sMaterialsPath, tError), tEnd; !tError && tIterator != tEnd; tIterator.increment(tError))
 	{
+		auto& tEntry = *tIterator;
 		// Ignore all non-material files
-		if (!tEntry.is_regular_file() || tEntry.path().extension() != std::string(".vmt"))
+		if (!tEntry.is_regular_file(tError) || tError || tEntry.path().extension() != ".vmt")
+		{
+			tError.clear();
 			continue;
+		}
 
 		std::ifstream fStream(tEntry.path());
 		if (!fStream.good())
@@ -293,7 +319,7 @@ void CMaterials::LoadMaterials()
 
 	static std::unordered_map<std::string, int> mSkyboxes = {};
 	static std::vector<const char*> vFaces = { "rt.vmt", "lf.vmt", "bk.vmt", "ft.vmt", "up.vmt", "dn.vmt" };
-	FileFindHandle_t hFind;
+	FileFindHandle_t hFind = -1;
 	for (char const* szFile = I::FileSystem->FindFirst("materials/skybox/*.vmt", &hFind); szFile && *szFile; szFile = I::FileSystem->FindNext(hFind))
 	{
 		std::string sFile = szFile;
@@ -314,6 +340,9 @@ void CMaterials::LoadMaterials()
 
 		mSkyboxes[sFile] |= iFace;
 	}
+	if (hFind != -1)
+		I::FileSystem->FindClose(hFind);
+
 	Vars::Visuals::World::SkyboxChanger.m_vValues = { "Off" };
 	for (auto& [sSkybox, iFaces] : mSkyboxes)
 	{
@@ -388,8 +417,13 @@ std::string CMaterials::GetVMT(uint32_t uHash)
 
 void CMaterials::AddMaterial(const char* sName)
 {
+	const std::filesystem::path tPath = GetMaterialFilePath(sName);
+	if (tPath.empty())
+		return;
+
 	auto uHash = FNV1A::Hash32(sName);
-	if (uHash == FNV1A::Hash32Const("Original") || std::filesystem::exists(F::Configs.m_sMaterialsPath + sName + ".vmt") || m_mMaterials.contains(uHash))
+	std::error_code tError;
+	if (uHash == FNV1A::Hash32Const("Original") || std::filesystem::exists(tPath, tError) || tError || m_mMaterials.contains(uHash))
 		return;
 
 	StoreStruct(
@@ -404,18 +438,38 @@ void CMaterials::AddMaterial(const char* sName)
 	const std::string material_vmt = modify_vmt(tMaterial.m_sVMT);
 	tMaterial.m_pMaterial = create_from_vmt(sName, material_vmt);
 	if (!tMaterial.m_pMaterial)
+	{
+		m_mMaterials.erase(uHash);
 		return;
+	}
 
 	//StoreVars(tMaterial);
 
-	std::ofstream outStream(F::Configs.m_sMaterialsPath + sName + ".vmt");
+	std::ofstream outStream(tPath);
+	if (!outStream)
+	{
+		Remove(tMaterial.m_pMaterial);
+		m_mMaterials.erase(uHash);
+		return;
+	}
 	outStream << tMaterial.m_sVMT;
-	outStream.close();
+	if (!outStream)
+	{
+		std::error_code tRemoveError;
+		std::filesystem::remove(tPath, tRemoveError);
+		Remove(tMaterial.m_pMaterial);
+		m_mMaterials.erase(uHash);
+	}
 }
 
 void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 {
-	if (!std::filesystem::exists(F::Configs.m_sMaterialsPath + sName + ".vmt"))
+	const std::filesystem::path tPath = GetMaterialFilePath(sName);
+	if (tPath.empty() || !sVMT)
+		return;
+
+	std::error_code tError;
+	if (!std::filesystem::exists(tPath, tError) || tError)
 		return;
 
 	m_bLoaded = false;
@@ -425,23 +479,35 @@ void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 	{
 		auto& tMaterial = m_mMaterials[uHash];
 
-		Remove(tMaterial.m_pMaterial);
-		RemoveVars(tMaterial);
-		tMaterial.m_sVMT = sVMT;
-
 		const std::string material_vmt = modify_vmt(sVMT);
-		tMaterial.m_pMaterial = create_from_vmt(sName, material_vmt);
-		if (!tMaterial.m_pMaterial)
+		IMaterial* pNewMaterial = create_from_vmt(sName, material_vmt);
+		if (!pNewMaterial)
 		{
 			m_bLoaded = true;
 			return;
 		}
 
+		Remove(tMaterial.m_pMaterial);
+		RemoveVars(tMaterial);
+		tMaterial.m_pMaterial = pNewMaterial;
+		tMaterial.m_sVMT = sVMT;
+
 		//StoreVars(tMaterial);
 
-		std::ofstream outStream(F::Configs.m_sMaterialsPath + sName + ".vmt");
+		std::ofstream outStream(tPath);
+		if (!outStream)
+		{
+			m_bLoaded = true;
+			return;
+		}
 		outStream << sVMT;
-		outStream.close();
+		if (!outStream)
+		{
+			std::error_code tRemoveError;
+			std::filesystem::remove(tPath, tRemoveError);
+			m_bLoaded = true;
+			return;
+		}
 	}
 
 	m_bLoaded = true;
@@ -449,7 +515,12 @@ void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 
 void CMaterials::RemoveMaterial(const char* sName)
 {
-	if (!std::filesystem::exists(F::Configs.m_sMaterialsPath + sName + ".vmt"))
+	const std::filesystem::path tPath = GetMaterialFilePath(sName);
+	if (tPath.empty())
+		return;
+
+	std::error_code tError;
+	if (!std::filesystem::exists(tPath, tError) || tError)
 		return;
 
 	m_bLoaded = false;
@@ -457,10 +528,14 @@ void CMaterials::RemoveMaterial(const char* sName)
 	auto uHash = FNV1A::Hash32(sName);
 	if (m_mMaterials.contains(uHash) && !m_mMaterials[uHash].m_bLocked)
 	{
+		if (!std::filesystem::remove(tPath, tError) || tError)
+		{
+			m_bLoaded = true;
+			return;
+		}
+
 		Remove(m_mMaterials[uHash].m_pMaterial);
 		m_mMaterials.erase(uHash);
-
-		std::filesystem::remove(F::Configs.m_sMaterialsPath + sName + ".vmt");
 
 		auto fRemoveFromVal = [&](std::vector<std::pair<std::string, ChamsMaterial_t>>& val)
 		{

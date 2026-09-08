@@ -141,7 +141,7 @@ public:
 	CNavArea* FindClosestNavArea(const Vector vOrigin, bool bLocalOrigin = true) { return m_pMap ? m_pMap->FindClosestNavArea(vOrigin, bLocalOrigin) : nullptr; }
 	CNavArea* GetLocalNavArea() const { return m_pLocalArea; }
 	CNavArea* GetLocalNavArea(const Vector& vLocalOrigin);
-	CNavFile* GetNavFile() { return &m_pMap->m_navfile; }
+	CNavFile* GetNavFile() { return m_pMap ? &m_pMap->m_navfile : nullptr; }
 	CMap* GetNavMap() { return m_pMap.get(); }
 
 	std::vector<Crumb_t>* GetCrumbs() { return &m_vCrumbs; }

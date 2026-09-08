@@ -19,7 +19,7 @@ public:
 		m_bOK = false;
 		m_vPlaces.clear();
 		m_vAreas.clear();
-		m_sMapName.append(szLevelname);
+		m_sMapName = szLevelname;
 		std::ifstream file(m_sMapName, std::ios::binary);
 		if (!file.is_open())
 			return;
@@ -174,13 +174,15 @@ public:
 				tSpot.m_iFromDir = iFromDir;
 				tSpot.m_iToDir = iToDir;
 
-				for (uint8_t s = 0; s < tSpot.m_uSpotCount; ++s)
-				{
-					SpotOrder_t tOrder{};
-					if (!Read(tOrder.m_uId) || !Read(tOrder.flT))
-						return;
-					tSpot.m_vSpots.push_back(tOrder);
-				}
+			for (uint8_t s = 0; s < tSpot.m_uSpotCount; ++s)
+			{
+				SpotOrder_t tOrder{};
+				unsigned char uT = 0;
+				if (!Read(tOrder.m_uId) || !Read(uT))
+					return;
+				tOrder.flT = uT;
+				tSpot.m_vSpots.push_back(tOrder);
+			}
 
 				tArea.m_vSpotEncounters.push_back(tSpot);
 			}
@@ -258,7 +260,22 @@ public:
 	// Might be related to the fact that im not using CUtlBuffer for saving this
 	bool Write(const char* szFilename = nullptr)
 	{
-		std::string sFilePath{ szFilename ? szFilename : std::filesystem::current_path().string() + "\\unibox\\Nav\\" + SDK::GetLevelName() + ".nav" };
+		if (!m_bOK)
+			return false;
+
+		std::filesystem::path tFilePath;
+		if (szFilename)
+			tFilePath = std::filesystem::path(szFilename);
+		else
+		{
+			const std::string sLevelName = SDK::GetLevelName();
+			if (sLevelName.empty() || sLevelName == "None")
+				return false;
+			tFilePath = std::filesystem::current_path() / "unibox" / "Nav" / (sLevelName + ".nav");
+		}
+		if (tFilePath.empty())
+			return false;
+
 		if (m_vPlaces.size() > (std::numeric_limits<uint16_t>::max)() || m_vAreas.size() > (std::numeric_limits<uint32_t>::max)())
 			return false;
 		for (const auto& tPlace : m_vPlaces)
@@ -283,10 +300,18 @@ public:
 					return false;
 		}
 
-		std::ofstream file(sFilePath, std::ios::binary | std::ios::trunc);
+		std::error_code tError;
+		if (!tFilePath.parent_path().empty())
+			std::filesystem::create_directories(tFilePath.parent_path(), tError);
+		if (tError)
+			return false;
+
+		std::filesystem::path tTempPath = tFilePath;
+		tTempPath += ".tmp";
+		std::ofstream file(tTempPath, std::ios::binary | std::ios::trunc);
 		if (!file.is_open())
 		{
-			SDK::Output("CNavFile::Write", std::format("Couldn't open file {}", sFilePath).c_str(), { 200, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			SDK::Output("CNavFile::Write", std::format("Couldn't open file {}", tFilePath.string()).c_str(), { 200, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 			return false;
 		}
 
@@ -348,11 +373,12 @@ public:
 
 				uint8_t uSpotCount = static_cast<uint8_t>(tEncounterSpot.m_vSpots.size());
 				file.write((char*)&uSpotCount, sizeof(unsigned char));
-				for (auto& tOrder : tEncounterSpot.m_vSpots)
-				{
-					file.write((char*)&tOrder.m_uId, sizeof(uint32_t));
-					file.write((char*)&tOrder.flT, sizeof(unsigned char));
-				}
+			for (auto& tOrder : tEncounterSpot.m_vSpots)
+			{
+				file.write((char*)&tOrder.m_uId, sizeof(uint32_t));
+				const unsigned char uT = static_cast<unsigned char>(tOrder.flT);
+				file.write((char*)&uT, sizeof(unsigned char));
+			}
 			}
 
 			file.write((char*)&tArea.m_uIndexType, sizeof(uint16_t));
@@ -385,9 +411,25 @@ public:
 
 		file.flush();
 		if (!file)
+		{
+			file.close();
+			std::filesystem::remove(tTempPath, tError);
 			return false;
+		}
 		file.close();
-		return !file.fail();
+		if (file.fail())
+		{
+			std::filesystem::remove(tTempPath, tError);
+			return false;
+		}
+
+		std::filesystem::rename(tTempPath, tFilePath, tError);
+		if (tError)
+		{
+			std::filesystem::remove(tTempPath, tError);
+			return false;
+		}
+		return true;
 	}
 
 	std::vector<NavPlace_t> m_vPlaces;

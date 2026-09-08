@@ -96,7 +96,8 @@ MAKE_HOOK(CBasePlayer_ItemPostFrame, S::CBasePlayer_ItemPostFrame(), void,
 	else
 	{
 		// not perfect but seems to work fine enough for casual use
-		auto pViewmodel = pLocal->m_hViewModel()->As<CBaseAnimating>();
+		auto pViewmodelEntity = pLocal->m_hViewModel().Get();
+		auto pViewmodel = pViewmodelEntity ? pViewmodelEntity->As<CBaseAnimating>() : nullptr;
 		if (!pViewmodel)
 			return CALL_ORIGINAL(rcx);
 

@@ -366,12 +366,15 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 			v = std::clamp(v, 0, int(c->m_vValues.size() - 1));
 		else
 		{
-			for (int i = 0; i < sizeof(int) * 8; i++)
+			unsigned int uValue = static_cast<unsigned int>(v);
+			for (int i = 0; i < MAX_GROUPS; i++)
 			{
-				bool bFound = v & (1 << i) && i < c->m_vValues.size();
+				const unsigned int uBit = 1u << i;
+				bool bFound = uValue & uBit && static_cast<size_t>(i) < c->m_vValues.size();
 				if (!bFound)
-					v &= ~(1 << i);
+					uValue &= ~uBit;
 			}
+			v = static_cast<int>(uValue);
 		}
 	}
 	else if (c->m_sExtra)
@@ -609,7 +612,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 
 		{
 			boost::property_tree::ptree tSub;
-			for (int iID = 0; iID < F::Groups.m_vGroups.size(); iID++)
+			for (int iID = 0; iID < F::Groups.m_vGroups.size() && iID < MAX_GROUPS; iID++)
 			{
 				auto& tGroup = F::Groups.m_vGroups[iID];
 
@@ -637,8 +640,6 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 				SaveJson(tChild, "Sightlines", tGroup.m_iSightlines);
 
 				tSub.put_child(std::to_string(iID), tChild);
-				if (F::Groups.m_vGroups.size() >= sizeof(int) * 8)
-					break;
 			}
 			tWrite.put_child("Groups", tSub);
 		}
@@ -769,6 +770,9 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 		{
 			for (auto& tChild : *tSub | std::views::values)
 			{
+				if (F::Groups.m_vGroups.size() >= MAX_GROUPS)
+					break;
+
 				Group_t tGroup = {};
 				LoadJson(tChild, "Name", tGroup.m_sName);
 				LoadJson(tChild, "Color", tGroup.m_tColor);
@@ -877,7 +881,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 
 		{
 			boost::property_tree::ptree tSub;
-			for (int iID = 0; iID < F::Groups.m_vGroups.size(); iID++)
+			for (int iID = 0; iID < F::Groups.m_vGroups.size() && iID < MAX_GROUPS; iID++)
 			{
 				auto& tGroup = F::Groups.m_vGroups[iID];
 
@@ -905,8 +909,6 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 				SaveJson(tChild, "Sightlines", tGroup.m_iSightlines);
 
 				tSub.put_child(std::to_string(iID), tChild);
-				if (F::Groups.m_vGroups.size() >= sizeof(int) * 8)
-					break;
 			}
 			tWrite.put_child("Groups", tSub);
 		}
@@ -979,6 +981,9 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		{
 			for (auto& tChild : *tSub | std::views::values)
 			{
+				if (F::Groups.m_vGroups.size() >= MAX_GROUPS)
+					break;
+
 				Group_t tGroup = {};
 				LoadJson(tChild, "Name", tGroup.m_sName);
 				LoadJson(tChild, "Color", tGroup.m_tColor);

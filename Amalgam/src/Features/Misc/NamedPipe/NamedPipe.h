@@ -11,6 +11,7 @@ class CNamedPipe
 {
 private:
 	HANDLE m_hPipe = INVALID_HANDLE_VALUE;
+	std::mutex m_pipeMutex;
 	std::atomic<bool> m_shouldRun = true;
 	std::thread m_pipeThread;
 	std::ofstream m_logFile;
@@ -79,6 +80,8 @@ private:
 	int GetReconnectDelayMs();
 
 	static void ConnectAndMaintainPipe();
+	bool HasPipe();
+	void ClosePipe();
 
 	void SendStatusUpdate(std::string sStatus);
 	void QueueCommand(std::string sCommand);

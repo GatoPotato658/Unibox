@@ -32,6 +32,7 @@ private:
 	int m_iFlags = false;
 
 public:
+	void Reset();
 	void Store(CTFPlayer* pLocal);
 	void RenderMain();
 	void RenderHandler(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);

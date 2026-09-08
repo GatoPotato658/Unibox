@@ -283,10 +283,14 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	const float flSideSign = (iEntIndex + pLocal->entindex()) % 2 ? 1.f : -1.f;
 	const Vector vAnchor = vPredictedOrigin + vForward * tProfile.m_flAheadDistance + vSide * (tProfile.m_flSideDistance * flSideSign);
 
-	std::vector<StalkCandidate_t> vCandidates{};
-	vCandidates.reserve(F::NavEngine.GetNavFile()->m_vAreas.size());
+	auto pNavFile = F::NavEngine.GetNavFile();
+	if (!pNavFile)
+		return false;
 
-	for (auto& tArea : F::NavEngine.GetNavFile()->m_vAreas)
+	std::vector<StalkCandidate_t> vCandidates{};
+	vCandidates.reserve(pNavFile->m_vAreas.size());
+
+	for (auto& tArea : pNavFile->m_vAreas)
 	{
 		auto vAreaOrigin = tArea.m_vCenter;
 

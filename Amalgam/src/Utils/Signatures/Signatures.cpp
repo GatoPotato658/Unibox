@@ -60,6 +60,7 @@ bool CSignature::Initialize()
 
 bool CSignatures::Initialize()
 {
+	m_bFailed = false;
 	for (auto pSignature : m_vSignatures)
 	{
 		if (!pSignature)

@@ -9,9 +9,20 @@
 void CBacktrack::Reset()
 {
 	m_mRecords.clear();
+	m_mDidShoot.clear();
 	m_dSequences.clear();
 	m_iLastInSequence = 0;
-	memset(m_tRecord.m_aBones, 0, sizeof(m_tRecord.m_aBones));
+	m_nOldInSequenceNr = 0;
+	m_nOldInReliableState = 0;
+	m_nLastInSequenceNr = 0;
+	m_nOldTickBase = 0;
+	m_flMaxUnlag = 1.f;
+	m_flFakeLatency = 0.f;
+	m_flFakeInterp = 0.015f;
+	m_bSettingUpBones = false;
+	m_iTickCount = 0;
+	m_flSentInterp = -1.f;
+	m_tRecord = {};
 }
 
 

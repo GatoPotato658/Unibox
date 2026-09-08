@@ -2,6 +2,23 @@
 
 #include "../../SDK.h"
 
+#include <algorithm>
+
+namespace
+{
+	void CacheSkipWeapon(CBaseEntity* pSkip, std::vector<int>& vWeapons, bool& bWeapon)
+	{
+		if (pSkip && pSkip->IsPlayer())
+		{
+			auto pPlayer = pSkip->As<CTFPlayer>();
+			auto pActiveWeapon = pPlayer->m_hActiveWeapon().Get();
+			if (auto pWeapon = pActiveWeapon ? pActiveWeapon->As<CTFWeaponBase>() : nullptr)
+				bWeapon = std::ranges::contains(vWeapons, pWeapon->GetWeaponID());
+		}
+		vWeapons.clear();
+	}
+}
+
 bool CTraceFilterHitscan::ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask)
 {
 	if (!pHandleEntity || pHandleEntity == m_pSkip)
@@ -35,23 +52,7 @@ bool CTraceFilterHitscan::ShouldHitEntity(IHandleEntity* pHandleEntity, int nCon
 	{
 		if (!(nContentsMask & CONTENTS_MOVEABLE)) return false;
 		if (m_iType != SKIP_CHECK && !m_vWeapons.empty())
-		{
-			if (m_pSkip && m_pSkip->IsPlayer())
-			{
-				auto pPlayer = m_pSkip->As<CTFPlayer>();
-				if (auto pWeapon = pPlayer->m_hActiveWeapon()->As<CTFWeaponBase>())
-				{
-					int iActiveWeaponID = pWeapon->GetWeaponID();
-					bool bFound = false;
-					for (int iWeaponId : m_vWeapons)
-					{
-						if (iWeaponId == iActiveWeaponID) { bFound = true; break; }
-					}
-					m_bWeapon = bFound;
-				}
-			}
-			m_vWeapons.clear();
-		}
+			CacheSkipWeapon(m_pSkip, m_vWeapons, m_bWeapon);
 
 		if (m_iType != SKIP_CHECK && (m_iWeapon == WEAPON_INCLUDE ? m_bWeapon : !m_bWeapon))
 			return m_iType == FORCE_HIT;
@@ -106,23 +107,7 @@ bool CTraceFilterCollideable::ShouldHitEntity(IHandleEntity* pHandleEntity, int 
 		if (m_iPlayer == PLAYER_NONE) return false;
 
 		if (m_iType != SKIP_CHECK && !m_vWeapons.empty())
-		{
-			if (m_pSkip && m_pSkip->IsPlayer())
-			{
-				auto pPlayer = m_pSkip->As<CTFPlayer>();
-				if (auto pWeapon = pPlayer->m_hActiveWeapon()->As<CTFWeaponBase>())
-				{
-					int iActiveWeaponID = pWeapon->GetWeaponID();
-					bool bFound = false;
-					for (int iWeaponId : m_vWeapons)
-					{
-						if (iWeaponId == iActiveWeaponID) { bFound = true; break; }
-					}
-					m_bWeapon = bFound;
-				}
-			}
-			m_vWeapons.clear();
-		}
+			CacheSkipWeapon(m_pSkip, m_vWeapons, m_bWeapon);
 
 		if (m_iType != SKIP_CHECK && (m_iWeapon == WEAPON_INCLUDE ? m_bWeapon : !m_bWeapon))
 			return m_iType == FORCE_HIT;

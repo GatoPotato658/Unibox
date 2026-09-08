@@ -334,7 +334,10 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 			}
 		}
 
-		for (auto& tArea : F::NavEngine.GetNavFile()->m_vAreas)
+		auto pNavFile = F::NavEngine.GetNavFile();
+		if (!pNavFile)
+			return;
+		for (auto& tArea : pNavFile->m_vAreas)
 		{
 			if (BlacklistedFromBuilding(&tArea))
 				continue;

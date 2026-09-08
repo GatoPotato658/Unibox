@@ -4,6 +4,8 @@
 #include "SteamProfileCache.h"
 #include "../Configs/Configs.h"
 
+#include <utility>
+
 void CPlayerlistCore::Run()
 {
 	F::SteamProfileCache.Pump();
@@ -94,6 +96,11 @@ void CPlayerlistCore::LoadPlayerlist()
 	if (!F::PlayerUtils.m_bLoad)
 		return;
 
+	decltype(F::PlayerUtils.m_vTags) vOldTags;
+	decltype(F::PlayerUtils.m_mPlayerTags) mOldPlayerTags;
+	decltype(F::PlayerUtils.m_mPlayerAliases) mOldPlayerAliases;
+	bool bOldSave = false;
+	bool bTransaction = false;
 	try
 	{
 		if (!std::filesystem::exists(F::Configs.m_sCorePath + "Players.json"))
@@ -104,6 +111,11 @@ void CPlayerlistCore::LoadPlayerlist()
 
 		boost::property_tree::ptree tRead;
 		read_json(F::Configs.m_sCorePath + "Players.json", tRead);
+		vOldTags = F::PlayerUtils.m_vTags;
+		mOldPlayerTags = F::PlayerUtils.m_mPlayerTags;
+		mOldPlayerAliases = F::PlayerUtils.m_mPlayerAliases;
+		bOldSave = F::PlayerUtils.m_bSave;
+		bTransaction = true;
 
 		F::PlayerUtils.m_mPlayerTags.clear();
 		F::PlayerUtils.m_mPlayerAliases.clear();
@@ -185,6 +197,13 @@ void CPlayerlistCore::LoadPlayerlist()
 	}
 	catch (...)
 	{
+		if (bTransaction)
+		{
+			F::PlayerUtils.m_vTags = std::move(vOldTags);
+			F::PlayerUtils.m_mPlayerTags = std::move(mOldPlayerTags);
+			F::PlayerUtils.m_mPlayerAliases = std::move(mOldPlayerAliases);
+			F::PlayerUtils.m_bSave = bOldSave;
+		}
 		SDK::Output("unibox", "Load playerlist failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 	}
 	F::PlayerUtils.m_bLoad = false;
@@ -199,8 +218,12 @@ void CPlayerlistCore::SaveCheaterlist()
 	{
 		const std::string sJson = F::PlayerUtils.ExportCheatersToJson();
 		std::ofstream fStream(F::Configs.m_sCorePath + "Cheaters.json", std::ios::out | std::ios::trunc);
+		if (!fStream)
+			throw std::ios_base::failure("failed to open cheaterlist");
+
 		fStream << sJson;
-		fStream.close();
+		if (!fStream)
+			throw std::ios_base::failure("failed to write cheaterlist");
 
 		F::PlayerUtils.m_bCheaterSave = false;
 		SDK::Output("unibox", "Saved cheaterlist", { 255, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
@@ -233,7 +256,12 @@ void CPlayerlistCore::LoadCheaterlist()
 		}
 
 		std::string sContents((std::istreambuf_iterator<char>(fStream)), std::istreambuf_iterator<char>());
-		fStream.close();
+		if (fStream.bad())
+		{
+			F::PlayerUtils.m_bCheaterLoad = false;
+			SDK::Output("unibox", "Load cheaterlist failed", { 255, 150, 150, 127 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			return;
+		}
 
 		if (F::PlayerUtils.ImportCheatersFromJson(sContents, false))
 		{

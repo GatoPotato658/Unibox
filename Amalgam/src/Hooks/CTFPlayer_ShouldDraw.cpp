@@ -21,10 +21,11 @@ MAKE_HOOK(CTFPlayer_ShouldDraw, S::CTFPlayer_ShouldDraw(), bool,
 	if (F::Spectate.HasTarget() && !I::EngineClient->IsHLTV())
 	{
 		auto pLocal = H::Entities.GetLocal();
-		auto pTarget = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(F::Spectate.GetTarget()))->As<CTFPlayer>();
+		auto pBaseTarget = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(F::Spectate.GetTarget()));
+		auto pTarget = pBaseTarget ? pBaseTarget->As<CTFPlayer>() : nullptr;
 		if (pLocal && pLocal->IsAlive() && rcx == pLocal->GetClientRenderable())
 			return true;
-		else if (pTarget && pTarget->IsAlive() && rcx == pTarget->GetClientRenderable())
+		else if (pTarget && pTarget->IsPlayer() && pTarget->IsAlive() && rcx == pTarget->GetClientRenderable())
 			return Vars::Visuals::Thirdperson::Enabled.Value;
 	}
 
@@ -53,10 +54,11 @@ MAKE_HOOK(CBasePlayer_ShouldDrawThisPlayer, S::CBasePlayer_ShouldDrawThisPlayer(
 			return false;
 
 		auto pLocal = H::Entities.GetLocal();
-		auto pTarget = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(F::Spectate.GetTarget()))->As<CTFPlayer>();
+		auto pBaseTarget = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(F::Spectate.GetTarget()));
+		auto pTarget = pBaseTarget ? pBaseTarget->As<CTFPlayer>() : nullptr;
 		if (pLocal && pLocal->IsAlive() && rcx == pLocal)
 			return true;
-		else if (pTarget && pTarget->IsAlive() && rcx == pTarget)
+		else if (pTarget && pTarget->IsPlayer() && pTarget->IsAlive() && rcx == pTarget)
 			return Vars::Visuals::Thirdperson::Enabled.Value;
 	}
 

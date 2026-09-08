@@ -4,6 +4,7 @@
 #include "Menu.h"
 #include "../Fonts/MaterialDesign/IconDefinitions.h"
 #include "../../Binds/Binds.h"
+#include "../../Visuals/Groups/Groups.h"
 #include "../../Visuals/Materials/Materials.h"
 #include <ImGui/imgui_internal.h>
 #include <ImGui/imgui_stdlib.h>
@@ -1878,7 +1879,7 @@ namespace ImGui
 			}
 			else
 			{
-				for (int i = 0; i < sizeof(int) * 8; i++)
+				for (int i = 0; i < MAX_GROUPS; i++)
 				{
 					bool bFound = *pVar & (1 << i) && std::find(vValues.begin(), vValues.end(), (1 << i)) != vValues.end();
 					if (!bFound)

@@ -66,7 +66,7 @@ MAKE_HOOK(CL_ProcessPacketEntities, S::CL_ProcessPacketEntities(), bool,
 	{
 		auto pWeapon = pLocal->GetWeaponFromSlot(iSlot);
 		if (!pWeapon)
-			break;
+			continue;
 
 		pWeapon->m_flCritTokenBucket() = tStorage.m_flCritTokenBucket;
 		pWeapon->m_nCritChecks() = tStorage.m_nCritChecks;

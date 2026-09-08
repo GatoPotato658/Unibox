@@ -11,6 +11,8 @@ Enum(Backtrack, Enabled = 1 << 0, Last = 1 << 1, First = 1 << 2, Always = 1 << 3
 Enum(Trajectory, Enabled = 1 << 0, IgnoreZ = 1 << 1, Predict = 1 << 2, Radius = 1 << 3, Trace = 1 << 4, Sphere = 1 << 5, Path = 1 << 6)
 Enum(Sightlines, Enabled = 1 << 0, IgnoreZ = 1 << 1)
 
+inline constexpr int MAX_GROUPS = sizeof(int) * 8;
+
 struct Group_t
 {
 	std::string m_sName = "";

@@ -1,7 +1,9 @@
 #include "../SDK/SDK.h"
 
+#include "../Features/Backtrack/Backtrack.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/Spectate/Spectate.h"
+#include "../Features/Visuals/Chams/Chams.h"
 #include "../Features/NavBot/NavEngine/NavEngine.h"
 #include "../Features/NavBot/Hazards/Hazards.h"
 #include "../Features/NavBot/NavBotJobs/NavBotJobs.h"
@@ -12,6 +14,8 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 {
 	DEBUG_RETURN(CHLClient_LevelShutdown, rcx);
 
+	F::Backtrack.Reset();
+	F::Chams.Reset();
 	H::Entities.Clear(true);
 	F::EnginePrediction.Unload();
 	F::Spectate.Reset();

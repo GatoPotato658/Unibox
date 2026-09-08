@@ -452,6 +452,11 @@ float CNavEngine::GetPathCost(const Vector& vStart, const Vector& vDestination, 
 CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
 {
 	static Timer tRefresh{};
+	if (!m_pMap)
+	{
+		m_pLocalArea = nullptr;
+		return nullptr;
+	}
 
 	const bool bAreaInvalid = !m_pLocalArea || !m_pMap->IsAreaValid(m_pLocalArea);
 	const bool bOutsideXY = !bAreaInvalid && !IsOverlappingExpandedLocal(m_pLocalArea, vLocalOrigin, HALF_PLAYER_WIDTH);
@@ -664,18 +669,18 @@ void CNavEngine::Reset(bool bForced)
 	m_uWorldGeneration++;
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
 
-	static std::string sPath = std::filesystem::current_path().string();
 	if (std::string sLevelName = I::EngineClient->GetLevelName(); !sLevelName.empty())
 	{
 		if (m_pMap) m_pMap->Reset();
 
-		if (bForced || !m_pMap || m_pMap->m_sMapName != sLevelName)
+		std::filesystem::path tNavPath = std::filesystem::current_path() / "tf" / sLevelName;
+		tNavPath.replace_extension(".nav");
+		const std::string sNavPath = tNavPath.string();
+		if (bForced || !m_pMap || m_pMap->m_sMapName != sNavPath || m_pMap->m_eState != NavStateEnum::Active)
 		{
 			if (m_pPathWorker) m_pPathWorker->Stop();
 			F::NavBotDanger.ResetSpawn();
 			F::Hazards.Reset();
-			sLevelName.erase(sLevelName.find_last_of('.'));
-			const std::string sNavPath = std::format("{}\\tf\\{}.nav", sPath, sLevelName);
 			if (Vars::Debug::Logging.Value)
 				SDK::Output("NavEngine", std::format("Nav File location: {}", sNavPath).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
 			m_pMap = std::make_unique<CMap>(sNavPath.c_str());

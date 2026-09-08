@@ -147,9 +147,10 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		bool bCanKeepTarget = F::NavEngine.IsPathing() && m_pCurrentTargetArea->m_vCenter.DistTo(vLocalOrigin) <= 4200.f;
 		if (pMap)
 		{
+			std::lock_guard lock(pMap->m_mutex);
 			auto tAreaKey = std::pair<CNavArea*, CNavArea*>(m_pCurrentTargetArea, m_pCurrentTargetArea);
 			auto it = pMap->m_mVischeckCache.find(tAreaKey);
-			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > I::GlobalVars->tickcount) && it->second.m_bStuckBlacklist)
+			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)) && it->second.m_bStuckBlacklist)
 				bCanKeepTarget = false;
 		}
 
@@ -193,7 +194,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	}
 
 	// Get all nav areas
-	for (auto& tArea : F::NavEngine.GetNavFile()->m_vAreas)
+	for (auto& tArea : pMap->m_navfile.m_vAreas)
 	{
 		if (!m_sConnectedAreas.contains(&tArea))
 			continue;
@@ -201,8 +202,9 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		float flBlacklistPenalty = 0.f;
 		if (pMap)
 		{
-			auto itBlacklist = F::NavEngine.GetFreeBlacklist()->find(&tArea);
-			if (itBlacklist != F::NavEngine.GetFreeBlacklist()->end())
+			std::lock_guard lock(pMap->m_mutex);
+			auto itBlacklist = pMap->m_mFreeBlacklist.find(&tArea);
+			if (itBlacklist != pMap->m_mFreeBlacklist.end())
 			{
 				flBlacklistPenalty = pMap->GetBlacklistPenalty(itBlacklist->second);
 				if (!std::isfinite(flBlacklistPenalty) || flBlacklistPenalty >= 4000.f)
@@ -213,9 +215,10 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		bool bSoftBlocked = false;
 		if (pMap)
 		{
+			std::lock_guard lock(pMap->m_mutex);
 			auto tAreaKey = std::pair<CNavArea*, CNavArea*>(&tArea, &tArea);
 			auto it = pMap->m_mVischeckCache.find(tAreaKey);
-			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > I::GlobalVars->tickcount))
+			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)))
 			{
 				if (it->second.m_bStuckBlacklist)
 					continue;

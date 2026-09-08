@@ -1,6 +1,9 @@
 #include "NavEngine.h"
 #include "../Hazards/Hazards.h"
 #include "../NavRuntime.h"
+#include <atomic>
+
+static std::atomic<float> s_flNavTickInterval{ 1.0f / 66.0f };
 
 float CMap::GetBlacklistPenalty(const BlacklistReason_t& tReason) const
 {
@@ -226,6 +229,7 @@ SolveContext CMap::BuildSolveContext()
 	auto pLocal = H::Entities.GetLocal();
 	tCtx.m_iTeam = pLocal ? pLocal->m_iTeamNum() : 0;
 	tCtx.m_iTickcount = I::GlobalVars ? I::GlobalVars->tickcount : 0;
+	s_flNavTickInterval.store(I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.0f), std::memory_order_relaxed);
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
 	tCtx.m_bIgnoreTraces = F::NavEngine.m_bIgnoreTraces;
 	if (pLocal)
@@ -312,7 +316,7 @@ const std::vector<CachedPathCrumb_t>* CMap::GetEdgeCrumbs(CNavArea* pFrom, CNavA
 	if (flUpDelta > PLAYER_CROUCHED_JUMP_HEIGHT)
 	{
 		auto& tEntry = m_mVischeckCache[tKey];
-		tEntry.m_iExpireTick = tCtx.m_iTickcount + static_cast<int>(90.f / (I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.f / 66.f)));
+		tEntry.m_iExpireTick = tCtx.m_iTickcount + static_cast<int>(90.f / s_flNavTickInterval.load(std::memory_order_relaxed));
 		tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
 		tEntry.m_bPassable = false;
 		tEntry.m_bStuckBlacklist = false;
@@ -324,7 +328,7 @@ const std::vector<CachedPathCrumb_t>* CMap::GetEdgeCrumbs(CNavArea* pFrom, CNavA
 	}
 
 	CachedConnection_t& tEntry = m_mVischeckCache[tKey];
-	tEntry.m_iExpireTick = tCtx.m_iTickcount + static_cast<int>(static_cast<float>(tCtx.m_iVischeckCacheSeconds) / (I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.f / 66.f)));
+	tEntry.m_iExpireTick = tCtx.m_iTickcount + static_cast<int>(static_cast<float>(tCtx.m_iVischeckCacheSeconds) / s_flNavTickInterval.load(std::memory_order_relaxed));
 	tEntry.m_eVischeckState = VischeckStateEnum::Visible;
 	tEntry.m_bPassable = true;
 	tEntry.m_bStuckBlacklist = false;
@@ -342,7 +346,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 
 	const int iTeam = tCtx.m_iTeam;
 	const int iNow = tCtx.m_iTickcount;
-	const float flTickInterval = I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.f);
+	const float flTickInterval = s_flNavTickInterval.load(std::memory_order_relaxed);
 	const int iCacheExpiry = iNow + static_cast<int>(static_cast<float>(tCtx.m_iVischeckCacheSeconds) / flTickInterval);
 	const int iUnreachableCacheExpiry = iNow + static_cast<int>(90.f / flTickInterval);
 

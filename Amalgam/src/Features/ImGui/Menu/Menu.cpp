@@ -781,7 +781,7 @@ void CMenu::MenuVisuals(int iTab)
 		{
 			static std::string sStaticName;
 
-			PushDisabled(F::Groups.m_vGroups.size() >= sizeof(int) * 8); // for active groups flags
+			PushDisabled(F::Groups.m_vGroups.size() >= MAX_GROUPS); // for active groups flags
 			{
 				FSDropdown("Name", &sStaticName, {}, FDropdownEnum::Left | FSDropdownEnum::AutoUpdate, -H::Draw.Unscale(FCalcTextSize("CREATE").x) - 36);
 
@@ -897,7 +897,7 @@ void CMenu::MenuVisuals(int iTab)
 							tGroup.m_sName = sInput;
 					}
 
-					PushDisabled(F::Groups.m_vGroups.size() >= sizeof(int) * 8);
+					PushDisabled(F::Groups.m_vGroups.size() >= MAX_GROUPS);
 					{
 						bDuplicate = FButton("Duplicate");
 					}

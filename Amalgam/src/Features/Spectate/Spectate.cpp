@@ -14,8 +14,9 @@ void CSpectate::NetUpdateEnd(CTFPlayer* pLocal)
 	CTFPlayer* pEntity = nullptr;
 	if (HasTarget())
 	{
-		pEntity = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(m_iTarget))->As<CTFPlayer>();
-		if (pEntity == pLocal)
+		auto pEntityBase = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(m_iTarget));
+		pEntity = pEntityBase ? pEntityBase->As<CTFPlayer>() : nullptr;
+		if (!pEntity || !pEntity->IsPlayer() || pEntity == pLocal)
 			m_iTarget = m_iIntendedTarget = -1;
 	}
 	if (!HasTarget())
