@@ -85,12 +85,28 @@ MAKE_HOOK(VGuiSurface_SetCursor, U::Memory.GetVirtual(I::MatSystemSurface, 51), 
 void WndProc::Initialize()
 {
 	hwWindow = SDK::GetTeamFortressWindow();
+	Original = nullptr;
+	if (!hwWindow)
+		return;
 
+	SetLastError(ERROR_SUCCESS);
 	Original = reinterpret_cast<WNDPROC>(SetWindowLongPtr(hwWindow, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(Func)));
+	if ((!Original && GetLastError() != ERROR_SUCCESS) || GetWindowLongPtr(hwWindow, GWLP_WNDPROC) != reinterpret_cast<LONG_PTR>(Func))
+	{
+		hwWindow = nullptr;
+		Original = nullptr;
+	}
 }
 
 void WndProc::Unload()
 {
-	SetWindowLongPtr(hwWindow, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(Original));
+	if (!hwWindow || !Original || GetWindowLongPtr(hwWindow, GWLP_WNDPROC) != reinterpret_cast<LONG_PTR>(Func))
+		return;
+
+	if (SetWindowLongPtr(hwWindow, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(Original)))
+	{
+		hwWindow = nullptr;
+		Original = nullptr;
+	}
 }
-#endif 
+#endif

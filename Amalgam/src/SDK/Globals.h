@@ -3,6 +3,7 @@
 #include "Definitions/Main/CUserCmd.h"
 #include "../Utils/Signatures/Signatures.h"
 #include "../Utils/Memory/Memory.h"
+#include <atomic>
 
 MAKE_SIGNATURE(RandomSeed, "client.dll", "0F B6 1D ? ? ? ? 89 9D", 0x0);
 
@@ -133,7 +134,7 @@ struct PasstimeMapGoalData_t
 
 namespace G
 {
-	inline bool Unload = false;
+	inline std::atomic_bool Unload = false;
 	inline bool SendPacket = false;
 
 	inline int Attacking = 0;

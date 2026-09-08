@@ -172,6 +172,11 @@ void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPla
 			SDK::Output("CAutoItem", "invalid_argument error making vSplitDefIdx vector.", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 			return;
 		}
+		catch (const std::out_of_range&)
+		{
+			SDK::Output("CAutoItem", "out_of_range error making vSplitDefIdx vector.", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			return;
+		}
 
 		auto pItem = pLocalInventory->GetFirstItemOfItemDef(vSplitDefIdx.at(0));
 
@@ -203,6 +208,11 @@ void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPla
 			catch (const std::invalid_argument&)
 			{
 				SDK::Output("CAutoItem", "invalid_argument error making result integer.", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				return;
+			}
+			catch (const std::out_of_range&)
+			{
+				SDK::Output("CAutoItem", "out_of_range error making result integer.", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 				return;
 			}
 
@@ -238,6 +248,11 @@ void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPla
 				catch (const std::invalid_argument&)
 				{
 					SDK::Output("CAutoItem", "invalid_argument error making vDefIndexes vector.", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+					return;
+				}
+				catch (const std::out_of_range&)
+				{
+					SDK::Output("CAutoItem", "out_of_range error making vDefIndexes vector.", { 255, 131, 131 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 					return;
 				}
 

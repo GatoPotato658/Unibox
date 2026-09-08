@@ -25,9 +25,9 @@ namespace FNV1A
 	{
 		uint32_t uHashed = uHash32;
 
-		for (std::size_t i = 0U; i < strlen(szString); ++i)
+		for (const char* p = szString; *p; ++p)
 		{
-			uHashed ^= szString[i];
+			uHashed ^= *p;
 			uHashed *= uPrime32;
 		}
 
@@ -37,9 +37,9 @@ namespace FNV1A
 	{
 		uint64_t uHashed = uHash64;
 
-		for (std::size_t i = 0U; i < strlen(szString); ++i)
+		for (const char* p = szString; *p; ++p)
 		{
-			uHashed ^= szString[i];
+			uHashed ^= *p;
 			uHashed *= uPrime64;
 		}
 

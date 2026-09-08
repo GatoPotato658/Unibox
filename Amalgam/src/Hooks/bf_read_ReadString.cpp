@@ -27,11 +27,11 @@ MAKE_HOOK(bf_read_ReadString, S::bf_read_ReadString(), bool,
 			return bReturn;
 
 		int iType; const char* sName = F::PlayerUtils.GetPlayerName(iTarget, nullptr, &iType);
-		if (iType == NameTypeEnum::None)
+		if (iType == NameTypeEnum::None || !pStr || maxLen <= 0)
 			return bReturn;
 
 		int iChar = 0;
-		while (1)
+		while (iChar < maxLen - 1)
 		{
 			char val = sName[iChar];
 			if (val == 0)
@@ -39,11 +39,8 @@ MAKE_HOOK(bf_read_ReadString, S::bf_read_ReadString(), bool,
 			else if (bLine && val == '\n')
 				break;
 
-			if (iChar < (maxLen - 1))
-			{
-				pStr[iChar] = val;
-				++iChar;
-			}
+			pStr[iChar] = val;
+			++iChar;
 		}
 		pStr[iChar] = 0;
 		if (pOutNumChars)

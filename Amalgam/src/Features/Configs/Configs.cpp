@@ -5,6 +5,67 @@
 #include "../Visuals/Groups/Groups.h"
 #include "../Visuals/Materials/Materials.h"
 
+#include <cctype>
+#include <functional>
+
+static bool IsSafeConfigName(const std::string& sConfigName)
+{
+	if (sConfigName.empty() || sConfigName == "." || sConfigName == ".." || sConfigName.size() > 128)
+		return false;
+
+	for (unsigned char c : sConfigName)
+	{
+		if (c < 32 || c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
+			return false;
+	}
+	if (sConfigName.back() == '.' || sConfigName.back() == ' ')
+		return false;
+
+	std::string sDevice = sConfigName.substr(0, sConfigName.find('.'));
+	for (char& c : sDevice)
+		c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+	if (sDevice == "CON" || sDevice == "PRN" || sDevice == "AUX" || sDevice == "NUL")
+		return false;
+	if (sDevice.size() == 4 && (sDevice.starts_with("COM") || sDevice.starts_with("LPT")) && sDevice.back() >= '1' && sDevice.back() <= '9')
+		return false;
+
+	return std::filesystem::path(sConfigName).filename() == sConfigName;
+}
+
+static std::filesystem::path GetConfigFilePath(const std::string& sDirectory, const std::string& sConfigName, const std::string& sExtension)
+{
+	if (!IsSafeConfigName(sConfigName))
+		return {};
+
+	const std::filesystem::path tDirectory = std::filesystem::path(sDirectory).lexically_normal();
+	const std::filesystem::path tPath = (tDirectory / (sConfigName + sExtension)).lexically_normal();
+	return tPath.parent_path() == tDirectory ? tPath : std::filesystem::path{};
+}
+
+using ConfigMapRestore = std::vector<std::function<void()>>;
+
+static ConfigMapRestore CaptureConfigMaps()
+{
+	ConfigMapRestore vRestore;
+	for (BaseVar* pBase : G::Vars)
+	{
+#define Capture(t) if (pBase->m_iType == typeid(t).hash_code()) { auto pVar = pBase->As<t>(); auto tMap = pVar->Map; vRestore.emplace_back([pVar, tMap = std::move(tMap)]() mutable { pVar->Map = std::move(tMap); }); }
+		Capture(bool)
+		else Capture(int)
+		else Capture(float)
+		else Capture(IntRange_t)
+		else Capture(FloatRange_t)
+		else Capture(std::string)
+		else Capture(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>))
+		else Capture(Color_t)
+		else Capture(Gradient_t)
+		else Capture(DragBox_t)
+		else Capture(WindowBox_t)
+#undef Capture
+	}
+	return vRestore;
+}
+
 template <class T> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const T& v)
 {
 	t.put(s, v);
@@ -431,8 +492,12 @@ void CConfigs::LoadState()
 
 		boost::property_tree::ptree tRead;
 		read_json(m_sStatePath, tRead);
-		m_sCurrentConfig = tRead.get("Config", m_sCurrentConfig);
-		m_sCurrentVisuals = tRead.get("Visuals", m_sCurrentVisuals);
+		const std::string sConfig = tRead.get("Config", m_sCurrentConfig);
+		const std::string sVisuals = tRead.get("Visuals", m_sCurrentVisuals);
+		if (IsSafeConfigName(sConfig))
+			m_sCurrentConfig = sConfig;
+		if (IsSafeConfigName(sVisuals))
+			m_sCurrentVisuals = sVisuals;
 	}
 	catch (...) {}
 }
@@ -489,6 +554,10 @@ static inline void LoadMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
 
 bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 {
+	const std::filesystem::path tPath = GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return false;
+
 	try
 	{
 		std::scoped_lock lock(F::Binds.m_mMutex);
@@ -574,7 +643,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 			tWrite.put_child("Groups", tSub);
 		}
 
-		write_json(m_sConfigPath + sConfigName + m_sConfigExtension, tWrite);
+		write_json(tPath.string(), tWrite);
 
 		m_sCurrentConfig = sConfigName; m_sCurrentVisuals = "";
 		SaveState();
@@ -592,10 +661,19 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 
 bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 {
+	const std::filesystem::path tPath = GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return false;
+
+	std::vector<Bind_t> vOldBinds;
+	std::vector<Group_t> vOldGroups;
+	ConfigMapRestore vRestore;
+	const std::string sOldCurrentConfig = m_sCurrentConfig;
+	const std::string sOldCurrentVisuals = m_sCurrentVisuals;
+	bool bTransaction = false;
 	try
 	{
-		std::scoped_lock lock(F::Binds.m_mMutex);
-		if (!std::filesystem::exists(m_sConfigPath + sConfigName + m_sConfigExtension))
+		if (!std::filesystem::exists(tPath))
 		{
 			if (sConfigName == std::string("default"))
 			{
@@ -604,9 +682,14 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 			}
 			return false;
 		}
+		std::scoped_lock lock(F::Binds.m_mMutex);
 
 		boost::property_tree::ptree tRead;
-		read_json(m_sConfigPath + sConfigName + m_sConfigExtension, tRead);
+		read_json(tPath.string(), tRead);
+		vOldBinds = F::Binds.m_vBinds;
+		vOldGroups = F::Groups.m_vGroups;
+		vRestore = CaptureConfigMaps();
+		bTransaction = true;
 
 		F::Binds.m_vBinds.clear();
 		F::Groups.m_vGroups.clear();
@@ -722,9 +805,21 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 		SaveState();
 		if (bNotify)
 			SDK::Output("unibox", std::format("Config {} loaded", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+		bTransaction = false;
 	}
 	catch (...)
 	{
+		if (bTransaction)
+		{
+			std::scoped_lock lock(F::Binds.m_mMutex);
+			F::Binds.m_vBinds = std::move(vOldBinds);
+			F::Groups.m_vGroups = std::move(vOldGroups);
+			for (auto& fRestore : vRestore)
+				fRestore();
+			m_sCurrentConfig = sOldCurrentConfig;
+			m_sCurrentVisuals = sOldCurrentVisuals;
+			F::Binds.SetVars(nullptr, nullptr, false);
+		}
 		SDK::Output("unibox", "Load config failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 		return false;
 	}
@@ -748,6 +843,10 @@ static inline void LoadMiscMain(BaseVar*& pBase, boost::property_tree::ptree& tT
 
 bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 {
+	const std::filesystem::path tPath = GetConfigFilePath(m_sVisualsPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return false;
+
 	try
 	{
 		std::scoped_lock lock(F::Binds.m_mMutex);
@@ -812,7 +911,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 			tWrite.put_child("Groups", tSub);
 		}
 
-		write_json(m_sVisualsPath + sConfigName + m_sConfigExtension, tWrite);
+		write_json(tPath.string(), tWrite);
 		m_sCurrentVisuals = sConfigName;
 		SaveState();
 
@@ -829,14 +928,25 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 
 bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 {
+	const std::filesystem::path tPath = GetConfigFilePath(m_sVisualsPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return false;
+
+	std::vector<Group_t> vOldGroups;
+	ConfigMapRestore vRestore;
+	const std::string sOldCurrentVisuals = m_sCurrentVisuals;
+	bool bTransaction = false;
 	try
 	{
 		std::scoped_lock lock(F::Binds.m_mMutex);
-		if (!std::filesystem::exists(m_sVisualsPath + sConfigName + m_sConfigExtension))
+		if (!std::filesystem::exists(tPath))
 			return false;
 
 		boost::property_tree::ptree tRead;
-		read_json(m_sVisualsPath + sConfigName + m_sConfigExtension, tRead);
+		read_json(tPath.string(), tRead);
+		vOldGroups = F::Groups.m_vGroups;
+		vRestore = CaptureConfigMaps();
+		bTransaction = true;
 
 		F::Groups.m_vGroups.clear();
 
@@ -904,9 +1014,19 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		SaveState();
 		if (bNotify)
 			SDK::Output("unibox", std::format("Visual config {} loaded", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+		bTransaction = false;
 	}
 	catch (...)
 	{
+		if (bTransaction)
+		{
+			std::scoped_lock lock(F::Binds.m_mMutex);
+			F::Groups.m_vGroups = std::move(vOldGroups);
+			for (auto& fRestore : vRestore)
+				fRestore();
+			m_sCurrentVisuals = sOldCurrentVisuals;
+			F::Binds.SetVars(nullptr, nullptr, false);
+		}
 		SDK::Output("unibox", "Load visuals failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 		return false;
 	}
@@ -924,6 +1044,10 @@ static inline void ResetMain(BaseVar*& pBase)
 
 void CConfigs::DeleteConfig(const std::string& sConfigName, bool bNotify)
 {
+	const std::filesystem::path tPath = GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return;
+
 	try
 	{
 		if (FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32Const("default"))
@@ -932,7 +1056,7 @@ void CConfigs::DeleteConfig(const std::string& sConfigName, bool bNotify)
 			return;
 		}
 
-		std::filesystem::remove(m_sConfigPath + sConfigName + m_sConfigExtension);
+		std::filesystem::remove(tPath);
 		if (FNV1A::Hash32(m_sCurrentConfig.c_str()) == FNV1A::Hash32(sConfigName.c_str()))
 			LoadConfig("default", false);
 
@@ -947,6 +1071,9 @@ void CConfigs::DeleteConfig(const std::string& sConfigName, bool bNotify)
 
 void CConfigs::ResetConfig(const std::string& sConfigName, bool bNotify)
 {
+	if (GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension).empty())
+		return;
+
 	try
 	{
 		F::Binds.m_vBinds.clear();
@@ -986,9 +1113,13 @@ void CConfigs::ResetConfig(const std::string& sConfigName, bool bNotify)
 
 void CConfigs::DeleteVisual(const std::string& sConfigName, bool bNotify)
 {
+	const std::filesystem::path tPath = GetConfigFilePath(m_sVisualsPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return;
+
 	try
 	{
-		std::filesystem::remove(m_sVisualsPath + sConfigName + m_sConfigExtension);
+		std::filesystem::remove(tPath);
 
 		if (bNotify)
 			SDK::Output("unibox", std::format("Visual config {} deleted", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
@@ -1001,6 +1132,9 @@ void CConfigs::DeleteVisual(const std::string& sConfigName, bool bNotify)
 
 void CConfigs::ResetVisual(const std::string& sConfigName, bool bNotify)
 {
+	if (GetConfigFilePath(m_sVisualsPath, sConfigName, m_sConfigExtension).empty())
+		return;
+
 	try
 	{
 		F::Groups.m_vGroups.clear();

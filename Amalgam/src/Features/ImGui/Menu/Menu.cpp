@@ -295,6 +295,7 @@ void CMenu::DrawMenu()
 			{ "CONFIG", "BINDS", "MATERIALS", "MISC##" }
 		};
 		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSettingsTab = 0;
+		iTab = std::clamp(iTab, 0, int(vSubTabs.size() - 1));
 		bool bHasSubTabs = !vSubTabs[iTab].empty();
 		float flHeaderHeight = flNavHeight + (bHasSubTabs ? flSubTabHeight : 0.f);
 		float flBrandWidth = H::Draw.Scale(140);
@@ -4003,7 +4004,9 @@ void CMenu::MenuSettings(int iTab)
 				{
 					if (FButton("Create", FButtonEnum::Fit | FButtonEnum::SameLine, { 0, 40 }))
 					{
-						if (!std::filesystem::exists(sPath + sStaticName))
+						std::error_code tError;
+						const auto tConfigPath = std::filesystem::path(sPath) / (sStaticName + F::Configs.m_sConfigExtension);
+						if (!std::filesystem::exists(tConfigPath, tError) && !tError)
 						{
 							if (!bVisual)
 								F::Configs.SaveConfig(sStaticName);
@@ -4022,9 +4025,12 @@ void CMenu::MenuSettings(int iTab)
 
 				std::vector<std::pair<std::filesystem::directory_entry, std::string>> vConfigs = {};
 				bool bDefaultFound = false;
-				for (auto& tEntry : std::filesystem::directory_iterator(sPath))
+				std::error_code tError;
+				for (std::filesystem::directory_iterator tIterator(sPath, tError), tEnd; !tError && tIterator != tEnd; tIterator.increment(tError))
 				{
-					if (!tEntry.is_regular_file() || tEntry.path().extension() != F::Configs.m_sConfigExtension)
+					auto& tEntry = *tIterator;
+					std::error_code tEntryError;
+					if (!tEntry.is_regular_file(tEntryError) || tEntryError || tEntry.path().extension() != F::Configs.m_sConfigExtension)
 						continue;
 
 					std::string sName = tEntry.path().filename().string();

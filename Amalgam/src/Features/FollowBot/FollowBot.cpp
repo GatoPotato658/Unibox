@@ -176,7 +176,8 @@ void CFollowBot::UpdateLockedTarget(CTFPlayer* pLocal)
 	}
 	*/
 
-	if (!(m_tLockedTarget.m_pPlayer = I::ClientEntityList->GetClientEntity(m_tLockedTarget.m_iEntIndex)->As<CTFPlayer>()))
+	auto pEntity = I::ClientEntityList->GetClientEntity(m_tLockedTarget.m_iEntIndex);
+	if (!(m_tLockedTarget.m_pPlayer = pEntity ? pEntity->As<CTFPlayer>() : nullptr))
 		return;
 
 	if (!IsValidTarget(pLocal, m_tLockedTarget.m_pPlayer))

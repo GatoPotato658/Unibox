@@ -69,7 +69,7 @@ private:
 		{668,  {2212, "TF_MAPS_FOUNDRY_ACHIEVE_PROGRESS1"}},	// Full Head Of Steam - Foundry Milestone
 		{756,  {2412, "TF_MAPS_DOOMSDAY_ACHIEVE_PROGRESS1"}},	// Gentle Munitionne of Leisure - Doomsday Milestone
 		{941,  {1912, "TF_HALLOWEEN_MERASMUS_COLLECT_LOOT"}},	// Skull Island Topper - A Lovely Vacation Spot
-		{581,  {1911, "TF_HALLOWEEN_LOOT_ISLAND"}},				// Bombinomicon - Dive Into a Good Book
+		{583,  {1911, "TF_HALLOWEEN_LOOT_ISLAND"}},				// Bombinomicon - Dive Into a Good Book
 		{744,  {156, "TF_DOMINATE_FOR_GOGGLES"}},				// Pyrovision Goggles - A Fresh Pair of Eyes
 		{1164, {167, "TF_PASS_TIME_GRIND"}},					// Civilian Grade JACK Hat - Jackpot!
 		{1169, {166, "TF_PASS_TIME_HAT"}},						// Military Grade JACK Hat - Tune Merasmus's Multi-Dimensional Television

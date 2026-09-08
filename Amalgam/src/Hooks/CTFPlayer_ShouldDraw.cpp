@@ -65,9 +65,9 @@ MAKE_HOOK(CBasePlayer_ShouldDrawThisPlayer, S::CBasePlayer_ShouldDrawThisPlayer(
 }
 
 MAKE_HOOK(CBasePlayer_ShouldDrawLocalPlayer, S::CBasePlayer_ShouldDrawLocalPlayer(), bool,
-	/*void* rcx*/)
+	void* rcx)
 {
-	DEBUG_RETURN(CBasePlayer_ShouldDrawThisPlayer, /*rcx*/);
+	DEBUG_RETURN(CBasePlayer_ShouldDrawLocalPlayer, rcx);
 
 #ifdef TEXTMODE
 	return false;
@@ -85,7 +85,7 @@ MAKE_HOOK(CBasePlayer_ShouldDrawLocalPlayer, S::CBasePlayer_ShouldDrawLocalPlaye
 			return true;
 	}
 
-	return CALL_ORIGINAL(/*rcx*/);
+	return CALL_ORIGINAL(rcx);
 #endif
 }
 

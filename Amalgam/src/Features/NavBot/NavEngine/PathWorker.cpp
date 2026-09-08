@@ -19,14 +19,19 @@ namespace PathWorker
 	void CPathWorker::Stop()
 	{
 		m_bRunning.store(false, std::memory_order_release);
+		{
+			std::lock_guard lock(m_mPending);
+			if (m_oPending) m_oPending->m_tToken.Cancel();
+			if (m_pActiveCancellation) m_pActiveCancellation->store(true, std::memory_order_relaxed);
+		}
 		m_cvPending.notify_all();
 		if (m_tWorker.joinable())
 			m_tWorker.join();
 
 		{
 			std::lock_guard lock(m_mPending);
-			if (m_oPending) m_oPending->m_tToken.Cancel();
 			m_oPending.reset();
+			m_pActiveCancellation.reset();
 		}
 		{
 			std::lock_guard lock(m_mCompleted);
@@ -43,6 +48,7 @@ namespace PathWorker
 
 		{
 			std::lock_guard lock(m_mPending);
+			if (m_pActiveCancellation) m_pActiveCancellation->store(true, std::memory_order_relaxed);
 			if (m_oPending) m_oPending->m_tToken.Cancel();
 			m_oPending = std::move(tRequest);
 		}
@@ -53,6 +59,7 @@ namespace PathWorker
 	void CPathWorker::CancelAll()
 	{
 		std::lock_guard lock(m_mPending);
+		if (m_pActiveCancellation) m_pActiveCancellation->store(true, std::memory_order_relaxed);
 		if (m_oPending) m_oPending->m_tToken.Cancel();
 		m_oPending.reset();
 	}
@@ -79,6 +86,7 @@ namespace PathWorker
 				if (!m_oPending) continue;
 				tRequest = std::move(*m_oPending);
 				m_oPending.reset();
+				m_pActiveCancellation = tRequest.m_tToken.m_pCancelled;
 			}
 
 			if (tRequest.m_tToken.IsCancelled() || !m_pMap)
@@ -94,6 +102,10 @@ namespace PathWorker
 				tResult.m_iSolveResult      = -1;
 				tResult.m_bCancelled        = true;
 
+				{
+					std::lock_guard lock(m_mPending);
+					m_pActiveCancellation.reset();
+				}
 				std::lock_guard lock(m_mCompleted);
 				m_vCompleted.push_back(std::move(tResult));
 				continue;
@@ -120,6 +132,10 @@ namespace PathWorker
 			tResult.m_bCancelled        = tRequest.m_tToken.IsCancelled();
 			tResult.m_vCrumbs           = std::move(vCrumbs);
 
+			{
+				std::lock_guard lock(m_mPending);
+				m_pActiveCancellation.reset();
+			}
 			std::lock_guard lock(m_mCompleted);
 			while (m_vCompleted.size() >= 4)
 				m_vCompleted.erase(m_vCompleted.begin());

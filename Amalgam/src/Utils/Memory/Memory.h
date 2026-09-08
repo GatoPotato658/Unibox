@@ -56,8 +56,15 @@ public:
 	template <typename T>
 	inline T GetModuleExport(const char* szModule, const char* szExport)
 	{
+		if (!szModule || !szExport)
+			return nullptr;
+
 		if (const auto hModule = GetModuleHandle(szModule))
-			return reinterpret_cast<T>(GetProcAddress(hModule, szExport));
+		{
+			if (const auto pProc = GetProcAddress(hModule, szExport))
+				return reinterpret_cast<T>(pProc);
+		}
+
 		return reinterpret_cast<T>(nullptr);
 	}
 };

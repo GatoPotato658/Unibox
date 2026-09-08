@@ -348,8 +348,10 @@ void CEntities::Store()
 					}
 					else if (nClassID == ETFClassID::CTFProjectile_Flare && pEntity->m_hOwnerEntity().GetEntryIndex() == nLocalIndex)
 					{
-						auto pLauncher = pEntity->As<CTFProjectile_Flare>()->m_hLauncher()->As<CTFWeaponBase>();
-						if (pLauncher && pLauncher->As<CTFFlareGun>()->GetFlareGunType() == FLAREGUN_DETONATE)
+						auto pLauncherEntity = pEntity->As<CTFProjectile_Flare>()->m_hLauncher().Get();
+						auto pLauncher = pLauncherEntity ? pLauncherEntity->As<CTFWeaponBase>() : nullptr;
+						auto pFlareGun = pLauncher ? pLauncher->As<CTFFlareGun>() : nullptr;
+						if (pFlareGun && pFlareGun->GetFlareGunType() == FLAREGUN_DETONATE)
 							m_aGroups[EntityEnum::LocalFlares].push_back(pEntity);
 					}
 					break;
@@ -449,8 +451,16 @@ void CEntities::ManualNetwork(const StartSoundParams_t& params)
 	switch (pEntity->GetClassID())
 	{
 	case ETFClassID::CTFPlayer:
-		pEntity->As<CTFPlayer>()->m_vecVelocity() = (params.origin - pEntity->m_vecOrigin()) / std::min(I::GlobalVars->curtime - s_mDormancy[n].m_flLastUpdate, 1.f);
-		pEntity->SetAbsVelocity(pEntity->As<CTFPlayer>()->m_vecVelocity()); SetAvgVelocity(pEntity->entindex(), pEntity->As<CTFPlayer>()->m_vecVelocity());
+		auto pPlayer = pEntity->As<CTFPlayer>();
+		if (!pPlayer)
+			break;
+
+		float flTime = std::min(I::GlobalVars->curtime - s_mDormancy[n].m_flLastUpdate, 1.f);
+		if (flTime <= 0.f)
+			break;
+
+		pPlayer->m_vecVelocity() = (params.origin - pEntity->m_vecOrigin()) / flTime;
+		pEntity->SetAbsVelocity(pPlayer->m_vecVelocity()); SetAvgVelocity(pEntity->entindex(), pPlayer->m_vecVelocity());
 	}
 	pEntity->SetAbsOrigin(pEntity->m_vecOrigin() = params.origin);
 
@@ -596,7 +606,14 @@ float CEntities::GetDeltaTime(uint16_t iIndex) { return iIndex < MAX_PLAYERS ? m
 float CEntities::GetLagTime(uint16_t iIndex) { return iIndex < MAX_PLAYERS ? m_aLagTimes[iIndex] : TICK_INTERVAL; }
 int CEntities::GetChoke(uint16_t iIndex) { return iIndex < MAX_PLAYERS ? m_aChokes[iIndex] : 0; }
 Vec3 CEntities::GetEyeAngles(uint16_t iIndex) { return iIndex < MAX_PLAYERS ? m_aEyeAngles[iIndex] : Vec3(); }
-Vec3 CEntities::GetDeltaAngles(uint16_t iIndex) { return iIndex < MAX_PLAYERS ? m_aEyeAngles[iIndex].DeltaAngle(m_aOldAngles[iIndex]) / GetLagTime(iIndex) * (F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke())) : Vec3(); }
+Vec3 CEntities::GetDeltaAngles(uint16_t iIndex)
+{
+	if (iIndex >= MAX_PLAYERS)
+		return {};
+
+	const float flLagTime = GetLagTime(iIndex);
+	return flLagTime > 0.f ? m_aEyeAngles[iIndex].DeltaAngle(m_aOldAngles[iIndex]) / flLagTime * (F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke())) : Vec3();
+}
 bool CEntities::GetLagCompensation(uint16_t iIndex) { return iIndex < MAX_PLAYERS ? m_aLagCompensation[iIndex] : false; }
 void CEntities::SetLagCompensation(uint16_t iIndex, bool bLagComp) { if (iIndex < MAX_PLAYERS) m_aLagCompensation[iIndex] = bLagComp; }
 Vec3* CEntities::GetAvgVelocity(uint16_t iIndex) { return iIndex < MAX_PLAYERS && iIndex != I::EngineClient->GetLocalPlayer() ? &m_aAvgVelocities[iIndex] : nullptr; }

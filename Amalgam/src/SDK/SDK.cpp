@@ -755,10 +755,12 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 			break;
 		case TF_WEAPON_LASER_POINTER:
 		{
-			auto pOwner = pWeapon->m_hOwner().Get()->As<CTFPlayer>();
+			auto pOwnerEntity = pWeapon->m_hOwner().Get();
+			auto pOwner = pOwnerEntity ? pOwnerEntity->As<CTFPlayer>() : nullptr;
 			if (pOwner && pOwner->IsPlayer())
 			{
-				auto pSentryGun = pOwner->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+				auto pSentryEntity = pOwner->GetObjectOfType(OBJ_SENTRYGUN);
+				auto pSentryGun = pSentryEntity ? pSentryEntity->As<CObjectSentrygun>() : nullptr;
 				if (pSentryGun && pSentryGun->m_bPlayerControlled() && !pSentryGun->IsDisabled() && pSentryGun->m_iUpgradeLevel() > 2 && pSentryGun->m_iAmmoRockets() != 0)
 					*pSecondaryType = EWeaponType::PROJECTILE;
 			}
@@ -767,7 +769,8 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 		}
 		case TF_WEAPON_MECHANICAL_ARM:
 		{
-			auto pOwner = pWeapon->m_hOwner().Get()->As<CTFPlayer>();
+			auto pOwnerEntity = pWeapon->m_hOwner().Get();
+			auto pOwner = pOwnerEntity ? pOwnerEntity->As<CTFPlayer>() : nullptr;
 			if (pOwner && pOwner->IsPlayer() && pOwner->m_iMetalCount() >= 65)
 				*pSecondaryType = EWeaponType::PROJECTILE;
 		}
@@ -1575,6 +1578,9 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 				float flMeterMult = S::IHasGenericMeter_GetMeterMultiplier.Call<float>(pWeapon->m_pMeter());
 				float flRate = SDK::AttribHookValue(1.f, "item_meter_charge_rate", pWeapon) - 1;
 				float flMult = SDK::AttribHookValue(1.f, "mult_item_meter_charge_rate", pWeapon);
+				if (flRate <= 0.f || flMult <= 0.f)
+					break;
+
 				float flTankPressure = pLocal->m_flTankPressure() + flFrametime * flMeterMult / (flRate * flMult);
 
 				if (bPrimary && flTankPressure < 100.f)
@@ -1599,7 +1605,8 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 			break;
 		case TF_WEAPON_LASER_POINTER:
 		{
-			auto pSentry = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+			auto pSentryEntity = pLocal->GetObjectOfType(OBJ_SENTRYGUN);
+			auto pSentry = pSentryEntity ? pSentryEntity->As<CObjectSentrygun>() : nullptr;
 			if (!pSentry || !pSentry->m_bPlayerControlled() || pSentry->IsDisabled())
 			{
 				bPrimary = bSecondary = false;

@@ -6,6 +6,8 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <charconv>
+#include <cmath>
 
 static const std::string sBase64Chars =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -72,14 +74,39 @@ static bool TryParsePipeFrame(const std::string& sFrame, std::string& sBotNumber
 	if (!std::getline(iss, sBotNumber, ':') || !std::getline(iss, sMessageType, ':'))
 		return false;
 
+	uint32_t uBotNumber = 0;
+	const auto [pEnd, ec] = std::from_chars(sBotNumber.data(), sBotNumber.data() + sBotNumber.size(), uBotNumber);
+	if (ec != std::errc{} || pEnd != sBotNumber.data() + sBotNumber.size())
+		return false;
+
 	std::getline(iss, sContent);
 	return !sMessageType.empty();
+}
+
+static bool TryParseInt(const std::string& sValue, int& iValue)
+{
+	const auto [pEnd, ec] = std::from_chars(sValue.data(), sValue.data() + sValue.size(), iValue);
+	return ec == std::errc{} && pEnd == sValue.data() + sValue.size();
+}
+
+static bool TryParseUInt32(const std::string& sValue, uint32_t& uValue)
+{
+	const auto [pEnd, ec] = std::from_chars(sValue.data(), sValue.data() + sValue.size(), uValue);
+	return ec == std::errc{} && pEnd == sValue.data() + sValue.size();
+}
+
+static bool TryParseFloat(const std::string& sValue, float& flValue)
+{
+	const auto [pEnd, ec] = std::from_chars(sValue.data(), sValue.data() + sValue.size(), flValue, std::chars_format::general);
+	return ec == std::errc{} && pEnd == sValue.data() + sValue.size() && std::isfinite(flValue);
 }
 
 const char* PIPE_NAME = "\\\\.\\pipe\\AwootismBotPipe";
 const int BASE_RECONNECT_DELAY_MS = 500;
 const int MAX_RECONNECT_DELAY_MS = 10000;
 const size_t MAX_PENDING_COMMANDS = 64;
+const size_t MAX_PENDING_MESSAGES = 256;
+const size_t MAX_PIPE_FRAME_SIZE = 1024 * 1024;
 
 static double GetNowSeconds()
 {
@@ -88,6 +115,7 @@ static double GetNowSeconds()
 
 void CNamedPipe::Initialize()
 {
+	m_shouldRun.store(true);
 	Log("NamedPipe::Initialize() called");
 	m_logFile.open("C:\\pipe_log.txt", std::ios::app);
 	if (!m_logFile.is_open())
@@ -112,7 +140,10 @@ void CNamedPipe::Shutdown()
 {
 	m_shouldRun.store(false);
 	if (m_pipeThread.joinable())
+	{
+		CancelSynchronousIo(m_pipeThread.native_handle());
 		m_pipeThread.join();
+	}
 }
 
 void CNamedPipe::Store(CTFPlayer* pLocal, bool bCreateMove)
@@ -267,7 +298,7 @@ void CNamedPipe::ConnectAndMaintainPipe()
 	F::NamedPipe.Log("ConnectAndMaintainPipe started");
 	srand(static_cast<unsigned int>(time(nullptr)));
 
-	static std::string sReadBuffer;
+	std::string sReadBuffer;
 
 	while (F::NamedPipe.m_shouldRun.load())
 	{
@@ -415,6 +446,13 @@ void CNamedPipe::ConnectAndMaintainPipe()
 					size_t newlinePos;
 					while ((newlinePos = sReadBuffer.find('\n', pos)) != std::string::npos)
 					{
+						if (newlinePos - pos > MAX_PIPE_FRAME_SIZE)
+						{
+							F::NamedPipe.Log("Received oversized message frame");
+							pos = newlinePos + 1;
+							continue;
+						}
+
 						std::string sLine = sReadBuffer.substr(pos, newlinePos - pos);
 						pos = newlinePos + 1;
 
@@ -446,6 +484,11 @@ void CNamedPipe::ConnectAndMaintainPipe()
 							F::NamedPipe.Log("Received unknown message type: " + sMessageType);
 					}
 					sReadBuffer.erase(0, pos);
+					if (sReadBuffer.size() > MAX_PIPE_FRAME_SIZE)
+					{
+						F::NamedPipe.Log("Discarding oversized unterminated message frame");
+						sReadBuffer.clear();
+					}
 				}
 			}
 		}
@@ -461,7 +504,7 @@ void CNamedPipe::ConnectAndMaintainPipe()
 		F::NamedPipe.m_vMessageQueue.clear();
 	}
 
-	if (F::NamedPipe.m_hPipe != INVALID_HANDLE_VALUE)
+	if (F::NamedPipe.m_hPipe != INVALID_HANDLE_VALUE && F::NamedPipe.m_shouldRun.load())
 	{
 		try
 		{
@@ -531,19 +574,27 @@ void CNamedPipe::QueueMessage(std::string sType, std::string sContent, bool bIsP
 {
 	std::lock_guard lock(m_messageQueueMutex);
 
-	if (bIsPriority || m_vMessageQueue.size() < 100)
+	if (m_vMessageQueue.size() < MAX_PENDING_MESSAGES)
 		m_vMessageQueue.push_back({ sType, sContent, bIsPriority });
 	else
 	{
+		auto pEviction = m_vMessageQueue.end();
 		for (auto it = m_vMessageQueue.begin(); it != m_vMessageQueue.end(); ++it)
 		{
 			if (!it->m_bIsPriority)
 			{
-				m_vMessageQueue.erase(it);
-				m_vMessageQueue.push_back({ sType, sContent, bIsPriority });
+				pEviction = it;
 				break;
 			}
 		}
+		if (pEviction == m_vMessageQueue.end())
+		{
+			if (!bIsPriority)
+				return;
+			pEviction = m_vMessageQueue.begin();
+		}
+		m_vMessageQueue.erase(pEviction);
+		m_vMessageQueue.push_back({ sType, sContent, bIsPriority });
 	}
 }
 
@@ -552,19 +603,23 @@ void CNamedPipe::ProcessMessageQueue()
 	if (m_hPipe == INVALID_HANDLE_VALUE)
 		return;
 
-	std::lock_guard lock(m_messageQueueMutex);
-	if (m_vMessageQueue.empty())
-		return;
-
 	int processCount = 0;
-	auto it = m_vMessageQueue.begin();
-	while (it != m_vMessageQueue.end() && processCount < 10)
+	while (processCount < 10)
 	{
+		PendingMessage tMessage;
+		{
+			std::lock_guard lock(m_messageQueueMutex);
+			if (m_vMessageQueue.empty())
+				break;
+			tMessage = std::move(m_vMessageQueue.front());
+			m_vMessageQueue.erase(m_vMessageQueue.begin());
+		}
+
 		std::string sContent;
 		if (m_iBotId != -1)
-			sContent = std::to_string(m_iBotId) + ":" + it->m_sType + ":" + it->m_sContent;
+			sContent = std::to_string(m_iBotId) + ":" + tMessage.m_sType + ":" + tMessage.m_sContent;
 		else
-			sContent = "0:" + it->m_sType + ":" + it->m_sContent;
+			sContent = "0:" + tMessage.m_sType + ":" + tMessage.m_sContent;
 
 		std::string sMessage = EncodePipeMessage(sContent);
 
@@ -572,10 +627,11 @@ void CNamedPipe::ProcessMessageQueue()
 		BOOL bSuccess = WriteFile(m_hPipe, sMessage.c_str(), static_cast<DWORD>(sMessage.length()), &dwBytesWritten, NULL);
 		if (bSuccess && dwBytesWritten == sMessage.length())
 		{
-			it = m_vMessageQueue.erase(it);
 			processCount++;
 			continue;
 		}
+
+		QueueMessage(std::move(tMessage.m_sType), std::move(tMessage.m_sContent), tMessage.m_bIsPriority);
 
 		const DWORD dwError = GetLastError();
 		Log("Failed to write queued message: " + std::to_string(dwError) + " - " + GetErrorMessage(dwError));
@@ -711,7 +767,13 @@ void CNamedPipe::ProcessLocalBotMessage(std::string sContent)
 			if (vTokens.empty())
 				return;
 
-			uint32_t uAccountID = static_cast<uint32_t>(std::stoull(vTokens[0]));
+			uint32_t uAccountID = 0;
+			if (!TryParseUInt32(vTokens[0], uAccountID) || uAccountID == 0)
+				return;
+
+			int iBotId = -1;
+			if (vTokens.size() >= 3 && (!TryParseInt(vTokens[2], iBotId) || vTokens[1].empty()))
+				return;
 
 			{
 				std::lock_guard lock(m_localBotsMutex);
@@ -723,7 +785,7 @@ void CNamedPipe::ProcessLocalBotMessage(std::string sContent)
 				std::lock_guard lock(m_otherBotsMutex);
 				OtherBotInfo_t& tInfo = m_mOtherBots[uAccountID];
 				tInfo.m_sServerIP = vTokens[1];
-				tInfo.m_iBotId = std::stoi(vTokens[2]);
+				tInfo.m_iBotId = iBotId;
 				tInfo.m_flLastUpdate = GetNowSeconds();
 			}
 
@@ -811,14 +873,21 @@ void CNamedPipe::ProcessCaptureReservationMessage(const std::string& sContent)
 			return;
 
 		const std::string& sMap = vTokens[1];
-		int iPointIdx = std::stoi(vTokens[2]);
+		int iPointIdx = -1;
+		if (!TryParseInt(vTokens[2], iPointIdx) || iPointIdx < 0)
+			return;
 		Vector vSpot{};
-		vSpot.x = std::stof(vTokens[3]);
-		vSpot.y = std::stof(vTokens[4]);
-		vSpot.z = std::stof(vTokens[5]);
-		uint32_t uOwner = static_cast<uint32_t>(std::stoull(vTokens[6]));
-		float flDuration = std::stof(vTokens[7]);
-		int iBotId = std::stoi(vTokens[8]);
+		if (!TryParseFloat(vTokens[3], vSpot.x) || !TryParseFloat(vTokens[4], vSpot.y) || !TryParseFloat(vTokens[5], vSpot.z))
+			return;
+		uint32_t uOwner = 0;
+		if (!TryParseUInt32(vTokens[6], uOwner) || uOwner == 0)
+			return;
+		float flDuration = 0.f;
+		if (!TryParseFloat(vTokens[7], flDuration) || flDuration <= 0.f)
+			return;
+		int iBotId = -1;
+		if (!TryParseInt(vTokens[8], iBotId))
+			return;
 
 		const double flExpiry = GetNowSeconds() + flDuration;
 
@@ -856,8 +925,12 @@ void CNamedPipe::ProcessCaptureReservationMessage(const std::string& sContent)
 			return;
 
 		const std::string& sMap = vTokens[1];
-		int iPointIdx = std::stoi(vTokens[2]);
-		uint32_t uOwner = static_cast<uint32_t>(std::stoull(vTokens[3]));
+		int iPointIdx = -1;
+		if (!TryParseInt(vTokens[2], iPointIdx) || iPointIdx < 0)
+			return;
+		uint32_t uOwner = 0;
+		if (!TryParseUInt32(vTokens[3], uOwner) || uOwner == 0)
+			return;
 
 		std::lock_guard lock(m_captureMutex);
 		m_vCaptureReservations.erase(std::remove_if(m_vCaptureReservations.begin(), m_vCaptureReservations.end(),

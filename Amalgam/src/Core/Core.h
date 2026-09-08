@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <fstream>
+#include <atomic>
 
 class CCore
 {
@@ -19,7 +20,7 @@ public:
 	void AppendFailText(const char* sMessage);
 	void LogFailText();
 
-	bool m_bUnload = false;
+	std::atomic_bool m_bUnload = false;
 };
 
 ADD_FEATURE_CUSTOM(CCore, Core, U);

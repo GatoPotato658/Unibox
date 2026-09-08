@@ -72,7 +72,8 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 
 			if (pGroup->m_tESP.Draw & ESPEnum::Labels)
 			{
-				std::vector<std::tuple<std::string, Color_t, int>> vTags = {};
+				static thread_local std::vector<std::tuple<std::string, Color_t, int>> vTags;
+				vTags.clear();
 				for (auto& iID : F::PlayerUtils.GetPlayerTags(uAccountID))
 				{
 					auto pTag = F::PlayerUtils.GetTag(iID);

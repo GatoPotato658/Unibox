@@ -13,9 +13,10 @@ public:
 public:
 	CHook(const std::string& sName, void* pInitFunc);
 
-	inline void Create(void* pSrc, void* pDst)
+	inline MH_STATUS Create(void* pSrc, void* pDst)
 	{
-		MH_CreateHook(pSrc, pDst, &m_pOriginal);
+		m_pOriginal = nullptr;
+		return MH_CreateHook(pSrc, pDst, &m_pOriginal);
 	}
 
 	template <typename T>
@@ -37,7 +38,7 @@ public:
 			type __fastcall Func(__VA_ARGS__); \
 		} \
 	} \
-	bool Hooks::name::Init() { if (address) {Hook.Create(reinterpret_cast<void*>(address), Func); return true;} else { SDK::Output("unibox", std::format("Failed to initialize hook: {}", #name).c_str(), { 255, 150, 175, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG); return false;}} \
+	bool Hooks::name::Init() { if (const auto pAddress = reinterpret_cast<void*>(address); pAddress && Hook.Create(pAddress, Func) == MH_OK && Hook.m_pOriginal) return true; SDK::Output("unibox", std::format("Failed to initialize hook: {}", #name).c_str(), { 255, 150, 175, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG); return false;} \
 	type __fastcall Hooks::name::Func(__VA_ARGS__)
 
 	#define DEBUG_RETURN(...)
@@ -61,7 +62,7 @@ public:
 			type __fastcall Func(__VA_ARGS__); \
 		} \
 	} \
-	bool Hooks::name::Init() { if (address) {Hook.Create(reinterpret_cast<void*>(address), Func); return true;} else { SDK::Output("unibox", std::format("Failed to initialize hook: {}", #name).c_str(), { 255, 150, 175, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG); return false;}} \
+	bool Hooks::name::Init() { if (const auto pAddress = reinterpret_cast<void*>(address); pAddress && Hook.Create(pAddress, Func) == MH_OK && Hook.m_pOriginal) return true; SDK::Output("unibox", std::format("Failed to initialize hook: {}", #name).c_str(), { 255, 150, 175, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG); return false;} \
 	type __fastcall Hooks::name::Func(__VA_ARGS__)
 
 	#define DEBUG_RETURN(hook, ...) \
@@ -75,6 +76,7 @@ class CHooks
 {
 private:
 	bool m_bFailed = false;
+	bool m_bInitialized = false;
 
 public:
 	std::unordered_map<std::string, CHook*> m_mHooks = {};

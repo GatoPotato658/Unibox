@@ -79,6 +79,7 @@ namespace PathWorker
 		std::mutex m_mPending;
 		std::condition_variable m_cvPending;
 		std::optional<PathRequest> m_oPending;
+		std::shared_ptr<std::atomic_bool> m_pActiveCancellation;
 
 		std::mutex m_mCompleted;
 		std::vector<PathResult> m_vCompleted;

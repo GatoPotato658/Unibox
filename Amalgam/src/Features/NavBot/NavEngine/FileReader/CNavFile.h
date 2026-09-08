@@ -2,6 +2,7 @@
 #include "nav.h"
 #include <fstream>
 #include <filesystem>
+#include <limits>
 
 class CNavFile
 {
@@ -15,67 +16,98 @@ public:
 		if (!szLevelname)
 			return;
 
+		m_bOK = false;
+		m_vPlaces.clear();
+		m_vAreas.clear();
 		m_sMapName.append(szLevelname);
 		std::ifstream file(m_sMapName, std::ios::binary);
 		if (!file.is_open())
-		{
-			//.nav file does not exist
 			return;
-		}
 
-		uint32_t uMagic;
-		file.read((char*)&uMagic, sizeof(uint32_t));
+		std::error_code tError;
+		const uintmax_t uFileSize = std::filesystem::file_size(m_sMapName, tError);
+		if (tError || uFileSize < 16 || uFileSize > 512ull * 1024ull * 1024ull)
+			return;
+
+		auto CanRead = [&](uintmax_t uSize)
+		{
+			const std::streampos tPosition = file.tellg();
+			return tPosition >= 0 && static_cast<uintmax_t>(tPosition) <= uFileSize && uSize <= uFileSize - static_cast<uintmax_t>(tPosition);
+		};
+		auto Read = [&](auto& tValue)
+		{
+			if (!CanRead(sizeof(tValue)))
+				return false;
+			file.read(reinterpret_cast<char*>(&tValue), sizeof(tValue));
+			return static_cast<bool>(file);
+		};
+		auto ReadBytes = [&](char* pData, size_t uSize)
+		{
+			if (!CanRead(uSize))
+				return false;
+			file.read(pData, static_cast<std::streamsize>(uSize));
+			return static_cast<bool>(file);
+		};
+		auto HasItems = [&](uint64_t uCount, uint64_t uMinimumSize)
+		{
+			const std::streampos tPosition = file.tellg();
+			if (tPosition < 0 || static_cast<uintmax_t>(tPosition) > uFileSize || !uMinimumSize)
+				return false;
+			return uCount <= (uFileSize - static_cast<uintmax_t>(tPosition)) / uMinimumSize;
+		};
+
+		uint32_t uMagic = 0;
+		if (!Read(uMagic))
+			return;
 		if (uMagic != 0xFEEDFACE)
-		{
-			// Wrong magic number
 			return;
-		}
 
-		uint32_t uVersion;
-		file.read((char*)&uVersion, sizeof(uint32_t));
+		uint32_t uVersion = 0;
+		if (!Read(uVersion))
+			return;
 		if (uVersion < 16) // 16 is latest for TF2
-		{
-			// Version is too old
 			return;
-		}
 
-		uint32_t uSubVersion;
-		file.read((char*)&uSubVersion, sizeof(uint32_t));
+		uint32_t uSubVersion = 0;
+		if (!Read(uSubVersion))
+			return;
 		if (uSubVersion != 2) // 2 for TF2
-		{
-			// Not TF2 nav file
 			return;
+
+		uint32_t uBspSize = 0;
+		unsigned char bAnalyzed = 0;
+		if (!Read(uBspSize) || !Read(bAnalyzed))
+			return;
+
+		uint16_t uPlacesCount = 0;
+		if (!Read(uPlacesCount) || !HasItems(uPlacesCount, sizeof(uint16_t)))
+			return;
+		std::vector<NavPlace_t> vPlaces;
+		vPlaces.reserve(uPlacesCount);
+		for (uint16_t i = 0; i < uPlacesCount; ++i)
+		{
+			NavPlace_t tPlace{};
+			if (!Read(tPlace.m_uLen) || tPlace.m_uLen > sizeof(tPlace.m_sName) || !ReadBytes(tPlace.m_sName, tPlace.m_uLen))
+				return;
+
+			vPlaces.push_back(tPlace);
 		}
 
-		// We do not really need to check the size
-		file.read((char*)&m_uBspSize, sizeof(uint32_t));
-		file.read((char*)&m_bAnalyzed, sizeof(unsigned char));
+		unsigned char bHasUnnamedAreas = 0;
+		if (!Read(bHasUnnamedAreas))
+			return;
 
-		// TF2 does not use places, but in case they exist
-		unsigned short uPlacesCount;
-		file.read((char*)&uPlacesCount, sizeof(uint16_t));
-		for (int i = 0; i < uPlacesCount; ++i)
+		uint32_t uAreaCount = 0;
+		if (!Read(uAreaCount) || !HasItems(uAreaCount, 107))
+			return;
+		std::vector<CNavArea> vAreas;
+		vAreas.reserve(uAreaCount);
+		for (uint32_t i = 0; i < uAreaCount; ++i)
 		{
-			NavPlace_t tPlace;
-			file.read((char*)&tPlace.m_uLen, sizeof(uint16_t));
-			file.read((char*)&tPlace.m_sName, tPlace.m_uLen);
-
-			m_vPlaces.push_back(tPlace);
-		}
-
-		file.read((char*)&m_bHasUnnamedAreas, sizeof(unsigned char));
-
-		unsigned int uAreaCount;
-		file.read((char*)&uAreaCount, sizeof(uint32_t));
-		for (size_t i = 0; i < uAreaCount; ++i)
-		{
-			CNavArea tArea;
-			file.read((char*)&tArea.m_uId, sizeof(uint32_t));
-			file.read((char*)&tArea.m_iAttributeFlags, sizeof(uint32_t));
-			file.read((char*)&tArea.m_vNwCorner, sizeof(Vector));
-			file.read((char*)&tArea.m_vSeCorner, sizeof(Vector));
-			file.read((char*)&tArea.m_flNeZ, sizeof(float));
-			file.read((char*)&tArea.m_flSwZ, sizeof(float));
+			CNavArea tArea{};
+			if (!Read(tArea.m_uId) || !Read(tArea.m_iAttributeFlags) || !Read(tArea.m_vNwCorner) || !Read(tArea.m_vSeCorner) ||
+				!Read(tArea.m_flNeZ) || !Read(tArea.m_flSwZ))
+				return;
 
 			tArea.m_vCenter[0] = (tArea.m_vNwCorner[0] + tArea.m_vSeCorner[0]) / 2.0f;
 			tArea.m_vCenter[1] = (tArea.m_vNwCorner[1] + tArea.m_vSeCorner[1]) / 2.0f;
@@ -98,11 +130,13 @@ public:
 			for (int iDir = 0; iDir < 4; iDir++)
 			{
 				uint32_t uDirConnectionCount = 0;
-				file.read((char*)&uDirConnectionCount, sizeof(uint32_t));
-				for (size_t j = 0; j < uDirConnectionCount; j++)
+				if (!Read(uDirConnectionCount) || !HasItems(uDirConnectionCount, sizeof(uint32_t)))
+					return;
+				for (uint32_t j = 0; j < uDirConnectionCount; j++)
 				{
-					NavConnect_t tConnect;
-					file.read((char*)&tConnect.m_uId, sizeof(uint32_t));
+					NavConnect_t tConnect{};
+					if (!Read(tConnect.m_uId))
+						return;
 
 					// Connection to the same area?
 					if (tConnect.m_uId == tArea.m_uId)
@@ -116,78 +150,88 @@ public:
 				}
 			}
 
-			file.read((char*)&tArea.m_uHidingSpotCount, sizeof(uint8_t));
-			for (size_t j = 0; j < tArea.m_uHidingSpotCount; j++)
+			if (!Read(tArea.m_uHidingSpotCount) || !HasItems(tArea.m_uHidingSpotCount, sizeof(uint32_t) + sizeof(Vector) + sizeof(unsigned char)))
+				return;
+			for (uint8_t j = 0; j < tArea.m_uHidingSpotCount; j++)
 			{
-				CHidingSpot tSpot;
-				file.read((char*)&tSpot.m_uId, sizeof(uint32_t));
-				file.read((char*)&tSpot.m_vPos, sizeof(Vector));
-				file.read((char*)&tSpot.m_fFlags, sizeof(unsigned char));
+				CHidingSpot tSpot{};
+				if (!Read(tSpot.m_uId) || !Read(tSpot.m_vPos) || !Read(tSpot.m_fFlags))
+					return;
 
 				tArea.m_vHidingSpots.push_back(tSpot);
 			}
 
-			file.read((char*)&tArea.m_uEncounterSpotCount, sizeof(uint32_t));
+			if (!Read(tArea.m_uEncounterSpotCount) || !HasItems(tArea.m_uEncounterSpotCount, 11))
+				return;
 
-			for (size_t j = 0; j < tArea.m_uEncounterSpotCount; j++)
+			for (uint32_t j = 0; j < tArea.m_uEncounterSpotCount; j++)
 			{
-				SpotEncounter_t tSpot;
-				file.read((char*)&tSpot.m_tFrom.m_uId, sizeof(uint32_t));
-				file.read((char*)&tSpot.m_iFromDir, sizeof(unsigned char));
-				file.read((char*)&tSpot.m_tTo.m_uId, sizeof(uint32_t));
-				file.read((char*)&tSpot.m_iToDir, sizeof(unsigned char));
-				file.read((char*)&tSpot.m_uSpotCount, sizeof(unsigned char));
+				SpotEncounter_t tSpot{};
+				unsigned char iFromDir = 0, iToDir = 0;
+				if (!Read(tSpot.m_tFrom.m_uId) || !Read(iFromDir) || !Read(tSpot.m_tTo.m_uId) ||
+					!Read(iToDir) || !Read(tSpot.m_uSpotCount) || !HasItems(tSpot.m_uSpotCount, sizeof(uint32_t) + sizeof(unsigned char)))
+					return;
+				tSpot.m_iFromDir = iFromDir;
+				tSpot.m_iToDir = iToDir;
 
-				for (int s = 0; s < tSpot.m_uSpotCount; ++s)
+				for (uint8_t s = 0; s < tSpot.m_uSpotCount; ++s)
 				{
-					SpotOrder_t tOrder;
-					file.read((char*)&tOrder.m_uId, sizeof(uint32_t));
-					file.read((char*)&tOrder.flT, sizeof(unsigned char));
+					SpotOrder_t tOrder{};
+					if (!Read(tOrder.m_uId) || !Read(tOrder.flT))
+						return;
 					tSpot.m_vSpots.push_back(tOrder);
 				}
 
 				tArea.m_vSpotEncounters.push_back(tSpot);
 			}
 
-			file.read((char*)&tArea.m_uIndexType, sizeof(uint16_t));
+			if (!Read(tArea.m_uIndexType))
+				return;
 
 			// TF2 does not use ladders either
 			for (int iDir = 0; iDir < 2; iDir++)
 			{
-				file.read((char*)&tArea.m_uLadderCount, sizeof(uint32_t));
-				for (size_t j = 0; j < tArea.m_uLadderCount; j++)
+				if (!Read(tArea.m_uLadderCount) || !HasItems(tArea.m_uLadderCount, sizeof(uint32_t)))
+					return;
+				for (uint32_t j = 0; j < tArea.m_uLadderCount; j++)
 				{
-					int iTemp;
-					file.read((char*)&iTemp, sizeof(uint32_t));
-					tArea.m_vLadders[iDir].push_back(iTemp);
+					uint32_t uLadder = 0;
+					if (!Read(uLadder))
+						return;
+					tArea.m_vLadders[iDir].push_back(uLadder);
 				}
 			}
 
 			for (float& j : tArea.m_flEarliestOccupyTime)
-				file.read((char*)&j, sizeof(float));
+				if (!Read(j))
+					return;
 
 			for (float& j : tArea.m_flLightIntensity)
-				file.read((char*)&j, sizeof(float));
+				if (!Read(j))
+					return;
 
-			file.read((char*)&tArea.m_uVisibleAreaCount, sizeof(uint32_t));
-			for (size_t j = 0; j < tArea.m_uVisibleAreaCount; ++j)
+			if (!Read(tArea.m_uVisibleAreaCount) || !HasItems(tArea.m_uVisibleAreaCount, sizeof(uint32_t) + sizeof(unsigned char)))
+				return;
+			for (uint32_t j = 0; j < tArea.m_uVisibleAreaCount; ++j)
 			{
-				AreaBindInfo_t tInfo;
-				file.read((char*)&tInfo.m_uId, sizeof(uint32_t));
-				file.read((char*)&tInfo.m_uAttributes, sizeof(unsigned char));
+				AreaBindInfo_t tInfo{};
+				if (!Read(tInfo.m_uId) || !Read(tInfo.m_uAttributes))
+					return;
 
 				tArea.m_vPotentiallyVisibleAreas.push_back(tInfo);
 			}
 
-			file.read((char*)&tArea.m_uInheritVisibilityFrom, sizeof(uint32_t));
+			if (!Read(tArea.m_uInheritVisibilityFrom) || !Read(tArea.m_iTFAttributeFlags))
+				return;
 
-			// TF2 Specific area flags
-			file.read((char*)&tArea.m_iTFAttributeFlags, sizeof(uint32_t));
-
-			m_vAreas.push_back(tArea);
+			vAreas.push_back(std::move(tArea));
 		}
 
-		file.close();
+		m_uBspSize = uBspSize;
+		m_bAnalyzed = bAnalyzed;
+		m_bHasUnnamedAreas = bHasUnnamedAreas;
+		m_vPlaces = std::move(vPlaces);
+		m_vAreas = std::move(vAreas);
 
 		// Fill connection for every area with their area ptrs instead of IDs
 		// This will come in handy in path finding
@@ -215,7 +259,31 @@ public:
 	bool Write(const char* szFilename = nullptr)
 	{
 		std::string sFilePath{ szFilename ? szFilename : std::filesystem::current_path().string() + "\\unibox\\Nav\\" + SDK::GetLevelName() + ".nav" };
-		std::ofstream file(sFilePath, std::ios::binary | std::ios::ate);
+		if (m_vPlaces.size() > (std::numeric_limits<uint16_t>::max)() || m_vAreas.size() > (std::numeric_limits<uint32_t>::max)())
+			return false;
+		for (const auto& tPlace : m_vPlaces)
+			if (tPlace.m_uLen > sizeof(tPlace.m_sName))
+				return false;
+		for (const auto& tArea : m_vAreas)
+		{
+			for (const auto& vConnections : tArea.m_vConnectionsDir)
+				if (vConnections.size() > (std::numeric_limits<uint32_t>::max)())
+					return false;
+			if (tArea.m_vHidingSpots.size() > (std::numeric_limits<uint8_t>::max)() ||
+				tArea.m_vSpotEncounters.size() > (std::numeric_limits<uint32_t>::max)() ||
+				tArea.m_vPotentiallyVisibleAreas.size() > (std::numeric_limits<uint32_t>::max)())
+				return false;
+			for (const auto& tEncounter : tArea.m_vSpotEncounters)
+				if (tEncounter.m_iFromDir < 0 || tEncounter.m_iFromDir > (std::numeric_limits<uint8_t>::max)() ||
+					tEncounter.m_iToDir < 0 || tEncounter.m_iToDir > (std::numeric_limits<uint8_t>::max)() ||
+					tEncounter.m_vSpots.size() > (std::numeric_limits<uint8_t>::max)())
+					return false;
+			for (const auto& vLadders : tArea.m_vLadders)
+				if (vLadders.size() > (std::numeric_limits<uint32_t>::max)())
+					return false;
+		}
+
+		std::ofstream file(sFilePath, std::ios::binary | std::ios::trunc);
 		if (!file.is_open())
 		{
 			SDK::Output("CNavFile::Write", std::format("Couldn't open file {}", sFilePath).c_str(), { 200, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
@@ -231,7 +299,7 @@ public:
 		file.write((char*)&m_uBspSize, sizeof(uint32_t));
 		file.write((char*)&m_bAnalyzed, sizeof(unsigned char));
 
-		size_t uPlacesCount = m_vPlaces.size();
+		uint16_t uPlacesCount = static_cast<uint16_t>(m_vPlaces.size());
 		file.write((char*)&uPlacesCount, sizeof(uint16_t));
 		for (auto& tPlace : m_vPlaces)
 		{
@@ -241,7 +309,7 @@ public:
 
 		file.write((char*)&m_bHasUnnamedAreas, sizeof(unsigned char));
 
-		size_t uAreaCount = m_vAreas.size();
+		uint32_t uAreaCount = static_cast<uint32_t>(m_vAreas.size());
 		file.write((char*)&uAreaCount, sizeof(uint32_t));
 		for (auto& tArea : m_vAreas)
 		{
@@ -254,13 +322,13 @@ public:
 
 			for (int iDir = 0; iDir < 4; iDir++)
 			{
-				size_t uConnectionCount = tArea.m_vConnectionsDir[iDir].size();
+				uint32_t uConnectionCount = static_cast<uint32_t>(tArea.m_vConnectionsDir[iDir].size());
 				file.write((char*)&uConnectionCount, sizeof(uint32_t));
 				for (auto& tConnect : tArea.m_vConnectionsDir[iDir])
 					file.write((char*)&tConnect.m_uId, sizeof(uint32_t));
 			}
 
-			size_t uHidingSpotCount = tArea.m_vHidingSpots.size();
+			uint8_t uHidingSpotCount = static_cast<uint8_t>(tArea.m_vHidingSpots.size());
 			file.write((char*)&uHidingSpotCount, sizeof(uint8_t));
 			for (auto& tHidingSpot : tArea.m_vHidingSpots)
 			{
@@ -269,7 +337,7 @@ public:
 				file.write((char*)&tHidingSpot.m_fFlags, sizeof(unsigned char));
 			}
 
-			size_t uEncounterSpotCount = tArea.m_vSpotEncounters.size();
+			uint32_t uEncounterSpotCount = static_cast<uint32_t>(tArea.m_vSpotEncounters.size());
 			file.write((char*)&uEncounterSpotCount, sizeof(uint32_t));
 			for (auto& tEncounterSpot : tArea.m_vSpotEncounters)
 			{
@@ -278,7 +346,7 @@ public:
 				file.write((char*)&tEncounterSpot.m_tTo.m_uId, sizeof(uint32_t));
 				file.write((char*)&tEncounterSpot.m_iToDir, sizeof(unsigned char));
 
-				size_t uSpotCount = tEncounterSpot.m_vSpots.size();
+				uint8_t uSpotCount = static_cast<uint8_t>(tEncounterSpot.m_vSpots.size());
 				file.write((char*)&uSpotCount, sizeof(unsigned char));
 				for (auto& tOrder : tEncounterSpot.m_vSpots)
 				{
@@ -291,7 +359,7 @@ public:
 
 			for (int iDir = 0; iDir < 2; iDir++)
 			{
-				size_t uLadderCount = tArea.m_vLadders[iDir].size();
+				uint32_t uLadderCount = static_cast<uint32_t>(tArea.m_vLadders[iDir].size());
 				file.write((char*)&uLadderCount, sizeof(uint32_t));
 				for (auto& uLadder : tArea.m_vLadders[iDir])
 					file.write((char*)&uLadder, sizeof(uint32_t));
@@ -303,7 +371,7 @@ public:
 			for (float& j : tArea.m_flLightIntensity)
 				file.write((char*)&j, sizeof(float));
 
-			size_t uPotentiallyVisibleCount = tArea.m_vPotentiallyVisibleAreas.size();
+			uint32_t uPotentiallyVisibleCount = static_cast<uint32_t>(tArea.m_vPotentiallyVisibleAreas.size());
 			file.write((char*)&uPotentiallyVisibleCount, sizeof(uint32_t));
 			for (auto& tVisibleArea : tArea.m_vPotentiallyVisibleAreas)
 			{
@@ -315,15 +383,18 @@ public:
 			file.write((char*)&tArea.m_iTFAttributeFlags, sizeof(uint32_t));
 		}
 
+		file.flush();
+		if (!file)
+			return false;
 		file.close();
-		return true;
+		return !file.fail();
 	}
 
 	std::vector<NavPlace_t> m_vPlaces;
 	std::vector<CNavArea> m_vAreas;
 	std::string m_sMapName;
 
-	unsigned int m_uBspSize;
+	unsigned int m_uBspSize = 0;
 	bool m_bHasUnnamedAreas{};
 	bool m_bAnalyzed{};
 	bool m_bOK = false;

@@ -240,13 +240,14 @@ void CBacktrack::MakeRecords()
 			m_mDidShoot[pPlayer->entindex()]
 		};
 		memcpy(tCurRecord.m_aBones, s_aBones, sizeof(tCurRecord.m_aBones));
-		TickRecord* pLastRecord = !vRecords.empty() ? &vRecords.front() : nullptr;
+		const bool bHasLastRecord = !vRecords.empty();
+		const Vec3 vLastOrigin = bHasLastRecord ? vRecords.front().m_vOrigin : Vec3();
 		vRecords.emplace_front(tCurRecord);
 
 		bool bLagComp = false;
-		if (pLastRecord)
+		if (bHasLastRecord)
 		{
-			const Vec3 vDelta = tCurRecord.m_vOrigin - pLastRecord->m_vOrigin;
+			const Vec3 vDelta = tCurRecord.m_vOrigin - vLastOrigin;
 
 			static auto sv_lagcompensation_teleport_dist = H::ConVars.FindVar("sv_lagcompensation_teleport_dist");
 			const float flDist = powf(sv_lagcompensation_teleport_dist->GetFloat(), 2.f);
@@ -294,7 +295,7 @@ void CBacktrack::CleanRecords()
 
 		//const int iOldSize = pRecords.size();
 
-		const int flDeadtime = I::GlobalVars->curtime + GetReal() - m_flMaxUnlag; // int ???
+		const float flDeadtime = I::GlobalVars->curtime + GetReal() - m_flMaxUnlag;
 		if (vRecords.size() > 1 && vRecords.back().m_flSimTime == std::numeric_limits<float>::max())
 			vRecords.pop_back();
 		while (!vRecords.empty())
@@ -342,7 +343,13 @@ void CBacktrack::ReportShot(int iIndex)
 		return;
 
 	auto pEntity = I::ClientEntityList->GetClientEntity(iIndex);
-	if (!pEntity || SDK::GetWeaponType(pEntity->As<CTFPlayer>()->m_hActiveWeapon()->As<CTFWeaponBase>()) != EWeaponType::HITSCAN)
+	auto pPlayer = pEntity ? pEntity->As<CTFPlayer>() : nullptr;
+	if (!pPlayer)
+		return;
+
+	auto pActiveWeapon = pPlayer->m_hActiveWeapon().Get();
+	auto pWeapon = pActiveWeapon ? pActiveWeapon->As<CTFWeaponBase>() : nullptr;
+	if (SDK::GetWeaponType(pWeapon) != EWeaponType::HITSCAN)
 		return;
 
 	m_mDidShoot[pEntity->entindex()] = true;

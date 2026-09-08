@@ -21,7 +21,7 @@ MAKE_HOOK(CTFParty_GetMemberActivity, S::CTFParty_GetMemberActivity(), void*,
 	void* rcx, int idx)
 {
 	void* pPartyMemberActivity = CALL_ORIGINAL( rcx, idx );
-	if ( reinterpret_cast< uintptr_t >( _ReturnAddress( ) ) != S::CTFPartyClient_GetPartyMemberStatus_call() )
+	if ( pPartyMemberActivity && reinterpret_cast< uintptr_t >( _ReturnAddress( ) ) != S::CTFPartyClient_GetPartyMemberStatus_call() + 5 )
 	{
 		//CSOTFPartyMember* pPartyMember = nullptr;
 		//S::CSOTFPartyMember_CSOTFPartyMember.Call<void*>(pPartyMember, 1);

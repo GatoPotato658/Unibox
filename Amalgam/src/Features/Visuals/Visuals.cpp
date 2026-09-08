@@ -29,6 +29,7 @@ static std::vector<Vec3> SplashTrace(Vec3 vOrigin, float flRadius, Vec3 vNormal 
 	Vec3 vRight, vUp; Math::AngleVectors(vAngles, nullptr, &vRight, &vUp);
 
 	std::vector<Vec3> vPoints = {};
+	vPoints.reserve(iSegments + 1);
 	for (float i = 0.f; i < iSegments; i++)
 	{
 		Vec3 vPoint = vOrigin + (vRight * cos(2 * Math::PI * i / iSegments) + vUp * sin(2 * Math::PI * i / iSegments)) * flRadius;
@@ -459,17 +460,19 @@ std::vector<DrawBox_t> CVisuals::GetHitboxes(matrix3x4* aBones, CBaseAnimating* 
 		&& !Vars::Colors::TargetHitboxEdge.Value.a && !Vars::Colors::TargetHitboxFace.Value.a && !Vars::Colors::TargetHitboxEdgeIgnoreZ.Value.a && !Vars::Colors::TargetHitboxFaceIgnoreZ.Value.a)
 		return {};
 
-	std::vector<DrawBox_t> vBoxes = {};
-
 	auto pSet = pEntity->GetHitboxSet();
 	if (!pSet)
-		return vBoxes;
+		return {};
 
 	if (vHitboxes.empty())
 	{
+		vHitboxes.reserve(pSet->numhitboxes);
 		for (int nHitbox = 0; nHitbox < pSet->numhitboxes; nHitbox++)
-			vHitboxes.push_back(nHitbox);
+			vHitboxes.emplace_back(nHitbox);
 	}
+
+	std::vector<DrawBox_t> vBoxes = {};
+	vBoxes.reserve(vHitboxes.size() * 2);
 
 	for (int nHitbox : vHitboxes)
 	{
@@ -954,7 +957,8 @@ void CVisuals::Store()
 	Group_t* pGroup;
 
 	{
-		std::unordered_mapset<CBaseEntity*> mProjectiles = {};
+		static thread_local std::unordered_mapset<CBaseEntity*> mProjectiles;
+		mProjectiles.clear();
 
 		for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 		{
@@ -1054,7 +1058,8 @@ void CVisuals::Store()
 	}
 
 	{
-		std::unordered_map<IClientEntity*, Vec3> mDots = {};
+		static thread_local std::unordered_map<IClientEntity*, Vec3> mDots;
+		mDots.clear();
 
 		for (auto pEntity : H::Entities.GetGroup(EntityEnum::SniperDots))
 		{
@@ -1078,7 +1083,8 @@ void CVisuals::Store()
 
 			Vec3 vShootPos = pPlayer->m_vecOrigin() + pPlayer->GetViewOffset();
 			Vec3 vForward; Math::AngleVectors(pPlayer->GetEyeAngles(), &vForward);
-			Vec3 vShootEnd = mDots.contains(pPlayer) ? mDots[pPlayer] : vShootPos + (vForward * 8192.f);
+			auto itDot = mDots.find(pPlayer);
+			Vec3 vShootEnd = itDot != mDots.end() ? itDot->second : vShootPos + (vForward * 8192.f);
 
 			CGameTrace trace = {};
 			CTraceFilterHitscan filter(pPlayer);
@@ -1211,37 +1217,38 @@ void CVisuals::Modulate()
 	const bool bWorldModulation = Vars::Visuals::World::Modulations.Value & Vars::Visuals::World::ModulationsEnum::World && !bScreenshot;
 	const bool bSkyModulation = Vars::Visuals::World::Modulations.Value & Vars::Visuals::World::ModulationsEnum::Sky && !bScreenshot;
 
-	bool bSetChanged, bColorChanged, bSkyChanged, bConnection;
+	bool bWorldChanged, bSkyChanged, bWorldColorChanged, bSkyColorChanged, bSkyboxChanged, bConnectionChanged;
 	{
 		static bool bStaticWorld = false, bStaticSky = false;
 		const bool bLastWorld = bStaticWorld, bLastSky = bStaticSky;
 		const bool bCurrWorld = bStaticWorld = bWorldModulation, bCurrSky = bStaticSky = bSkyModulation;
-		bSetChanged = bCurrWorld != bLastWorld || bCurrSky != bLastSky;
+		bWorldChanged = bCurrWorld != bLastWorld;
+		bSkyChanged = bCurrSky != bLastSky;
 	}
 	{
 		static Color_t tStaticWorld = {}, tStaticSky = {};
 		const Color_t tLastWorld = tStaticWorld, tLastSky = tStaticSky;
 		const Color_t tCurrWorld = tStaticWorld = Vars::Colors::WorldModulation.Value, tCurrSky = tStaticSky = Vars::Colors::SkyModulation.Value;
-		bColorChanged = tCurrWorld != tLastWorld || tCurrSky != tLastSky;
+		bWorldColorChanged = tCurrWorld != tLastWorld;
+		bSkyColorChanged = tCurrSky != tLastSky;
 	}
 	{
 		static uint32_t uStaticHash = 0;
 		const uint32_t uLastHash = uStaticHash;
 		const uint32_t uCurrHash = uStaticHash = FNV1A::Hash32(Vars::Visuals::World::SkyboxChanger.Value.c_str());
-		bSkyChanged = uCurrHash != uLastHash;
+		bSkyboxChanged = uCurrHash != uLastHash;
 	}
 	{
 		static bool bStaticConnected = false;
 		const bool bLastConnected = bStaticConnected;
 		const bool bCurrConnected = bStaticConnected = I::EngineClient->IsConnected() && I::EngineClient->IsInGame();
-		bConnection = bCurrConnected == bLastConnected;
+		bConnectionChanged = bCurrConnected != bLastConnected;
 	}
 
-	if (bSetChanged || bColorChanged || bSkyChanged || !bConnection)
-	{
+	if (bWorldChanged || bWorldColorChanged || bSkyboxChanged || bConnectionChanged)
 		bWorldModulation ? ApplyModulation(Vars::Colors::WorldModulation.Value) : ApplyModulation({ 255, 255, 255, 255 });
+	if (bSkyChanged || bSkyColorChanged || bSkyboxChanged || bConnectionChanged)
 		bSkyModulation ? ApplyModulation(Vars::Colors::SkyModulation.Value, true) : ApplyModulation({ 255, 255, 255, 255 }, true);
-	}
 }
 
 void CVisuals::RestoreWorldModulation()
