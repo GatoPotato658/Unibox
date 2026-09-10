@@ -38,9 +38,6 @@ bool CNavBotGroup::GetFormationOffset(CTFPlayer* pLocal, int iPositionIndex, Vec
 
 	vDirection = NormalizePlanar(vDirection);
 
-	// Calculate cross product for perpendicular direction (for side-by-side formations)
-	[[maybe_unused]] const Vector vRight = NormalizePlanar(vDirection.Cross(Vector(0, 0, 1)));
-
 	// Different formation styles:
 	// 1. Line formation (bots following one after another)
 	vOut = (vDirection * -m_flFormationDistance * iPositionIndex);
@@ -74,7 +71,8 @@ void CNavBotGroup::UpdateLocalBotPositions(CTFPlayer* pLocal)
 #endif
 
 		// Get the player entity
-		auto pEntity = I::ClientEntityList->GetClientEntity(i)->As<CBaseEntity>();
+		auto pClientEntity = I::ClientEntityList->GetClientEntity(i);
+		auto pEntity = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
 		if (!pEntity || pEntity->IsDormant() ||
 			!pEntity->IsPlayer() || pEntity->m_iTeamNum() != iLocalTeam)
 			continue;
@@ -147,7 +145,8 @@ bool CNavBotGroup::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	if (!m_vLocalBotPositions.empty())
 	{
 		// Find the actual leader in-game
-		auto pLeader = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(m_vLocalBotPositions[0].first))->As<CBaseEntity>();
+		auto pClientEntity = I::ClientEntityList->GetClientEntity(I::EngineClient->GetPlayerForUserID(m_vLocalBotPositions[0].first));
+		auto pLeader = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
 		if (pLeader && pLeader->IsPlayer())
 		{
 			pLeaderPlayer = pLeader->As<CTFPlayer>();
@@ -205,7 +204,7 @@ bool CNavBotGroup::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	if (!m_tFormationNavTimer.Run(0.5f) && F::NavEngine.IsPathing())
 		return true;
 
-	if (F::NavEngine.NavTo(vTargetPos, PriorityListEnum::Patrol, true, !F::NavEngine.IsPathing()))
+	if (F::NavEngine.NavTo(vTargetPos, PriorityListEnum::Patrol))
 		return true;
 
 	return false;

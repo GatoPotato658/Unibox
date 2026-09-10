@@ -15,7 +15,7 @@ static bool TryNavToHiddenSpot(CNavArea* pLocalArea, const Vector& vVischeckPoin
 	if (!NavAreaUtils::FindClosestHidingSpot(pLocalArea, vVischeckPoint, 5, tBestSpot))
 		return false;
 
-	return F::NavEngine.NavTo(tBestSpot.first->m_vCenter, ePriority, true, !F::NavEngine.IsPathing());
+	return F::NavEngine.NavTo(tBestSpot.first->m_vCenter, ePriority);
 }
 
 bool CNavBotReload::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)

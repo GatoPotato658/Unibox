@@ -12,7 +12,7 @@ static std::pair<CBaseEntity*, float> FindClosestThreatToArea(CTFPlayer* pLocal,
 	float flBestDist = FLT_MAX;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
-		if (!F::BotUtils.ShouldTarget(pLocal, pWeapon, pEntity->entindex()))
+		if (F::BotUtils.ShouldTarget(pLocal, pWeapon, pEntity->entindex()) != ShouldTargetEnum::Target)
 			continue;
 
 		const float flDist = pEntity->GetAbsOrigin().DistTo(pArea->m_vCenter);
@@ -131,7 +131,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 						m_bDefending = true;
 						return true;
 					}
-					if (F::NavEngine.NavTo(tHidingSpot.first->m_vCenter, PriorityListEnum::Patrol, true, !F::NavEngine.IsPathing()))
+					if (F::NavEngine.NavTo(tHidingSpot.first->m_vCenter, PriorityListEnum::Patrol))
 					{
 						m_pDefendSpotArea = tHidingSpot.first;
 						m_bDefending = true;
@@ -166,7 +166,6 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	struct RoamCandidate_t
 	{
 		CNavArea* m_pArea = nullptr;
-		float m_flBlacklistPenalty = 0.f;
 		float m_flDangerCost = 0.f;
 		bool m_bSoftBlocked = false;
 	};
@@ -199,19 +198,6 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		if (!m_sConnectedAreas.contains(&tArea))
 			continue;
 
-		float flBlacklistPenalty = 0.f;
-		if (pMap)
-		{
-			std::lock_guard lock(pMap->m_mutex);
-			auto itBlacklist = pMap->m_mFreeBlacklist.find(&tArea);
-			if (itBlacklist != pMap->m_mFreeBlacklist.end())
-			{
-				flBlacklistPenalty = pMap->GetBlacklistPenalty(itBlacklist->second);
-				if (!std::isfinite(flBlacklistPenalty) || flBlacklistPenalty >= 4000.f)
-					continue;
-			}
-		}
-
 		bool bSoftBlocked = false;
 		if (pMap)
 		{
@@ -233,8 +219,9 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 		RoamCandidate_t tCandidate{};
 		tCandidate.m_pArea = &tArea;
-		tCandidate.m_flBlacklistPenalty = flBlacklistPenalty;
 		tCandidate.m_flDangerCost = F::Hazards.GetCost(&tArea);
+		if (!std::isfinite(tCandidate.m_flDangerCost))
+			continue;
 		tCandidate.m_bSoftBlocked = bSoftBlocked;
 		vCandidates.push_back(tCandidate);
 	}
@@ -264,7 +251,6 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		}
 
 		float flSafetyPenalty = std::clamp(tCandidate.m_flDangerCost, 0.f, 8000.f) * 0.08f;
-		flSafetyPenalty += std::min(tCandidate.m_flBlacklistPenalty, 2500.f) * 0.45f;
 		if (tCandidate.m_bSoftBlocked)
 			flSafetyPenalty += 450.f;
 

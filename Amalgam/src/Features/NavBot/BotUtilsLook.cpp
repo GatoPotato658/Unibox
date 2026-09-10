@@ -224,11 +224,13 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 
 	CBaseEntity* pBestEnemy = nullptr;
 	float flBestDist = FLT_MAX;
-	auto pWeapon = pLocal->m_hActiveWeapon().Get()->As<CTFWeaponBase>();
+	auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
 
 	if (G::AimTarget.m_iEntIndex)
 	{
-		if (auto pTarget = I::ClientEntityList->GetClientEntity(G::AimTarget.m_iEntIndex)->As<CBaseEntity>())
+		auto pClientEntity = I::ClientEntityList->GetClientEntity(G::AimTarget.m_iEntIndex);
+		if (auto pTarget = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr)
 		{
 			if (pTarget->IsPlayer() ? pTarget->As<CTFPlayer>()->IsAlive() : (pTarget->IsBuilding() ? pTarget->As<CBaseObject>()->m_iHealth() > 0 : false))
 			{
@@ -248,7 +250,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		if (!pEnemy || !pEnemy->IsAlive() || pEnemy->IsDormant())
 			continue;
 
-		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) == ShouldTargetEnum::DontTarget)
+		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) != ShouldTargetEnum::Target)
 			continue;
 
 		Vec3 vEnemyEye = pEnemy->GetEyePosition();
@@ -269,7 +271,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		if (!pBuilding || pBuilding->m_iHealth() <= 0 || pBuilding->IsDormant())
 			continue;
 
-		if (ShouldTargetBuilding(pLocal, pBuilding->entindex()) == ShouldTargetEnum::DontTarget)
+		if (ShouldTargetBuilding(pLocal, pBuilding->entindex()) != ShouldTargetEnum::Target)
 			continue;
 
 		Vec3 vBuildingCenter = pBuilding->GetCenter();

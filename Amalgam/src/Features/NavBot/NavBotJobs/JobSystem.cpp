@@ -1,5 +1,6 @@
 #include "NavBotJobs.h"
 #include "../NavBotCore.h"
+#include "../Hazards/Hazards.h"
 
 #include <algorithm>
 #include <array>
@@ -125,8 +126,7 @@
 			!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles)))
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
 
-		if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::EscapeDanger &&
-			F::NavEngine.m_eCurrentPriority != PriorityListEnum::EscapeDanger)
+		if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::EscapeDanger)
 			return 0.f;
 
 		const auto vLocalOrigin = pLocal->GetAbsOrigin();
@@ -166,29 +166,28 @@
 		}
 
 		auto pLocalArea = F::NavEngine.GetLocalNavArea();
-		auto pBlacklist = F::NavEngine.GetFreeBlacklist();
-		if (!pLocalArea || !pBlacklist || is_spawn_area(pLocalArea))
+		if (!pLocalArea || is_spawn_area(pLocalArea))
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
 
-		const auto tIt = pBlacklist->find(pLocalArea);
-		if (tIt == pBlacklist->end() || tIt->second.m_eValue == BlacklistReasonEnum::BadBuildSpot)
+		const Hazard_t* pHazard = F::Hazards.GetHazard(pLocalArea);
+		if (!pHazard)
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
 
 		const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
 		float flScore = 0.f;
-		switch (tIt->second.m_eValue)
+		switch (pHazard->m_eKind)
 		{
-		case BlacklistReasonEnum::Sentry:
-		case BlacklistReasonEnum::Sticky:
-		case BlacklistReasonEnum::EnemyInvuln:
+		case HazardKind::Sentry:
+		case HazardKind::Sticky:
+		case HazardKind::EnemyInvuln:
 			flScore = 1700.f;
 			break;
-		case BlacklistReasonEnum::SentryMedium:
-		case BlacklistReasonEnum::EnemyNormal:
+		case HazardKind::SentryMedium:
+		case HazardKind::EnemyNormal:
 			flScore = flHealth < 0.5f ? 1425.f : 0.f;
 			break;
-		case BlacklistReasonEnum::SentryLow:
-		case BlacklistReasonEnum::EnemyDormant:
+		case HazardKind::SentryLow:
+		case HazardKind::EnemyDormant:
 			flScore = 0.f;
 			break;
 		default:

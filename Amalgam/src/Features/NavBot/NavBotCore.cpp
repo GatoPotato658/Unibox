@@ -35,7 +35,8 @@ void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy)
 			{
 				if (pLocal->m_bCarryingObject())
 				{
-					auto pWeapon = pLocal->m_hActiveWeapon().Get()->As<CTFWeaponBase>();
+					auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+					auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
 					if (pWeapon && pWeapon->GetSlot() != 3)
 						F::BotUtils.SetSlot(pLocal, SLOT_PRIMARY);
 				}
@@ -89,6 +90,7 @@ void CNavBotCore::ResetRuntimeState(CUserCmd* pCmd)
 {
 	F::NavBotStayNear.m_iStayNearTargetIdx = -1;
 	F::NavBotReload.m_iLastReloadSlot = -1;
+	F::CritHack.m_bForce = false;
 	m_tIdleTimer.Update();
 	m_tAntiStuckTimer.Update();
 	UpdateRunReloadInput(pCmd, false);
@@ -109,7 +111,7 @@ static bool IsWeaponValidForDT(CTFWeaponBase* pWeapon)
 void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	if (!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value ||
-		!pLocal->IsAlive() || F::NavEngine.m_eCurrentPriority == PriorityListEnum::Followbot || F::FollowBot.m_bActive || !F::NavEngine.IsReady())
+		!pLocal || !pCmd || !pLocal->IsAlive() || F::NavEngine.m_eCurrentPriority == PriorityListEnum::Followbot || F::FollowBot.m_bActive || !F::NavEngine.IsReady())
 	{
 		ResetRuntimeState(pCmd);
 		return;
@@ -216,14 +218,13 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 			tDoubletapRecharge.Update();
 	}
 
-	// Not used
-	// RefreshSniperSpots();
 	m_tJobSystem.RefreshSharedState(pLocal);
 
 	m_tSelectedConfig = NavBotConfig::Select(pLocal, pWeapon);
 
 	UpdateSlot(pLocal, F::BotUtils.m_tClosestEnemy);
 	F::Hazards.Update(pLocal);
+	F::CritHack.m_bForce = false;
 
 	if (F::MVMController.IsActive() && F::MVMController.Run(pCmd, pLocal, pWeapon))
 	{
@@ -244,37 +245,29 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (tJobResult.m_bHasJob)
 	{
-		bool bIsPathing = F::NavEngine.IsPathing();
-		if (!bIsPathing)
-		{
-			// If we have a job but no path, we consider it idle (stuck or waiting for gods agreement to move lol)
-		}
-		else
+		if (F::NavEngine.IsPathing())
 		{
 			m_tIdleTimer.Update();
 			m_tAntiStuckTimer.Update();
 		}
 
-		// Force crithack in dangerous conditions
-		// TODO:
-		// Maybe add some logic to it (more logic)
 		CTFPlayer* pPlayer = nullptr;
 		switch (F::NavEngine.m_eCurrentPriority)
 		{
 		case PriorityListEnum::StayNear:
-			pPlayer = I::ClientEntityList->GetClientEntity(F::NavBotStayNear.m_iStayNearTargetIdx)->As<CTFPlayer>();
+			if (auto pEntity = I::ClientEntityList->GetClientEntity(F::NavBotStayNear.m_iStayNearTargetIdx))
+				pPlayer = pEntity->As<CTFPlayer>();
 			if (pPlayer)
 				F::CritHack.m_bForce = !pPlayer->IsDormant() && pPlayer->m_iHealth() >= pWeapon->GetDamage();
 			break;
 		case PriorityListEnum::MeleeAttack:
 		case PriorityListEnum::GetHealth:
 		case PriorityListEnum::EscapeDanger:
-			pPlayer = I::ClientEntityList->GetClientEntity(F::BotUtils.m_tClosestEnemy.m_iEntIdx)->As<CTFPlayer>();
+			if (auto pEntity = I::ClientEntityList->GetClientEntity(F::BotUtils.m_tClosestEnemy.m_iEntIdx))
+				pPlayer = pEntity->As<CTFPlayer>();
 			F::CritHack.m_bForce = pPlayer && !pPlayer->IsDormant() && pPlayer->m_iHealth() >= pWeapon->GetDamage();
 			break;
-		default:
-			F::CritHack.m_bForce = false;
-			break;
+		default: break;
 		}
 	}
 	else if (F::NavEngine.IsReady() && !F::NavEngine.IsSetupTime() && F::NavEngine.m_eCurrentPriority == PriorityListEnum::None)

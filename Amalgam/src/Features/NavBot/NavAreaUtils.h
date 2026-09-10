@@ -8,8 +8,8 @@ namespace NavAreaUtils
 	bool FindClosestHidingSpot(
 		CNavArea* pArea,
 		const Vector& vVischeckPoint,
-		int iRecursionCount,
+		int iMaxDepth,
 		std::pair<CNavArea*, int>& tOut,
 		bool bVischeck = true,
-		int iRecursionIndex = 0);
+		int iStartDepth = 0);
 }

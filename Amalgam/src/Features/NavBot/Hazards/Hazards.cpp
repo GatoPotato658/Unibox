@@ -25,8 +25,6 @@ float CHazards::CostForKind(HazardKind eKind)
 	case HazardKind::Sticky:         return HAZARD_COST_STICKY;
 	case HazardKind::EnemyNormal:    return HAZARD_COST_ENEMY_NORMAL;
 	case HazardKind::EnemyDormant:   return HAZARD_COST_ENEMY_DORMANT;
-	case HazardKind::BadBuildSpot:   return HAZARD_COST_AVOID;
-	case HazardKind::StuckBlacklist: return HAZARD_COST_ENEMY_INVULN;
 	default:                         return 0.f;
 	}
 }
@@ -41,10 +39,8 @@ int CHazards::PriorityForKind(HazardKind eKind)
 	case HazardKind::Sticky:         return 80;
 	case HazardKind::SentryMedium:   return 70;
 	case HazardKind::SentryLow:      return 50;
-	case HazardKind::StuckBlacklist: return 95;
 	case HazardKind::EnemyNormal:    return 30;
 	case HazardKind::EnemyDormant:   return 20;
-	case HazardKind::BadBuildSpot:   return 10;
 	default:                         return 0;
 	}
 }
@@ -58,10 +54,9 @@ bool CHazards::RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePol
 	const int iIncomingPriority = PriorityForKind(eKind);
 	const int iExistingPriority = PriorityForKind(tHazard.m_eKind);
 
-	tHazard.m_iLastUpdateTick = m_iLastUpdateTick;
-
 	if (iIncomingPriority < iExistingPriority)
 		return false;
+	tHazard.m_iLastUpdateTick = m_iLastUpdateTick;
 
 	const bool bMaterialChange =
 		bWasAbsent
@@ -79,38 +74,6 @@ bool CHazards::RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePol
 	return bMaterialChange;
 }
 
-void CHazards::AddHazardAround(const Vector& vOrigin, float flRadius, HazardKind eKind, float flCost, unsigned int nMask, bool bRequireLOS)
-{
-	auto* pMap = F::NavEngine.GetNavMap();
-	if (!pMap) return;
-
-	std::vector<CNavArea*> vAreas;
-	pMap->CollectAreasAround(vOrigin, flRadius, vAreas);
-	if (vAreas.empty()) return;
-
-	const float flRadiusSqr = flRadius * flRadius;
-	bool bAnyChange = false;
-
-	for (auto* pArea : vAreas)
-	{
-		if (!pArea) continue;
-
-		Vector vAreaPoint = pArea->m_vCenter;
-		vAreaPoint.z += PLAYER_CROUCHED_JUMP_HEIGHT;
-		if (vOrigin.DistToSqr(vAreaPoint) > flRadiusSqr) continue;
-
-		if (bRequireLOS && !F::NavEngine.IsVectorVisibleNavigation(vOrigin, vAreaPoint, nMask))
-			continue;
-
-		const float flDistFactor = 1.f - (std::sqrt(vOrigin.DistToSqr(vAreaPoint)) / flRadius);
-		const float flScaledCost = flCost * (0.5f + 0.5f * std::clamp(flDistFactor, 0.f, 1.f));
-
-		bAnyChange |= RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flScaledCost, vOrigin, 0);
-	}
-
-	if (bAnyChange) ++m_iGenerationId;
-}
-
 void CHazards::AddHazard(CNavArea* pArea, HazardKind eKind, float flCost, int iExpireTick, HazardPolicy ePolicy)
 {
 	if (!pArea) return;
@@ -124,13 +87,16 @@ void CHazards::ClearByKind(HazardKind eKind)
 {
 	const size_t nBefore = m_mAreaHazards.size();
 	std::erase_if(m_mAreaHazards, [eKind](const auto& e) { return e.second.m_eKind == eKind; });
+	if (m_pStandingHazardArea && !m_mAreaHazards.contains(m_pStandingHazardArea))
+		m_pStandingHazardArea = nullptr;
 	if (m_mAreaHazards.size() != nBefore) ++m_iGenerationId;
 }
 
 void CHazards::ClearAll()
 {
-	if (m_mAreaHazards.empty()) return;
+	if (m_mAreaHazards.empty()) { m_pStandingHazardArea = nullptr; return; }
 	m_mAreaHazards.clear();
+	m_pStandingHazardArea = nullptr;
 	++m_iGenerationId;
 }
 
@@ -139,13 +105,13 @@ void CHazards::Reset()
 	m_mAreaHazards.clear();
 	m_iGenerationId = 1;
 	m_iLastUpdateTick = 0;
-	m_bStandingOnHazard = false;
+	m_pStandingHazardArea = nullptr;
 	m_bIgnoreSentries = false;
 }
 
 float CHazards::GetCost(CNavArea* pArea) const
 {
-	if (!pArea || m_bStandingOnHazard) return 0.f;
+	if (!pArea || pArea == m_pStandingHazardArea) return 0.f;
 
 	auto it = m_mAreaHazards.find(pArea);
 	if (it == m_mAreaHazards.end()) return 0.f;
@@ -163,9 +129,15 @@ float CHazards::GetCost(CNavArea* pArea) const
 	return tHazard.m_flCost;
 }
 
+const Hazard_t* CHazards::GetHazard(CNavArea* pArea) const
+{
+	const auto it = m_mAreaHazards.find(pArea);
+	return it != m_mAreaHazards.end() ? &it->second : nullptr;
+}
+
 bool CHazards::IsHardBlocked(CNavArea* pArea) const
 {
-	if (!pArea || m_bStandingOnHazard) return false;
+	if (!pArea || pArea == m_pStandingHazardArea) return false;
 	auto it = m_mAreaHazards.find(pArea);
 	if (it == m_mAreaHazards.end()) return false;
 	return it->second.m_ePolicy == HazardPolicy::HardBlock || it->second.m_ePolicy == HazardPolicy::TempForbid;
@@ -174,10 +146,11 @@ bool CHazards::IsHardBlocked(CNavArea* pArea) const
 void CHazards::SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const
 {
 	mOut.clear();
-	if (m_bStandingOnHazard) return;
 	mOut.reserve(m_mAreaHazards.size());
 	for (const auto& [pArea, tHazard] : m_mAreaHazards)
 	{
+		if (pArea == m_pStandingHazardArea)
+			continue;
 		if (m_bIgnoreSentries
 			&& (tHazard.m_eKind == HazardKind::Sentry
 			|| tHazard.m_eKind == HazardKind::SentryMedium
@@ -199,11 +172,12 @@ bool CHazards::HasHazard(CNavArea* pArea) const
 
 void CHazards::UpdateBotStanding(CNavArea* pLocalArea)
 {
-	if (!pLocalArea) { m_bStandingOnHazard = false; return; }
+	if (!pLocalArea) { m_pStandingHazardArea = nullptr; return; }
 	auto it = m_mAreaHazards.find(pLocalArea);
-	m_bStandingOnHazard = it != m_mAreaHazards.end()
+	m_pStandingHazardArea = it != m_mAreaHazards.end()
 		&& it->second.m_ePolicy != HazardPolicy::SoftCost
-		&& PriorityForKind(it->second.m_eKind) >= PriorityForKind(HazardKind::SentryMedium);
+		&& PriorityForKind(it->second.m_eKind) >= PriorityForKind(HazardKind::SentryMedium)
+		? pLocalArea : nullptr;
 }
 
 void CHazards::ExpireStale()
@@ -219,6 +193,8 @@ void CHazards::ExpireStale()
 			if (bExpiredByTick || bStale) { bAnyChange = true; return true; }
 			return false;
 		});
+	if (m_pStandingHazardArea && !m_mAreaHazards.contains(m_pStandingHazardArea))
+		m_pStandingHazardArea = nullptr;
 
 	if (bAnyChange) ++m_iGenerationId;
 }
@@ -430,7 +406,6 @@ void CHazards::Render()
 		case HazardKind::EnemyNormal:
 		case HazardKind::EnemyDormant:   tColor = { 255, 128,   0, 255 }; break;
 		case HazardKind::Sticky:         tColor = { 255, 255,   0, 255 }; break;
-		case HazardKind::StuckBlacklist: tColor = { 180,   0, 180, 255 }; break;
 		default:                          tColor = Vars::Colors::NavbotBlacklist.Value; break;
 		}
 

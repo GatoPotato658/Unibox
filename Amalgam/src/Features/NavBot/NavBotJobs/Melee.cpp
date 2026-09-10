@@ -3,7 +3,8 @@
 static bool ApproachMeleeTarget(CUserCmd* pCmd, CTFPlayer* pLocal, const Vector& vTargetOrigin)
 {
 	// Crouch if we are standing on someone
-	if (pLocal->m_hGroundEntity().Get() && pLocal->m_hGroundEntity().Get()->IsPlayer())
+	auto pGroundEntity = pLocal->m_hGroundEntity().Get();
+	if (pGroundEntity && pGroundEntity->IsPlayer())
 		pCmd->buttons |= IN_DUCK;
 
 	SDK::WalkTo(pCmd, pLocal, vTargetOrigin);
@@ -87,7 +88,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnem
 		if (!tSpyMeleeCooldown.Run(flDistToSpot < 200.f ? 0.1f : flDistToSpot < 1000.f ? 0.3f : 1.f) && F::NavEngine.IsPathing())
 			return F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack;
 
-		if (F::NavEngine.NavTo(vBackstabSpot, PriorityListEnum::MeleeAttack, true, !F::NavEngine.IsPathing()))
+		if (F::NavEngine.NavTo(vBackstabSpot, PriorityListEnum::MeleeAttack))
 			return true;
 
 		return false;
@@ -104,7 +105,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnem
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack;
 
 	// Just walk at the enemy l0l
-	if (F::NavEngine.NavTo(vTargetOrigin, PriorityListEnum::MeleeAttack, true, !F::NavEngine.IsPathing()))
+	if (F::NavEngine.NavTo(vTargetOrigin, PriorityListEnum::MeleeAttack))
 		return true;
 	return false;
 }

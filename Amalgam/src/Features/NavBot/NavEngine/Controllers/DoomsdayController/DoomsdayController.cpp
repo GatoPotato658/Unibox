@@ -21,7 +21,7 @@ CCaptureFlag* CDoomsdayController::GetFlag()
 {
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
 			continue;
 
 		return pEntity->As<CCaptureFlag>();
@@ -30,49 +30,13 @@ CCaptureFlag* CDoomsdayController::GetFlag()
 	return nullptr;
 }
 
-bool GetDoomsdayCapturePos(int iLocalTeam, Vector& vOut)
+static bool GetDoomsdayCapturePos(Vector& vOut)
 {
-	/*
-	// capture area
-	for (auto& tTrigger : G::TriggerStorage)
-	{
-		if (tTrigger.m_eType != TriggerTypeEnum::CaptureArea)
-			continue;
-
-		Vector vPos = AdjustToNav(tTrigger.m_vCenter);
-		if (!vPos.IsZero())
-		{
-			if (Vars::Debug::Logging.Value)
-				SDK::Output("DoomsdayController", "GetDoomsdayCapturePos: found rocket via trigger", { 100, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-			vOut = vPos;
-			return true;
-		}
-	}
-
-	// sd_ doesnt really use control points actually
-	auto pResource = H::Entities.GetObjectiveResource();
-	if (pResource)
-	{
-		int iNumCPs = pResource->m_iNumControlPoints();
-		for (int i = 0; i < iNumCPs; i++)
-		{
-			Vector vCPPos = pResource->m_vCPPositions(i);
-			if (vCPPos.IsZero())
-				continue;
-
-			// The rocket is usually the only control point in Doomsday
-			vOut = AdjustToNav(vCPPos);
-			if (Vars::Debug::Logging.Value)
-				SDK::Output("DoomsdayController", "GetDoomsdayCapturePos: found rocket via objective resource", { 100, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-			return true;
-		}
-	}
-	*/
-
 	// Try to find the rocket lid prop specifically (prop_dynamic)
 	for (int n = I::EngineClient->GetMaxClients() + 1; n <= I::ClientEntityList->GetHighestEntityIndex(); n++)
 	{
-		auto pEntity = I::ClientEntityList->GetClientEntity(n)->As<CBaseEntity>();
+		auto pClientEntity = I::ClientEntityList->GetClientEntity(n);
+		auto pEntity = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
 		if (!pEntity || pEntity->IsDormant() || pEntity->GetClassID() != ETFClassID::CDynamicProp)
 			continue;
 
@@ -96,39 +60,6 @@ bool GetDoomsdayCapturePos(int iLocalTeam, Vector& vOut)
 		}
 	}
 
-	/*
-	// rocket lid already works but if by some reason we would not be able to find it, then this works too. just we'd have to slighly move its pos
-	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
-	{
-		if (!pEntity || pEntity->IsDormant())
-			continue;
-
-		bool bIsRocket = pEntity->GetClassID() == ETFClassID::CTeamControlPoint || pEntity->GetClassID() == ETFClassID::CFuncTrackTrain;
-		if (!bIsRocket)
-		{
-			if (auto pClientClass = pEntity->GetClientClass())
-			{
-				uint32_t uHash = FNV1A::Hash32(pClientClass->m_pNetworkName);
-				bIsRocket = uHash == FNV1A::Hash32Const("CTeamControlPoint") || uHash == FNV1A::Hash32Const("CFuncTrackTrain");
-			}
-		}
-
-		if (!bIsRocket)
-			continue;
-
-		Vector vCPPos = pEntity->GetAbsOrigin();
-		if (vCPPos.IsZero())
-			vCPPos = pEntity->GetCenter();
-		if (vCPPos.IsZero())
-			continue;
-
-		vOut = AdjustToNav(vCPPos);
-		if (Vars::Debug::Logging.Value)
-			SDK::Output("DoomsdayController", std::format("GetDoomsdayCapturePos: found rocket via WorldObjective entity ({})", pEntity->GetClientClass()->m_pNetworkName).c_str(), { 100, 255, 100 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		return true;
-	}
-	*/
-
 	return false;
 }
 
@@ -138,9 +69,8 @@ bool CDoomsdayController::GetCapturePos(Vector& vOut)
 	if (!pLocal)
 		return false;
 
-	int iLocalTeam = pLocal->m_iTeamNum();
 	Vector vCapturePos = {};
-	if (GetDoomsdayCapturePos(iLocalTeam, vCapturePos))
+	if (GetDoomsdayCapturePos(vCapturePos))
 	{
 		m_vCachedCapturePos = vCapturePos;
 		m_bHasCachedCapturePos = true;

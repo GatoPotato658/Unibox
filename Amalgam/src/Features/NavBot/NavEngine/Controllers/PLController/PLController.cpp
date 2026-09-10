@@ -14,23 +14,21 @@ void CPLController::Update()
 {
 	m_aPayloadCounts = {};
 
+	for (auto pPayload : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		for (auto pPayload : H::Entities.GetGroup(EntityEnum::WorldObjective))
-		{
-			if (!pPayload || pPayload->GetClassID() != ETFClassID::CObjectCartDispenser)
-				continue;
+		if (!pPayload || pPayload->GetClassID() != ETFClassID::CObjectCartDispenser)
+			continue;
 
-			int iTeam = pPayload->m_iTeamNum();
+		int iTeam = pPayload->m_iTeamNum();
 
-			if (iTeam < TF_TEAM_RED || iTeam > TF_TEAM_BLUE)
-				continue;
+		if (iTeam < TF_TEAM_RED || iTeam > TF_TEAM_BLUE)
+			continue;
 
 		const auto iTeamIndex = GetPayloadTeamIndex(iTeam);
 		auto& aPayloads = m_aPayloads[iTeamIndex];
 		auto& nPayloadCount = m_aPayloadCounts[iTeamIndex];
 		if (nPayloadCount < aPayloads.size())
 			aPayloads[nPayloadCount++] = pPayload->As<CObjectCartDispenser>();
-		}
 	}
 }
 

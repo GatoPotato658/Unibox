@@ -24,7 +24,7 @@ void CCPController::UpdateControlPoints()
 	if (!m_pObjectiveResource)
 		return;
 
-	const int iNumControlPoints = m_pObjectiveResource->m_iNumControlPoints();
+	const int iNumControlPoints = std::clamp(m_pObjectiveResource->m_iNumControlPoints(), 0, MAX_CONTROL_POINTS);
 	// No control points
 	if (!iNumControlPoints)
 		return;
@@ -79,10 +79,10 @@ int CCPController::GetPreviousPointForPoint(int iIndex, int iTeam, int iPrevIdx)
 int CCPController::GetFarthestOwnedControlPoint(int iTeam)
 {
 	int iOwnedEnd = m_pObjectiveResource->m_iBaseControlPoints(iTeam);
-	if (iOwnedEnd == -1)
+	const int iNumControlPoints = std::clamp(m_pObjectiveResource->m_iNumControlPoints(), 0, MAX_CONTROL_POINTS);
+	if (iOwnedEnd < 0 || iOwnedEnd >= iNumControlPoints)
 		return -1;
 
-	int iNumControlPoints = m_pObjectiveResource->m_iNumControlPoints();
 	int iWalk = 1;
 	int iEnemyEnd = iNumControlPoints - 1;
 	if (iOwnedEnd != 0)
@@ -107,6 +107,10 @@ int CCPController::GetFarthestOwnedControlPoint(int iTeam)
 
 bool CCPController::IsPointUseable(int iIndex, int iTeam)
 {
+	if (!m_pObjectiveResource || iIndex < 0 || iIndex >= std::clamp(m_pObjectiveResource->m_iNumControlPoints(), 0, MAX_CONTROL_POINTS)
+		|| iTeam < TF_TEAM_RED || iTeam > TF_TEAM_BLUE)
+		return false;
+
 	// We Own it, can't cap it
 	if (m_pObjectiveResource->m_iOwner(iIndex) == iTeam)
 		return false;
@@ -125,7 +129,7 @@ bool CCPController::IsPointUseable(int iIndex, int iTeam)
 
 	// Linear cap means that it WILL require previous points (the cvar doesnt seem to work here though)
 	static auto tf_caplinear = H::ConVars.FindVar("tf_caplinear");
-	if (!tf_caplinear->GetBool() || m_pObjectiveResource->m_iNumControlPoints() == 1)
+	if (!tf_caplinear || !tf_caplinear->GetBool() || m_pObjectiveResource->m_iNumControlPoints() == 1)
 		return true;
 
 	// Any previous points necessary?

@@ -167,7 +167,7 @@ bool CNavBotMVMSniper::CampAt(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseEntity* pA
 	const float flDist = pLocal->GetAbsOrigin().DistTo(vAnchorOrigin);
 	if (flDist > 150.f)
 	{
-		F::NavEngine.NavTo(vAnchorOrigin, PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
+		F::NavEngine.NavTo(vAnchorOrigin, PriorityListEnum::MVMSniper);
 		return true;
 	}
 
@@ -242,7 +242,7 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 		if (flDist > 250.f)
 		{
 			m_flOnEntranceSince = 0.f;
-			F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper, true, !F::NavEngine.IsPathing());
+			F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper);
 			return true;
 		}
 

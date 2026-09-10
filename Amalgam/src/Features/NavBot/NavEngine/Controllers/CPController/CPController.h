@@ -17,7 +17,7 @@ struct CPInfo
 class CCPController
 {
 private:
-	std::array<CPInfo, MAX_CONTROL_POINTS + 1> m_aControlPointData;
+	std::array<CPInfo, MAX_CONTROL_POINTS> m_aControlPointData;
 	CBaseTeamObjectiveResource* m_pObjectiveResource = nullptr;
 
 	//Update

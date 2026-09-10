@@ -1,8 +1,10 @@
 #pragma once
 #include "nav.h"
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <limits>
+#include <unordered_map>
 
 class CNavFile
 {
@@ -111,7 +113,6 @@ public:
 
 			tArea.m_vCenter[0] = (tArea.m_vNwCorner[0] + tArea.m_vSeCorner[0]) / 2.0f;
 			tArea.m_vCenter[1] = (tArea.m_vNwCorner[1] + tArea.m_vSeCorner[1]) / 2.0f;
-			tArea.m_vCenter[2] = (tArea.m_vNwCorner[2] + tArea.m_vSeCorner[2]) / 2.0f;
 
 			if ((tArea.m_vSeCorner.x - tArea.m_vNwCorner.x) > 0.0f &&
 				(tArea.m_vSeCorner.y - tArea.m_vNwCorner.y) > 0.0f)
@@ -122,9 +123,9 @@ public:
 			else
 				tArea.m_flInvDxCorners = tArea.m_flInvDyCorners = 0.0f;
 
-			// Change the tolerance if you wish
-			tArea.m_flMinZ = std::min(tArea.m_vSeCorner.z, tArea.m_vNwCorner.z) - 18.f;
-			tArea.m_flMaxZ = std::max(tArea.m_vSeCorner.z, tArea.m_vNwCorner.z) + 18.f;
+			tArea.m_vCenter[2] = tArea.GetZ(tArea.m_vCenter.x, tArea.m_vCenter.y);
+			tArea.m_flMinZ = std::min({ tArea.m_vNwCorner.z, tArea.m_flNeZ, tArea.m_flSwZ, tArea.m_vSeCorner.z }) - 18.f;
+			tArea.m_flMaxZ = std::max({ tArea.m_vNwCorner.z, tArea.m_flNeZ, tArea.m_flSwZ, tArea.m_vSeCorner.z }) + 18.f;
 			tArea.m_uConnectionCount = 0;
 
 			for (int iDir = 0; iDir < 4; iDir++)
@@ -235,22 +236,20 @@ public:
 		m_vPlaces = std::move(vPlaces);
 		m_vAreas = std::move(vAreas);
 
-		// Fill connection for every area with their area ptrs instead of IDs
-		// This will come in handy in path finding
+		std::unordered_map<uint32_t, CNavArea*> mAreasById;
+		mAreasById.reserve(m_vAreas.size());
+		for (auto& tArea : m_vAreas)
+			mAreasById.emplace(tArea.m_uId, &tArea);
 
 		for (auto& tArea : m_vAreas)
 		{
 			for (auto& connection : tArea.m_vConnections)
-				for (auto& connected_area : m_vAreas)
-					if (connection.m_uId == connected_area.m_uId)
-						connection.m_pArea = &connected_area;
+				if (const auto it = mAreasById.find(connection.m_uId); it != mAreasById.end())
+					connection.m_pArea = it->second;
 
-			// Fill potentially visible areas as well
 			for (auto& bindinfo : tArea.m_vPotentiallyVisibleAreas)
-				for (auto& boundarea : m_vAreas)
-					if (bindinfo.m_uId == boundarea.m_uId)
-						bindinfo.m_pArea = &boundarea;
-
+				if (const auto it = mAreasById.find(bindinfo.m_uId); it != mAreasById.end())
+					bindinfo.m_pArea = it->second;
 		}
 		m_bOK = true;
 	}

@@ -40,11 +40,9 @@ namespace PathWorker
 		m_pMap = nullptr;
 	}
 
-	CancellationToken CPathWorker::Submit(PathRequest tRequest)
+	void CPathWorker::Submit(PathRequest tRequest)
 	{
-		tRequest.m_tToken.m_uId = tRequest.m_uRequestId;
 		tRequest.m_tToken.m_pCancelled = std::make_shared<std::atomic_bool>(false);
-		CancellationToken tToken = tRequest.m_tToken;
 
 		{
 			std::lock_guard lock(m_mPending);
@@ -53,7 +51,6 @@ namespace PathWorker
 			m_oPending = std::move(tRequest);
 		}
 		m_cvPending.notify_one();
-		return tToken;
 	}
 
 	void CPathWorker::CancelAll()
@@ -94,11 +91,7 @@ namespace PathWorker
 				PathResult tResult{};
 				tResult.m_uRequestId        = tRequest.m_uRequestId;
 				tResult.m_uWorldGeneration  = tRequest.m_uWorldGeneration;
-				tResult.m_uHazardGeneration = tRequest.m_uHazardGeneration;
-				tResult.m_vDestination      = tRequest.m_vDestination;
 				tResult.m_ePriority         = tRequest.m_ePriority;
-				tResult.m_bIgnoreTraces     = tRequest.m_bIgnoreTraces;
-				tResult.m_bNavToLocal       = tRequest.m_bNavToLocal;
 				tResult.m_iSolveResult      = -1;
 				tResult.m_bCancelled        = true;
 
@@ -123,11 +116,7 @@ namespace PathWorker
 			PathResult tResult{};
 			tResult.m_uRequestId        = tRequest.m_uRequestId;
 			tResult.m_uWorldGeneration  = tRequest.m_uWorldGeneration;
-			tResult.m_uHazardGeneration = tRequest.m_uHazardGeneration;
-			tResult.m_vDestination      = tRequest.m_vDestination;
 			tResult.m_ePriority         = tRequest.m_ePriority;
-			tResult.m_bIgnoreTraces     = tRequest.m_bIgnoreTraces;
-			tResult.m_bNavToLocal       = tRequest.m_bNavToLocal;
 			tResult.m_iSolveResult      = iResult;
 			tResult.m_bCancelled        = tRequest.m_tToken.IsCancelled();
 			tResult.m_vCrumbs           = std::move(vCrumbs);

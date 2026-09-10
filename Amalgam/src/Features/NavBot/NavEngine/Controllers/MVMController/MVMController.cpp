@@ -99,7 +99,7 @@ bool CMVMController::GetTankTarget(CBaseEntity*& pOut) const
 	return pOut != nullptr;
 }
 
-bool CMVMController::GetRobotTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity*& pOut) const
+bool CMVMController::GetRobotTarget(CTFPlayer* pLocal, CBaseEntity*& pOut) const
 {
 	pOut = nullptr;
 	if (!pLocal)
@@ -242,7 +242,7 @@ bool CMVMController::GetFrontlineTarget(CTFPlayer* pLocal, Vector& vOut)
 	RefreshSpawnAnchors(pLocal);
 
 	CBaseEntity* pRobot = nullptr;
-	if (GetRobotTarget(pLocal, H::Entities.GetWeapon(), pRobot) && pRobot)
+	if (GetRobotTarget(pLocal, pRobot) && pRobot)
 	{
 		vOut = pRobot->GetAbsOrigin();
 		return true;
@@ -282,7 +282,7 @@ bool CMVMController::RunTank(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* p
 	pCmd->viewangles = Math::CalcAngle(pLocal->GetEyePosition(), vTarget);
 
 	if (flDistance > flRange * 0.85f)
-		F::NavEngine.NavTo(pTank->GetAbsOrigin(), PriorityListEnum::MVMTank, true, flDistance > 260.f);
+		F::NavEngine.NavTo(pTank->GetAbsOrigin(), PriorityListEnum::MVMTank);
 	else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMTank && F::NavEngine.IsPathing())
 		F::NavEngine.CancelPath();
 
@@ -329,7 +329,7 @@ bool CMVMController::RunCombat(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase*
 				if (flDistance < 90.f && IsVisibleToShoot(pLocal, pTarget))
 					pCmd->buttons |= IN_ATTACK;
 				if (flDistance > flRange * 0.8f)
-					F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 220.f);
+					F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat);
 				return true;
 			}
 		}
@@ -361,14 +361,14 @@ bool CMVMController::RunCombat(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase*
 	if (iClass == TF_CLASS_PYRO || iClass == TF_CLASS_SCOUT)
 	{
 		if (flDistance > 85.f)
-			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 150.f);
+			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat);
 		else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
 			F::NavEngine.CancelPath();
 	}
 	else
 	{
 		if (flDistance > flRange * 0.8f)
-			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat, true, flDistance > 220.f);
+			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat);
 		else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
 			F::NavEngine.CancelPath();
 	}
@@ -397,7 +397,7 @@ bool CMVMController::RunMoney(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseEntity* pM
 		return true;
 	}
 
-	return F::NavEngine.NavTo(vOrigin, PriorityListEnum::MVMMoney, true, flDistance > 180.f);
+	return F::NavEngine.NavTo(vOrigin, PriorityListEnum::MVMMoney);
 }
 
 bool CMVMController::RunFrontline(CTFPlayer* pLocal)
@@ -434,7 +434,7 @@ bool CMVMController::RunFrontline(CTFPlayer* pLocal)
 	if (flDistance < 120.f)
 		return true;
 
-	return F::NavEngine.NavTo(vTarget, PriorityListEnum::MVMFrontline, true, flDistance > 180.f);
+	return F::NavEngine.NavTo(vTarget, PriorityListEnum::MVMFrontline);
 }
 
 void CMVMController::Update()
@@ -503,7 +503,7 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		return RunTank(pCmd, pLocal, pWeapon, pTank);
 
 	CBaseEntity* pRobot = nullptr;
-	if (GetRobotTarget(pLocal, pWeapon, pRobot))
+	if (GetRobotTarget(pLocal, pRobot))
 		return RunCombat(pCmd, pLocal, pWeapon, pRobot);
 
 	CBaseEntity* pMoney = nullptr;

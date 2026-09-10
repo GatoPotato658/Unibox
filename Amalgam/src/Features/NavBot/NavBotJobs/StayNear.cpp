@@ -382,8 +382,7 @@ bool CNavBotStayNear::IsAreaValidForStayNear(Vector vEntOrigin, CNavArea* pArea,
 	if (flDist < F::NavBotCore.m_tSelectedConfig.m_flMinFullDanger)
 		return false;
 
-	// Blacklisted
-	if (F::NavEngine.GetFreeBlacklist()->find(pArea) != F::NavEngine.GetFreeBlacklist()->end())
+	if (F::Hazards.HasHazard(pArea))
 		return false;
 
 	// Too far away
@@ -398,7 +397,7 @@ int CNavBotStayNear::IsStayNearTargetValid(CTFPlayer* pLocal, CTFWeaponBase* pWe
 	if (!pLocal || iEntIndex <= 0 || iEntIndex == pLocal->entindex())
 		return 0;
 
-	return F::BotUtils.ShouldTarget(pLocal, pWeapon, iEntIndex);
+	return F::BotUtils.ShouldTarget(pLocal, pWeapon, iEntIndex) == ShouldTargetEnum::Target;
 }
 
 bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
@@ -429,9 +428,9 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		return false;
 	}
 
-	int iPreviousTargetValid = IsStayNearTargetValid(pLocal, pWeapon, iStayNearTargetIdx);
+	const bool bPreviousTargetValid = IsStayNearTargetValid(pLocal, pWeapon, iStayNearTargetIdx);
 	// Check and use our previous target if available
-	if (iPreviousTargetValid)
+	if (bPreviousTargetValid)
 	{
 		tInvalidTargetTimer.Update();
 
@@ -464,10 +463,6 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			return F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear;
 
 	}
-	// Our previous target wasn't properly checked, try again unless
-	else if (iPreviousTargetValid == -1 && !tInvalidTargetTimer.Check(0.35f))
-		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear;
-
 	// Failed, invalidate previous target and try others
 	iStayNearTargetIdx = -1;
 	tInvalidTargetTimer.Update();

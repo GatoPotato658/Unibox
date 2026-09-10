@@ -180,7 +180,10 @@ bool CNavBotSupplies::GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocal
 		if (flDist < 75.0f)
 		{
 			Vector2D vTo = { pSupplyData->m_vOrigin.x, pSupplyData->m_vOrigin.y };
-			Vector vPathPoint = F::NavEngine.GetLocalNavArea()->GetNearestPoint(vTo);
+			CNavArea* pLocalArea = F::NavEngine.GetLocalNavArea(vLocalOrigin);
+			if (!pLocalArea)
+				return false;
+			Vector vPathPoint = pLocalArea->GetNearestPoint(vTo);
 			vPathPoint.z = pSupplyData->m_vOrigin.z;
 
 			// We are close enough to take the pack. Mark as taken
@@ -198,13 +201,13 @@ bool CNavBotSupplies::GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocal
 		// Keep job priority alive while waiting for dispenser ticks.
 		if (F::NavEngine.m_eCurrentPriority != ePriority)
 		{
-			if (!F::NavEngine.NavTo(pSupplyData->m_vOrigin, ePriority, true, false))
+			if (!F::NavEngine.NavTo(pSupplyData->m_vOrigin, ePriority))
 				F::NavEngine.m_eCurrentPriority = ePriority;
 		}
 		return true;
 	}
 
-	return F::NavEngine.NavTo(pSupplyData->m_vOrigin, ePriority, true, flDist > 200.f);
+	return F::NavEngine.NavTo(pSupplyData->m_vOrigin, ePriority);
 }
 
 void CNavBotSupplies::UpdateTakenState()

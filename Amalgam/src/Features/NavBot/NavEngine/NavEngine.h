@@ -26,14 +26,6 @@ Enum(PriorityList, None,
 	BuyBot
 )
 
-enum class PathSolveResult : int
-{
-	Success = 0,
-	NoPath = 1,
-	InvalidEndpoints = 2,
-	StartEqualsEnd = 3,
-};
-
 struct Crumb_t
 {
 	CNavArea* m_pNavArea = nullptr;
@@ -65,8 +57,6 @@ private:
 	Timer m_tLastProgressTimer = {};
 	Vector m_vLastStuckSamplePos = {};
 	float m_flLastDistToCrumb = FLT_MAX;
-	int m_iNoProgressSamples = 0;
-	int m_iStuckJumpAttempts = 0;
 	int m_iStuckSide = 1;
 	CNavArea* m_pLastProgressArea = nullptr;
 
@@ -76,7 +66,6 @@ private:
 	bool m_bRepathRequested = false;
 	int m_iNextRepathTick = 0;
 	bool m_bRepathOnFail = false;
-	bool m_bCurrentNavToLocal = false;
 	bool m_bUnstucking = false;
 	int m_iLastBlacklistAbandonTick = 0;
 
@@ -87,7 +76,10 @@ private:
 	uint64_t m_uPendingRequestId = 0;
 	uint64_t m_uWorldGeneration = 1;
 	uint64_t m_uHazardGenerationSeen = 0;
-	int m_iLastSubmitTick = 0;
+	Vector m_vPendingDestination = {};
+	PriorityListEnum::PriorityListEnum m_ePendingPriority = PriorityListEnum::None;
+	bool m_bPendingRepathOnFail = false;
+	bool m_bPendingIgnoreTraces = false;
 
 	std::array<float, 10> m_flRecentFallSpeeds = {};
 	size_t m_iRecentFallSpeedIndex = 0;
@@ -97,7 +89,6 @@ private:
 	void RecordStuckFailure();
 	void ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
 	void PollPathWorker();
-	bool BuildCrumbsFromResult(const PathWorker::PathResult& tResult, CTFPlayer* pLocal);
 	bool StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCrumbs, CTFPlayer* pLocal);
 	bool SolveInline();
 	void UpdateRespawnRooms();
@@ -146,28 +137,11 @@ public:
 
 	std::vector<Crumb_t>* GetCrumbs() { return &m_vCrumbs; }
 
-	// Compat shim — backing map is never populated; queries always report "not blacklisted".
-	std::unordered_map<CNavArea*, BlacklistReason_t>* GetFreeBlacklist() { return &m_pMap->m_mFreeBlacklist; }
-	std::unordered_map<CNavArea*, BlacklistReason_t> GetFreeBlacklist(BlacklistReason_t tReason)
-	{
-		std::unordered_map<CNavArea*, BlacklistReason_t> mReturnMap;
-		for (auto& [pNav, tBlacklist] : m_pMap->m_mFreeBlacklist)
-			if (tBlacklist.m_eValue == tReason.m_eValue)
-				mReturnMap[pNav] = tBlacklist;
-		return mReturnMap;
-	}
-	void ClearFreeBlacklist() const { m_pMap->m_mFreeBlacklist.clear(); }
-	void ClearFreeBlacklist(BlacklistReason_t tReason)
-	{
-		std::erase_if(m_pMap->m_mFreeBlacklist, [&tReason](const auto& entry)
-			{ return entry.second.m_eValue == tReason.m_eValue; });
-	}
-
 	bool IsReady(bool bRoundCheck = false);
 	bool IsBlacklistIrrelevant();
 	void CancelPath();
 
-	bool NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority = PriorityListEnum::Forced, bool bShouldRepath = true, bool bNavToLocal = true, bool bIgnoreTraces = false);
+	bool NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority = PriorityListEnum::Forced, bool bShouldRepath = true, bool bIgnoreTraces = false);
 
 	float GetPathCost(CNavArea* pStartArea, CNavArea* pDestinationArea);
 	float GetPathCost(const Vector& vStart, const Vector& vDestination, bool bLocal = true);

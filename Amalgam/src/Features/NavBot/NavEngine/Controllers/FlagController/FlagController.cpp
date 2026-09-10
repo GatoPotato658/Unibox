@@ -57,11 +57,11 @@ int CFlagController::GetCarrier(CCaptureFlag* pFlag)
 		return -1;
 
 	auto pOwnerEnt = pFlag->m_hOwnerEntity().Get();
-	if (!pOwnerEnt)
+	if (!pOwnerEnt || !pOwnerEnt->IsPlayer())
 		return -1;
 
 	auto pPlayer = pOwnerEnt->As<CTFPlayer>();
-	if (pPlayer->IsDormant() || !pPlayer->IsPlayer() || !pPlayer->IsAlive())
+	if (pPlayer->IsDormant() || !pPlayer->IsAlive())
 		return -1;
 
 	return pPlayer->entindex();
@@ -105,7 +105,7 @@ void CFlagController::Update()
 	// Find flags and get info
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();

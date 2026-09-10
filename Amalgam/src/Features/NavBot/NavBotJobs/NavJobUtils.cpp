@@ -48,7 +48,7 @@ namespace NavJobUtils
 			if (nMaxAttempts && nAttempts++ >= nMaxAttempts)
 				break;
 
-			if (F::NavEngine.NavTo(tAreaScore.m_pArea->m_vCenter, ePriority, true, !F::NavEngine.IsPathing()))
+			if (F::NavEngine.NavTo(tAreaScore.m_pArea->m_vCenter, ePriority))
 				return true;
 		}
 

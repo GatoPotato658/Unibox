@@ -140,7 +140,8 @@ static int SelectBestSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy
 	}
 	case TF_CLASS_SOLDIER:
 	{
-		auto pEnemyWeapon = bHasEnemy ? tClosestEnemy.m_pPlayer->m_hActiveWeapon().Get()->As<CTFWeaponBase>() : nullptr;
+		auto pEnemyWeaponEntity = bHasEnemy ? tClosestEnemy.m_pPlayer->m_hActiveWeapon().Get() : nullptr;
+		auto pEnemyWeapon = pEnemyWeaponEntity ? pEnemyWeaponEntity->As<CTFWeaponBase>() : nullptr;
 		const bool bEnemyCanAirblast = pEnemyWeapon && pEnemyWeapon->GetWeaponID() == TF_WEAPON_FLAMETHROWER && pEnemyWeapon->m_iItemDefinitionIndex() != Pyro_m_ThePhlogistinator;
 		const bool bEnemyClose = bHasEnemy && flEnemyDist <= 250.f;
 		const bool bPrimaryEmpty = SlotUsesAmmo(SLOT_PRIMARY) && !SlotHasClip(SLOT_PRIMARY) && !SlotHasReserve(SLOT_PRIMARY);
@@ -207,6 +208,9 @@ bool CBotUtils::HasMedigunTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 bool CBotUtils::ShouldAssist(CTFPlayer* pLocal, int iEntIdx)
 {
+	if (!pLocal)
+		return false;
+
 	auto pEntity = I::ClientEntityList->GetClientEntity(iEntIdx);
 	if (!pEntity || pEntity->As<CBaseEntity>()->m_iTeamNum() != pLocal->m_iTeamNum())
 		return false;
@@ -224,7 +228,11 @@ bool CBotUtils::ShouldAssist(CTFPlayer* pLocal, int iEntIdx)
 
 ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIdx)
 {
-	auto pEntity = I::ClientEntityList->GetClientEntity(iEntIdx)->As<CBaseEntity>();
+	if (!pLocal)
+		return ShouldTargetEnum::Invalid;
+
+	auto pClientEntity = I::ClientEntityList->GetClientEntity(iEntIdx);
+	auto pEntity = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
 	if (!pEntity || !pEntity->IsPlayer())
 		return ShouldTargetEnum::Invalid;
 
@@ -278,10 +286,11 @@ ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTarget(CTFPlayer* pLocal, CT
 
 ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTargetBuilding(CTFPlayer* pLocal, int iEntIdx)
 {
-	if (iEntIdx <= 0)
+	if (!pLocal || iEntIdx <= 0)
 		return ShouldTargetEnum::DontTarget;
 
-	auto pEntity = I::ClientEntityList->GetClientEntity(iEntIdx)->As<CBaseEntity>();
+	auto pClientEntity = I::ClientEntityList->GetClientEntity(iEntIdx);
+	auto pEntity = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
 	if (!pEntity)
 		return ShouldTargetEnum::Invalid;
 
@@ -292,10 +301,10 @@ ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTargetBuilding(CTFPlayer* pL
 	if (!(Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Sentry) && pBuilding->IsSentrygun()
 		|| !(Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Dispenser) && pBuilding->IsDispenser()
 		|| !(Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Teleporter) && pBuilding->IsTeleporter())
-		return ShouldTargetEnum::Target;
+		return ShouldTargetEnum::DontTarget;
 
 	if (pLocal->m_iTeamNum() == pBuilding->m_iTeamNum())
-		return ShouldTargetEnum::Target;
+		return ShouldTargetEnum::DontTarget;
 
 	auto pOwner = pBuilding->m_hBuilder().Get();
 	if (pOwner)
@@ -316,7 +325,8 @@ bool CBotUtils::GetDormantOrigin(int iIndex, Vector* pOut)
 	if (iIndex <= 0)
 		return false;
 
-	auto pEntity = I::ClientEntityList->GetClientEntity(iIndex)->As<CBaseEntity>();
+	auto pClientEntity = I::ClientEntityList->GetClientEntity(iIndex);
+	auto pEntity = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
 	if (!pEntity ||
 		(pEntity->IsPlayer() ? !pEntity->As<CBasePlayer>()->IsAlive() :
 		(!pEntity->IsBuilding() || !pEntity->As<CBaseObject>()->m_iHealth())))
@@ -341,7 +351,7 @@ ClosestEnemy_t CBotUtils::UpdateCloseEnemies(CTFPlayer* pLocal, CTFWeaponBase* p
 	{
 		auto pPlayer = pEntity->As<CTFPlayer>();
 		int iEntIndex = pPlayer->entindex();
-		if (ShouldTarget(pLocal, pWeapon, iEntIndex) == ShouldTargetEnum::DontTarget)
+		if (ShouldTarget(pLocal, pWeapon, iEntIndex) != ShouldTargetEnum::Target)
 			continue;
 
 		Vector vOrigin = pPlayer->GetAbsOrigin();

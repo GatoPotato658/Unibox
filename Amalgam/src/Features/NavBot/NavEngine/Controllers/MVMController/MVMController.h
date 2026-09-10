@@ -21,7 +21,7 @@ private:
 	bool PrimaryHasAmmo() const;
 	bool DesiredCombatWeaponCanFire(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) const;
 	bool GetTankTarget(CBaseEntity*& pOut) const;
-	bool GetRobotTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity*& pOut) const;
+	bool GetRobotTarget(CTFPlayer* pLocal, CBaseEntity*& pOut) const;
 	bool GetMoneyTarget(CTFPlayer* pLocal, CBaseEntity*& pOut) const;
 	bool GetFrontlineTarget(CTFPlayer* pLocal, Vector& vOut);
 	void RefreshSpawnAnchors(CTFPlayer* pLocal);

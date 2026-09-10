@@ -10,7 +10,6 @@ inline constexpr float HAZARD_COST_SENTRY_MEDIUM  = 800.f;
 inline constexpr float HAZARD_COST_SENTRY_LOW     = 400.f;
 inline constexpr float HAZARD_COST_ENEMY_NORMAL   = 300.f;
 inline constexpr float HAZARD_COST_ENEMY_DORMANT  = 200.f;
-inline constexpr float HAZARD_COST_AVOID          = 100.f;
 
 enum class HazardKind : uint8_t
 {
@@ -22,8 +21,6 @@ enum class HazardKind : uint8_t
 	EnemyDormant,
 	EnemyInvuln,
 	Sticky,
-	BadBuildSpot,
-	StuckBlacklist,
 };
 
 enum class HazardPolicy : uint8_t
@@ -52,7 +49,7 @@ private:
 	uint64_t m_iGenerationId = 1;
 
 	int m_iLastUpdateTick = 0;
-	bool m_bStandingOnHazard = false;
+	CNavArea* m_pStandingHazardArea = nullptr;
 	bool m_bIgnoreSentries = false;
 	float m_flPlayerScanRadius = 350.f;
 
@@ -63,8 +60,6 @@ private:
 
 	// Returns true only on material changes (gates generation-id bumps).
 	bool RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePolicy, float flCost, const Vector& vOrigin, int iExpireTick);
-	void AddHazardAround(const Vector& vOrigin, float flRadius, HazardKind eKind, float flCost, unsigned int nMask, bool bRequireLOS);
-
 	static float CostForKind(HazardKind eKind);
 	static int PriorityForKind(HazardKind eKind);
 
@@ -74,6 +69,7 @@ public:
 	void Render();
 
 	float GetCost(CNavArea* pArea) const;
+	const Hazard_t* GetHazard(CNavArea* pArea) const;
 	bool IsHardBlocked(CNavArea* pArea) const;
 	bool HasHazard(CNavArea* pArea) const;
 	uint64_t GetGenerationId() const { return m_iGenerationId; }
@@ -86,7 +82,7 @@ public:
 
 	// Suspends cost while bot is on a hazard so A* doesn't path around its own spot.
 	void UpdateBotStanding(CNavArea* pLocalArea);
-	bool BotStandingOnHazard() const { return m_bStandingOnHazard; }
+	bool BotStandingOnHazard() const { return m_pStandingHazardArea != nullptr; }
 
 	void AddHazard(CNavArea* pArea, HazardKind eKind, float flCost = 0.f, int iExpireTick = 0, HazardPolicy ePolicy = HazardPolicy::SoftCost);
 	void ClearByKind(HazardKind eKind);

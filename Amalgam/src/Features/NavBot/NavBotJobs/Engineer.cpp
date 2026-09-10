@@ -43,24 +43,6 @@ bool CNavBotEngineer::BuildingNeedsToBeSmacked(CBaseObject* pBuilding)
 	return false;
 }
 
-bool CNavBotEngineer::BlacklistedFromBuilding(CNavArea* pArea)
-{
-	// FIXME: Better way of doing this ?
-	if (auto pBlackList = F::NavEngine.GetFreeBlacklist())
-	{
-		for (auto [pBlacklistedArea, tReason] : *pBlackList)
-		{
-			if (pBlacklistedArea == pArea)
-			{
-				if (tReason.m_eValue == BlacklistReasonEnum::BadBuildSpot)
-					return true;
-				break;
-			}
-		}
-	}
-	return false;
-}
-
 bool CNavBotEngineer::NavToSentrySpot(Vector vLocalOrigin)
 {
 	static Timer tWaitUntilPathSentryTimer;
@@ -339,9 +321,6 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 			return;
 		for (auto& tArea : pNavFile->m_vAreas)
 		{
-			if (BlacklistedFromBuilding(&tArea))
-				continue;
-
 			if (tArea.m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_EXIT))
 				continue;
 

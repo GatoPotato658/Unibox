@@ -1,24 +1,31 @@
 #include "NavBotJobs.h"
 #include "../NavBotCore.h"
+#include "../Hazards/Hazards.h"
 #include "../NavEngine/Controllers/FlagController/FlagController.h"
 #include "../NavEngine/Controllers/Controller.h"
 
-inline bool IsHighDangerReason(BlacklistReasonEnum::BlacklistReasonEnum eReason)
+static bool IsHighDanger(const Hazard_t& tHazard)
 {
-	return eReason == BlacklistReasonEnum::Sentry || eReason == BlacklistReasonEnum::Sticky || eReason == BlacklistReasonEnum::EnemyInvuln;
+	return tHazard.m_ePolicy != HazardPolicy::SoftCost
+		|| tHazard.m_eKind == HazardKind::Sentry
+		|| tHazard.m_eKind == HazardKind::Sticky
+		|| tHazard.m_eKind == HazardKind::EnemyInvuln;
 }
 
-inline bool IsMediumDangerReason(BlacklistReasonEnum::BlacklistReasonEnum eReason)
+static bool IsMediumDanger(const Hazard_t& tHazard)
 {
-	return eReason == BlacklistReasonEnum::SentryMedium || eReason == BlacklistReasonEnum::EnemyNormal;
+	return tHazard.m_eKind == HazardKind::SentryMedium || tHazard.m_eKind == HazardKind::EnemyNormal;
 }
 
-inline bool CanUseDangerArea(BlacklistReasonEnum::BlacklistReasonEnum eReason, bool bHasTarget, bool bLowHealth)
+static bool CanUseDangerArea(const Hazard_t* pHazard, bool bHasTarget, bool bLowHealth)
 {
-	if (IsHighDangerReason(eReason))
+	if (!pHazard)
+		return true;
+
+	if (IsHighDanger(*pHazard))
 		return false;
 
-	if (IsMediumDangerReason(eReason))
+	if (IsMediumDanger(*pHazard))
 		return bHasTarget && !bLowHealth;
 
 	return true;
@@ -46,45 +53,29 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 	// Check if we're in spawn - if so, ignore danger and focus on getting out
 	auto pLocalArea = F::NavEngine.GetLocalNavArea();
+	if (!pLocalArea)
+		return false;
 	if (pLocalArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_RED ||
 		pLocalArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_BLUE)
 		return false;
 
-	auto pBlacklist = F::NavEngine.GetFreeBlacklist();
+	const Hazard_t* pLocalHazard = F::Hazards.GetHazard(pLocalArea);
 
 	// Check if we're in any danger
 	bool bInHighDanger = false;
 	bool bInMediumDanger = false;
 	bool bInLowDanger = false;
 
-	if (pBlacklist && pBlacklist->contains(pLocalArea))
+	if (pLocalHazard)
 	{
 		const bool bActiveEscapeJob = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger;
 		static Timer tRepathCooldown{};
 		if (bActiveEscapeJob && F::NavEngine.IsPathing() && !tRepathCooldown.Run(0.35f))
 			return true;
 
-		// Check building spot - don't run away from that
-		if ((*pBlacklist)[pLocalArea].m_eValue == BlacklistReasonEnum::BadBuildSpot)
-			return false;
-
-		// Determine danger level
-		switch ((*pBlacklist)[pLocalArea].m_eValue)
-		{
-		case BlacklistReasonEnum::Sentry:
-		case BlacklistReasonEnum::Sticky:
-		case BlacklistReasonEnum::EnemyInvuln:
-			bInHighDanger = true;
-			break;
-		case BlacklistReasonEnum::SentryMedium:
-		case BlacklistReasonEnum::EnemyNormal:
-			bInMediumDanger = true;
-			break;
-		case BlacklistReasonEnum::SentryLow:
-		case BlacklistReasonEnum::EnemyDormant:
-			bInLowDanger = true;
-			break;
-		}
+		bInHighDanger = IsHighDanger(*pLocalHazard);
+		bInMediumDanger = IsMediumDanger(*pLocalHazard);
+		bInLowDanger = !bInHighDanger && !bInMediumDanger;
 
 		// Only escape from high danger by default
 		// Also escape from medium danger if health is low
@@ -104,7 +95,7 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 			return false;
 
 		// Already escaping and our target is still valid: keep moving, but recover if pathing was lost.
-		if (bActiveEscapeJob && m_pEscapeTargetArea && !pBlacklist->contains(m_pEscapeTargetArea))
+		if (bActiveEscapeJob && m_pEscapeTargetArea && !F::Hazards.HasHazard(m_pEscapeTargetArea))
 		{
 			if (F::NavEngine.IsPathing())
 				return true;
@@ -141,13 +132,9 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 		for (auto& pArea : vAreaPointers)
 		{
-			// Skip if area is blacklisted with high danger
-			auto it = pBlacklist->find(pArea);
-			if (it != pBlacklist->end())
-			{
-				if (!CanUseDangerArea(it->second.m_eValue, bHasTarget, pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.5f))
-					continue;
-			}
+			if (!CanUseDangerArea(F::Hazards.GetHazard(pArea), bHasTarget,
+				pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.5f))
+				continue;
 
 			float flDistToReference = pArea->m_vCenter.DistTo(vReferencePosition);
 			float flDistToCurrent = pArea->m_vCenter.DistTo(pLocal->GetAbsOrigin());
@@ -178,9 +165,12 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 			// Check if this area is safe (not near enemy)
 			bool bIsSafe = true;
+			auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+			if (!pWeaponEntity)
+				continue;
 			for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 			{
-				if (!F::BotUtils.ShouldTarget(pLocal, pLocal->m_hActiveWeapon().Get()->As<CTFWeaponBase>(), pEntity->entindex()))
+				if (F::BotUtils.ShouldTarget(pLocal, pWeaponEntity->As<CTFWeaponBase>(), pEntity->entindex()) != ShouldTargetEnum::Target)
 					continue;
 
 				// If enemy is too close to this area, mark it as unsafe
@@ -213,12 +203,10 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 					return a->m_vCenter.DistTo(pLocal->GetAbsOrigin()) < b->m_vCenter.DistTo(pLocal->GetAbsOrigin());
 				});
 
-			// Try to path to any non-blacklisted area
 			for (auto& pArea : vAreaPointers)
 			{
-				auto it = pBlacklist->find(pArea);
-				if (it == pBlacklist->end() ||
-					(bInHighDanger && !IsHighDangerReason(it->second.m_eValue) && !IsMediumDangerReason(it->second.m_eValue)))
+				const Hazard_t* pHazard = F::Hazards.GetHazard(pArea);
+				if (!pHazard || (bInHighDanger && !IsHighDanger(*pHazard) && !IsMediumDanger(*pHazard)))
 				{
 					iCalls++;
 					if (iCalls > 5)
@@ -308,7 +296,7 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 		return true;
 
 	if (bActiveEscapeJob && m_pProjectileTargetArea &&
-		F::NavEngine.GetFreeBlacklist()->find(m_pProjectileTargetArea) == F::NavEngine.GetFreeBlacklist()->end() &&
+		!F::Hazards.HasHazard(m_pProjectileTargetArea) &&
 		IsPositionSafe(m_pProjectileTargetArea->m_vCenter, pLocal->m_iTeamNum()))
 	{
 		if (F::NavEngine.IsPathing())
@@ -335,8 +323,7 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 		if (pArea == pLocalArea)
 			continue;
 
-		// Skip if area is blacklisted
-		if (F::NavEngine.GetFreeBlacklist()->find(pArea) != F::NavEngine.GetFreeBlacklist()->end())
+		if (F::Hazards.HasHazard(pArea))
 			continue;
 
 		if (IsPositionSafe(pArea->m_vCenter, pLocal->m_iTeamNum()))
@@ -369,8 +356,12 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 
 bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 {
+	CNavArea* pLocalArea = F::NavEngine.GetLocalNavArea();
+	if (!pLocalArea)
+		return false;
+
 	// Cancel if we're not in spawn and this is running
-	if (!(F::NavEngine.GetLocalNavArea()->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)))
+	if (!(pLocalArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)))
 	{
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeSpawn)
 			F::NavEngine.CancelPath();
@@ -387,7 +378,7 @@ bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 	if (!m_pSpawnExitArea || m_pSpawnExitArea->m_vCenter.DistTo(vLocalOrigin) > 1500.f)
 	{
 		// Try to find a closest exit
-		float flMinDist = FLT_MAX;	CNavArea* pClosest = nullptr;
+		float flMinDist = FLT_MAX;
 		for (auto pArea : *F::NavEngine.GetRespawnRoomExitAreas())
 		{
 			float flDist = pArea->m_vCenter.DistTo(vLocalOrigin);

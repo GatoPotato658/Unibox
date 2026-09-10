@@ -17,14 +17,14 @@ static Vector AdjustObjectivePosToNav(Vector vPos)
 	return vCorrected;
 }
 
-CCaptureFlag* GetHaarpFlag(int iTeam, const Vector& vRelativePos = Vector())
+static CCaptureFlag* GetHaarpFlag(const Vector& vRelativePos = Vector())
 {
 	CCaptureFlag* pBestFlag = nullptr;
 	float flBestDist = FLT_MAX;
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();
@@ -86,7 +86,8 @@ bool GetHaarpCapturePos(int iLocalTeam, Vector& vOut)
 	}
 
 	int iFallbackIdx = -1;
-	for (int i = 0; i < pResource->m_iNumControlPoints(); i++)
+	const int iControlPointCount = std::clamp(pResource->m_iNumControlPoints(), 0, MAX_CONTROL_POINTS);
+	for (int i = 0; i < iControlPointCount; i++)
 	{
 		if (!F::CPController.IsPointUseable(i, iLocalTeam))
 			continue;
@@ -215,7 +216,7 @@ bool CHaarpController::GetDefensePos(Vector& vOut)
 	if (vCapturePos.IsZero())
 		return false;
 
-	auto pFlag = GetHaarpFlag(-1, vCapturePos);
+	auto pFlag = GetHaarpFlag(vCapturePos);
 
 	if (!pFlag)
 		return false;

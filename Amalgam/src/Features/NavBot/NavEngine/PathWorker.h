@@ -12,7 +12,6 @@ namespace PathWorker
 {
 	struct CancellationToken
 	{
-		uint64_t m_uId = 0;
 		std::shared_ptr<std::atomic_bool> m_pCancelled{};
 
 		bool IsCancelled() const
@@ -29,14 +28,11 @@ namespace PathWorker
 	{
 		uint64_t m_uRequestId = 0;
 		uint64_t m_uWorldGeneration = 0;
-		uint64_t m_uHazardGeneration = 0;
 		CNavArea* m_pStartArea = nullptr;
 		CNavArea* m_pDestArea = nullptr;
 		Vector m_vStart{};
 		Vector m_vDestination{};
 		PriorityListEnum::PriorityListEnum m_ePriority = PriorityListEnum::None;
-		bool m_bIgnoreTraces = false;
-		bool m_bNavToLocal = true;
 		SolveContext m_tCtx{};
 		CancellationToken m_tToken{};
 	};
@@ -45,11 +41,7 @@ namespace PathWorker
 	{
 		uint64_t m_uRequestId = 0;
 		uint64_t m_uWorldGeneration = 0;
-		uint64_t m_uHazardGeneration = 0;
-		Vector m_vDestination{};
 		PriorityListEnum::PriorityListEnum m_ePriority = PriorityListEnum::None;
-		bool m_bIgnoreTraces = false;
-		bool m_bNavToLocal = true;
 		int m_iSolveResult = -1;
 		bool m_bCancelled = false;
 		std::vector<CachedPathCrumb_t> m_vCrumbs;
@@ -63,7 +55,7 @@ namespace PathWorker
 		void Stop();
 
 		// Submitting a new request cancels any older pending one — only the newest is honored.
-		CancellationToken Submit(PathRequest tRequest);
+		void Submit(PathRequest tRequest);
 
 		void CancelAll();
 

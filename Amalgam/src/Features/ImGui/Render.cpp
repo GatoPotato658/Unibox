@@ -21,6 +21,23 @@
 #include "../NavBot/NavBotCore.h"
 #include "../Aimbot/AutoHeal/AutoHeal.h"
 
+	static Color_t GetThemeSurface(Color_t tBackground, Color_t tAccent)
+	{
+		float flAccentH, flAccentS, flAccentV;
+		tAccent.GetHSV(flAccentH, flAccentS, flAccentV);
+
+		float flBackgroundH, flBackgroundS, flBackgroundV;
+		tBackground.GetHSV(flBackgroundH, flBackgroundS, flBackgroundV);
+
+		const float flHue = flAccentS >= 8.f ? flAccentH : flBackgroundH;
+		const float flSaturation = std::clamp((flAccentS >= 8.f ? flAccentS : flBackgroundS) * 0.72f, 12.f, 42.f);
+		const float flValue = std::clamp(flBackgroundV + (flBackgroundV < 55.f ? 28.f : -14.f), 26.f, 78.f);
+
+		Color_t tSurface;
+		tSurface.SetHSV(flHue, flSaturation, flValue, tBackground.a);
+		return tSurface;
+	}
+
 	template <size_t t_size>
 	static ImFont* LoadFontWithFallback(ImFontAtlas* pFontAtlas, const std::array<const char*, t_size>& vFontPaths, float flSizePixels, ImFontConfig tFontConfig)
 	{
@@ -87,7 +104,7 @@ void CRender::LoadColors()
 
 	Accent = ColorByteToFloat(Vars::Menu::Theme::Accent.Value);
 	Background0 = ColorByteToFloat(Vars::Menu::Theme::Background.Value);
-	const Color_t tSurface = { 72, 73, 127, Vars::Menu::Theme::Background.Value.a };
+	const Color_t tSurface = GetThemeSurface(Vars::Menu::Theme::Background.Value, Vars::Menu::Theme::Accent.Value);
 	Background0p5 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.16f, LerpEnum::NoAlpha));
 	Background1 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.28f, LerpEnum::NoAlpha));
 	Background1p5 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.4f, LerpEnum::NoAlpha));
@@ -104,16 +121,24 @@ void CRender::LoadColors()
 	colors[ImGuiCol_FrameBg] = Background1p5;
 	colors[ImGuiCol_FrameBgHovered] = Background1p5L;
 	colors[ImGuiCol_FrameBgActive] = Background1p5;
+	colors[ImGuiCol_CheckMark] = Accent;
 	colors[ImGuiCol_Header] = {};
 	colors[ImGuiCol_HeaderHovered] = { Background1p5L.Value.x * 1.1f, Background1p5L.Value.y * 1.1f, Background1p5L.Value.z * 1.1f, Background1p5.Value.w }; // divd by 1.1
 	colors[ImGuiCol_HeaderActive] = Background1p5;
 	colors[ImGuiCol_ModalWindowDimBg] = { Background0.Value.x, Background0.Value.y, Background0.Value.z, 0.4f };
+	colors[ImGuiCol_NavHighlight] = Accent;
 	colors[ImGuiCol_PopupBg] = Background1p5L;
 	colors[ImGuiCol_ResizeGrip] = {};
 	colors[ImGuiCol_ResizeGripActive] = {};
 	colors[ImGuiCol_ResizeGripHovered] = {};
 	colors[ImGuiCol_ScrollbarBg] = {};
+	colors[ImGuiCol_SliderGrab] = Accent;
+	colors[ImGuiCol_SliderGrabActive] = Accent;
+	colors[ImGuiCol_Separator] = Background2;
+	colors[ImGuiCol_SeparatorHovered] = Accent;
+	colors[ImGuiCol_SeparatorActive] = Accent;
 	colors[ImGuiCol_Text] = Active;
+	colors[ImGuiCol_TextSelectedBg] = Accent;
 	colors[ImGuiCol_WindowBg] = {};
 }
 

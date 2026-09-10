@@ -14,26 +14,6 @@
 Enum(NavState, Unavailable, Active)
 Enum(VischeckState, NotVisible = -1, NotChecked, Visible)
 
-// Compat shim — backing map is never populated; CHazards owns real threat data.
-Enum(BlacklistReason, Init = -1,
-	Sentry, SentryMedium, SentryLow,
-	Sticky,
-	EnemyNormal, EnemyDormant, EnemyInvuln,
-	BadBuildSpot
-)
-
-struct BlacklistReason_t
-{
-	BlacklistReasonEnum::BlacklistReasonEnum m_eValue = BlacklistReasonEnum::Init;
-	int m_iTime = 0;
-
-	BlacklistReason_t() = default;
-	explicit BlacklistReason_t(BlacklistReasonEnum::BlacklistReasonEnum eReason) : m_eValue(eReason) {}
-	BlacklistReason_t(BlacklistReasonEnum::BlacklistReasonEnum eReason, int iTime) : m_eValue(eReason), m_iTime(iTime) {}
-
-	void operator=(BlacklistReasonEnum::BlacklistReasonEnum const& eReason) { m_eValue = eReason; }
-};
-
 struct NavPoints_t
 {
 	Vector m_vCurrent;
@@ -71,7 +51,6 @@ struct CachedConnection_t
 	bool m_bPassable = false;
 	bool m_bStuckBlacklist = false;
 	size_t m_uNavMeshHash = 0;
-	std::vector<CachedPathCrumb_t> m_vCrumbs;
 };
 
 struct CachedStucktime_t
@@ -104,39 +83,30 @@ public:
 	std::unordered_map<std::pair<CNavArea*, CNavArea*>, CachedConnection_t, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_mVischeckCache;
 	std::unordered_map<std::pair<CNavArea*, CNavArea*>, CachedStucktime_t, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_mConnectionStuckTime;
 
-	std::unordered_map<CNavArea*, BlacklistReason_t> m_mFreeBlacklist;
-
 	bool m_bSkipSpawn = false;
 
 	explicit CMap(const char* sMapName)
 		: m_navfile(sMapName), m_sMapName(sMapName)
 	{
 		m_eState = m_navfile.m_bOK ? NavStateEnum::Active : NavStateEnum::Unavailable;
-		if (m_eState == NavStateEnum::Active)
-			RefreshCrumbGraph(true);
 	}
 
 	// Caller must hold m_mutex — reads/writes m_mVischeckCache + m_mConnectionStuckTime.
 	int Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std::vector<CNavArea*>& vOutPath, float* pflCost);
 
-	std::vector<CNavArea*> FindPath(CNavArea* pLocalArea, CNavArea* pDestArea, int* pOutResult = nullptr);
-
 	// Must be called on the main thread; touches H::Entities / F::Hazards / F::NavEngine.
 	static SolveContext BuildSolveContext();
-	bool RefreshCrumbGraph(bool bForce = false);
 	int SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
 		const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost);
 
-	NavPoints_t DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea, bool bIsOneWay);
-	DropdownHint_t HandleDropdown(const Vector& vCurrentPos, const Vector& vNextPos);
+	NavPoints_t DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea);
+	DropdownHint_t HandleDropdown(const NavPoints_t& tPoints);
 
-	bool IsOneWay(CNavArea* pFrom, CNavArea* pTo) const;
 	bool HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const;
-
-	float GetBlacklistPenalty(const BlacklistReason_t& tReason) const;
 
 	void CollectAreasAround(const Vector& vOrigin, float flRadius, std::vector<CNavArea*>& vOutAreas);
 
+	static bool CanFallToNavArea(const Vector& vPos, const CNavArea& tArea);
 	CNavArea* FindClosestNavArea(const Vector& vPos, bool bLocalOrigin);
 
 	bool IsAreaValid(CNavArea* pArea) const
@@ -161,7 +131,6 @@ private:
 		float m_f = std::numeric_limits<float>::max();
 		CNavArea* m_pParent = nullptr;
 		uint32_t m_iQueryId = 0;
-		bool m_bInOpen = false;
 	};
 
 	std::vector<PathNode_t> m_vPathNodes;
@@ -170,7 +139,5 @@ private:
 	struct AdjacentEntry { CNavArea* m_pArea; float m_flCost; };
 	void GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::vector<AdjacentEntry>& vOut);
 	size_t GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const;
-	const std::vector<CachedPathCrumb_t>* GetEdgeCrumbs(CNavArea* pFrom, CNavArea* pTo, const SolveContext& tCtx);
-	void CacheConnectionCrumbs(CachedConnection_t& tEntry, CNavArea* pFrom, CNavArea* pTo, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown) const;
 	float EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown, int iTeam) const;
 };

@@ -72,7 +72,7 @@ void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 	{
 		if (pEnemy->IsDormant())
 			continue;
-		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) == ShouldTargetEnum::DontTarget)
+		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) != ShouldTargetEnum::Target)
 			continue;
 		vEnemiesSorted.emplace_back(pEnemy, pEnemy->GetAbsOrigin().DistToSqr(vLocalOrigin));
 	}
@@ -81,7 +81,7 @@ void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 	{
 		if (pEnemyBuilding->IsDormant())
 			continue;
-		if (ShouldTargetBuilding(pLocal, pEnemyBuilding->entindex()) == ShouldTargetEnum::DontTarget)
+		if (ShouldTargetBuilding(pLocal, pEnemyBuilding->entindex()) != ShouldTargetEnum::Target)
 			continue;
 		vEnemiesSorted.emplace_back(pEnemyBuilding, pEnemyBuilding->GetAbsOrigin().DistToSqr(vLocalOrigin));
 	}
@@ -245,7 +245,7 @@ void CBotUtils::AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 		auto pEnemyPlayer = pEnemy->As<CTFPlayer>();
 		if (pEnemyPlayer->IsInvulnerable())
 			continue;
-		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) == ShouldTargetEnum::DontTarget)
+		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) != ShouldTargetEnum::Target)
 			continue;
 		vTargetsSorted.emplace_back(pEnemy, pEnemy->GetAbsOrigin().DistToSqr(vLocalOrigin));
 	}
@@ -254,7 +254,7 @@ void CBotUtils::AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 	{
 		if (pEnemyBuilding->IsDormant())
 			continue;
-		if (ShouldTargetBuilding(pLocal, pEnemyBuilding->entindex()) == ShouldTargetEnum::DontTarget)
+		if (ShouldTargetBuilding(pLocal, pEnemyBuilding->entindex()) != ShouldTargetEnum::Target)
 			continue;
 		vTargetsSorted.emplace_back(pEnemyBuilding, pEnemyBuilding->GetAbsOrigin().DistToSqr(vLocalOrigin));
 	}

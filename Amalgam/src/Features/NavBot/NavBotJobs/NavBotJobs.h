@@ -123,7 +123,6 @@ private:
 	std::vector<Vector> m_vFailedSpots;
 private:
 	bool BuildingNeedsToBeSmacked(CBaseObject* pBuilding);
-	bool BlacklistedFromBuilding(CNavArea* pArea);
 	bool NavToSentrySpot(Vector vLocalOrigin);
 	bool BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy, bool bDispenser);
 	bool SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObject* pBuilding);

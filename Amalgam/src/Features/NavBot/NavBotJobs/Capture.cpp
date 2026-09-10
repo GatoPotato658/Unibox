@@ -818,7 +818,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	const float flRetargetThresholdSq = bPasstimeCarrier ? pow(180.0f, 2) : 256.0f;
 	if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::Capture || vTarget.DistToSqr(vPreviousTarget) > flRetargetThresholdSq)
 	{
-		bool bNavOk = F::NavEngine.NavTo(vTarget, PriorityListEnum::Capture, true, !F::NavEngine.IsPathing());
+		bool bNavOk = F::NavEngine.NavTo(vTarget, PriorityListEnum::Capture);
 		if (bNavOk)
 		{
 			if (Vars::Debug::Logging.Value)

@@ -101,7 +101,7 @@ public:
 	bool IsSurfaceWalkable(const Vector& vNormal);
 	bool SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void HandleSmartJump(CTFPlayer* pLocal, CUserCmd* pCmd);
-	void ForceJump() { if (m_eJumpState == STATE_AWAITING_JUMP) m_eJumpState = Vars::Misc::Movement::AutoCTap.Value ? STATE_CTAP : STATE_JUMP; }
+	void ForceJump() { if (Vars::Misc::Movement::NavBot::SmartJump.Value && m_eJumpState == STATE_AWAITING_JUMP) m_eJumpState = Vars::Misc::Movement::AutoCTap.Value ? STATE_CTAP : STATE_JUMP; }
 
 	void AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);

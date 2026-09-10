@@ -37,7 +37,11 @@ static std::filesystem::path GetConfigFilePath(const std::string& sDirectory, co
 	if (!IsSafeConfigName(sConfigName))
 		return {};
 
-	const std::filesystem::path tDirectory = std::filesystem::path(sDirectory).lexically_normal();
+	std::filesystem::path tDirectory = std::filesystem::path(sDirectory).lexically_normal();
+	// had to change it cuz a bug just materialized itself out of nowhere
+	if (!tDirectory.empty() && tDirectory.filename().empty() && tDirectory != tDirectory.root_path())
+		tDirectory = tDirectory.parent_path();
+
 	const std::filesystem::path tPath = (tDirectory / (sConfigName + sExtension)).lexically_normal();
 	return tPath.parent_path() == tDirectory ? tPath : std::filesystem::path{};
 }
