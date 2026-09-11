@@ -8,6 +8,7 @@
 #include "../../Visuals/Materials/Materials.h"
 #include <ImGui/imgui_internal.h>
 #include <ImGui/imgui_stdlib.h>
+#include <charconv>
 #include <numeric>
 #include <tuple>
 
@@ -2125,10 +2126,15 @@ namespace ImGui
 		PushItemWidth(vSize.x);
 
 		static std::string sPreview = "", sInput = "", sTab = "\n";
+		static unsigned int uActiveHash = 0;
 		if (BeginCombo(std::format("##{}", sLabel).c_str(), "", ImGuiComboFlags_CustomPreview | ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
 		{
-			if (!ActiveMap[uHash])
+			if (!ActiveMap[uHash] || uActiveHash != uHash)
+			{
 				sPreview = sInput = "";
+				sTab = "\n";
+				uActiveHash = uHash;
+			}
 
 			ActiveMap[uHash] = true;
 
@@ -2241,7 +2247,10 @@ namespace ImGui
 			}
 
 			if ((bEnter || iFlags & FSDropdownEnum::AutoUpdate) && (iFlags & FSDropdownEnum::Custom || vEntries.empty()))
-				*pVar = sPreview; bReturn = true;
+			{
+				*pVar = sPreview;
+				bReturn = true;
+			}
 			if (bEnter || U::KeyHandler.Down(VK_ESCAPE))
 				CloseCurrentPopup();
 
@@ -2359,10 +2368,15 @@ namespace ImGui
 		PushItemWidth(vSize.x);
 
 		static std::string sPreview = "", sInput = "", sTab = "\n";
+		static unsigned int uActiveHash = 0;
 		if (BeginCombo(std::format("##{}", sLabel).c_str(), "", ImGuiComboFlags_CustomPreview | ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
 		{
-			if (!ActiveMap[uHash])
+			if (!ActiveMap[uHash] || uActiveHash != uHash)
+			{
 				sPreview = sInput = "";
+				sTab = "\n";
+				uActiveHash = uHash;
+			}
 
 			ActiveMap[uHash] = true;
 
@@ -2373,15 +2387,9 @@ namespace ImGui
 				SetKeyboardFocusHere();
 			bool bEnter = InputText("##FSDropdown", &sInput, ImGuiInputTextFlags_EnterReturnsTrue);
 
-			try
-			{
-				int check = atoi(sInput.c_str());
-			}
-			catch (const std::invalid_argument&)
-			{
-				// tf are you trying to type?
-				bEnter = false;
-			}
+			int iPreviewValue = 0;
+			const auto [pPreviewEnd, ePreviewError] = std::from_chars(sPreview.data(), sPreview.data() + sPreview.size(), iPreviewValue);
+			const bool bValidPreview = !sPreview.empty() && ePreviewError == std::errc{} && pPreviewEnd == sPreview.data() + sPreview.size();
 
 			if (sInput != sTab)
 			{
@@ -2485,8 +2493,11 @@ namespace ImGui
 				SetCursorPosY(GetCursorPosY() - H::Draw.Scale(10)); DebugDummy({});
 			}
 
-			if ((bEnter || iFlags & FSDropdownEnum::AutoUpdate) && (iFlags & FSDropdownEnum::Custom || vEntries.empty()))
-				*pVar = atoi(sPreview.c_str()); bReturn = true;
+			if ((bEnter || iFlags & FSDropdownEnum::AutoUpdate) && (iFlags & FSDropdownEnum::Custom || vEntries.empty()) && bValidPreview)
+			{
+				*pVar = iPreviewValue;
+				bReturn = true;
+			}
 			if (bEnter || U::KeyHandler.Down(VK_ESCAPE))
 				CloseCurrentPopup();
 

@@ -42,7 +42,7 @@ struct RespawnRoom_t
 	TriggerData_t tData = {};
 };
 
-enum class StuckPhase : int { Idle = 0, Nudge, Jump, Fail };
+enum class StuckPhase : int { Idle = 0, Jump, Skip, Fail };
 
 class CNavEngine
 {
@@ -57,7 +57,6 @@ private:
 	Timer m_tLastProgressTimer = {};
 	Vector m_vLastStuckSamplePos = {};
 	float m_flLastDistToCrumb = FLT_MAX;
-	int m_iStuckSide = 1;
 	CNavArea* m_pLastProgressArea = nullptr;
 
 	Timer m_tOffMeshTimer = {};
@@ -68,6 +67,14 @@ private:
 	bool m_bRepathOnFail = false;
 	bool m_bUnstucking = false;
 	int m_iLastBlacklistAbandonTick = 0;
+	bool m_bRepathBeforePending = false;
+	bool m_bIgnoreTracesBeforePending = false;
+	Vector m_vDestinationBeforePending = {};
+	bool m_bRecoveryRetryUsed = false;
+	bool m_bBypassFailedDestination = false;
+	Crumb_t m_tStuckFrom = {};
+	Crumb_t m_tStuckTo = {};
+	bool m_bHasStuckEdge = false;
 
 	bool m_bUpdatedRespawnRooms = false;
 
