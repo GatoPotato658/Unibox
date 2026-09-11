@@ -45,7 +45,6 @@ class CHazards
 private:
 	std::unordered_map<CNavArea*, Hazard_t> m_mAreaHazards;
 
-	// Bumped on every material hazard change; async path results are dropped if this drifted.
 	uint64_t m_iGenerationId = 1;
 
 	int m_iLastUpdateTick = 0;
@@ -58,7 +57,6 @@ private:
 	void UpdateProjectiles(CTFPlayer* pLocal);
 	void ExpireStale();
 
-	// Returns true only on material changes (gates generation-id bumps).
 	bool RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePolicy, float flCost, const Vector& vOrigin, int iExpireTick);
 	static float CostForKind(HazardKind eKind);
 	static int PriorityForKind(HazardKind eKind);
@@ -74,13 +72,11 @@ public:
 	bool HasHazard(CNavArea* pArea) const;
 	uint64_t GetGenerationId() const { return m_iGenerationId; }
 
-	// Main-thread only. Snapshot format: finite cost = soft, +inf = hard, missing = none.
 	void SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const;
 
 	void SetIgnoreSentries(bool b) { m_bIgnoreSentries = b; }
 	bool IgnoresSentries() const { return m_bIgnoreSentries; }
 
-	// Suspends cost while bot is on a hazard so A* doesn't path around its own spot.
 	void UpdateBotStanding(CNavArea* pLocalArea);
 	bool BotStandingOnHazard() const { return m_pStandingHazardArea != nullptr; }
 

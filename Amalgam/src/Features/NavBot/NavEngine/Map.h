@@ -59,8 +59,6 @@ struct CachedStucktime_t
 	int m_iTimeStuck = 0;
 };
 
-// Filled on the main thread before each Solve so the worker never touches game globals.
-// Hazard snapshot: finite cost = soft penalty, +inf = hard block.
 struct SolveContext
 {
 	int m_iTeam = 0;
@@ -91,10 +89,8 @@ public:
 		m_eState = m_navfile.m_bOK ? NavStateEnum::Active : NavStateEnum::Unavailable;
 	}
 
-	// Caller must hold m_mutex — reads/writes m_mVischeckCache + m_mConnectionStuckTime.
 	int Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std::vector<CNavArea*>& vOutPath, float* pflCost);
 
-	// Must be called on the main thread; touches H::Entities / F::Hazards / F::NavEngine.
 	static SolveContext BuildSolveContext();
 	int SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
 		const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost);

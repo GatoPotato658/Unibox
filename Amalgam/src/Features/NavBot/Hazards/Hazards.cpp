@@ -61,9 +61,7 @@ bool CHazards::RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePol
 	const bool bMaterialChange =
 		bWasAbsent
 		|| tHazard.m_eKind != eKind
-		|| tHazard.m_ePolicy != ePolicy
-		|| flCost > tHazard.m_flCost + 1.f
-		|| (iExpireTick && iExpireTick > tHazard.m_iExpireTick);
+		|| tHazard.m_ePolicy != ePolicy;
 
 	tHazard.m_eKind = eKind;
 	tHazard.m_ePolicy = ePolicy;

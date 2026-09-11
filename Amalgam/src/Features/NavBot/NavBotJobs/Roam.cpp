@@ -144,17 +144,19 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	m_bDefending = false;
 	if (m_pCurrentTargetArea && F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol)
 	{
-		bool bCanKeepTarget = F::NavEngine.IsPathing() && m_pCurrentTargetArea->m_vCenter.DistTo(vLocalOrigin) <= 4200.f;
+		bool bBlacklisted = false;
 		if (pMap)
 		{
 			std::lock_guard lock(pMap->m_mutex);
 			auto tAreaKey = std::pair<CNavArea*, CNavArea*>(m_pCurrentTargetArea, m_pCurrentTargetArea);
 			auto it = pMap->m_mVischeckCache.find(tAreaKey);
 			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)) && it->second.m_bStuckBlacklist)
-				bCanKeepTarget = false;
+				bBlacklisted = true;
 		}
 
-		if (bCanKeepTarget)
+		const bool bReached = F::NavEngine.GetLocalNavArea() == m_pCurrentTargetArea;
+		if (!bBlacklisted && (F::NavEngine.IsPathing()
+			|| (!bReached && F::NavEngine.NavTo(m_pCurrentTargetArea->m_vCenter, PriorityListEnum::Patrol))))
 			return true;
 
 		m_pCurrentTargetArea = nullptr;

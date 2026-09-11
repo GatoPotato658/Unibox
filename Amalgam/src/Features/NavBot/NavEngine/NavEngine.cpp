@@ -27,12 +27,6 @@ static float GetAreaVerticalOutside(CNavArea* pArea, const Vector& vPos)
 	return flBelow + flAbove;
 }
 
-static bool IsOverlappingExpandedLocal(const CNavArea* pArea, const Vector& vPos, float flExpand = HALF_PLAYER_WIDTH)
-{
-	if (!pArea) return false;
-	return pArea->IsOverlapping(vPos, flExpand);
-}
-
 static bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrigin)
 {
 	if (!pLocal || F::GameObjectiveController.m_eGameMode != TF_GAMETYPE_ESCORT)
@@ -328,8 +322,6 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 				tEnt.m_iExpireTick = iExpire;
 				tEnt.m_eVischeckState = VischeckStateEnum::Visible;
 				tEnt.m_bPassable = true;
-				// Keep m_bStuckBlacklist / m_mConnectionStuckTime intact — a clear trace
-				// proves visibility, not that the connection is physically walkable.
 			}
 		}
 
@@ -461,7 +453,6 @@ void CNavEngine::VischeckPath()
 	auto pLocal = H::Entities.GetLocal();
 	if (!pLocal) return;
 
-	// Must hold m_mutex — path worker reads m_mVischeckCache concurrently.
 	std::lock_guard lock(m_pMap->m_mutex);
 
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
@@ -555,7 +546,6 @@ void CNavEngine::VischeckPath()
 			tEnt.m_iExpireTick = iExpire;
 			tEnt.m_eVischeckState = VischeckStateEnum::Visible;
 			tEnt.m_bPassable = true;
-			// Keep stuck state intact — visibility != physically walkable.
 		}
 	}
 }
@@ -627,7 +617,6 @@ void CNavEngine::Reset(bool bForced)
 	m_tOffMeshTimer.Update();
 	m_vOffMeshTarget = {};
 
-	// Bump invalidates any in-flight results from the previous map.
 	m_uWorldGeneration++;
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
 
@@ -1276,14 +1265,9 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			{
 				if (tActive.m_pNavArea && !CMap::CanFallToNavArea(vLocalOrigin, *tActive.m_pNavArea))
 				{
-					const bool bStacked = m_pLocalArea && IsOverlappingExpandedLocal(m_pLocalArea, vLocalOrigin, HALF_PLAYER_WIDTH)
-						&& IsOverlappingExpandedLocal(tActive.m_pNavArea, vLocalOrigin, HALF_PLAYER_WIDTH);
-					if (bStacked)
-					{
-						m_tLastCrumb = tActive;
-						nConsumed++;
-						continue;
-					}
+					m_tLastCrumb = tActive;
+					nConsumed++;
+					continue;
 				}
 			}
 			if (tActive.m_pNavArea && tActive.m_pNavArea != m_pLocalArea)

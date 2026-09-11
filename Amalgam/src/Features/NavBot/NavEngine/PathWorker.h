@@ -54,7 +54,6 @@ namespace PathWorker
 		void Start(CMap* pMap);
 		void Stop();
 
-		// Submitting a new request cancels any older pending one — only the newest is honored.
 		void Submit(PathRequest tRequest);
 
 		void CancelAll();

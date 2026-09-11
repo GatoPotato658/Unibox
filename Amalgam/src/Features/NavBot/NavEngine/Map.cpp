@@ -377,8 +377,6 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		if (m_bSkipSpawn && bTouchesSpawn)
 			flFinalCost += 5000.f;
 
-		// Can't jump right now (scoped/revved) — penalize instead of blocking, or A*
-		// can return "no solution" whenever the weapon state flips mid-route.
 		if (!tCtx.m_bCanJump && tPoints.m_vCenterNext.z - tPoints.m_vCenter.z > 18.0f)
 			flFinalCost += 1200.f;
 
