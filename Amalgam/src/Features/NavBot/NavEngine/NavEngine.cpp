@@ -209,7 +209,13 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 	if (!pDestArea) { m_sLastFailureReason = "No destination nav area"; return false; }
 
 	constexpr float flReuseRadiusSq = 160.f * 160.f;
-	const uint64_t uHazardGen = F::Hazards.GetGenerationId();
+	if (m_iFailedDestinationTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)
+		&& m_vFailedDestination.DistToSqr(vDestination) <= flReuseRadiusSq)
+	{
+		m_sLastFailureReason = "No solution found";
+		return false;
+	}
+
 	const bool bSamePending = m_uPendingRequestId != 0
 		&& ePriority == m_ePendingPriority
 		&& bIgnoreTraces == m_bPendingIgnoreTraces
@@ -225,7 +231,6 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 		&& m_uPendingRequestId == 0
 		&& ePriority == m_eCurrentPriority
 		&& bIgnoreTraces == m_bIgnoreTraces
-		&& uHazardGen == m_uHazardGenerationSeen
 		&& m_vLastDestination.DistToSqr(vDestination) <= flReuseRadiusSq;
 	if (bCanReuse)
 	{
@@ -247,7 +252,10 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 	tReq.m_ePriority = ePriority;
 	tReq.m_tCtx = CMap::BuildSolveContext();
 
+	m_ePriorityBeforePending = m_eCurrentPriority;
+	m_bHadActivePathBeforePending = !m_vCrumbs.empty();
 	m_pPathWorker->Submit(std::move(tReq));
+	m_eCurrentPriority = ePriority;
 	m_uPendingRequestId = m_uNextRequestId;
 	m_vPendingDestination = vDestination;
 	m_ePendingPriority = ePriority;
@@ -261,14 +269,13 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 {
 	if (vCrumbs.empty()) return false;
 
-	m_vCrumbs.clear();
-	m_vCrumbs.reserve(vCrumbs.size());
+	std::vector<Crumb_t> vValidated;
+	vValidated.reserve(vCrumbs.size());
 	for (const auto& tCached : vCrumbs)
 	{
 		if (!tCached.m_pNavArea || !m_pMap->IsAreaValid(tCached.m_pNavArea))
 		{
 			m_sLastFailureReason = "Crumb graph contains an invalid area";
-			m_vCrumbs.clear();
 			return false;
 		}
 
@@ -279,19 +286,19 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 		tCrumb.m_bRequiresDrop = tCached.m_bRequiresDrop;
 		tCrumb.m_flDropHeight = tCached.m_flDropHeight;
 		tCrumb.m_flApproachDistance = tCached.m_flApproachDistance;
-		m_vCrumbs.push_back(tCrumb);
+		vValidated.push_back(tCrumb);
 	}
 
-	if (!m_bIgnoreTraces && !m_vCrumbs.empty())
+	if (!m_bIgnoreTraces && !vValidated.empty())
 	{
 		const int iExpire = TICKCOUNT_TIMESTAMP(std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45));
 		std::lock_guard lock(m_pMap->m_mutex);
 		bool bValid = true;
 
-		for (size_t i = 0; i + 1 < m_vCrumbs.size(); ++i)
+		for (size_t i = 0; i + 1 < vValidated.size(); ++i)
 		{
-			const auto& a = m_vCrumbs[i];
-			const auto& b = m_vCrumbs[i + 1];
+			const auto& a = vValidated[i];
+			const auto& b = vValidated[i + 1];
 			if (a.m_bRequiresDrop) continue;
 
 			const bool bSameArea = a.m_pNavArea && a.m_pNavArea == b.m_pNavArea;
@@ -327,12 +334,12 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 
 		if (!bValid)
 		{
-			m_vCrumbs.clear();
 			m_sLastFailureReason = "Path blocked by traces";
 			return false;
 		}
 	}
 
+	m_vCrumbs = std::move(vValidated);
 	return true;
 }
 
@@ -361,40 +368,48 @@ void CNavEngine::PollPathWorker()
 		if (tResult.m_iSolveResult == 1 || tResult.m_iSolveResult == 2)
 		{
 			m_sLastFailureReason = tResult.m_iSolveResult == 1 ? "No solution found" : "Pathing engine error";
-			ClearPathState();
-			if (m_bPendingRepathOnFail)
+			m_vFailedDestination = m_vPendingDestination;
+			m_iFailedDestinationTick = TICKCOUNT_TIMESTAMP(1.0f);
+			if (m_bHadActivePathBeforePending)
 			{
-				m_vLastDestination = m_vPendingDestination;
-				m_bRepathOnFail = true;
-				m_bIgnoreTraces = m_bPendingIgnoreTraces;
-				m_eCurrentPriority = tResult.m_ePriority;
-				m_bRepathRequested = true;
-				m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(0.2f));
+				m_eCurrentPriority = m_ePriorityBeforePending;
+				m_bRepathRequested = false;
 			}
 			else
+			{
+				ClearPathState();
 				m_eCurrentPriority = PriorityListEnum::None;
+				m_bRepathOnFail = false;
+			}
+			m_bHadActivePathBeforePending = false;
 			continue;
 		}
 
 		m_vLastDestination = m_vPendingDestination;
 		m_bRepathOnFail = m_bPendingRepathOnFail;
 		m_bIgnoreTraces = m_bPendingIgnoreTraces;
-		m_uHazardGenerationSeen = F::Hazards.GetGenerationId();
-
 		if (!StoreValidatedCrumbs(tResult.m_vCrumbs, pLocal))
 		{
-			ClearPathState();
-			if (m_bRepathOnFail)
+			m_vFailedDestination = m_vPendingDestination;
+			m_iFailedDestinationTick = TICKCOUNT_TIMESTAMP(1.0f);
+			if (m_bHadActivePathBeforePending)
 			{
-				m_eCurrentPriority = tResult.m_ePriority;
-				m_bRepathRequested = true;
-				m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(0.2f));
+				m_eCurrentPriority = m_ePriorityBeforePending;
+				m_bRepathRequested = false;
 			}
 			else
+			{
+				ClearPathState();
 				m_eCurrentPriority = PriorityListEnum::None;
+				m_bRepathOnFail = false;
+			}
+			m_bHadActivePathBeforePending = false;
 			continue;
 		}
 
+		m_bHadActivePathBeforePending = false;
+		m_vFailedDestination = {};
+		m_iFailedDestinationTick = 0;
 		m_eCurrentPriority = tResult.m_ePriority;
 	}
 }
@@ -810,6 +825,10 @@ void CNavEngine::CancelPath()
 	m_ePendingPriority = PriorityListEnum::None;
 	m_bPendingRepathOnFail = false;
 	m_bPendingIgnoreTraces = false;
+	m_ePriorityBeforePending = PriorityListEnum::None;
+	m_bHadActivePathBeforePending = false;
+	m_vFailedDestination = {};
+	m_iFailedDestinationTick = 0;
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
 }
 
@@ -1287,7 +1306,8 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			}
 		}
 
-		if (!bDropCrumb && vDeltaPlanar.LengthSqr() < kDefaultReachRadius * kDefaultReachRadius && flVerticalDelta <= flVerticalTol)
+		const float flVerticalReach = vDelta.z < 0.f ? PLAYER_CROUCHED_JUMP_HEIGHT : flVerticalTol;
+		if (!bDropCrumb && vDeltaPlanar.LengthSqr() < kDefaultReachRadius * kDefaultReachRadius && flVerticalDelta <= flVerticalReach)
 		{
 			m_tLastCrumb = tActive;
 			nConsumed++;
@@ -1419,10 +1439,19 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			break;
 		}
 	}
-	else if (bDropCrumb && ePhase == StuckPhase::Fail)
+	else if (bDropCrumb)
 	{
-		AbandonPath("Stuck on drop");
-		return;
+		if ((ePhase == StuckPhase::Nudge || ePhase == StuckPhase::Jump)
+			&& NavRuntime::CanIssueNavJump(pWeapon, pCmd) && pLocal->OnSolid() && tLastJump.Check(0.35f))
+		{
+			F::BotUtils.ForceJump();
+			tLastJump.Update();
+		}
+		if (ePhase == StuckPhase::Fail)
+		{
+			AbandonPath("Stuck on drop");
+			return;
+		}
 	}
 
 	DoLookAtPath(pLocal, pCmd, vMoveTarget, true);

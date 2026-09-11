@@ -75,11 +75,14 @@ private:
 	uint64_t m_uNextRequestId = 1;
 	uint64_t m_uPendingRequestId = 0;
 	uint64_t m_uWorldGeneration = 1;
-	uint64_t m_uHazardGenerationSeen = 0;
 	Vector m_vPendingDestination = {};
 	PriorityListEnum::PriorityListEnum m_ePendingPriority = PriorityListEnum::None;
+	PriorityListEnum::PriorityListEnum m_ePriorityBeforePending = PriorityListEnum::None;
+	bool m_bHadActivePathBeforePending = false;
 	bool m_bPendingRepathOnFail = false;
 	bool m_bPendingIgnoreTraces = false;
+	Vector m_vFailedDestination = {};
+	int m_iFailedDestinationTick = 0;
 
 	std::array<float, 10> m_flRecentFallSpeeds = {};
 	size_t m_iRecentFallSpeedIndex = 0;
