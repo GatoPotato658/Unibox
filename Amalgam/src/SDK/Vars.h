@@ -829,6 +829,7 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(StuckBlacklistTime, "Stuck blacklist time", 90, SLIDER_MIN, 20, 600, 20, "%is");
 				CVar(StuckExpireTime, "Stuck expire time", 20, SLIDER_MIN, 5, 100, 5, "%is");
 				CVar(StuckTime, "Stuck time", 0.25f, SLIDER_MIN, 0.25f, 0.9f, 0.05f, "%gs");
+				CVar(OffPathRepath, "Off-path repath", false, NOSAVE | DEBUGVAR);
 
 				CVar(VischeckEnabled, "Vischeck enabled", true);
 				CVar(VischeckTime, "Vischeck time", 0.25f, SLIDER_MIN, 0.005f, 3.f, 0.005f, "%gs");

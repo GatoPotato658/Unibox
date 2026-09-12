@@ -2033,6 +2033,7 @@ void CMenu::MenuMisc(int iTab)
 						{
 							FSlider(Vars::Misc::Movement::NavBot::StickyDangerRange);
 							FSlider(Vars::Misc::Movement::NavBot::ProjectileDangerRange);
+							FToggle(Vars::Misc::Movement::NavEngine::OffPathRepath);
 
 							EndPopup();
 						}

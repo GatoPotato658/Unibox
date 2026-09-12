@@ -758,12 +758,13 @@ void CNavEngine::AbandonPath(const std::string& sReason)
 
 	m_sLastFailureReason = sReason;
 	const bool bStuck = sReason.find("Stuck") != std::string::npos;
+	const bool bOffPath = sReason == "Off track";
 	if (bStuck)
 		RecordStuckFailure();
 	ClearPathState();
 	m_uPendingRequestId = 0;
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
-	if (m_bRepathOnFail || bStuck)
+	if (bStuck || (m_bRepathOnFail && !bOffPath) || (bOffPath && Vars::Misc::Movement::NavEngine::OffPathRepath.Value))
 	{
 		if (SolveInline())
 			m_bRepathRequested = false;
