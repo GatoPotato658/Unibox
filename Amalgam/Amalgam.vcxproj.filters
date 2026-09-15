@@ -158,6 +158,7 @@
     <ClCompile Include="src\Hooks\IEngineVGui_Paint.cpp" />
     <ClCompile Include="src\Hooks\CInput_GetUserCmd.cpp" />
     <ClCompile Include="src\Hooks\IPanel_PaintTraverse.cpp" />
+    <ClCompile Include="src\Hooks\IPhysicsCollision_TraceBox.cpp" />
     <ClCompile Include="src\Hooks\IsFreeTrialAccount.cpp" />
     <ClCompile Include="src\Hooks\ISteamFriends_GetFriendPersonaName.cpp" />
     <ClCompile Include="src\Hooks\ISteamNetworkingUtils_GetPingToDataCenter.cpp" />
