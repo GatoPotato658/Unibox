@@ -10,7 +10,7 @@ MAKE_HOOK(CMaterial_Uncache, S::CMaterial_Uncache(), void,
 	DEBUG_RETURN(CMaterial_Uncache, rcx, bPreserveVars);
 
 	if (F::Materials.m_mMatList.contains(rcx))
-		return;
+		bPreserveVars = true;
 
 	CALL_ORIGINAL(rcx, bPreserveVars);
 }
