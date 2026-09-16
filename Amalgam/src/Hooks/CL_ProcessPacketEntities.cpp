@@ -55,17 +55,18 @@ MAKE_HOOK(CL_ProcessPacketEntities, S::CL_ProcessPacketEntities(), bool,
 
 	bool bReturn = CALL_ORIGINAL(entmsg);
 
-	pLocal = H::Entities.GetLocal();
-	if (!pLocal || !pLocal->m_hMyWeapons())
-	{
-		SDK::Output("ProcessPacketEntities", "Failed to restore weapon crit data! (2)", { 255, 100, 100 });
+	auto pLocalEnt = I::ClientEntityList->GetClientEntity(I::EngineClient->GetLocalPlayer());
+	if (!pLocalEnt)
 		return bReturn;
-	}
+
+	pLocal = pLocalEnt->As<CTFPlayer>();
+	if (!pLocal || !pLocal->IsPlayer() || !pLocal->m_hMyWeapons())
+		return bReturn;
 
 	for (auto& [iSlot, tStorage] : mCriticalStorage)
 	{
 		auto pWeapon = pLocal->GetWeaponFromSlot(iSlot);
-		if (!pWeapon || I::ClientEntityList->GetClientEntity(pWeapon->entindex()) != pWeapon)
+		if (!pWeapon || pWeapon->IsPlayer() || I::ClientEntityList->GetClientEntity(pWeapon->entindex()) != pWeapon)
 			continue;
 
 		pWeapon->m_flCritTokenBucket() = tStorage.m_flCritTokenBucket;

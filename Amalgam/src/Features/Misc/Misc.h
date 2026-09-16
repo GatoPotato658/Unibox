@@ -37,7 +37,6 @@ private:
 	void TauntKartControl(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AutoCrouchNavbot(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd);
-	void ApplyFastAccelerate(CTFPlayer* pLocal, CUserCmd* pCmd, bool bSetPSilent);
 	void AutoHeatmakerFocus(CTFPlayer* pLocal, CUserCmd* pCmd);
 
 	void AutoPeek(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost = false);
@@ -127,7 +126,6 @@ public:
 
 	void RunPre(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void RunPost(CTFPlayer* pLocal, CUserCmd* pCmd);
-	void FastAccelerateWithAntiAim(CTFPlayer* pLocal, CUserCmd* pCmd);
 	bool IsDuckSpeedActive() const { return m_bDuckSpeedActive; }
 
 	void Event(IGameEvent* pEvent, uint32_t uNameHash);

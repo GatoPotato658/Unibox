@@ -83,6 +83,7 @@ public:
 	bool ShouldForceEffects(CTFPlayer* pLocal);
 	
 	bool m_bForce = false;
+	bool m_bCachedForceEffects = false;
 
 	float GetCritDamage() { return m_iCritDamage; }
 	float GetRangedDamage() { return m_iRangedDamage; }

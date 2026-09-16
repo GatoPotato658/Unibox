@@ -2,10 +2,12 @@
 
 #include "../Visuals/FakeAngle/FakeAngle.h"
 #include "../Ticks/Ticks.h"
+#include "../Misc/Misc.h"
 
 static inline bool AntiAimCheck(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	return F::AntiAim.YawOn() && F::AntiAim.ShouldRun(pLocal, pWeapon, pCmd) && !F::Ticks.m_bRecharge
+		&& !F::Misc.IsDuckSpeedActive()
 		&& I::ClientState->chokedcommands < F::AntiAim.AntiAimTicks();
 }
 

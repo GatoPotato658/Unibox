@@ -17,7 +17,7 @@ MAKE_HOOK(CTFPlayerShared_IsCritBoosted, S::CTFPlayerShared_IsCritBoosted(), boo
 		return CALL_ORIGINAL(rcx);
 
 	auto pLocal = H::Entities.GetLocal();
-	if (!pLocal || pLocal->m_Shared() != rcx || !F::CritHack.ShouldForceEffects(pLocal))
+	if (!pLocal || pLocal->m_Shared() != rcx || !F::CritHack.m_bCachedForceEffects)
 		return CALL_ORIGINAL(rcx);
 
 	return true;

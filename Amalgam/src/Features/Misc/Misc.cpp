@@ -939,71 +939,20 @@ void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 			pCmd->forwardmove *= -1.f;
 			pCmd->sidemove *= -1.f;
 			pCmd->viewangles.x = 91.f;
-			Vec3 vMove = { pCmd->forwardmove, pCmd->sidemove, 0.f };
-			Vec3 vAngMoveReverse = Math::VectorAngles(-vMove);
-			pCmd->forwardmove = -vMove.Length();
-			pCmd->sidemove = 0.f;
-			pCmd->viewangles.y = fmodf(pCmd->viewangles.y - vAngMoveReverse.y, 360.f);
-			pCmd->viewangles.z = 270.f;
-			G::PSilentAngles = true;
-			m_bDuckSpeedActive = true;
-			break;
 		}
 
-		if (F::AntiAim.YawOn())
-			return;
+		Vec3 vMove = { pCmd->forwardmove, pCmd->sidemove, 0.f };
+		Vec3 vAngMoveReverse = Math::VectorAngles(-vMove);
+		pCmd->forwardmove = -vMove.Length();
+		pCmd->sidemove = 0.f;
+		pCmd->viewangles.y = fmodf(pCmd->viewangles.y - vAngMoveReverse.y, 360.f);
+		pCmd->viewangles.z = 270.f;
+		G::PSilentAngles = true;
+		m_bDuckSpeedActive = true;
 
-		ApplyFastAccelerate(pLocal, pCmd, true);
 		break;
 	}
 	}
-}
-
-void CMisc::ApplyFastAccelerate(CTFPlayer* pLocal, CUserCmd* pCmd, bool bSetPSilent)
-{
-	if (!Vars::Misc::Movement::FastAccelerate.Value || F::AntiCheatCompatibility.Active()
-		|| G::Attacking == 1 || F::Ticks.m_bDoubletap || F::Ticks.m_bRecharge)
-		return;
-	if (!pLocal->m_hGroundEntity() || pLocal->InCond(TF_COND_HALLOWEEN_KART) || pLocal->IsDucking() || (pCmd->buttons & IN_DUCK))
-		return;
-	if (!(pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT)) && !pCmd->forwardmove && !pCmd->sidemove)
-		return;
-
-	const float flSpeed = pLocal->m_vecVelocity().Length2D();
-	const float flMaxSpeed = std::min(pLocal->m_flMaxspeed() * 0.9f, 520.f) - 10.f;
-	if (flSpeed >= flMaxSpeed)
-		return;
-
-	if (bSetPSilent)
-	{
-		if (!(!I::ClientState->chokedcommands && F::Ticks.CanChoke(true)))
-			return;
-	}
-
-	Vec3 vMove = { pCmd->forwardmove, pCmd->sidemove, 0.f };
-	Vec3 vAngMoveReverse = Math::VectorAngles(-vMove);
-	pCmd->forwardmove = -vMove.Length();
-	pCmd->sidemove = 0.f;
-	pCmd->viewangles.y = fmodf(pCmd->viewangles.y - vAngMoveReverse.y, 360.f);
-	pCmd->viewangles.z = 270.f;
-	if (bSetPSilent)
-		G::PSilentAngles = true;
-}
-
-void CMisc::FastAccelerateWithAntiAim(CTFPlayer* pLocal, CUserCmd* pCmd)
-{
-	if (!pLocal || !pCmd || m_bDuckSpeedActive || !F::AntiAim.YawOn())
-		return;
-
-	if (G::AntiAim)
-	{
-		if (G::SendPacket)
-			return;
-		ApplyFastAccelerate(pLocal, pCmd, false);
-		return;
-	}
-
-	ApplyFastAccelerate(pLocal, pCmd, true);
 }
 
 void CMisc::AutoHeatmakerFocus(CTFPlayer* pLocal, CUserCmd* pCmd)

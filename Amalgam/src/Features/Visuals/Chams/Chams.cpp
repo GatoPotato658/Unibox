@@ -47,6 +47,9 @@ void CChams::End()
 
 void CChams::DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderContext* pRenderContext, int iModel, bool bTwoModel)
 {
+	if (!pEntity || !pEntity->GetModel())
+		return;
+
 	if (!m_iFlags && iModel == ModelEnum::Visible)
 		m_mEntities[pEntity->entindex()];
 

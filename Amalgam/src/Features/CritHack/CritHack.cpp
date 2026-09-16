@@ -249,6 +249,8 @@ bool CCritHack::WeaponCanCrit(CTFWeaponBase* pWeapon, bool bWeaponOnly)
 {
 	if (!pWeapon)
 		return false;
+	if (I::ClientEntityList->GetClientEntity(pWeapon->entindex()) != pWeapon)
+		return false;
 
 	if ((!bWeaponOnly && !pWeapon->AreRandomCritsEnabled()) || SDK::AttribHookValue(1.f, "mult_crit_chance", pWeapon) <= 0.f)
 		return false;
@@ -419,7 +421,7 @@ int CCritHack::PredictCmdNum(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd
 
 bool CCritHack::ShouldForceEffects(CTFPlayer* pLocal)
 {
-	if (!Vars::CritHack::CritEffects.Value || !pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->IsCritBoosted())
+	if (!pLocal || !Vars::CritHack::CritEffects.Value || !pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->IsCritBoosted())
 		return false;
 
 	auto pWeapon = H::Entities.GetWeapon();
@@ -617,6 +619,8 @@ MAKE_HOOK(CTFGameStats_FindPlayerStats, S::CTFGameStats_FindPlayerStats(), void*
 
 void CCritHack::CacheDrawInfo(CTFPlayer* pLocal)
 {
+	m_bCachedForceEffects = ShouldForceEffects(pLocal);
+
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) || !I::EngineClient->IsInGame())
 	{
 		std::lock_guard<std::mutex> lock(m_tDrawMutex);
