@@ -11,7 +11,7 @@
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Spectate/Spectate.h"
-#include "../Features/NavBot/NavEngine/NavEngine.h"
+#include "../Features/NavBot/NavEngine.h"
 #include "../SDK/Events/Events.h"
 #ifdef TEXTMODE
 #include "../Features/Misc/NamedPipe/NamedPipe.h"

@@ -1,11 +1,9 @@
 #include "NavBotCore.h"
-
-#include "Hazards/Hazards.h"
-#include "NavAreaUtils.h"
-#include "NavEngine/NavEngine.h"
-#include "NavBotJobs/NavBotJobs.h"
-#include "NavRuntime.h"
-#include "NavEngine/Controllers/MVMController/MVMController.h"
+#include "Hazards.h"
+#include "Jobs/NavBotJobs.h"
+#include "NavEngine.h"
+#include "BotUtils.h"
+#include "Objectives.h"
 #include "../FollowBot/FollowBot.h"
 #include "../CritHack/CritHack.h"
 #include "../Misc/Misc.h"
@@ -13,14 +11,12 @@
 #include "../Ticks/Ticks.h"
 #include "../ImGui/IndicatorPanel.h"
 
-
 void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy)
 {
 	static Timer tSlotTimer{};
 	if (!tSlotTimer.Run(0.2f))
 		return;
 
-	// Prioritize reloading
 	int iReloadSlot = F::NavBotReload.m_iLastReloadSlot = F::NavBotReload.GetReloadWeaponSlot(pLocal, tClosestEnemy);
 
 	if (F::NavBotEngineer.IsEngieMode(pLocal))
@@ -28,7 +24,7 @@ void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy)
 		int iSwitch = 0;
 		switch (F::NavBotEngineer.m_eTaskStage)
 		{
-			// We are currently building something
+
 		case EngineerTaskStageEnum::BuildSentry:
 		case EngineerTaskStageEnum::BuildDispenser:
 			if (F::NavBotEngineer.m_tCurrentBuildingSpot.m_flCost != FLT_MAX && F::NavBotEngineer.m_tCurrentBuildingSpot.m_vPos.DistTo(pLocal->GetAbsOrigin()) <= 500.f)
@@ -43,7 +39,7 @@ void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy)
 				return;
 			}
 			break;
-			// We are currently upgrading/repairing something
+
 		case EngineerTaskStageEnum::SmackSentry:
 			iSwitch = F::NavBotEngineer.m_flDistToSentry <= 300.f;
 			break;
@@ -177,11 +173,9 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		return;
 	}
 
-	// Update our current nav area
 	if (!F::NavEngine.GetLocalNavArea(pLocal->GetAbsOrigin()))
 	{
-		// This should never happen.
-		// In case it did then theres something wrong with nav engine
+
 		ResetRuntimeState(pCmd);
 		return;
 	}
@@ -189,7 +183,7 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	auto pGameRules = I::TFGameRules();
 	if ((Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::MVMSniper) && pGameRules && pGameRules->m_bPlayingMannVsMachine())
 	{
-		// let buybot drive while it is working, no matter which class we currently are
+
 		if (F::Misc.IsBuyBotBusy())
 			return;
 
@@ -205,7 +199,6 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		}
 	}
 
-	// Recharge doubletap every n seconds
 	static Timer tDoubletapRecharge{};
 	if (Vars::Misc::Movement::NavBot::RechargeDT.Value && IsWeaponValidForDT(pWeapon))
 	{

@@ -11,8 +11,8 @@
 #include "../../Features/Resolver/Resolver.h"
 #include "../../Features/Visuals/Visuals.h"
 #include "../../Features/Killstreak/Killstreak.h"
-#include "../../Features/NavBot/NavEngine/NavEngine.h"
-#include "../../Features/NavBot/NavBotJobs/NavBotJobs.h"
+#include "../../Features/NavBot/NavEngine.h"
+#include "../../Features/NavBot/Jobs/NavBotJobs.h"
 #include "../../Features/Commands/Commands.h"
 #ifdef TEXTMODE
 #include "../../Features/Misc/NamedPipe/NamedPipe.h"

@@ -1,6 +1,6 @@
 #include "NavBotConfig.h"
 
-#include "NavBotJobs/NavBotJobs.h"
+#include "Jobs/NavBotJobs.h"
 
 namespace NavBotConfig
 {

@@ -4,9 +4,9 @@
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/Visuals/Chams/Chams.h"
-#include "../Features/NavBot/NavEngine/NavEngine.h"
-#include "../Features/NavBot/Hazards/Hazards.h"
-#include "../Features/NavBot/NavBotJobs/NavBotJobs.h"
+#include "../Features/NavBot/NavEngine.h"
+#include "../Features/NavBot/Hazards.h"
+#include "../Features/NavBot/Jobs/NavBotJobs.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
 
 MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,

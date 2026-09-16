@@ -2,7 +2,7 @@
 
 #include "../../Core/Core.h"
 #include "../ImGui/Menu/Menu.h"
-#include "../NavBot/NavEngine/NavEngine.h"
+#include "../NavBot/NavEngine.h"
 #include "../Configs/Configs.h"
 #include "../Players/PlayerUtils.h"
 #include "../Misc/AutoItem/AutoItem.h"

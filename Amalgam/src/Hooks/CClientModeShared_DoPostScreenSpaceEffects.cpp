@@ -5,7 +5,7 @@
 #include "../Features/Visuals/CameraWindow/CameraWindow.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Visuals/Materials/Materials.h"
-#include "../Features/Navbot/NavEngine/NavEngine.h"
+#include "../Features/NavBot/NavEngine.h"
 #include "../Features/FollowBot/FollowBot.h"
 #include "../Features/Spectate/Spectate.h"
 

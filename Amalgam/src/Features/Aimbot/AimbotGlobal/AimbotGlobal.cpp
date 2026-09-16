@@ -5,7 +5,7 @@
 #include "../../Misc/NamedPipe/NamedPipe.h"
 #include "../../Ticks/Ticks.h"
 #include "../../EnginePrediction/EnginePrediction.h"
-#include "../../NavBot/NavBotJobs/NavBotJobs.h"
+#include "../../NavBot/Jobs/NavBotJobs.h"
 #include "../../Followbot/Followbot.h"
 #include "../AutoHeal/AutoHeal.h"
 

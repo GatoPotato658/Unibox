@@ -3,7 +3,7 @@
 #include "../Features/ImGui/Notifications/Notifications.h"
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
-#include "../Features/NavBot/NavEngine/NavEngine.h"
+#include "../Features/NavBot/NavEngine.h"
 #include "../Features/Ticks/Ticks.h"
 
 #pragma warning (disable : 6385)

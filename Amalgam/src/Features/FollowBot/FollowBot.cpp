@@ -2,7 +2,7 @@
 #include "../Misc/Misc.h"
 #include "../Players/PlayerUtils.h"
 #include "../NavBot/BotUtils.h"
-#include "../NavBot/NavEngine/NavEngine.h"
+#include "../NavBot/NavEngine.h"
 
 static bool HasManualMovementInput(CUserCmd* pCmd)
 {

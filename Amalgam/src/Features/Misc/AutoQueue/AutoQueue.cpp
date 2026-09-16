@@ -1,7 +1,7 @@
 #include "AutoQueue.h"
 #include "MvmQueue.h"
 #include "../../Players/PlayerUtils.h"
-#include "../../NavBot/NavEngine/NavEngine.h"
+#include "../../NavBot/NavEngine.h"
 #include "../Misc.h"
 #include "../NamedPipe/NamedPipe.h"
 

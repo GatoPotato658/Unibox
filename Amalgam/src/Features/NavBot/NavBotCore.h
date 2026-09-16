@@ -1,6 +1,6 @@
 #pragma once
 #include "BotUtils.h"
-#include "NavBotJobs/NavBotJobs.h"
+#include "Jobs/NavBotJobs.h"
 #include "NavBotConfig.h"
 
 class CNavArea;

@@ -7,7 +7,7 @@
 #include "../AutoAirblast/AutoAirblast.h"
 #include "../AutoHeal/AutoHeal.h"
 #include "../../NavBot/BotUtils.h"
-#include "../../NavBot/NavEngine/Controllers/PasstimeController/PasstimeController.h"
+#include "../../NavBot/Objectives.h"
 #include <array>
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include <numeric>

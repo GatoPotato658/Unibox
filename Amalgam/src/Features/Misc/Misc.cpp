@@ -11,8 +11,8 @@
 #include "../Aimbot/AutoRocketJump/AutoRocketJump.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../EnginePrediction/EnginePrediction.h"
-#include "../NavBot/NavEngine/NavEngine.h"
-#include "../NavBot/NavBotJobs/NavBotJobs.h"
+#include "../NavBot/NavEngine.h"
+#include "../NavBot/Jobs/NavBotJobs.h"
 #include "../PacketManip/AntiAim/AntiAim.h"
 #ifdef TEXTMODE
 #include "NamedPipe/NamedPipe.h"
