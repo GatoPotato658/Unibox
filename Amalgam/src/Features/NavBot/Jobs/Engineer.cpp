@@ -5,7 +5,7 @@ inline bool IsBuildSpotFailed(const std::vector<Vector>& vFailedSpots, const Vec
 {
 	for (const auto& vFailed : vFailedSpots)
 	{
-		if (vFailed.DistTo(vPos) < 1.f)
+		if (vFailed.DistTo(vPos) < 72.f)
 			return true;
 	}
 
@@ -16,8 +16,8 @@ static bool CanBuildAtPosition(CTFPlayer* pLocal, const Vector& vPos)
 {
 	CGameTrace trace;
 	CTraceFilterNavigation filter(pLocal);
-	const Vector vMins(-30.f, -30.f, 0.f);
-	const Vector vMaxs(30.f, 30.f, 66.f);
+	const Vector vMins(-20.f, -20.f, 0.f);
+	const Vector vMaxs(20.f, 20.f, 48.f);
 
 	SDK::TraceHull(vPos + Vector(0, 0, 5), vPos + Vector(0, 0, 5), vMins, vMaxs, MASK_PLAYERSOLID, &filter, &trace);
 	if (trace.DidHit())
@@ -64,23 +64,16 @@ bool CNavBotEngineer::NavToSentrySpot(Vector vLocalOrigin)
 	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer)
 		return true;
 
-	auto uSize = m_vBuildingSpots.size();
-
-	for (int iAttempts = 0; iAttempts < 10 && iAttempts < uSize; ++iAttempts)
+	for (auto& tSpot : m_vBuildingSpots)
 	{
+		if (IsBuildSpotFailed(m_vFailedSpots, tSpot.m_vPos))
+			continue;
+		if (m_tCurrentBuildingSpot.m_flCost != FLT_MAX && tSpot.m_vPos.DistTo(m_tCurrentBuildingSpot.m_vPos) < 8.f)
+			continue;
 
-		auto iRandomOffset = SDK::RandomInt(0, std::min(3, (int)uSize));
-
-		BuildingSpot_t tRandomSpot;
-
-		if (iAttempts - iRandomOffset < 0)
-			tRandomSpot = m_vBuildingSpots[uSize + (iAttempts - iRandomOffset)];
-		else
-			tRandomSpot = m_vBuildingSpots[iAttempts - iRandomOffset];
-
-		if (F::NavEngine.NavTo(tRandomSpot.m_vPos, PriorityListEnum::Engineer))
+		if (F::NavEngine.NavTo(tSpot.m_vPos, PriorityListEnum::Engineer))
 		{
-			m_tCurrentBuildingSpot = tRandomSpot;
+			m_tCurrentBuildingSpot = tSpot;
 			m_flBuildYaw = 0.0f;
 			return true;
 		}
@@ -92,7 +85,7 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 {
 	m_eTaskStage = bDispenser ? EngineerTaskStageEnum::BuildDispenser : EngineerTaskStageEnum::BuildSentry;
 
-	if (m_flBuildYaw >= 360.0f)
+	if (m_flBuildYaw >= 360.0f || m_iBuildAttempts > 20)
 	{
 		m_vFailedSpots.push_back(m_tCurrentBuildingSpot.m_vPos);
 		m_tCurrentBuildingSpot = {};
@@ -105,7 +98,25 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 	if (pLocal->m_iMetalCount() < iRequiredMetal)
 		return F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
 
-	if (m_tCurrentBuildingSpot.m_flCost != FLT_MAX && m_tCurrentBuildingSpot.m_vPos.DistTo(pLocal->GetAbsOrigin()) <= (bDispenser ? 500.f : 200.f))
+	if (bDispenser && m_pMySentryGun && !m_pMySentryGun->m_bPlacing())
+	{
+		const Vector vSentry = m_pMySentryGun->GetAbsOrigin();
+		if (m_tCurrentBuildingSpot.m_flCost == FLT_MAX || m_tCurrentBuildingSpot.m_vPos.DistTo(vSentry) < 48.f)
+		{
+			static const float aOff[][2] = { {96.f, 0.f}, {-96.f, 0.f}, {0.f, 96.f}, {0.f, -96.f}, {72.f, 72.f}, {72.f, -72.f}, {-72.f, 72.f}, {-72.f, -72.f} };
+			for (const auto& tOff : aOff)
+			{
+				const Vector vPos = vSentry + Vector(tOff[0], tOff[1], 0.f);
+				if (IsBuildSpotFailed(m_vFailedSpots, vPos) || !CanBuildAtPosition(pLocal, vPos))
+					continue;
+				m_tCurrentBuildingSpot = { vSentry.DistTo(vPos), vPos };
+				break;
+			}
+		}
+	}
+
+	const float flPlaceDist = bDispenser ? 140.f : 200.f;
+	if (m_tCurrentBuildingSpot.m_flCost != FLT_MAX && m_tCurrentBuildingSpot.m_vPos.DistTo(pLocal->GetAbsOrigin()) <= flPlaceDist)
 	{
 
 		if (tClosestEnemy.m_flDist < 500.f && tClosestEnemy.m_pPlayer && tClosestEnemy.m_pPlayer->IsAlive() && !pLocal->m_bCarryingObject())
@@ -117,7 +128,7 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 		I::EngineClient->SetViewAngles(pCmd->viewangles);
 
 		if (tRotationTimer.Run(0.3f))
-			m_flBuildYaw += 15.0f;
+			m_flBuildYaw += 45.0f;
 
 		static Timer tAttemptTimer;
 		if (tAttemptTimer.Run(0.3f))
@@ -136,13 +147,8 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 			pCmd->sidemove = 1.0f;
 		return true;
 	}
-	else
-	{
-		m_flBuildYaw = 0.0f;
-		return NavToSentrySpot(pLocal->GetAbsOrigin());
-	}
 
-	return false;
+	return NavToSentrySpot(pLocal->GetAbsOrigin());
 }
 
 bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObject* pBuilding)
@@ -314,19 +320,22 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 			if (tArea.m_vCenter.DistTo(tFocus.m_vPos) > 2000.f)
 				continue;
 
-			auto AddSpot = [&](CNavArea* pArea, const Vector& vPos)
+			if (tArea.IsBlocked(pLocal->m_iTeamNum()))
+				continue;
+
+			auto AddSpot = [&](CNavArea* pArea, const Vector& vPos, float flBonus = 0.f)
 				{
 					if (IsBuildSpotFailed(m_vFailedSpots, vPos))
 						return;
 
-					if (F::NavEngine.GetPathCost(tFocus.m_pArea, pArea) > 4000.f)
+					if (tFocus.m_pArea && F::NavEngine.GetPathCost(tFocus.m_pArea, pArea) > 4000.f)
 						return;
 
 					if (!CanBuildAtPosition(pLocal, vPos))
 						return;
 
 					float flDistToFocus = vPos.DistTo(tFocus.m_vPos);
-					float flCost = flDistToFocus;
+					float flCost = flDistToFocus - flBonus;
 
 					if (flDistToFocus > 2500.f)
 						flCost += (flDistToFocus - 2500.f) * 2.f;
@@ -342,19 +351,21 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 
 					if (tArea.m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT)
 						flCost -= 200.f;
+					if (tArea.m_iTFAttributeFlags & TF_NAV_CONTROL_POINT)
+						flCost -= 150.f;
 
 					m_vBuildingSpots.emplace_back(flCost, vPos);
 				};
 
-			if (tArea.m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT)
-				AddSpot(&tArea, tArea.m_vCenter);
-			else
+			const bool bSentrySpot = (tArea.m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT) != 0;
+			const bool bNearObjective = tArea.m_vCenter.DistTo(tFocus.m_vPos) < 1400.f;
+			if (bSentrySpot || bNearObjective)
+				AddSpot(&tArea, tArea.m_vCenter, bSentrySpot ? 250.f : 0.f);
+
+			for (auto& tHidingSpot : tArea.m_vHidingSpots)
 			{
-				for (auto& tHidingSpot : tArea.m_vHidingSpots)
-				{
-					if (tHidingSpot.HasGoodCover())
-						AddSpot(&tArea, tHidingSpot.m_vPos);
-				}
+				if (tHidingSpot.HasGoodCover())
+					AddSpot(&tArea, tHidingSpot.m_vPos, 80.f);
 			}
 		}
 
@@ -363,6 +374,8 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 			{
 				return a.m_flCost < b.m_flCost;
 			});
+		if (m_vBuildingSpots.size() > 48)
+			m_vBuildingSpots.resize(48);
 	}
 }
 
@@ -419,7 +432,6 @@ void CNavBotEngineer::Reset()
 bool CNavBotEngineer::IsEngieMode(CTFPlayer* pLocal)
 {
 	return Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::AutoEngie &&
-		(Vars::Aimbot::AutoEngie::AutoRepair.Value || Vars::Aimbot::AutoEngie::AutoUpgrade.Value) &&
 		pLocal && pLocal->IsAlive() && pLocal->m_iClass() == TF_CLASS_ENGINEER;
 }
 

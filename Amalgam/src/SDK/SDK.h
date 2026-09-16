@@ -158,5 +158,8 @@ namespace SDK
 	int GetPasstimeGoalMapTeam(const Vec3& vOrigin, std::string* pTargetname = nullptr);
 
 	bool CleanScreenshot();
+	void NotifyCleanScreenshot();
+	void TickCleanScreenshot();
+	void UpdateSteamScreenshotHook();
 	void CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool& bPrimary, bool& bSecondary, bool& bReloading);
 }

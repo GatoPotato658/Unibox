@@ -97,6 +97,7 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::PacketManip.Run(pLocal, pWeapon, pCmd);
 		F::Ticks.CreateMove(pLocal, pWeapon, pCmd);
 		F::AntiAim.Run(pLocal, pWeapon, pCmd);
+		F::Misc.FastAccelerateWithAntiAim(pLocal, pCmd);
 		F::AntiCheatCompatibility.CreateMove(pCmd);
 		
 #ifndef TEXTMODE

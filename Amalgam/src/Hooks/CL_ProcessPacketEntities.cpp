@@ -65,7 +65,7 @@ MAKE_HOOK(CL_ProcessPacketEntities, S::CL_ProcessPacketEntities(), bool,
 	for (auto& [iSlot, tStorage] : mCriticalStorage)
 	{
 		auto pWeapon = pLocal->GetWeaponFromSlot(iSlot);
-		if (!pWeapon)
+		if (!pWeapon || I::ClientEntityList->GetClientEntity(pWeapon->entindex()) != pWeapon)
 			continue;
 
 		pWeapon->m_flCritTokenBucket() = tStorage.m_flCritTokenBucket;

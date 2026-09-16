@@ -46,6 +46,9 @@ bool CNullInterfaces::Initialize()
 	I::SteamUser = I::SteamClient->GetISteamUser(hsNewUser, hsNewPipe, STEAMUSER_INTERFACE_VERSION);
 	ValidateSteam(I::SteamUser);
 
+	I::SteamScreenshots = I::SteamClient->GetISteamScreenshots(hsNewUser, hsNewPipe, STEAMSCREENSHOTS_INTERFACE_VERSION);
+	ValidateNonLethal(I::SteamScreenshots);
+
 	S::Get_SteamNetworkingUtils.Call<ISteamNetworkingUtils*>(&I::SteamNetworkingUtils);
 	ValidateSteam(I::SteamNetworkingUtils);
 

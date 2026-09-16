@@ -247,7 +247,10 @@ void CCritHack::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 bool CCritHack::WeaponCanCrit(CTFWeaponBase* pWeapon, bool bWeaponOnly)
 {
-	if (!bWeaponOnly && !pWeapon->AreRandomCritsEnabled() || SDK::AttribHookValue(1.f, "mult_crit_chance", pWeapon) <= 0.f)
+	if (!pWeapon)
+		return false;
+
+	if ((!bWeaponOnly && !pWeapon->AreRandomCritsEnabled()) || SDK::AttribHookValue(1.f, "mult_crit_chance", pWeapon) <= 0.f)
 		return false;
 
 	switch (pWeapon->GetWeaponID())

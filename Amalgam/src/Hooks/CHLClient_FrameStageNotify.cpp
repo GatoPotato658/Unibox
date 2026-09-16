@@ -77,6 +77,11 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		break;
 	}
 	case FRAME_RENDER_START:
+#ifndef TEXTMODE
+		if (I::EngineClient && I::EngineClient->IsTakingScreenshot())
+			SDK::NotifyCleanScreenshot();
+		SDK::UpdateSteamScreenshotHook();
+#endif
 #ifdef TEXTMODE
 		F::AutoQueue.Run();
 		F::NamedPipe.ProcessCommandQueue();

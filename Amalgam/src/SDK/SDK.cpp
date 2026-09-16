@@ -1495,9 +1495,35 @@ bool TriggerData_t::PointIsWithin(Vec3 vPoint) const
 	return trace.startsolid;
 }
 
+static int s_nCleanScreenshotFrames = 0;
+
+void SDK::NotifyCleanScreenshot()
+{
+	if (s_nCleanScreenshotFrames < 3)
+		s_nCleanScreenshotFrames = 3;
+}
+
+void SDK::TickCleanScreenshot()
+{
+	if (s_nCleanScreenshotFrames > 0)
+		s_nCleanScreenshotFrames--;
+}
+
+void SDK::UpdateSteamScreenshotHook()
+{
+	if (!Vars::Visuals::UI::CleanScreenshots.Value || !I::SteamScreenshots)
+		return;
+
+	I::SteamScreenshots->HookScreenshots(true);
+}
+
 bool SDK::CleanScreenshot()
 {
-	return Vars::Visuals::UI::CleanScreenshots.Value && I::EngineClient->IsTakingScreenshot();
+	if (!Vars::Visuals::UI::CleanScreenshots.Value)
+		return false;
+	if (s_nCleanScreenshotFrames > 0)
+		return true;
+	return I::EngineClient && I::EngineClient->IsTakingScreenshot();
 }
 
 void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool& bPrimary, bool& bSecondary, bool& bReloading)

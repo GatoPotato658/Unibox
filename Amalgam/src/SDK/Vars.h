@@ -596,6 +596,14 @@ NAMESPACE_BEGIN(Vars)
 			CVar(CleanScreenshots, "Clean screenshots", true);
 		NAMESPACE_END(UI)
 
+		NAMESPACE_BEGIN(SkinChanger)
+			CVar(Enabled, "Skin changer", false, VISUAL);
+			CVar(PaintKit, "Paint kit", 0, VISUAL | SLIDER_MIN, 0, 1600, 1);
+			CVar(Australium, "Australium", false, VISUAL);
+			CVar(Festive, "Festive", false, VISUAL);
+			CVar(Killstreak, "Killstreak", 0, VISUAL | SLIDER_CLAMP, 0, 3, 1);
+		NAMESPACE_END(SkinChanger)
+
 		NAMESPACE_BEGIN(Thirdperson)
 			CVar(Enabled, "Thirdperson", false, VISUAL);
 			CVar(Crosshair, VA_LIST("Crosshair", "Thirdperson crosshair"), false, VISUAL);
@@ -847,6 +855,7 @@ I dont think this is a good idea to disable simulations completely:
 					Off, Simple, MoveSim);
 				CVar(AutoScopeCancelTime, "Auto scope cancel time", 3, SLIDER_MIN, 1, 5, 1, "%is");
 				CVar(AutoScopeUseCachedResults, "Auto scope use cached results", true, NOSAVE | DEBUGVAR);
+				CVar(AutoHeatmakerFocus, "Auto heatmaker focus", false);
 				CVar(LookAtPathDebug, "Look at path debug", false, NOSAVE | DEBUGVAR);
 			NAMESPACE_END(BotUtils)
 
@@ -1128,7 +1137,7 @@ I dont think this is a good idea to disable simulations completely:
 				static const std::vector<int> vItemAchievementIDs =
 				{
 					1036, 1037, 1038, 1136, 1137, 1138, 1236, 1237, 1238, 1336, 1337, 1338, 1437, 1438, 1439, 1537,
-					1538, 1539, 156, 1637, 1638, 1639, 166, 167, 1735, 1736, 1737, 1801, 1802, 1803, 1901, 1902,
+					1538, 1539, 1637, 1638, 1639, 1735, 1736, 1737, 1801, 1802, 1803, 1901, 1902,
 					1906, 1909, 1910, 1911, 1912, 1928, 2006, 2212, 2412
 				};
 				return vItemAchievementIDs;

@@ -1335,6 +1335,14 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::UI::ScoreboardColors, FToggleEnum::Left);
 					FToggle(Vars::Visuals::UI::CleanScreenshots, FToggleEnum::Right);
 				} EndSection();
+				if (Section("Skins"))
+				{
+					FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
+					FToggle(Vars::Visuals::SkinChanger::Australium, FToggleEnum::Right);
+					FToggle(Vars::Visuals::SkinChanger::Festive, FToggleEnum::Left);
+					FSlider(Vars::Visuals::SkinChanger::PaintKit);
+					FSlider(Vars::Visuals::SkinChanger::Killstreak);
+				} EndSection();
 				if (Section("Thirdperson", 8))
 				{
 					FToggle(Vars::Visuals::Thirdperson::Enabled, FToggleEnum::Left);
@@ -2009,6 +2017,7 @@ void CMenu::MenuMisc(int iTab)
 					FDropdown(Vars::Misc::Automation::ForceClass, { "Off", "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" }, {0,1,3,7,4,6,9,5,2,8}, FDropdownEnum::Left);
 					FDropdown(Vars::Misc::Movement::BotUtils::WeaponSlot, FDropdownEnum::Right);
 					FDropdown(Vars::Misc::Movement::BotUtils::AutoScope);
+					FToggle(Vars::Misc::Movement::BotUtils::AutoHeatmakerFocus, FToggleEnum::Left);
 					PushTransparent(!Vars::Misc::Movement::BotUtils::AutoScope.Value);
 					{
 						FSlider(Vars::Misc::Movement::BotUtils::AutoScopeCancelTime, FSliderEnum::None);
@@ -4782,28 +4791,34 @@ void CMenu::MenuSettings(int iTab)
 
 			if (!I::EngineClient->IsConnected())
 			{
-				bool bItem = false;
+				static int iAchievementOp = 0;
 				if (FButton("Unlock achievements", FButtonEnum::Left))
+				{
+					iAchievementOp = 0;
 					OpenPopup("UnlockAchievements");
+				}
 				if (FButton("Unlock item achievements", FButtonEnum::Right | FButtonEnum::SameLine))
 				{
+					iAchievementOp = 1;
 					OpenPopup("UnlockAchievements");
-					bItem = true;
 				}
 				if (FButton("Lock achievements", FButtonEnum::Left))
+				{
+					iAchievementOp = 0;
 					OpenPopup("LockAchievements");
+				}
 				if (FButton("Lock item achievements", FButtonEnum::Right | FButtonEnum::SameLine))
 				{
+					iAchievementOp = 1;
 					OpenPopup("LockAchievements");
-					bItem = true;
 				}
 				if (FBeginPopupModal("UnlockAchievements"))
 				{
-					FText(std::format("Do you really want to unlock all {}achievements?", (bItem ? "item " : "")).c_str());
+					FText(std::format("Do you really want to unlock all {}achievements?", (iAchievementOp ? "item " : "")).c_str());
 
 					if (FButton("Yes, unlock", FButtonEnum::Left))
 					{
-						if (bItem) F::Misc.UnlockItemAchievements();
+						if (iAchievementOp) F::Misc.UnlockItemAchievements();
 						else F::Misc.UnlockAchievements();
 						CloseCurrentPopup();
 					}
@@ -4814,11 +4829,11 @@ void CMenu::MenuSettings(int iTab)
 				}
 				else if (FBeginPopupModal("LockAchievements"))
 				{
-					FText(std::format("Do you really want to lock all {}achievements?", (bItem ? "item " : "")).c_str());
+					FText(std::format("Do you really want to lock all {}achievements?", (iAchievementOp ? "item " : "")).c_str());
 
 					if (FButton("Yes, lock", FButtonEnum::Left))
 					{
-						if (bItem) F::Misc.LockItemAchievements();
+						if (iAchievementOp) F::Misc.LockItemAchievements();
 						else F::Misc.LockAchievements();
 						CloseCurrentPopup();
 					}

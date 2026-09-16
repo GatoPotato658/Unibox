@@ -73,6 +73,32 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 		return value;
 
 	std::lock_guard<std::recursive_mutex> lock(sAttribHookMutex);
-	return AttribHookIntOriginal(Hook.As<void*>(), value, name, econent, buffer, isGlobalConstString);
+	int iRet = AttribHookIntOriginal(Hook.As<void*>(), value, name, econent, buffer, isGlobalConstString);
+
+	if (!Vars::Visuals::SkinChanger::Enabled.Value)
+		return iRet;
+
+	auto pEntity = reinterpret_cast<CBaseEntity*>(econent);
+	const int iLocal = I::EngineClient->GetLocalPlayer();
+	bool bLocalOwned = pEntity->entindex() == iLocal;
+	if (!bLocalOwned)
+	{
+		if (auto pOwner = pEntity->m_hOwnerEntity().Get())
+			bLocalOwned = pOwner->entindex() == iLocal;
+	}
+	if (!bLocalOwned)
+		return iRet;
+
+	const auto uHash = FNV1A::Hash32(name);
+	if (uHash == FNV1A::Hash32Const("paintkit_proto_def_index") && Vars::Visuals::SkinChanger::PaintKit.Value)
+		return Vars::Visuals::SkinChanger::PaintKit.Value;
+	if (uHash == FNV1A::Hash32Const("is_australium_item") && Vars::Visuals::SkinChanger::Australium.Value)
+		return 1;
+	if (uHash == FNV1A::Hash32Const("is_festivized") && Vars::Visuals::SkinChanger::Festive.Value)
+		return 1;
+	if (uHash == FNV1A::Hash32Const("killstreak_tier") && Vars::Visuals::SkinChanger::Killstreak.Value)
+		return Vars::Visuals::SkinChanger::Killstreak.Value;
+
+	return iRet;
 }
 #endif
