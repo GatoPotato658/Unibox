@@ -125,6 +125,8 @@ static bool ModulesLoaded()
 
 void CCore::Load()
 {
+	SDK::CInitTimingScope tTotal("Core.Load total");
+
 	if (m_bUnload = m_bFailed = FNV1A::Hash32(GetProcessName(GetCurrentProcessId()).c_str()) != FNV1A::Hash32Const("tf_win64.exe"))
 	{
 		AppendFailText("Invalid process");
@@ -135,28 +137,53 @@ void CCore::Load()
 	F::NamedPipe.Initialize();
 #endif
 
-	float flTime = 0.f;
-	while (!ModulesLoaded())
 	{
-		Sleep(500), flTime += 0.5f;
-		if (m_bUnload = m_bFailed = flTime >= 60.f)
+		SDK::CInitTimingScope tWait("Core.Load wait modules");
+		float flTime = 0.f;
+		while (!ModulesLoaded())
 		{
-			AppendFailText("Failed to load");
-			return;
-		}
-		if (m_bUnload = m_bFailed = U::KeyHandler.Down(VK_F11, true))
-		{
-			AppendFailText("Cancelled load");
-			return;
+			Sleep(500), flTime += 0.5f;
+			if (m_bUnload = m_bFailed = flTime >= 60.f)
+			{
+				AppendFailText("Failed to load");
+				return;
+			}
+			if (m_bUnload = m_bFailed = U::KeyHandler.Down(VK_F11, true))
+			{
+				AppendFailText("Cancelled load");
+				return;
+			}
 		}
 	}
 
-	if (m_bUnload = m_bFailed = !U::Signatures.Initialize() || !U::Interfaces.Initialize() || !CheckDXLevel())
-		return;
+	{
+		SDK::CInitTimingScope tSigs("Core.Load signatures");
+		if (m_bUnload = m_bFailed = !U::Signatures.Initialize())
+			return;
+	}
+	{
+		SDK::CInitTimingScope tIfaces("Core.Load interfaces");
+		if (m_bUnload = m_bFailed = !U::Interfaces.Initialize() || !CheckDXLevel())
+			return;
+	}
 
-	const bool bHooksInitialized = U::Hooks.Initialize();
-	const bool bBytePatchesInitialized = U::BytePatches.Initialize();
-	const bool bEventsInitialized = H::Events.Initialize();
+	SDK::Output("init", std::format("mat_dxlevel {}", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+
+	bool bHooksInitialized = false;
+	bool bBytePatchesInitialized = false;
+	bool bEventsInitialized = false;
+	{
+		SDK::CInitTimingScope tHooks("Core.Load hooks");
+		bHooksInitialized = U::Hooks.Initialize();
+	}
+	{
+		SDK::CInitTimingScope tPatches("Core.Load bytepatches");
+		bBytePatchesInitialized = U::BytePatches.Initialize();
+	}
+	{
+		SDK::CInitTimingScope tEvents("Core.Load events");
+		bEventsInitialized = H::Events.Initialize();
+	}
 	if (m_bUnload = m_bFailed2 = !bHooksInitialized || !bBytePatchesInitialized || !bEventsInitialized)
 		return;
 
@@ -165,15 +192,21 @@ void CCore::Load()
 #endif
 	H::ConVars.Modify(Vars::Misc::Exploits::UnlockCVars.Value);
 #ifndef TEXTMODE
-	H::Fonts.Reload();
+	{
+		SDK::CInitTimingScope tFonts("Core.Load fonts");
+		H::Fonts.Reload();
+	}
 #endif
 	const auto sVisualConfig = F::Configs.m_sCurrentVisuals;
-	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
-	if (!sVisualConfig.empty())
-		F::Configs.LoadVisual(sVisualConfig, false);
+	{
+		SDK::CInitTimingScope tConfig("Core.Load config");
+		F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
+		if (!sVisualConfig.empty())
+			F::Configs.LoadVisual(sVisualConfig, false);
+	}
 	F::TelemetryBlocker.Initialize();
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
-	SDK::Output("unibox", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+	SDK::Output("unibox", std::format("Loaded (dxlevel {})", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }
 
 void CCore::Loop()

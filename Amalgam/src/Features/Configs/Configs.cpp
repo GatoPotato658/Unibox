@@ -715,6 +715,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 
 bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 {
+	SDK::CInitTimingScope tLoad("Configs.LoadConfig");
 	const std::filesystem::path tPath = GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension);
 	if (tPath.empty())
 		return false;

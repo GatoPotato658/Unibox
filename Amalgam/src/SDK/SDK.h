@@ -108,6 +108,19 @@ namespace SDK
 	int RandomInt(int iMinVal = 0, int iMaxVal = VALVE_RAND_MAX);
 	float RandomFloat(float flMinVal = 0.f, float flMaxVal = 1.f);
 	double PlatFloatTime();
+	double InitNowMs();
+	void LogInitTiming(const char* sStage, double flMs);
+	int GetActiveDXLevel();
+	bool SupportsDX9Shaders();
+
+	struct CInitTimingScope
+	{
+		const char* m_szName;
+		double m_flStart;
+
+		explicit CInitTimingScope(const char* szName);
+		~CInitTimingScope();
+	};
 
 	bool W2S(const Vec3& vOrigin, Vec3& vScreen, bool bAlways = false);
 	bool IsOnScreen(CBaseEntity* pEntity, const matrix3x4& mTransform, float* pLeft = nullptr, float* pRight = nullptr, float* pTop = nullptr, float* pBottom = nullptr, bool bAll = false);

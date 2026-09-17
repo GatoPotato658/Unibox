@@ -1,10 +1,13 @@
 #include "Fonts.h"
 
 #include "../../Definitions/Interfaces/IMatSystemSurface.h"
+#include "../../SDK.h"
 #include <ranges>
 
 void CFonts::Reload(float flDPI, bool bOutline)
 {
+	SDK::CInitTimingScope tReload("Fonts.Reload");
+
 	int iFlags = !bOutline ? FONTFLAG_ANTIALIAS : FONTFLAG_ANTIALIAS | FONTFLAG_DROPSHADOW;
 
 	m_mFonts[FONT_ESP] = { "Verdana", int(12.f * flDPI), iFlags, 0 };

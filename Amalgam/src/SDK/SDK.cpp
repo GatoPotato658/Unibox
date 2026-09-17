@@ -6,6 +6,8 @@
 #include "../Features/NavBot/NavEngine.h"
 #include "../Features/Ticks/Ticks.h"
 
+#include <Windows.h>
+
 #pragma warning (disable : 6385)
 
 MAKE_SIGNATURE(CM_TransformedBoxTrace, "engine.dll", "48 8B C4 48 89 58 ? 55 56 57 48 8D 68 ? 48 81 EC ? ? ? ? F3 0F 10 41", 0x0);
@@ -466,6 +468,53 @@ double SDK::PlatFloatTime()
 {
 	static auto Plat_FloatTime = U::Memory.GetModuleExport<double(*)()>("tier0.dll", "Plat_FloatTime");
 	return Plat_FloatTime();
+}
+
+double SDK::InitNowMs()
+{
+	static const double flFreq = []()
+	{
+		LARGE_INTEGER tFreq = {};
+		QueryPerformanceFrequency(&tFreq);
+		return tFreq.QuadPart ? double(tFreq.QuadPart) : 1.0;
+	}();
+
+	LARGE_INTEGER tNow = {};
+	QueryPerformanceCounter(&tNow);
+	return 1000.0 * double(tNow.QuadPart) / flFreq;
+}
+
+void SDK::LogInitTiming(const char* sStage, double flMs)
+{
+	const std::string sMessage = std::format("{}: {:.2f} ms", sStage ? sStage : "?", flMs);
+	if (I::CVar)
+		Output("init", sMessage.c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	else
+		OutputDebugStringA(std::format("[init] {}\n", sMessage).c_str());
+}
+
+int SDK::GetActiveDXLevel()
+{
+	if (auto pDxLevel = H::ConVars.FindVar("mat_dxlevel"))
+		return pDxLevel->GetInt();
+	if (I::EngineClient)
+		return I::EngineClient->GetDXSupportLevel();
+	return 90;
+}
+
+bool SDK::SupportsDX9Shaders()
+{
+	return GetActiveDXLevel() >= 90;
+}
+
+SDK::CInitTimingScope::CInitTimingScope(const char* szName)
+	: m_szName(szName), m_flStart(InitNowMs())
+{
+}
+
+SDK::CInitTimingScope::~CInitTimingScope()
+{
+	LogInitTiming(m_szName, InitNowMs() - m_flStart);
 }
 
 bool SDK::W2S(const Vec3& vOrigin, Vec3& vScreen, bool bAlways)

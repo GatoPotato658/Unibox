@@ -1,6 +1,7 @@
 #include "Hooks.h"
 
 #include "../../Core/Core.h"
+#include "../../SDK/SDK.h"
 #include "../../Hooks/Direct3DDevice9.h"
 #include <ranges>
 
@@ -12,6 +13,8 @@ CHook::CHook(const std::string& sName, void* pInitFunc)
 
 bool CHooks::Initialize()
 {
+	SDK::CInitTimingScope tTotal("Hooks.Initialize total");
+
 	m_bFailed = false;
 	m_bInitialized = false;
 	if (MH_Initialize() != MH_OK)
@@ -21,19 +24,28 @@ bool CHooks::Initialize()
 	}
 
 #ifndef TEXTMODE
-	WndProc::Initialize();
-	if (!WndProc::hwWindow || !WndProc::Original)
-		m_bFailed = true;
+	{
+		SDK::CInitTimingScope tWnd("Hooks.Initialize WndProc");
+		WndProc::Initialize();
+		if (!WndProc::hwWindow || !WndProc::Original)
+			m_bFailed = true;
+	}
 #endif
 
-	for (auto& pHook : m_mHooks | std::views::values)
 	{
-		const bool bOK = reinterpret_cast<bool(__cdecl*)()>(pHook->m_pInitFunc)();
-		m_bFailed = m_bFailed || !bOK;
+		SDK::CInitTimingScope tCreate("Hooks.Initialize create");
+		for (auto& pHook : m_mHooks | std::views::values)
+		{
+			const bool bOK = reinterpret_cast<bool(__cdecl*)()>(pHook->m_pInitFunc)();
+			m_bFailed = m_bFailed || !bOK;
+		}
 	}
 
-	if (!m_bFailed && MH_EnableHook(MH_ALL_HOOKS) != MH_OK)
-		m_bFailed = true;
+	{
+		SDK::CInitTimingScope tEnable("Hooks.Initialize MH_EnableHook");
+		if (!m_bFailed && MH_EnableHook(MH_ALL_HOOKS) != MH_OK)
+			m_bFailed = true;
+	}
 
 	if (m_bFailed)
 	{

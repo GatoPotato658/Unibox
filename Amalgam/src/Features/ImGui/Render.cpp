@@ -144,6 +144,8 @@ void CRender::LoadColors()
 
 void CRender::LoadFonts()
 {
+	SDK::CInitTimingScope tFonts("ImGui.LoadFonts");
+
 	using namespace ImGui;
 
 	auto& io = GetIO();
@@ -255,6 +257,8 @@ void CRender::LoadStyle()
 
 void CRender::Initialize(IDirect3DDevice9* pDevice)
 {
+	SDK::CInitTimingScope tInit("ImGui.Initialize");
+
 	ImGui::CreateContext();
 	ImGui_ImplWin32_Init(WndProc::hwWindow);
 	ImGui_ImplDX9_Init(pDevice);

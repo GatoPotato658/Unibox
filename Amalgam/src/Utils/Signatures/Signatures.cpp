@@ -2,6 +2,7 @@
 
 #include "../Memory/Memory.h"
 #include "../../Core/Core.h"
+#include "../../SDK/SDK.h"
 #include <string>
 #include <format>
 #include <limits>
@@ -29,7 +30,11 @@ bool CSignature::Initialize()
 	if (!m_sDLLName || !m_sSignature)
 		return Fail();
 
+	const double flScanStart = SDK::InitNowMs();
 	const auto dwAddress = U::Memory.FindSignature(m_sDLLName, m_sSignature);
+	const double flScanMs = SDK::InitNowMs() - flScanStart;
+	if (flScanMs >= 20.0)
+		SDK::LogInitTiming(m_sName ? m_sName : "signature", flScanMs);
 	if (!dwAddress)
 		return Fail();
 
@@ -60,6 +65,8 @@ bool CSignature::Initialize()
 
 bool CSignatures::Initialize()
 {
+	SDK::CInitTimingScope tTotal("Signatures.Initialize");
+
 	m_bFailed = false;
 	for (auto pSignature : m_vSignatures)
 	{

@@ -97,6 +97,16 @@ void CMaterials::ServicePendingOperation()
 	if (operation == PendingOperation::None)
 		return;
 
+	const char* sName = "Materials.None";
+	switch (operation)
+	{
+	case PendingOperation::Load: sName = "Materials.Load"; break;
+	case PendingOperation::Reload: sName = "Materials.Reload"; break;
+	case PendingOperation::Unload: sName = "Materials.Unload"; break;
+	case PendingOperation::None: break;
+	}
+	SDK::CInitTimingScope tOperation(sName);
+
 	switch (operation)
 	{
 	case PendingOperation::Load:
@@ -190,11 +200,14 @@ static inline std::string modify_vmt(const std::string& vmt)
 	if (!has_material_key(vmt, "$model"))
 		append += "\n\t$model \"1\"";
 
-	if (!has_cloak_factor && !has_material_key(vmt, "$cloakpassenabled"))
-		append += "\n\t$cloakpassenabled \"1\"";
+	if (SDK::SupportsDX9Shaders())
+	{
+		if (!has_cloak_factor && !has_material_key(vmt, "$cloakpassenabled"))
+			append += "\n\t$cloakpassenabled \"1\"";
 
-	if (!has_cloak_factor && is_vertex_lit_generic(vmt) && !has_material_key(vmt, "proxies"))
-		append += "\n\tProxies\n\t{\n\t\tinvis\n\t\t{\n\t\t}\n\t}";
+		if (!has_cloak_factor && is_vertex_lit_generic(vmt) && !has_material_key(vmt, "proxies"))
+			append += "\n\tProxies\n\t{\n\t\tinvis\n\t\t{\n\t\t}\n\t}";
+	}
 
 	if (!append.empty())
 		modified.insert(insert_pos, append);
@@ -206,6 +219,9 @@ static inline std::string modify_vmt(const std::string& vmt)
 
 void CMaterials::LoadMaterials()
 {
+	SDK::CInitTimingScope tTotal("LoadMaterials total");
+	const bool bDx9Shaders = SDK::SupportsDX9Shaders();
+
 	// default materials
 	StoreStruct( // hacky
 		"None",
@@ -224,10 +240,15 @@ void CMaterials::LoadMaterials()
 		true);
 	StoreStruct(
 		"Shaded",
-			"\"VertexLitGeneric\""
-			"\n{"
-			"\n\t$basetexture \"white\""
-			"\n}",
+			bDx9Shaders
+			? "\"VertexLitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"white\""
+			  "\n}"
+			: "\"UnlitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"white\""
+			  "\n}",
 		true);
 	StoreStruct(
 		"Wireframe",
@@ -239,41 +260,59 @@ void CMaterials::LoadMaterials()
 		true);
 	StoreStruct(
 		"Fresnel",
-			"\"VertexLitGeneric\""
-			"\n{"
-			"\n\t$basetexture \"white\""
-			"\n\t$bumpmap \"models/player/shared/shared_normal\""
-			"\n\t$color2 \"[0 0 0]\""
-			"\n\t$additive \"1\""
-			"\n\t$phong \"1\""
-			"\n\t$phongfresnelranges \"[0 0.5 1]\""
-			"\n\t$envmap \"skybox/sky_dustbowl_01\""
-			"\n\t$envmapfresnel \"1\""
-			"\n}",
+			bDx9Shaders
+			? "\"VertexLitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"white\""
+			  "\n\t$bumpmap \"models/player/shared/shared_normal\""
+			  "\n\t$color2 \"[0 0 0]\""
+			  "\n\t$additive \"1\""
+			  "\n\t$phong \"1\""
+			  "\n\t$phongfresnelranges \"[0 0.5 1]\""
+			  "\n\t$envmap \"skybox/sky_dustbowl_01\""
+			  "\n\t$envmapfresnel \"1\""
+			  "\n}"
+			: "\"UnlitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"white\""
+			  "\n\t$additive \"1\""
+			  "\n}",
 		true);
 	StoreStruct(
 		"Shine",
-			"\"VertexLitGeneric\""
-			"\n{"
-			"\n\t$additive \"1\""
-			"\n\t$envmap \"cubemaps/cubemap_sheen002.hdr\""
-			"\n\t$envmaptint \"[1 1 1]\""
-			"\n}",
+			bDx9Shaders
+			? "\"VertexLitGeneric\""
+			  "\n{"
+			  "\n\t$additive \"1\""
+			  "\n\t$envmap \"cubemaps/cubemap_sheen002.hdr\""
+			  "\n\t$envmaptint \"[1 1 1]\""
+			  "\n}"
+			: "\"UnlitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"white\""
+			  "\n\t$additive \"1\""
+			  "\n}",
 		true);
 	StoreStruct(
 		"Tint",
-			"\"VertexLitGeneric\""
-			"\n{"
-			"\n\t$basetexture \"models/player/shared/ice_player\""
-			"\n\t$bumpmap \"models/player/shared/shared_normal\""
-			"\n\t$additive \"1\""
-			"\n\t$phong \"1\""
-			"\n\t$phongfresnelranges \"[0 0.001 0.001]\""
-			"\n\t$envmap \"skybox/sky_dustbowl_01\""
-			"\n\t$envmapfresnel \"1\""
-			"\n\t$selfillum \"1\""
-			"\n\t$selfillumtint \"[0 0 0]\""
-			"\n}",
+			bDx9Shaders
+			? "\"VertexLitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"models/player/shared/ice_player\""
+			  "\n\t$bumpmap \"models/player/shared/shared_normal\""
+			  "\n\t$additive \"1\""
+			  "\n\t$phong \"1\""
+			  "\n\t$phongfresnelranges \"[0 0.001 0.001]\""
+			  "\n\t$envmap \"skybox/sky_dustbowl_01\""
+			  "\n\t$envmapfresnel \"1\""
+			  "\n\t$selfillum \"1\""
+			  "\n\t$selfillumtint \"[0 0 0]\""
+			  "\n}"
+			: "\"UnlitGeneric\""
+			  "\n{"
+			  "\n\t$basetexture \"white\""
+			  "\n\t$additive \"1\""
+			  "\n}",
 		true);
 	// user materials
 	std::error_code tError;
@@ -304,50 +343,70 @@ void CMaterials::LoadMaterials()
 	// create materials
 	for (auto& tMaterial : m_mMaterials | std::views::values)
 	{
+		const double flStart = SDK::InitNowMs();
 		const std::string material_vmt = modify_vmt(tMaterial.m_sVMT);
 		tMaterial.m_pMaterial = create_from_vmt(tMaterial.m_sName.c_str(), material_vmt);
+		const double flMs = SDK::InitNowMs() - flStart;
+		if (flMs >= 5.0)
+			SDK::LogInitTiming(std::format("LoadMaterials create {}", tMaterial.m_sName).c_str(), flMs);
 		//StoreVars(tMaterial);
 	}
 
-	F::Glow.Initialize();
-	F::CameraWindow.Initialize();
+	{
+		SDK::CInitTimingScope tTargets("LoadMaterials render targets");
+		if (bDx9Shaders)
+			I::MaterialSystem->BeginRenderTargetAllocation();
+		F::Glow.Initialize();
+		F::CameraWindow.Initialize();
+		if (bDx9Shaders)
+			I::MaterialSystem->EndRenderTargetAllocation();
+	}
 
-	S::InitializeStandardMaterials.Call<void>();
+	{
+		SDK::CInitTimingScope tStd("LoadMaterials InitializeStandardMaterials");
+		S::InitializeStandardMaterials.Call<void>();
+	}
 	auto pMaterial = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(S::Wireframe()));
 	if (pMaterial)
 		pMaterial->SetMaterialVarFlag(MATERIAL_VAR_VERTEXALPHA, true);
 
 	static std::unordered_map<std::string, int> mSkyboxes = {};
 	static std::vector<const char*> vFaces = { "rt.vmt", "lf.vmt", "bk.vmt", "ft.vmt", "up.vmt", "dn.vmt" };
-	FileFindHandle_t hFind = -1;
-	for (char const* szFile = I::FileSystem->FindFirst("materials/skybox/*.vmt", &hFind); szFile && *szFile; szFile = I::FileSystem->FindNext(hFind))
 	{
-		std::string sFile = szFile;
-
-		int iFace = -1;
-		for (int i = 0; i < vFaces.size(); i++)
+		SDK::CInitTimingScope tSkyboxes("LoadMaterials skybox scan");
+		if (mSkyboxes.empty())
 		{
-			auto sFace = vFaces[i];
-			if (sFile.find(sFace) == sFile.length() - strlen(sFace))
+			FileFindHandle_t hFind = -1;
+			for (char const* szFile = I::FileSystem->FindFirst("materials/skybox/*.vmt", &hFind); szFile && *szFile; szFile = I::FileSystem->FindNext(hFind))
 			{
-				iFace = 1 << i;
-				sFile = sFile.substr(0, sFile.length() - strlen(sFace));
-				break;
+				std::string sFile = szFile;
+
+				int iFace = -1;
+				for (int i = 0; i < vFaces.size(); i++)
+				{
+					auto sFace = vFaces[i];
+					if (sFile.find(sFace) == sFile.length() - strlen(sFace))
+					{
+						iFace = 1 << i;
+						sFile = sFile.substr(0, sFile.length() - strlen(sFace));
+						break;
+					}
+				}
+				if (iFace == -1)
+					continue;
+
+				mSkyboxes[sFile] |= iFace;
 			}
+			if (hFind != -1)
+				I::FileSystem->FindClose(hFind);
 		}
-		if (iFace == -1)
-			continue;
 
-		mSkyboxes[sFile] |= iFace;
-	}
-	if (hFind != -1)
-		I::FileSystem->FindClose(hFind);
-
-	Vars::Visuals::World::SkyboxChanger.m_vValues = { "Off" };
-	for (auto& [sSkybox, iFaces] : mSkyboxes)
-	{
-		if (iFaces == 0b111111)
-			Vars::Visuals::World::SkyboxChanger.m_vValues.push_back(sSkybox.c_str());
+		Vars::Visuals::World::SkyboxChanger.m_vValues = { "Off" };
+		for (auto& [sSkybox, iFaces] : mSkyboxes)
+		{
+			if (iFaces == 0b111111)
+				Vars::Visuals::World::SkyboxChanger.m_vValues.push_back(sSkybox.c_str());
+		}
 	}
 
 	m_bLoaded = true;

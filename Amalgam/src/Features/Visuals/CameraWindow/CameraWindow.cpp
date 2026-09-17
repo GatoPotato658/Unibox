@@ -68,6 +68,8 @@ void CCameraWindow::RenderCustomView(void* rcx, const CViewSetup& pViewSetup, IT
 
 void CCameraWindow::Initialize()
 {
+	SDK::CInitTimingScope tInit("CameraWindow.Initialize");
+
 	if (!m_pCameraMaterial)
 	{
 		m_pCameraMaterial = F::Materials.create_from_vmt("CameraMaterial",
@@ -77,7 +79,7 @@ void CCameraWindow::Initialize()
 			"\n}");
 	}
 
-	if (!m_pCameraTexture)
+	if (!m_pCameraTexture && SDK::SupportsDX9Shaders())
 	{
 		m_pCameraTexture = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
 			"m_pCameraTexture",
@@ -89,7 +91,8 @@ void CCameraWindow::Initialize()
 			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT,
 			CREATERENDERTARGETFLAGS_HDR
 		);
-		m_pCameraTexture->IncrementReferenceCount();
+		if (m_pCameraTexture)
+			m_pCameraTexture->IncrementReferenceCount();
 	}
 }
 
