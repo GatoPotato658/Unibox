@@ -12,6 +12,7 @@
 #include "../../Spectate/Spectate.h"
 #include "../../Resolver/Resolver.h"
 #include "../../Visuals/Visuals.h"
+#include "../../Visuals/SkinChanger/SkinChanger.h"
 #include "../../Misc/Misc.h"
 #include "../../Misc/AutoQueue/MvmQueue.h"
 #if __has_include("../../Misc/ProfileStalker/ProfileStalker.h")
@@ -1338,12 +1339,29 @@ void CMenu::MenuVisuals(int iTab)
 				if (Section("Skins"))
 				{
 					FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
-					FToggle(Vars::Visuals::SkinChanger::Australium, FToggleEnum::Right);
-					FToggle(Vars::Visuals::SkinChanger::Festive, FToggleEnum::Left);
-					FSlider(Vars::Visuals::SkinChanger::PaintKit);
-					FSlider(Vars::Visuals::SkinChanger::Killstreak);
-					FDropdown(Vars::Visuals::SkinChanger::Sheen);
-					FDropdown(Vars::Visuals::SkinChanger::Unusual);
+
+					auto pWeapon = H::Entities.GetWeapon();
+					const int iKey = pWeapon ? F::SkinChanger.Key(pWeapon->m_iItemDefinitionIndex()) : -1;
+					static std::string sWeaponLabel;
+					sWeaponLabel = pWeapon ? std::format("Editing {}", F::SkinChanger.WeaponLabel(iKey)) : "Hold a weapon to edit skins";
+					FText(sWeaponLabel.c_str());
+
+					PushDisabled(!pWeapon);
+					Skin_t tSkin = F::SkinChanger.Get(iKey);
+					std::vector<const char*> vKitNames;
+					std::vector<int> vKitIds;
+					F::SkinChanger.GetKits(iKey, vKitNames, vKitIds);
+					FDropdown("Paint kit", &tSkin.iPaintKit, vKitNames, vKitIds);
+					FToggle("Australium", &tSkin.bAustralium, FToggleEnum::Left);
+					FToggle("Festive", &tSkin.bFestive, FToggleEnum::Right);
+					FSlider("Killstreak", &tSkin.iKillstreak, 0, 3, 1, "%i", FSliderEnum::Clamp);
+					static const std::vector<const char*> vSheen = { "Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod" };
+					static const std::vector<const char*> vUnusual = { "Off", "Hot", "Isotope", "Cool", "Energy orb" };
+					FDropdown("Sheen", &tSkin.iSheen, vSheen);
+					FDropdown("Weapon unusual", &tSkin.iUnusual, vUnusual);
+					if (pWeapon)
+						F::SkinChanger.Set(iKey, tSkin);
+					PopDisabled();
 				} EndSection();
 				if (Section("Thirdperson", 8))
 				{
