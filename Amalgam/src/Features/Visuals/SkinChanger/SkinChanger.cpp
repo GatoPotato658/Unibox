@@ -167,6 +167,28 @@ namespace
 		{ 418, "Warborn" },
 		{ 419, "Pacific Peacemaker" },
 		{ 420, "Mechanized Monster" },
+		{ 421, "Stardust" },
+		{ 422, "Team Detail" },
+		{ 423, "Gobi Glazed" },
+		{ 424, "Sleek Greek" },
+		{ 425, "Graphite Gripped" },
+		{ 426, "Stealth Specialist" },
+		{ 427, "Piranha Mania" },
+		{ 428, "Team Charged" },
+		{ 429, "Brawler's Iron" },
+		{ 430, "Necropolish" },
+		{ 431, "Blackout" },
+		{ 432, "Broken Record" },
+		{ 433, "Sandwich Diner" },
+		{ 434, "Beachy Boy" },
+		{ 435, "Army Guns" },
+		{ 436, "Taxi Cabbed" },
+		{ 437, "Ocean Mapped" },
+		{ 438, "Krak-coated" },
+		{ 439, "Team Union" },
+		{ 440, "Sideshow" },
+		{ 441, "Storage War" },
+		{ 442, "Die'n Dasher" },
 	};
 
 	void RedirectIndex(int& nWeaponIndex)
@@ -562,6 +584,8 @@ namespace
 #ifndef TEXTMODE
 	constexpr uint16_t kPaintkit = 834;
 	constexpr uint16_t kWear = 725;
+	constexpr uint16_t kSeedLo = 866;
+	constexpr uint16_t kSeedHi = 867;
 	constexpr uint16_t kInspect = 731;
 	constexpr uint16_t kUnusualWeapon = 370;
 	constexpr uint16_t kFestive = 2053;
@@ -569,7 +593,7 @@ namespace
 	constexpr uint16_t kLootRarity = 2022;
 	constexpr uint16_t kStyleOverride = 542;
 	constexpr uint16_t kKillstreakTier = 2025;
-	constexpr uint16_t kKillstreakSheen = 2013;
+	constexpr uint16_t kKillstreakSheen = 2014;
 
 	constexpr int kUnusualHot = 701;
 	constexpr int kUnusualIsotope = 702;
@@ -608,7 +632,29 @@ namespace
 
 			S::CAttributeList_SetRuntimeAttributeValue.Call<void>(this, pDef, flValue);
 		}
+
+		void SetInt(int iIndex, int iValue)
+		{
+			SetAttribute(iIndex, IntToStupidFloat(iValue));
+		}
 	};
+
+	CAttributeList* AttributeList(CTFWeaponBase* pWeapon)
+	{
+		static int nOffset = U::NetVars.GetNetVar("CEconEntity", "m_AttributeList");
+		if (nOffset <= 0)
+			return nullptr;
+		return reinterpret_cast<CAttributeList*>(uintptr_t(pWeapon) + nOffset);
+	}
+
+	void RequestFullUpdate()
+	{
+		if (!I::ClientState)
+			return;
+		if (I::ClientState->m_nDeltaTick == -1)
+			I::ClientState->m_nDeltaTick = 0;
+		I::ClientState->ForceFullUpdate();
+	}
 
 	void ApplySkin(CTFWeaponBase* pWeapon, const Skin_t& tSkin)
 	{
@@ -618,21 +664,23 @@ namespace
 		int& nWeaponIndex = pWeapon->m_iItemDefinitionIndex();
 		RedirectIndex(nWeaponIndex);
 
-		auto pList = reinterpret_cast<CAttributeList*>(uintptr_t(pWeapon) + 3512);
+		auto pList = AttributeList(pWeapon);
 		if (!pList)
 			return;
 
 		if (tSkin.iPaintKit)
 		{
-			pList->SetAttribute(kPaintkit, IntToStupidFloat(tSkin.iPaintKit));
+			pList->SetInt(kPaintkit, tSkin.iPaintKit);
 			pList->SetAttribute(kWear, 0.f);
 			pList->SetAttribute(kInspect, 1.f);
+			pList->SetInt(kSeedLo, 0);
+			pList->SetInt(kSeedHi, 0);
 		}
 
 		if (tSkin.bAustralium)
 		{
-			pList->SetAttribute(kAustralium, 1.f);
-			pList->SetAttribute(kLootRarity, 1.f);
+			pList->SetInt(kAustralium, 1);
+			pList->SetInt(kLootRarity, 1);
 			pList->SetAttribute(kStyleOverride, 1.f);
 		}
 
@@ -749,8 +797,7 @@ void CSkinChanger::Apply()
 		{
 			m_bWasEnabled = false;
 			m_iLastHash = 0;
-			if (I::ClientState)
-				I::ClientState->ForceFullUpdate();
+			RequestFullUpdate();
 		}
 		return;
 	}
@@ -761,8 +808,7 @@ void CSkinChanger::Apply()
 	if (iHash != m_iLastHash)
 	{
 		m_iLastHash = iHash;
-		if (I::ClientState)
-			I::ClientState->ForceFullUpdate();
+		RequestFullUpdate();
 	}
 
 	if (!I::EngineClient || !I::ClientEntityList)
