@@ -81,45 +81,6 @@ static bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrig
 	return I::GlobalVars->curtime - aLastPayloadMoveTime[iIdx] <= flMoveGrace;
 }
 
-static bool CanJumpIfScoped(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
-{
-	if (pLocal->m_fFlags() & FL_INWATER) return true;
-	const auto iWeaponID = pWeapon->GetWeaponID();
-	return iWeaponID == TF_WEAPON_SNIPERRIFLE_CLASSIC
-		? !pWeapon->As<CTFSniperRifleClassic>()->m_bCharging()
-		: !pLocal->InCond(TF_COND_ZOOMED);
-}
-
-static bool ShouldJumpForNavObstacle(CTFPlayer* pLocal, const Vector& vMoveDir, const Vector& vTarget)
-{
-	if (!pLocal || !pLocal->OnSolid() || vMoveDir.LengthSqr() <= 0.01f)
-		return false;
-
-	const Vector vOrigin = pLocal->GetAbsOrigin();
-	Vector vToTarget = vTarget - vOrigin;
-	vToTarget.z = 0.f;
-
-	if (vToTarget.LengthSqr() > 180.f * 180.f)
-		return false;
-
-	if (vTarget.z - vOrigin.z > 10.f)
-		return true;
-
-	CTraceFilterNavigation filter(pLocal);
-	CGameTrace lowTrace{};
-	const Vector vStart = vOrigin + Vector(0.f, 0.f, 18.f);
-	const Vector vEnd = vStart + vMoveDir * 54.f;
-	SDK::TraceHull(vStart, vEnd, Vector(-23.99f, -23.99f, 0.f), Vector(23.99f, 23.99f, 36.f), MASK_PLAYERSOLID, &filter, &lowTrace);
-	if (lowTrace.fraction >= 1.f)
-		return false;
-
-	CGameTrace highTrace{};
-	const Vector vHighStart = vOrigin + Vector(0.f, 0.f, PLAYER_JUMP_HEIGHT);
-	const Vector vHighEnd = vHighStart + vMoveDir * 54.f;
-	SDK::TraceHull(vHighStart, vHighEnd, Vector(-23.99f, -23.99f, 0.f), Vector(23.99f, 23.99f, 36.f), MASK_PLAYERSOLID, &filter, &highTrace);
-	return highTrace.fraction > lowTrace.fraction + 0.2f;
-}
-
 CNavEngine::CNavEngine()
 	: m_pPathWorker(std::make_unique<PathWorker::CPathWorker>())
 {
@@ -1059,37 +1020,37 @@ bool CNavEngine::RecentlyAtRest() const
 
 StuckPhase CNavEngine::TickStuckSample(const Vector& vLocalOrigin, const Vector& vCrumbTarget)
 {
-	const float flSampleTime = std::clamp(Vars::Misc::Movement::NavEngine::StuckTime.Value, 0.1f, 0.9f);
-	if (!m_tStuckSampleTimer.Check(flSampleTime)) return StuckPhase::Idle;
-	m_tStuckSampleTimer.Update();
-
 	auto pLocal = H::Entities.GetLocal();
-	if (!pLocal || !pLocal->OnSolid())
+	if (!pLocal)
 		return StuckPhase::Idle;
 
-	const float flDistToCrumb = (vCrumbTarget - vLocalOrigin).Length();
-	const float flSpeed = pLocal->GetAbsVelocity().Length2D();
-	const bool bAreaChanged = m_pLocalArea && m_pLastProgressArea && m_pLocalArea != m_pLastProgressArea;
-	const bool bFirstSample = m_flLastDistToCrumb == FLT_MAX || m_vLastStuckSamplePos.IsZero();
-	const bool bProgress = bFirstSample
-		|| bAreaChanged
-		|| flDistToCrumb < m_flLastDistToCrumb - std::max(8.f, flSpeed * flSampleTime * 0.18f);
-
-	m_vLastStuckSamplePos = vLocalOrigin;
-	m_flLastDistToCrumb = flDistToCrumb;
-
-	if (bProgress)
+	const float flSampleTime = std::clamp(Vars::Misc::Movement::NavEngine::StuckTime.Value, 0.1f, 0.9f);
+	if (pLocal->OnSolid() && m_tStuckSampleTimer.Check(flSampleTime))
 	{
-		m_pLastProgressArea = m_pLocalArea;
-		m_bHasStuckEdge = false;
-		m_tLastProgressTimer.Update();
-		return StuckPhase::Idle;
+		m_tStuckSampleTimer.Update();
+
+		const float flDistToCrumb = (vCrumbTarget - vLocalOrigin).Length();
+		const float flSpeed = pLocal->GetAbsVelocity().Length2D();
+		const bool bAreaChanged = m_pLocalArea && m_pLastProgressArea && m_pLocalArea != m_pLastProgressArea;
+		const bool bFirstSample = m_flLastDistToCrumb == FLT_MAX || m_vLastStuckSamplePos.IsZero();
+		const bool bProgress = bFirstSample
+			|| bAreaChanged
+			|| flDistToCrumb < m_flLastDistToCrumb - std::max(8.f, flSpeed * flSampleTime * 0.18f);
+
+		m_vLastStuckSamplePos = vLocalOrigin;
+		m_flLastDistToCrumb = flDistToCrumb;
+
+		if (bProgress)
+		{
+			m_pLastProgressArea = m_pLocalArea;
+			m_bHasStuckEdge = false;
+			m_tLastProgressTimer.Update();
+			return StuckPhase::Idle;
+		}
 	}
 
-	const float flDetectTime = std::clamp(static_cast<float>(Vars::Misc::Movement::NavEngine::StuckDetectTime.Value), 0.8f, 8.f);
-	if (!m_tLastProgressTimer.Check(flDetectTime * 0.35f)) return StuckPhase::Idle;
-	if (!m_tLastProgressTimer.Check(flDetectTime * 0.65f)) return StuckPhase::Jump;
-	if (!m_tLastProgressTimer.Check(flDetectTime)) return StuckPhase::Skip;
+	if (!m_tLastProgressTimer.Check(0.5f)) return StuckPhase::Idle;
+	if (!m_tLastProgressTimer.Check(2.5f)) return StuckPhase::Jump;
 	return StuckPhase::Fail;
 }
 
@@ -1163,8 +1124,6 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 {
 	m_bUnstucking = false;
 
-	static Timer tLastJump{};
-
 	if (m_vCrumbs.empty())
 	{
 		if (m_tOffMeshTimer.Check(6.0f))
@@ -1174,12 +1133,8 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 
 			if (!IsPayloadEscortPaceState(pLocal, pLocal->GetAbsOrigin())
 				&& pLocal->OnSolid()
-				&& NavRuntime::CanIssueNavJump(pWeapon, pCmd)
-				&& tLastJump.Check(0.6f))
-			{
-				F::BotUtils.ForceJump();
-				tLastJump.Update();
-			}
+				&& NavRuntime::CanIssueNavJump(pWeapon, pCmd))
+				pCmd->buttons |= IN_JUMP;
 		}
 		else
 		{
@@ -1310,24 +1265,6 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		}
 	}
 
-	if (!bDropCrumb && !NavRuntime::CanUseNavJump(pLocal, pWeapon) && ShouldJumpForNavObstacle(pLocal, vMoveDir, vCrumbTarget))
-	{
-		CNavArea* pFrom = m_tLastCrumb.m_pNavArea ? m_tLastCrumb.m_pNavArea : m_pLocalArea;
-		CNavArea* pTo = m_tCurrentCrumb.m_pNavArea ? m_tCurrentCrumb.m_pNavArea : m_pLocalArea;
-		if (pFrom && pTo && m_pMap->IsAreaValid(pFrom) && m_pMap->IsAreaValid(pTo))
-		{
-			std::lock_guard lock(m_pMap->m_mutex);
-			auto& tEntry = m_pMap->m_mVischeckCache[std::pair<CNavArea*, CNavArea*>(pFrom, pTo)];
-			tEntry.m_iExpireTick = TICKCOUNT_TIMESTAMP(3.f);
-			tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
-			tEntry.m_bPassable = false;
-			tEntry.m_bStuckBlacklist = true;
-			tEntry.m_flCachedCost = std::numeric_limits<float>::max();
-		}
-		AbandonPath("Path requires jump while scoped/revved");
-		return;
-	}
-
 	StuckPhase ePhase = StuckPhase::Idle;
 	if (bPayloadEscortPace)
 	{
@@ -1338,69 +1275,22 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		ePhase = TickStuckSample(vLocalOrigin, vCrumbTarget);
 	}
 	m_bUnstucking = ePhase != StuckPhase::Idle;
-	if (ePhase == StuckPhase::Skip)
+
+	if (ePhase == StuckPhase::Jump && NavRuntime::CanIssueNavJump(pWeapon, pCmd))
 	{
-		if (bDropCrumb || std::fabs(vCrumbTarget.z - vLocalOrigin.z) > PLAYER_STEP_HEIGHT)
-			ePhase = StuckPhase::Jump;
-		else if (m_vCrumbs.size() > 1)
+		if (pLocal->OnSolid())
 		{
-			m_tStuckFrom = m_tLastCrumb;
-			m_tStuckTo = m_tCurrentCrumb;
-			m_bHasStuckEdge = m_tStuckTo.m_pNavArea != nullptr;
-			RecordStuckFailure();
-			m_tLastCrumb = m_vCrumbs.front();
-			m_vCrumbs.erase(m_vCrumbs.begin());
-			m_tCurrentCrumb = {};
-			ResetStuckProgress(vLocalOrigin, m_vCrumbs.front().m_vPos);
-			return;
+			pCmd->buttons &= ~IN_DUCK;
+			pCmd->buttons |= IN_JUMP;
 		}
 		else
-			ePhase = StuckPhase::Fail;
+			pCmd->buttons |= IN_DUCK;
 	}
 
-	if (!bDropCrumb)
+	if (ePhase == StuckPhase::Fail)
 	{
-		const bool bCanJump = pWeapon && m_pLocalArea
-			&& !(m_pLocalArea->m_iAttributeFlags & (NAV_MESH_NO_JUMP | NAV_MESH_STAIRS))
-			&& [&]
-			{
-				const auto iWeaponID = pWeapon->GetWeaponID();
-				if (iWeaponID == TF_WEAPON_SNIPERRIFLE
-					|| iWeaponID == TF_WEAPON_SNIPERRIFLE_CLASSIC
-					|| iWeaponID == TF_WEAPON_SNIPERRIFLE_DECAP)
-					return CanJumpIfScoped(pLocal, pWeapon);
-				return true;
-			}();
-
-		const bool bShouldJumpNow = ePhase == StuckPhase::Jump
-			|| ShouldJumpForNavObstacle(pLocal, vMoveDir, vCrumbTarget);
-		m_bUnstucking = m_bUnstucking || bShouldJumpNow;
-
-		if (bShouldJumpNow && bCanJump && NavRuntime::CanIssueNavJump(pWeapon, pCmd) && pLocal->OnSolid() && tLastJump.Check(0.25f))
-		{
-			F::BotUtils.ForceJump();
-			tLastJump.Update();
-		}
-
-		if (ePhase == StuckPhase::Fail)
-		{
-			AbandonPath("Stuck (no progress)");
-			return;
-		}
-	}
-	else if (bDropCrumb)
-	{
-		if (ePhase == StuckPhase::Jump
-			&& NavRuntime::CanIssueNavJump(pWeapon, pCmd) && pLocal->OnSolid() && tLastJump.Check(0.35f))
-		{
-			F::BotUtils.ForceJump();
-			tLastJump.Update();
-		}
-		if (ePhase == StuckPhase::Fail)
-		{
-			AbandonPath("Stuck on drop");
-			return;
-		}
+		AbandonPath(bDropCrumb ? "Stuck on drop" : "Stuck (no progress)");
+		return;
 	}
 
 	DoLookAtPath(pLocal, pCmd, vMoveTarget, true);
