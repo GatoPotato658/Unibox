@@ -602,6 +602,12 @@ NAMESPACE_BEGIN(Vars)
 			CVar(Australium, "Australium", false, VISUAL);
 			CVar(Festive, "Festive", false, VISUAL);
 			CVar(Killstreak, "Killstreak", 0, VISUAL | SLIDER_CLAMP, 0, 3, 1);
+			CVarEnum(Sheen, "Sheen", 0, VISUAL, nullptr,
+				VA_LIST("Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod"),
+				Off, TeamShine, DeadlyDaffodil, Manndarin, MeanGreen, AgonizingEmerald, VillainousViolet, HotRod);
+			CVarEnum(Unusual, "Weapon unusual", 0, VISUAL, nullptr,
+				VA_LIST("Off", "Hot", "Isotope", "Cool", "Energy orb"),
+				Off, Hot, Isotope, Cool, EnergyOrb);
 		NAMESPACE_END(SkinChanger)
 
 		NAMESPACE_BEGIN(Thirdperson)
@@ -840,7 +846,7 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(OffPathRepath, "Off-path repath", false, NOSAVE | DEBUGVAR);
 
 				CVar(VischeckEnabled, "Vischeck enabled", true);
-				CVar(VischeckTime, "Vischeck time", 0.25f, SLIDER_MIN, 0.005f, 3.f, 0.005f, "%gs");
+				CVar(VischeckTime, "Vischeck time", 2.f, SLIDER_MIN, 0.5f, 3.f, 0.5f, "%gs");
 				CVar(VischeckCacheTime, "Vischeck cache time", 45, SLIDER_MIN, 10, 500, 10, "%is");
 			NAMESPACE_END(NavEngine)
 

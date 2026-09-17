@@ -255,16 +255,18 @@ int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& 
 				CachedPathCrumb_t tCrumb{};
 				tCrumb.m_pNavArea = pArea;
 				tCrumb.m_vPos = vSegmentStart + vDelta * (static_cast<float>(iStep) / iSteps);
-				tCrumb.m_vPos.z = pArea->GetZ(tCrumb.m_vPos.x, tCrumb.m_vPos.y);
 				tCrumb.m_vApproachDir = vApproachDir;
 				if (pDrop && iStep == iSteps)
 				{
+					tCrumb.m_vPos = vSegmentEnd;
 					tCrumb.m_bRequiresDrop = true;
 					tCrumb.m_flDropHeight = pDrop->m_flDropHeight;
 					tCrumb.m_flApproachDistance = pDrop->m_flApproachDistance;
 					if (!pDrop->m_vApproachDir.IsZero())
 						tCrumb.m_vApproachDir = pDrop->m_vApproachDir;
 				}
+				else
+					tCrumb.m_vPos.z = pArea->GetZ(tCrumb.m_vPos.x, tCrumb.m_vPos.y);
 				AppendCrumb(std::move(tCrumb));
 			}
 		};
@@ -465,29 +467,23 @@ size_t CMap::GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const
 
 NavPoints_t CMap::DeterminePoints(CNavArea* pCurrentArea, CNavArea* pNextArea)
 {
-	const auto vCurrentCenter = pCurrentArea->m_vCenter;
-	const auto vNextCenter = pNextArea->m_vCenter;
-	auto ResolveAxis = [](float flCurrentMin, float flCurrentMax, float flNextMin, float flNextMax, float flMidpoint)
-		{
-			const float flOverlapMin = std::max(flCurrentMin, flNextMin);
-			const float flOverlapMax = std::min(flCurrentMax, flNextMax);
-			if (flOverlapMin <= flOverlapMax)
-			{
-				const float flGate = std::clamp(flMidpoint, flOverlapMin, flOverlapMax);
-				return std::pair(flGate, flGate);
-			}
-			return flCurrentMax < flNextMin
-				? std::pair(flCurrentMax, flNextMin)
-				: std::pair(flCurrentMin, flNextMax);
-		};
+	const Vector vCurrentCenter = pCurrentArea->m_vCenter;
+	const Vector vNextCenter = pNextArea->m_vCenter;
+	Vector vCenter = pCurrentArea->GetNearestPoint(Vector2D(vNextCenter.x, vNextCenter.y));
+	if (vCenter.x != vCurrentCenter.x && vCenter.y != vCurrentCenter.y
+		&& vCenter.x != vNextCenter.x && vCenter.y != vNextCenter.y)
+	{
+		const Vector vNextClosest = pNextArea->GetNearestPoint(Vector2D(vCurrentCenter.x, vCurrentCenter.y));
+		vCenter = vNextClosest;
+		vCenter.z = pCurrentArea->GetNearestPoint(Vector2D(vNextClosest.x, vNextClosest.y)).z;
+	}
 
-	const auto [flCurrentX, flNextX] = ResolveAxis(pCurrentArea->m_vNwCorner.x, pCurrentArea->m_vSeCorner.x,
-		pNextArea->m_vNwCorner.x, pNextArea->m_vSeCorner.x, (vCurrentCenter.x + vNextCenter.x) * 0.5f);
-	const auto [flCurrentY, flNextY] = ResolveAxis(pCurrentArea->m_vNwCorner.y, pCurrentArea->m_vSeCorner.y,
-		pNextArea->m_vNwCorner.y, pNextArea->m_vSeCorner.y, (vCurrentCenter.y + vNextCenter.y) * 0.5f);
-	const Vector vCurrentGate = GetSafePointOnArea(pCurrentArea, { flCurrentX, flCurrentY, 0.0f });
-	const Vector vNextGate = GetSafePointOnArea(pNextArea, { flNextX, flNextY, 0.0f });
-	return NavPoints_t(vCurrentCenter, vCurrentGate, vNextGate, vNextCenter);
+	return {
+		vCurrentCenter,
+		vCenter,
+		pNextArea->GetNearestPoint(Vector2D(vCenter.x, vCenter.y)),
+		vNextCenter
+	};
 }
 
 DropdownHint_t CMap::HandleDropdown(const NavPoints_t& tPoints)
@@ -495,20 +491,25 @@ DropdownHint_t CMap::HandleDropdown(const NavPoints_t& tPoints)
 	DropdownHint_t tHint{};
 	tHint.m_vAdjustedPos = tPoints.m_vCenter;
 
-	Vector vHorizontal = tPoints.m_vCenterNext - tPoints.m_vCenter;
-	const float flHeightDiff = vHorizontal.z;
-	vHorizontal.z = 0.f;
-	const float flHorizontalLength = vHorizontal.Length();
-	if (flHorizontalLength <= 1.f || -flHeightDiff <= PLAYER_JUMP_HEIGHT)
+	Vector vToTarget = tPoints.m_vNext - tPoints.m_vCenter;
+	if (-vToTarget.z <= PLAYER_JUMP_HEIGHT)
 		return tHint;
 
-	const Vector vDirection = vHorizontal / flHorizontalLength;
+	vToTarget.z = 0.f;
+	if (vToTarget.LengthSqr() <= 1.f)
+	{
+		vToTarget = tPoints.m_vCenter - tPoints.m_vCurrent;
+		vToTarget.z = 0.f;
+	}
+	if (vToTarget.LengthSqr() <= 1.f)
+		return tHint;
+
+	vToTarget.Normalize();
 	tHint.m_bRequiresDrop = true;
-	tHint.m_flDropHeight = -flHeightDiff;
-	tHint.m_vApproachDir = vDirection;
-	tHint.m_flApproachDistance = std::clamp(tHint.m_flDropHeight * 0.5f, PLAYER_WIDTH * 0.85f, PLAYER_WIDTH * 1.5f);
-	tHint.m_flApproachDistance = std::min(tHint.m_flApproachDistance, flHorizontalLength * 0.95f);
-	tHint.m_vAdjustedPos = tPoints.m_vCenter + vDirection * tHint.m_flApproachDistance;
+	tHint.m_flDropHeight = tPoints.m_vCenter.z - tPoints.m_vNext.z;
+	tHint.m_vApproachDir = vToTarget;
+	tHint.m_flApproachDistance = PLAYER_WIDTH * 2.0f;
+	tHint.m_vAdjustedPos = tPoints.m_vCenter + vToTarget * tHint.m_flApproachDistance;
 	tHint.m_vAdjustedPos.z = tPoints.m_vCenter.z;
 	return tHint;
 }

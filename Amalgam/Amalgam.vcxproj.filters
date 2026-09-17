@@ -66,6 +66,7 @@
     <ClCompile Include="src\Features\Visuals\ESP\ESP.cpp" />
     <ClCompile Include="src\Features\Visuals\FakeAngle\FakeAngle.cpp" />
     <ClCompile Include="src\Features\Visuals\Glow\Glow.cpp" />
+    <ClCompile Include="src\Features\Visuals\SkinChanger\SkinChanger.cpp" />
     <ClCompile Include="src\Features\Visuals\PlayerConditions\PlayerConditions.cpp" />
     <ClCompile Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.cpp" />
     <ClCompile Include="src\Features\Visuals\SpectatorList\SpectatorList.cpp" />
@@ -455,6 +456,7 @@
     <ClInclude Include="src\Features\Visuals\ESP\ESP.h" />
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
+    <ClInclude Include="src\Features\Visuals\SkinChanger\SkinChanger.h" />
     <ClInclude Include="src\Features\Visuals\PlayerConditions\PlayerConditions.h" />
     <ClInclude Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.h" />
     <ClInclude Include="src\Features\Visuals\SpectatorList\SpectatorList.h" />

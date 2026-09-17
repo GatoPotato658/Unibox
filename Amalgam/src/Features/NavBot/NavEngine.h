@@ -127,7 +127,7 @@ public:
 	bool IsVectorVisibleNavigation(const Vector vFrom, const Vector vTo, unsigned int nMask = MASK_SHOT);
 	bool IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFrom, Vector vTo, unsigned int nMask = MASK_PLAYERSOLID);
 
-	bool IsPathing() { return !m_vCrumbs.empty() || m_uPendingRequestId != 0; }
+	bool IsPathing() { return !m_vCrumbs.empty() || m_uPendingRequestId != 0 || m_bRepathRequested; }
 	bool IsUnstucking() const { return m_bUnstucking; }
 	bool IsNavMeshLoaded() const { return m_pMap && m_pMap->m_eState == NavStateEnum::Active; }
 	std::string GetNavFilePath() const { return m_pMap ? m_pMap->m_sMapName : ""; }

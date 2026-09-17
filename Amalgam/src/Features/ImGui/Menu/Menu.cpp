@@ -1342,6 +1342,8 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::SkinChanger::Festive, FToggleEnum::Left);
 					FSlider(Vars::Visuals::SkinChanger::PaintKit);
 					FSlider(Vars::Visuals::SkinChanger::Killstreak);
+					FDropdown(Vars::Visuals::SkinChanger::Sheen);
+					FDropdown(Vars::Visuals::SkinChanger::Unusual);
 				} EndSection();
 				if (Section("Thirdperson", 8))
 				{

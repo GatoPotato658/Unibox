@@ -16,6 +16,9 @@
 #include "../Features/Visuals/Groups/Groups.h"
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
+#ifndef TEXTMODE
+#include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#endif
 #ifdef TEXTMODE
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
 #include "../Features/Misc/NamedPipe/NamedPipe.h"
@@ -25,6 +28,11 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 	void* rcx, ClientFrameStage_t curStage)
 {
 	DEBUG_RETURN(CHLClient_FrameStageNotify, rcx, curStage);
+
+#ifndef TEXTMODE
+	if (curStage == FRAME_NET_UPDATE_POSTDATAUPDATE_END)
+		F::SkinChanger.Apply();
+#endif
 
 	CALL_ORIGINAL(rcx, curStage);
 

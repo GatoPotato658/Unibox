@@ -560,7 +560,8 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CBotUtils::HandleSmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (!pLocal || !pLocal->IsAlive() || !Vars::Misc::Movement::NavEngine::Enabled.Value || F::AutoRocketJump.IsRunning())
+	if (!pLocal || !pLocal->IsAlive() || !Vars::Misc::Movement::NavEngine::Enabled.Value
+		|| !Vars::Misc::Movement::NavBot::SmartJump.Value || F::AutoRocketJump.IsRunning())
 	{
 		m_eJumpState = STATE_AWAITING_JUMP;
 		return;

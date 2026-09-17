@@ -1496,6 +1496,40 @@ bool TriggerData_t::PointIsWithin(Vec3 vPoint) const
 }
 
 static int s_nCleanScreenshotFrames = 0;
+static int s_nSteamUnhookFrames = 0;
+static bool s_bPendingSteamScreenshot = false;
+static bool s_bSteamScreenshotsHooked = false;
+static bool s_bSteamScreenshotCallbackRegistered = false;
+
+class CSteamScreenshotRequestedCallback final : public CCallbackBase
+{
+public:
+	void Run(void*) override
+	{
+		SDK::NotifyCleanScreenshot();
+		s_bPendingSteamScreenshot = true;
+	}
+	void Run(void*, bool, SteamAPICall_t) override {}
+	int GetCallbackSizeBytes() override { return sizeof(ScreenshotRequested_t); }
+};
+
+static CSteamScreenshotRequestedCallback s_tSteamScreenshotCallback;
+
+static void RegisterSteamScreenshotCallback()
+{
+	if (s_bSteamScreenshotCallbackRegistered)
+		return;
+
+	using RegisterFn = void(__cdecl*)(CCallbackBase*, int);
+	auto RegisterCallback = U::Memory.GetModuleExport<RegisterFn>("steam_api64.dll", "SteamAPI_RegisterCallback");
+	if (!RegisterCallback)
+		RegisterCallback = U::Memory.GetModuleExport<RegisterFn>("steam_api.dll", "SteamAPI_RegisterCallback");
+	if (!RegisterCallback)
+		return;
+
+	RegisterCallback(&s_tSteamScreenshotCallback, ScreenshotRequested_t::k_iCallback);
+	s_bSteamScreenshotCallbackRegistered = true;
+}
 
 void SDK::NotifyCleanScreenshot()
 {
@@ -1505,16 +1539,56 @@ void SDK::NotifyCleanScreenshot()
 
 void SDK::TickCleanScreenshot()
 {
+	if (s_bPendingSteamScreenshot && s_nCleanScreenshotFrames > 0 && I::SteamScreenshots)
+	{
+		I::SteamScreenshots->HookScreenshots(false);
+		s_bSteamScreenshotsHooked = false;
+		I::SteamScreenshots->TriggerScreenshot();
+		s_bPendingSteamScreenshot = false;
+		s_nSteamUnhookFrames = 2;
+	}
+
 	if (s_nCleanScreenshotFrames > 0)
 		s_nCleanScreenshotFrames--;
+	if (s_nSteamUnhookFrames > 0)
+		s_nSteamUnhookFrames--;
 }
 
 void SDK::UpdateSteamScreenshotHook()
 {
-	if (!Vars::Visuals::UI::CleanScreenshots.Value || !I::SteamScreenshots)
+	if (!I::SteamScreenshots)
 		return;
 
-	I::SteamScreenshots->HookScreenshots(true);
+	if (!Vars::Visuals::UI::CleanScreenshots.Value)
+	{
+		if (s_bSteamScreenshotsHooked)
+		{
+			I::SteamScreenshots->HookScreenshots(false);
+			s_bSteamScreenshotsHooked = false;
+		}
+		s_bPendingSteamScreenshot = false;
+		return;
+	}
+
+	RegisterSteamScreenshotCallback();
+
+	static bool s_bF12Down = false;
+	const bool bF12 = (GetAsyncKeyState(VK_F12) & 0x8000) != 0;
+	if (bF12 && !s_bF12Down)
+	{
+		NotifyCleanScreenshot();
+		s_bPendingSteamScreenshot = true;
+	}
+	s_bF12Down = bF12;
+
+	if (s_nSteamUnhookFrames > 0 || s_bPendingSteamScreenshot)
+		return;
+
+	if (!s_bSteamScreenshotsHooked)
+	{
+		I::SteamScreenshots->HookScreenshots(true);
+		s_bSteamScreenshotsHooked = true;
+	}
 }
 
 bool SDK::CleanScreenshot()
