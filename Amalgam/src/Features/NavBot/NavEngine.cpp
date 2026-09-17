@@ -1049,8 +1049,8 @@ StuckPhase CNavEngine::TickStuckSample(const Vector& vLocalOrigin, const Vector&
 		}
 	}
 
-	if (!m_tLastProgressTimer.Check(0.5f)) return StuckPhase::Idle;
-	if (!m_tLastProgressTimer.Check(2.5f)) return StuckPhase::Jump;
+	if (!m_tLastProgressTimer.Check(1.5f)) return StuckPhase::Idle;
+	if (!m_tLastProgressTimer.Check(1.85f)) return StuckPhase::Jump;
 	return StuckPhase::Fail;
 }
 
