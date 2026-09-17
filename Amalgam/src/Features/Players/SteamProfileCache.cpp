@@ -127,7 +127,7 @@ class CSteamProfilePersonaCallback final : public CCallbackBase
 		if (pParameter)
 			m_tCache.HandlePersonaStateChange(*static_cast<PersonaStateChange_t*>(pParameter));
 	}
-		void Run(void*, bool, SteamAPICall_t) override {}
+	void Run(void* pParameter, bool, SteamAPICall_t) override { Run(pParameter); }
 		int GetCallbackSizeBytes() override { return sizeof(PersonaStateChange_t); }
 	private:
 		CSteamProfileCache& m_tCache;
@@ -142,7 +142,7 @@ class CSteamProfileAvatarCallback final : public CCallbackBase
 		if (pParameter)
 			m_tCache.HandleAvatarImageLoaded(*static_cast<AvatarImageLoaded_t*>(pParameter));
 	}
-		void Run(void*, bool, SteamAPICall_t) override {}
+	void Run(void* pParameter, bool, SteamAPICall_t) override { Run(pParameter); }
 		int GetCallbackSizeBytes() override { return sizeof(AvatarImageLoaded_t); }
 	private:
 		CSteamProfileCache& m_tCache;

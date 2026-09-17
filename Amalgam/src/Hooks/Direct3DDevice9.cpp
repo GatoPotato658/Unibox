@@ -13,11 +13,12 @@ MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), H
 	DEBUG_RETURN(Direct3DDevice9_Present, pDevice, pSource, pDestination, pDirtyRegion);
 
 	if (!G::Unload)
+	{
 		F::Render.Render(pDevice);
+		SDK::TickCleanScreenshot();
+	}
 
-	const HRESULT hr = CALL_ORIGINAL(pDevice, pSource, pDestination, pDirtyRegion);
-	SDK::TickCleanScreenshot();
-	return hr;
+	return CALL_ORIGINAL(pDevice, pSource, pDestination, pDirtyRegion);
 }
 
 MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRESULT,

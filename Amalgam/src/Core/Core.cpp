@@ -205,6 +205,7 @@ void CCore::Unload()
 		return;
 	}
 
+	SDK::ShutdownSteamScreenshotHook();
 	F::SteamProfileCache.Shutdown();
 
 #ifndef TEXTMODE

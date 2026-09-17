@@ -161,5 +161,6 @@ namespace SDK
 	void NotifyCleanScreenshot();
 	void TickCleanScreenshot();
 	void UpdateSteamScreenshotHook();
+	void ShutdownSteamScreenshotHook();
 	void CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool& bPrimary, bool& bSecondary, bool& bReloading);
 }
