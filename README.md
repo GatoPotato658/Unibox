@@ -5,6 +5,7 @@
   [![Stars](https://img.shields.io/github/stars/GatoPotato658/Unibox?style=for-the-badge&color=white&logo=github)](/../../stargazers)
   [![Workflow status](https://img.shields.io/github/actions/workflow/status/GatoPotato658/Unibox/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)
   [![Commit activity](https://img.shields.io/github/commit-activity/m/GatoPotato658/Unibox?style=for-the-badge)](/../../commits/)
+  [![Discord](.github/assets/discord.svg)](https://dsc.gg/unibox)
   
   [![Download](.github/assets/download.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64Release.zip)
   [![PDB](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleasePDB.zip)
