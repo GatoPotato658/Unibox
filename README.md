@@ -5,7 +5,7 @@
   [![Stars](https://img.shields.io/github/stars/GatoPotato658/Unibox?style=for-the-badge&color=white&logo=github)](/../../stargazers)
   [![Workflow status](https://img.shields.io/github/actions/workflow/status/GatoPotato658/Unibox/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)
   [![Commit activity](https://img.shields.io/github/commit-activity/m/GatoPotato658/Unibox?style=for-the-badge)](/../../commits/)
-  [![Discord](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv9%2Finvites%2FQAu5zGV249%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&label=DISCORD&suffix=%20MEMBERS&style=for-the-badge&logo=discord&logoColor=white&color=5865F2)](https://dsc.gg/unibox)
+  [![Discord](https://raw.githubusercontent.com/GatoPotato658/Unibox/gh-pages/discord.svg)](https://dsc.gg/unibox)
   
   [![Download](.github/assets/download.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64Release.zip)
   [![PDB](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleasePDB.zip)

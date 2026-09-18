@@ -1,0 +1,26 @@
+name: discord-badge
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish badge to gh-pages only
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        run: |
+          node .github/scripts/gen-discord-badge.mjs discord.svg
+          git checkout --orphan badge-publish
+          git reset
+          git add discord.svg
+          git config user.name "pupnoodle"
+          git config user.email "dobryfraudzichaxd@proton.me"
+          git commit -m "discord badge"
+          git push -f origin HEAD:gh-pages
