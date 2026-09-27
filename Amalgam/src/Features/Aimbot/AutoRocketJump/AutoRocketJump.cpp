@@ -230,14 +230,6 @@ void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 				m_bFull = Vars::Misc::Movement::AutoRocketJump.Value;
 				m_iChoke = bCurrGrounded ? Vars::Misc::Movement::AutoRocketJumpChokeGrounded.Value : Vars::Misc::Movement::AutoRocketJumpChokeAir.Value;
 
-				if (G::Reloading)
-				{
-					m_iFrame = -1;
-					if (!bBeggars)
-						pCmd->buttons |= IN_ATTACK;
-					else
-						pCmd->buttons &= ~IN_ATTACK;
-				}
 			}
 		}
 	}

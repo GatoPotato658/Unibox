@@ -17,8 +17,11 @@ static inline bool ShouldTargetTeam(Group_t& tGroup, int iBit, CBaseEntity* pEnt
 		return false;
 	}
 
-	if (pEntity->m_iTeamNum() == TF_TEAM_BLUE && !(tGroup.m_iConditions & ConditionsEnum::BLU)
-		|| pEntity->m_iTeamNum() == TF_TEAM_RED && !(tGroup.m_iConditions & ConditionsEnum::RED))
+	const int iTeam = pEntity->m_iTeamNum();
+	const bool bHasTeamFilter = tGroup.m_iConditions & (ConditionsEnum::BLU | ConditionsEnum::RED);
+	if (bHasTeamFilter
+		&& (iTeam != TF_TEAM_BLUE || !(tGroup.m_iConditions & ConditionsEnum::BLU))
+		&& (iTeam != TF_TEAM_RED || !(tGroup.m_iConditions & ConditionsEnum::RED)))
 		return false;
 
 	return true;

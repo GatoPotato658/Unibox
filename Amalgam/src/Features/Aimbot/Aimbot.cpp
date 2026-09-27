@@ -100,6 +100,8 @@ void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		G::AimPoint = {};
 
 	F::AutoRocketJump.Run(pLocal, pWeapon, pCmd);
+	if (F::AutoRocketJump.IsRunning())
+		return;
 	if (!ShouldRun(pLocal, pWeapon, pCmd))
 		return;
 
