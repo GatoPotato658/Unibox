@@ -12,6 +12,20 @@
 
 static std::atomic<float> s_flNavTickInterval{ 1.0f / 66.0f };
 
+static float GetPathLowerBound(const CNavArea& tFrom, const CNavArea& tTo)
+{
+	const float flDx = tFrom.m_vSeCorner.x < tTo.m_vNwCorner.x
+		? tTo.m_vNwCorner.x - tFrom.m_vSeCorner.x
+		: tTo.m_vSeCorner.x < tFrom.m_vNwCorner.x ? tFrom.m_vNwCorner.x - tTo.m_vSeCorner.x : 0.f;
+	const float flDy = tFrom.m_vSeCorner.y < tTo.m_vNwCorner.y
+		? tTo.m_vNwCorner.y - tFrom.m_vSeCorner.y
+		: tTo.m_vSeCorner.y < tFrom.m_vNwCorner.y ? tFrom.m_vNwCorner.y - tTo.m_vSeCorner.y : 0.f;
+	const float flDz = tFrom.m_flMaxZ < tTo.m_flMinZ
+		? tTo.m_flMinZ - tFrom.m_flMaxZ
+		: tTo.m_flMaxZ < tFrom.m_flMinZ ? tFrom.m_flMinZ - tTo.m_flMaxZ : 0.f;
+	return std::sqrt(flDx * flDx + flDy * flDy) + flDz * 1.15f;
+}
+
 static float GetAreaVerticalOutside(const CNavArea& tArea, const Vector& vPos)
 {
 	const float flBelow = std::max(tArea.m_flMinZ - vPos.z, 0.0f);
@@ -122,7 +136,7 @@ int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std:
 
 	PathNode_t& tStart = m_vPathNodes[uStartIdx];
 	tStart.m_g = 0.f;
-	tStart.m_f = pStart->m_vCenter.DistTo(pEnd->m_vCenter);
+	tStart.m_f = GetPathLowerBound(*pStart, *pEnd);
 	tStart.m_pParent = nullptr;
 	tStart.m_iQueryId = m_iQueryId;
 
@@ -181,7 +195,7 @@ int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std:
 			{
 				tNext.m_pParent = pCurrentArea;
 				tNext.m_g = flTentativeG;
-				tNext.m_f = flTentativeG + pNextArea->m_vCenter.DistTo(pEnd->m_vCenter);
+				tNext.m_f = flTentativeG + GetPathLowerBound(*pNextArea, *pEnd);
 				openSet.push({ tNext.m_f, uNextIdx });
 			}
 		}
@@ -220,7 +234,6 @@ int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& 
 	const int iResult = Solve(pStartArea, pEndArea, tCtx, vAreas, &flAreaCost);
 	if ((iResult != 0 && iResult != 3) || vAreas.empty()) return iResult == 3 ? 3 : 1;
 	if (pflCost) *pflCost = flAreaCost;
-	constexpr float flCrumbSpacing = 150.0f;
 
 	auto AppendCrumb = [&vOutPath](CachedPathCrumb_t tCrumb)
 		{
@@ -244,7 +257,13 @@ int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& 
 			const Vector vSegmentStart = GetSafePointOnArea(pArea, vFrom);
 			const Vector vSegmentEnd = pDrop ? vTo : GetSafePointOnArea(pArea, vTo);
 			const Vector vDelta = vSegmentEnd - vSegmentStart;
-			const int iSteps = std::max(static_cast<int>(std::ceil(vDelta.Length() / flCrumbSpacing)), 1);
+			const float flSegmentLen = vDelta.Length();
+
+			const Vector vExtent = pArea->m_vSeCorner - pArea->m_vNwCorner;
+			const float flAreaWidth = std::min(std::fabs(vExtent.x), std::fabs(vExtent.y));
+			const float flSpacing = std::clamp(flAreaWidth, 32.f, 200.f);
+
+			const int iSteps = std::max(static_cast<int>(std::ceil(flSegmentLen / flSpacing)), 1);
 			Vector vApproachDir = vDelta;
 			vApproachDir.z = 0.f;
 			if (vApproachDir.Normalize() <= 0.01f)
@@ -610,7 +629,7 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 			flCost += 320.f;
 	}
 
-	return std::max(flCost, 1.f);
+	return std::max({ flCost, GetPathLowerBound(*pCurrentArea, *pNextArea), 1.f });
 }
 
 void CMap::CollectAreasAround(const Vector& vOrigin, float flRadius, std::vector<CNavArea*>& vOutAreas)
