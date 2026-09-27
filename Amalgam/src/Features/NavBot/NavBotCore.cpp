@@ -373,7 +373,16 @@ static std::wstring BuildJobLabel()
 	case PriorityListEnum::EscapeSpawn:
 		return L"Escape spawn";
 	case PriorityListEnum::EscapeDanger:
-		return L"Escape danger";
+	{
+		auto s_job = std::wstring(L"Escape danger");
+		if (!F::NavBotDanger.m_sDangerStatus.empty())
+		{
+			s_job += L" (";
+			s_job += F::NavBotDanger.m_sDangerStatus;
+			s_job += L')';
+		}
+		return s_job;
+	}
 	case PriorityListEnum::Followbot:
 		return L"FollowBot";
 	case PriorityListEnum::MVMTank:

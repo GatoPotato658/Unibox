@@ -2080,6 +2080,7 @@ void CMenu::MenuMisc(int iTab)
 								FSlider(Vars::Misc::Movement::NavBot::RechargeDTDelay, FSliderEnum::None);
 							PopTransparent();
 							FDropdown(Vars::Misc::Movement::NavBot::Preferences);
+							FDropdown(Vars::Misc::Movement::NavBot::Personality);
 							FDropdown(Vars::Misc::Movement::NavBot::Blacklist);
 							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats));
 							{

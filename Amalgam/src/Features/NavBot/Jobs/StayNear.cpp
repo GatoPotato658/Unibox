@@ -278,7 +278,14 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	}
 
 	Vector vSide(-vForward.y, vForward.x, 0.f);
-	const float flSideSign = (iEntIndex + pLocal->entindex()) % 2 ? 1.f : -1.f;
+	static int s_iLastFlankTarget = -1;
+	static float s_flFlankSide = 1.f;
+	if (iEntIndex != s_iLastFlankTarget)
+	{
+		s_iLastFlankTarget = iEntIndex;
+		s_flFlankSide = SDK::RandomFloat(0.f, 1.f) < 0.5f ? -1.f : 1.f;
+	}
+	const float flSideSign = s_flFlankSide;
 	const Vector vAnchor = vPredictedOrigin + vForward * tProfile.m_flAheadDistance + vSide * (tProfile.m_flSideDistance * flSideSign);
 
 	auto pNavFile = F::NavEngine.GetNavFile();

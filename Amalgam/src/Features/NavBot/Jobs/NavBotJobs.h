@@ -159,6 +159,8 @@ private:
 	Timer m_tEscapeRefresh{};
 	CNavArea* m_pProjectileTargetArea = nullptr;
 public:
+	std::wstring m_sDangerStatus = {};
+public:
 	bool EscapeDanger(CTFPlayer* pLocal);
 	bool EscapeProjectiles(CTFPlayer* pLocal);
 	bool EscapeSpawn(CTFPlayer* pLocal);

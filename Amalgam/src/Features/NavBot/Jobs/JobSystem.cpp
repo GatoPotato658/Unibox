@@ -152,11 +152,17 @@
 
 	static auto get_escape_danger_score(CTFPlayer* pLocal) -> float
 	{
+		static bool s_bDangerLatch = false;
+		static Timer s_tDangerCommit{};
+
 		if (!pLocal)
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
 
 		if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::EscapeDanger))
+		{
+			s_bDangerLatch = false;
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
+		}
 
 		if (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::DontEscapeDangerIntel &&
 			F::GameObjectiveController.m_eGameMode == TF_GAMETYPE_CTF)
@@ -164,29 +170,43 @@
 			const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
 			const int iFlagCarrierIdx = F::FlagController.GetCarrier(iEnemyTeam);
 			if (iFlagCarrierIdx == pLocal->entindex())
+			{
+				s_bDangerLatch = false;
 				return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
+			}
 		}
 
 		auto pLocalArea = F::NavEngine.GetLocalNavArea();
 		if (!pLocalArea || is_spawn_area(pLocalArea))
+		{
+			s_bDangerLatch = false;
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
+		}
 
 		const Hazard_t* pHazard = F::Hazards.GetHazard(pLocalArea);
 		if (!pHazard)
+		{
+			if (!s_bDangerLatch || s_tDangerCommit.Check(1.f))
+				s_bDangerLatch = false;
 			return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
+		}
 
 		const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+		const int iPersonality = Vars::Misc::Movement::NavBot::Personality.Value;
+		const float flMedHpThreshold = iPersonality == Vars::Misc::Movement::NavBot::PersonalityEnum::Yolo ? 0.25f
+			: iPersonality == Vars::Misc::Movement::NavBot::PersonalityEnum::Cautious ? 0.8f : 0.5f;
+		const float flHighHpThreshold = iPersonality == Vars::Misc::Movement::NavBot::PersonalityEnum::Yolo ? 0.35f : 1.01f;
 		float flScore = 0.f;
 		switch (pHazard->m_eKind)
 		{
 		case HazardKind::Sentry:
 		case HazardKind::Sticky:
 		case HazardKind::EnemyInvuln:
-			flScore = 1700.f;
+			flScore = flHealth < flHighHpThreshold ? 1700.f : 0.f;
 			break;
 		case HazardKind::SentryMedium:
 		case HazardKind::EnemyNormal:
-			flScore = flHealth < 0.5f ? 1425.f : 0.f;
+			flScore = flHealth < flMedHpThreshold ? 1425.f : 0.f;
 			break;
 		case HazardKind::SentryLow:
 		case HazardKind::EnemyDormant:
@@ -195,6 +215,16 @@
 		default:
 			break;
 		}
+
+		if (flScore > 0.f)
+		{
+			s_bDangerLatch = true;
+			s_tDangerCommit.Update();
+		}
+		else if (s_bDangerLatch && F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger && !s_tDangerCommit.Check(1.f))
+			flScore = 950.f;
+		else
+			s_bDangerLatch = false;
 
 		if (flScore <= 0.f && F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger)
 			flScore = 300.f;
@@ -249,6 +279,9 @@
 				else if (flHealth < 0.64f)
 					flScore = 1100.f;
 			}
+
+			if (flScore > 0.f && !bLowPrio && flHealth >= 0.5f && !is_health_job_active() && F::MissionBoard.GetUrgency() >= 0.85f)
+				flScore *= 0.5f;
 		}
 
 		return get_active_priority_score(ePriority, flScore);
@@ -447,6 +480,9 @@
 			break;
 		}
 
+		if (flScore > 0.f)
+			flScore += F::MissionBoard.GetUrgency() * 150.f;
+
 		return get_active_priority_score(PriorityListEnum::Capture, flScore);
 	}
 
@@ -507,6 +543,16 @@
 				flScore += 40.f;
 		}
 
+		if (flScore > 0.f)
+		{
+			const int iPersonality = Vars::Misc::Movement::NavBot::Personality.Value;
+			if (iPersonality == Vars::Misc::Movement::NavBot::PersonalityEnum::Yolo)
+				flScore += 120.f;
+			else if (iPersonality == Vars::Misc::Movement::NavBot::PersonalityEnum::Cautious)
+				flScore = std::max(flScore - 100.f, 0.f);
+			flScore += SDK::RandomFloat(-15.f, 15.f);
+		}
+
 		return get_active_priority_score(PriorityListEnum::StayNear, flScore);
 	}
 
@@ -529,6 +575,7 @@ void CNavBotJobSystem::RefreshSharedState(CTFPlayer* pLocal)
 		return;
 
 	F::NavBotGroup.UpdateLocalBotPositions(pLocal);
+	F::MissionBoard.Update(pLocal);
 	F::NavBotEngineer.RefreshLocalBuildings(pLocal);
 	F::NavBotEngineer.RefreshBuildingSpots(pLocal, F::BotUtils.m_tClosestEnemy);
 }
@@ -635,6 +682,7 @@ void CNavBotJobSystem::Reset()
 	F::NavBotRoam.Reset();
 	F::NavBotDanger.ResetSpawn();
 	F::NavBotMVMSniper.Reset();
+	F::MissionBoard.Reset();
 }
 
 auto CNavBotJobSystem::TryEscapeSpawn(CTFPlayer* pLocal) -> bool

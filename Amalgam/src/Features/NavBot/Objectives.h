@@ -1,5 +1,6 @@
 #pragma once
 #include "../../SDK/SDK.h"
+#include "../../Utils/Timer/Timer.h"
 
 #define MAX_CONTROL_POINTS 8
 #define MAX_PREVIOUS_POINTS 3
@@ -182,6 +183,46 @@ public:
 	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 };
 
+Enum(MissionKind, None,
+	CtfSteal, CtfCarry, CtfEscort,
+	ControlPoint, Payload, Passtime, Doomsday, MVM);
+
+struct Mission_t
+{
+	MissionKindEnum::MissionKindEnum m_eKind = MissionKindEnum::None;
+	Vector m_vPos = {};
+	float m_flValue = 0.f;
+	int m_iCarrierIdx = -1;
+	bool m_bValid = false;
+};
+
+class CMissionBoard
+{
+private:
+	Mission_t m_tMission = {};
+	float m_flUrgency = 0.f;
+	int m_iFriendliesNear = 0;
+	int m_iEnemiesNear = 0;
+
+	void UpdateCtf(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam);
+	void UpdateCp(CTFPlayer* pLocal, int iOurTeam);
+	void UpdatePayload(CTFPlayer* pLocal, int iOurTeam);
+	void UpdatePasstime(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam);
+	void CountForces(CTFPlayer* pLocal, const Vector& vPos);
+
+public:
+	void Update(CTFPlayer* pLocal);
+	void Reset();
+
+	const Mission_t& GetMission() const { return m_tMission; }
+	float GetUrgency() const { return m_flUrgency; }
+	int GetFriendliesNear() const { return m_iFriendliesNear; }
+	int GetEnemiesNear() const { return m_iEnemiesNear; }
+
+	std::wstring m_sStatus = L"";
+};
+
+ADD_FEATURE(CMissionBoard, MissionBoard);
 ADD_FEATURE(CGameObjectiveController, GameObjectiveController);
 ADD_FEATURE(CFlagController, FlagController);
 ADD_FEATURE(CCPController, CPController);

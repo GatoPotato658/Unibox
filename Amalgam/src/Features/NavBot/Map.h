@@ -119,6 +119,7 @@ struct SolveContext
 	int m_iVischeckCacheSeconds = 30;
 	bool m_bIgnoreTraces = false;
 	bool m_bCanJump = true;
+	float m_flHazardScale = 1.f;
 	NavPolicyState m_tPolicy{};
 	const std::atomic_bool* m_pCancel = nullptr;
 	std::unordered_map<CNavArea*, float> m_mHazardCosts;

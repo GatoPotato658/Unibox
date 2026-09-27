@@ -1760,3 +1760,240 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 
 	return RunFrontline(pLocal);
 }
+
+void CMissionBoard::Reset()
+{
+	m_tMission = {};
+	m_flUrgency = 0.f;
+	m_iFriendliesNear = 0;
+	m_iEnemiesNear = 0;
+	m_sStatus = L"";
+}
+
+void CMissionBoard::CountForces(CTFPlayer* pLocal, const Vector& vPos)
+{
+	m_iFriendliesNear = 0;
+	m_iEnemiesNear = 0;
+	const int iLocalIdx = pLocal ? pLocal->entindex() : -1;
+
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerTeam))
+	{
+		if (!pEntity || pEntity->entindex() == iLocalIdx || pEntity->IsDormant())
+			continue;
+		auto pPlayer = pEntity->As<CTFPlayer>();
+		if (!pPlayer || !pPlayer->IsAlive())
+			continue;
+		if (pPlayer->GetAbsOrigin().DistTo(vPos) <= 900.f)
+			m_iFriendliesNear++;
+	}
+
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
+	{
+		if (!pEntity || pEntity->IsDormant())
+			continue;
+		auto pPlayer = pEntity->As<CTFPlayer>();
+		if (!pPlayer || !pPlayer->IsAlive())
+			continue;
+		if (pPlayer->GetAbsOrigin().DistTo(vPos) <= 900.f)
+			m_iEnemiesNear++;
+	}
+}
+
+void CMissionBoard::UpdateCtf(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam)
+{
+	const int iLocalIdx = pLocal->entindex();
+	if (F::FlagController.GetCarrier(iEnemyTeam) == iLocalIdx)
+	{
+		if (!F::FlagController.GetSpawnPosition(iOurTeam, m_tMission.m_vPos) &&
+			!F::FlagController.GetPosition(iEnemyTeam, m_tMission.m_vPos))
+			return;
+		m_tMission.m_eKind = MissionKindEnum::CtfCarry;
+		m_tMission.m_flValue = 1.f;
+		m_tMission.m_iCarrierIdx = iLocalIdx;
+		m_tMission.m_bValid = true;
+		m_sStatus = L"CTF carry";
+		return;
+	}
+
+	const int iCarrierIdx = F::FlagController.GetCarrier(iEnemyTeam);
+	if (iCarrierIdx > 0)
+	{
+		Vector vCarrier{};
+		if (F::BotUtils.GetDormantOrigin(iCarrierIdx, &vCarrier) && F::BotUtils.ShouldAssist(pLocal, iCarrierIdx))
+		{
+			m_tMission.m_eKind = MissionKindEnum::CtfEscort;
+			m_tMission.m_vPos = vCarrier;
+			m_tMission.m_flValue = 0.8f;
+			m_tMission.m_iCarrierIdx = iCarrierIdx;
+			m_tMission.m_bValid = true;
+			m_sStatus = L"CTF escort";
+			return;
+		}
+	}
+
+	if (F::FlagController.GetPosition(iEnemyTeam, m_tMission.m_vPos))
+	{
+		m_tMission.m_eKind = MissionKindEnum::CtfSteal;
+		m_tMission.m_flValue = 0.6f;
+		m_tMission.m_iCarrierIdx = -1;
+		m_tMission.m_bValid = true;
+		m_sStatus = L"CTF steal";
+	}
+}
+
+void CMissionBoard::UpdateCp(CTFPlayer* pLocal, int iOurTeam)
+{
+	std::pair<int, Vector> tInfo{};
+	if (!F::CPController.GetClosestControlPointInfo(pLocal->GetAbsOrigin(), iOurTeam, tInfo))
+		return;
+	m_tMission.m_eKind = MissionKindEnum::ControlPoint;
+	m_tMission.m_vPos = tInfo.second;
+	m_tMission.m_flValue = 0.6f;
+	m_tMission.m_iCarrierIdx = -1;
+	m_tMission.m_bValid = true;
+	m_sStatus = L"CP";
+}
+
+void CMissionBoard::UpdatePayload(CTFPlayer* pLocal, int iOurTeam)
+{
+	auto pPayload = F::PLController.GetClosestPayload(pLocal->GetAbsOrigin(), iOurTeam);
+	if (!pPayload)
+		return;
+	m_tMission.m_eKind = MissionKindEnum::Payload;
+	m_tMission.m_vPos = pPayload->GetAbsOrigin();
+	m_tMission.m_flValue = 0.7f;
+	m_tMission.m_iCarrierIdx = -1;
+	m_tMission.m_bValid = true;
+	m_sStatus = L"Payload";
+}
+
+void CMissionBoard::UpdatePasstime(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam)
+{
+	const int iLocalIdx = pLocal->entindex();
+	const int iCarrierIdx = F::PasstimeController.GetCarrier();
+	if (pLocal->m_bHasPasstimeBall() || iCarrierIdx == iLocalIdx)
+	{
+		Vector vGoal{};
+		if (!F::PasstimeController.GetGoalPos(iOurTeam, pLocal->GetAbsOrigin(), vGoal) &&
+			!F::PasstimeController.GetBallPos(vGoal))
+			return;
+		m_tMission.m_eKind = MissionKindEnum::Passtime;
+		m_tMission.m_vPos = vGoal;
+		m_tMission.m_flValue = 0.9f;
+		m_tMission.m_iCarrierIdx = iLocalIdx;
+		m_tMission.m_bValid = true;
+		m_sStatus = L"Passtime run";
+		return;
+	}
+
+	if (iCarrierIdx > 0)
+	{
+		Vector vCarrier{};
+		if (F::BotUtils.GetDormantOrigin(iCarrierIdx, &vCarrier))
+		{
+			m_tMission.m_eKind = MissionKindEnum::Passtime;
+			m_tMission.m_vPos = vCarrier;
+			m_tMission.m_flValue = 0.7f;
+			m_tMission.m_iCarrierIdx = iCarrierIdx;
+			m_tMission.m_bValid = true;
+			m_sStatus = L"Passtime chase";
+			return;
+		}
+	}
+
+	if (F::PasstimeController.GetBallPos(m_tMission.m_vPos))
+	{
+		m_tMission.m_eKind = MissionKindEnum::Passtime;
+		m_tMission.m_flValue = 0.5f;
+		m_tMission.m_iCarrierIdx = -1;
+		m_tMission.m_bValid = true;
+		m_sStatus = L"Passtime ball";
+	}
+}
+
+void CMissionBoard::Update(CTFPlayer* pLocal)
+{
+	static Timer tThrottle{};
+	if (!tThrottle.Run(0.3f))
+		return;
+
+	m_tMission = {};
+	m_flUrgency = 0.f;
+	m_iFriendliesNear = 0;
+	m_iEnemiesNear = 0;
+	m_sStatus = L"";
+	if (!pLocal)
+		return;
+
+	bool bRoundRunning = false;
+	if (const auto& pGameRules = I::TFGameRules())
+	{
+		bRoundRunning = (pGameRules->m_iRoundState() == GR_STATE_RND_RUNNING ||
+			pGameRules->m_iRoundState() == GR_STATE_STALEMATE) &&
+			!pGameRules->m_bInWaitingForPlayers() &&
+			pGameRules->m_iRoundState() != GR_STATE_TEAM_WIN;
+	}
+	if (!bRoundRunning)
+		return;
+
+	if (F::MVMController.IsActive())
+	{
+		m_tMission.m_eKind = MissionKindEnum::MVM;
+		m_sStatus = L"MvM";
+		return;
+	}
+
+	const int iOurTeam = pLocal->m_iTeamNum();
+	const int iEnemyTeam = iOurTeam == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
+
+	switch (F::GameObjectiveController.m_eGameMode)
+	{
+	case TF_GAMETYPE_CTF:
+		UpdateCtf(pLocal, iOurTeam, iEnemyTeam);
+		break;
+	case TF_GAMETYPE_CP:
+		UpdateCp(pLocal, iOurTeam);
+		break;
+	case TF_GAMETYPE_ESCORT:
+		UpdatePayload(pLocal, iOurTeam);
+		break;
+	case TF_GAMETYPE_PASSTIME:
+		UpdatePasstime(pLocal, iOurTeam, iEnemyTeam);
+		break;
+	default:
+		if (F::GameObjectiveController.m_bDoomsday)
+		{
+			UpdateCtf(pLocal, iOurTeam, iEnemyTeam);
+			if (m_tMission.m_bValid)
+			{
+				m_tMission.m_eKind = MissionKindEnum::Doomsday;
+				m_tMission.m_flValue = std::max(m_tMission.m_flValue, 0.8f);
+				m_sStatus = F::DoomsdayController.m_sDoomsdayStatus.empty() ? std::wstring(L"Doomsday") : F::DoomsdayController.m_sDoomsdayStatus;
+			}
+		}
+		else if (F::GameObjectiveController.m_bHaarp)
+			UpdateCtf(pLocal, iOurTeam, iEnemyTeam);
+		break;
+	}
+
+	if (!m_tMission.m_bValid)
+		return;
+
+	CountForces(pLocal, m_tMission.m_vPos);
+	m_flUrgency = m_tMission.m_flValue;
+	if (m_iEnemiesNear > m_iFriendliesNear &&
+		(m_tMission.m_eKind == MissionKindEnum::ControlPoint || m_tMission.m_eKind == MissionKindEnum::Payload))
+		m_flUrgency = std::min(m_flUrgency + 0.15f, 1.f);
+
+	if (Vars::Debug::Logging.Value)
+	{
+		static std::wstring sLastStatus{};
+		if (sLastStatus != m_sStatus)
+		{
+			sLastStatus = m_sStatus;
+			SDK::Output("NavBotMission", std::format("Mission: {} urgency={:.2f} friends={} enemies={}",
+				std::string(m_sStatus.begin(), m_sStatus.end()), m_flUrgency, m_iFriendliesNear, m_iEnemiesNear).c_str(),
+				{ 120, 220, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		}
+	}
+}

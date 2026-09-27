@@ -153,6 +153,7 @@ public:
 	bool NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority = PriorityListEnum::Forced, bool bShouldRepath = true, bool bIgnoreTraces = false);
 
 	float GetPathCost(CNavArea* pStartArea, CNavArea* pDestinationArea);
+	bool GetPathAreas(CNavArea* pStartArea, CNavArea* pDestinationArea, std::vector<CNavArea*>& vOutAreas);
 	float GetPathCost(const Vector& vStart, const Vector& vDestination, bool bLocal = true);
 
 	const Vector& GetCurrentPathDir() const { return m_vCurrentPathDir; }

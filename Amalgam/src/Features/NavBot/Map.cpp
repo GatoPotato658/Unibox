@@ -213,6 +213,18 @@ SolveContext CMap::BuildSolveContext()
 	s_flNavTickInterval.store(I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.0f), std::memory_order_relaxed);
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
 	tCtx.m_bIgnoreTraces = F::NavEngine.m_bIgnoreTraces;
+	switch (Vars::Misc::Movement::NavBot::Personality.Value)
+	{
+	case Vars::Misc::Movement::NavBot::PersonalityEnum::Yolo:
+		tCtx.m_flHazardScale = 0.35f;
+		break;
+	case Vars::Misc::Movement::NavBot::PersonalityEnum::Cautious:
+		tCtx.m_flHazardScale = 2.f;
+		break;
+	default:
+		tCtx.m_flHazardScale = 1.f;
+		break;
+	}
 	if (pLocal)
 	{
 		auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
@@ -433,7 +445,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		{
 			const float flHazardCost = LookupHazard(pNextArea);
 			if (std::isfinite(flHazardCost))
-				flFinalCost += std::clamp(flHazardCost * 0.28f, 0.f, 650.f);
+				flFinalCost += std::clamp(flHazardCost * 0.28f * tCtx.m_flHazardScale, 0.f, 650.f * tCtx.m_flHazardScale);
 			else
 				continue;
 

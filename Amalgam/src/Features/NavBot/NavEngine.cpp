@@ -432,6 +432,17 @@ float CNavEngine::GetPathCost(CNavArea* pStartArea, CNavArea* pDestinationArea)
 	return iResult == 0 || iResult == 3 ? flCost : FLT_MAX;
 }
 
+bool CNavEngine::GetPathAreas(CNavArea* pStartArea, CNavArea* pDestinationArea, std::vector<CNavArea*>& vOutAreas)
+{
+	vOutAreas.clear();
+	if (!m_pMap || !pStartArea || !pDestinationArea)
+		return false;
+	SolveContext tCtx = CMap::BuildSolveContext();
+	std::lock_guard lock(m_pMap->m_mutex);
+	const int iResult = m_pMap->Solve(pStartArea, pDestinationArea, tCtx, vOutAreas, nullptr);
+	return iResult == 0 || iResult == 3;
+}
+
 float CNavEngine::GetPathCost(const Vector& vStart, const Vector& vDestination, bool bLocal)
 {
 	if (!IsNavMeshLoaded()) return FLT_MAX;
