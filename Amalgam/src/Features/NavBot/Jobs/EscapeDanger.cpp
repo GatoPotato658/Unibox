@@ -30,7 +30,7 @@ static bool CanUseDangerArea(const Hazard_t* pHazard, bool bHasTarget, bool bLow
 	return true;
 }
 
-static bool IsEscapePathSafe(CNavArea* pFrom, CNavArea* pTo)
+static bool IsEscapePathSafe(CNavArea* pFrom, CNavArea* pTo, bool bHasTarget, bool bLowHealth)
 {
 	if (!pFrom || !pTo)
 		return false;
@@ -44,7 +44,7 @@ static bool IsEscapePathSafe(CNavArea* pFrom, CNavArea* pTo)
 		const Hazard_t* pHazard = F::Hazards.GetHazard(vAreas[i]);
 		if (!pHazard)
 			continue;
-		if (IsHighDanger(*pHazard) || !std::isfinite(F::Hazards.GetCost(vAreas[i])))
+		if (!CanUseDangerArea(pHazard, bHasTarget, bLowHealth) || !std::isfinite(F::Hazards.GetCost(vAreas[i])))
 			return false;
 	}
 	return true;
@@ -131,6 +131,7 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 			vReferencePosition = pLocal->GetAbsOrigin();
 		}
+		const bool bLowHealth = pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.5f;
 
 		std::vector<NavAreaScore_t> vSafeAreas;
 		std::vector<CNavArea*> vAreaPointers;
@@ -139,8 +140,7 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 		for (auto& pArea : vAreaPointers)
 		{
-			if (!CanUseDangerArea(F::Hazards.GetHazard(pArea), bHasTarget,
-				pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.5f))
+			if (!CanUseDangerArea(F::Hazards.GetHazard(pArea), bHasTarget, bLowHealth))
 				continue;
 
 			float flDistToReference = pArea->m_vCenter.DistTo(vReferencePosition);
@@ -160,7 +160,6 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 			});
 
 		int iCalls = 0;
-		int iVerifies = 0;
 
 		for (const auto& tPair : vSafeAreas)
 		{
@@ -189,12 +188,8 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 			if (!bIsSafe)
 				continue;
 
-			if (iVerifies < 4)
-			{
-				iVerifies++;
-				if (!IsEscapePathSafe(pLocalArea, pArea))
-					continue;
-			}
+			if (!IsEscapePathSafe(pLocalArea, pArea, bHasTarget, bLowHealth))
+				continue;
 
 			if (F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
 			{
@@ -221,12 +216,8 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 					iCalls++;
 					if (iCalls > 5)
 						break;
-					if (iVerifies < 6)
-					{
-						iVerifies++;
-						if (!IsEscapePathSafe(pLocalArea, pArea))
-							continue;
-					}
+					if (!IsEscapePathSafe(pLocalArea, pArea, bHasTarget, bLowHealth))
+						continue;
 					if (F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
 					{
 						m_pEscapeTargetArea = pArea;
@@ -246,7 +237,8 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 			vVischeck = F::BotUtils.m_tClosestEnemy.m_vOrigin;
 			vVischeck.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 		}
-		if (NavAreaUtils::FindClosestHidingSpot(pLocalArea, vVischeck, 4, tHidingSpot) && tHidingSpot.first)
+		if (NavAreaUtils::FindClosestHidingSpot(pLocalArea, vVischeck, 4, tHidingSpot) && tHidingSpot.first
+			&& IsEscapePathSafe(pLocalArea, tHidingSpot.first, false, bLowHealth))
 		{
 			if (F::NavEngine.NavTo(tHidingSpot.first->m_vCenter, PriorityListEnum::EscapeDanger))
 			{

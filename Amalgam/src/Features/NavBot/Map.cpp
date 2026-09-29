@@ -445,7 +445,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		{
 			const float flHazardCost = LookupHazard(pNextArea);
 			if (std::isfinite(flHazardCost))
-				flFinalCost += std::clamp(flHazardCost * 0.28f * tCtx.m_flHazardScale, 0.f, 650.f * tCtx.m_flHazardScale);
+				flFinalCost += std::clamp(flHazardCost * 0.75f * tCtx.m_flHazardScale, 0.f, 650.f * tCtx.m_flHazardScale);
 			else
 				continue;
 
