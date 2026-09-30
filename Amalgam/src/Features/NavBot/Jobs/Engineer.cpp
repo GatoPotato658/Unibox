@@ -312,6 +312,10 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 		auto pNavFile = F::NavEngine.GetNavFile();
 		if (!pNavFile)
 			return;
+
+		std::vector<float> vFocusCost;
+		const bool bHasFocusCost = tFocus.m_pArea && F::NavEngine.GetPathCostField(tFocus.m_pArea, vFocusCost, 4000.f);
+
 		for (auto& tArea : pNavFile->m_vAreas)
 		{
 			if (tArea.m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_EXIT))
@@ -328,7 +332,7 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 					if (IsBuildSpotFailed(m_vFailedSpots, vPos))
 						return;
 
-					if (tFocus.m_pArea && F::NavEngine.GetPathCost(tFocus.m_pArea, pArea) > 4000.f)
+					if (tFocus.m_pArea && (!bHasFocusCost || F::NavEngine.GetFieldCost(vFocusCost, pArea) > 4000.f))
 						return;
 
 					if (!CanBuildAtPosition(pLocal, vPos))

@@ -128,6 +128,10 @@ public:
 	bool IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFrom, Vector vTo, unsigned int nMask = MASK_PLAYERSOLID);
 
 	bool IsPathing() { return !m_vCrumbs.empty() || m_uPendingRequestId != 0 || m_bRepathRequested; }
+	bool IsPriorityAllowed(PriorityListEnum::PriorityListEnum ePriority) const
+	{
+		return !(ePriority < m_eCurrentPriority || (m_uPendingRequestId != 0 && ePriority < m_ePendingPriority));
+	}
 	bool IsUnstucking() const { return m_bUnstucking; }
 	bool IsNavMeshLoaded() const { return m_pMap && m_pMap->m_eState == NavStateEnum::Active; }
 	std::string GetNavFilePath() const { return m_pMap ? m_pMap->m_sMapName : ""; }
@@ -155,6 +159,8 @@ public:
 	float GetPathCost(CNavArea* pStartArea, CNavArea* pDestinationArea);
 	bool GetPathAreas(CNavArea* pStartArea, CNavArea* pDestinationArea, std::vector<CNavArea*>& vOutAreas);
 	float GetPathCost(const Vector& vStart, const Vector& vDestination, bool bLocal = true);
+	bool GetPathCostField(CNavArea* pStartArea, std::vector<float>& vOutCost, float flMaxCost = FLT_MAX, const std::vector<CNavArea*>* pTargets = nullptr);
+	float GetFieldCost(const std::vector<float>& vCost, CNavArea* pArea) const;
 
 	const Vector& GetCurrentPathDir() const { return m_vCurrentPathDir; }
 

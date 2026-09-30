@@ -43,7 +43,21 @@ struct Hazard_t
 class CHazards
 {
 private:
+	struct SentryCoverage_t
+	{
+		Vector m_vOrigin = {};
+		int m_iLevel = 0;
+		int m_iLocalClass = 0;
+		bool m_bMini = false;
+		float m_flTargetEye = 0.f;
+		int m_iExpireTick = 0;
+		int m_iSeenTick = 0;
+		std::vector<std::pair<CNavArea*, HazardKind>> m_vAreas;
+	};
+
 	std::unordered_map<CNavArea*, Hazard_t> m_mAreaHazards;
+	std::unordered_map<int, SentryCoverage_t> m_mSentryCoverage;
+	float m_flStandingEyeHeight = TFGame::VIEW_HEIGHT_DEFAULT;
 
 	uint64_t m_iGenerationId = 1;
 

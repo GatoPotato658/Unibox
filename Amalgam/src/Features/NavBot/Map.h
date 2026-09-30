@@ -1,5 +1,6 @@
 #pragma once
 #include "NavArea.h"
+#include "TFConstants.h"
 #include <boost/container_hash/hash.hpp>
 #include <atomic>
 #include <limits>
@@ -17,6 +18,11 @@ inline constexpr float PLAYER_STEP_HEIGHT = 18.0f;
 inline constexpr float PLAYER_JUMP_HEIGHT = 72.0f;
 inline constexpr float PLAYER_CROUCHED_JUMP_HEIGHT = 72.0f;
 inline constexpr float PLAYER_DEATH_DROP_HEIGHT = 1000.0f;
+
+static_assert(HALF_PLAYER_WIDTH == TFGame::HULL_HALF_WIDTH && PLAYER_WIDTH == 2.f * TFGame::HULL_HALF_WIDTH);
+static_assert(PLAYER_HEIGHT == TFGame::HULL_HEIGHT && PLAYER_DUCK_HEIGHT == TFGame::HULL_DUCK_HEIGHT);
+static_assert(PLAYER_STEP_HEIGHT == TFGame::STEP_HEIGHT);
+static_assert(PLAYER_JUMP_HEIGHT <= TFGame::CROUCH_JUMP_REACH + 0.5f && PLAYER_JUMP_HEIGHT >= TFGame::CROUCH_JUMP_REACH - 0.5f);
 #define TICKCOUNT_TIMESTAMP(seconds) (I::GlobalVars->tickcount + static_cast<int>((seconds) / I::GlobalVars->interval_per_tick))
 
 class CNavFile
@@ -44,6 +50,9 @@ private:
 	int m_nGridW = 0;
 	int m_nGridH = 0;
 	std::vector<std::vector<CNavArea*>> m_vGrid;
+
+	mutable std::vector<uint32_t> m_vQueryStamp;
+	mutable uint32_t m_uQueryStamp = 0;
 };
 
 struct NavPolicyState
@@ -147,6 +156,10 @@ public:
 
 	int Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std::vector<CNavArea*>& vOutPath, float* pflCost);
 
+	void SolveCostField(CNavArea* pStart, const SolveContext& tCtx, std::vector<float>& vOutCost,
+		float flMaxCost = std::numeric_limits<float>::max(), const std::vector<CNavArea*>* pTargets = nullptr);
+	size_t GetAreaIndex(const CNavArea* pArea) const { return static_cast<size_t>(pArea - m_navfile.m_vAreas.data()); }
+
 	static SolveContext BuildSolveContext();
 	int SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
 		const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost);
@@ -155,6 +168,9 @@ public:
 	DropdownHint_t HandleDropdown(const NavPoints_t& tPoints);
 
 	bool HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const;
+
+	enum class AreaBlock : uint8_t { None, Soft, Stuck };
+	AreaBlock GetAreaBlock(CNavArea* pArea, int iTick) const;
 
 	void CollectAreasAround(const Vector& vOrigin, float flRadius, std::vector<CNavArea*>& vOutAreas);
 

@@ -178,8 +178,13 @@ bool CNavBotSupplies::GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocal
 			Vector vPathPoint = pLocalArea->GetNearestPoint(vTo);
 			vPathPoint.z = pSupplyData->m_vOrigin.z;
 
-			if (pSupplyData->m_pOriginalSelfPtr && !pSupplyData->m_flRespawnTime && flDist <= 20.f)
-				pSupplyData->m_pOriginalSelfPtr->m_flRespawnTime = I::GlobalVars->curtime + 10.f;
+			if (!pSupplyData->m_flRespawnTime && flDist <= 20.f)
+			{
+				auto& vCache = pSupplyData->m_bHealthCache ? m_vCachedHealthOrigins : m_vCachedAmmoOrigins;
+				const int iIndex = pSupplyData->m_iCacheIndex;
+				if (iIndex >= 0 && iIndex < static_cast<int>(vCache.size()))
+					vCache[iIndex].m_flRespawnTime = I::GlobalVars->curtime + 10.f;
+			}
 
 			SDK::WalkTo(pCmd, pLocal, vPathPoint);
 			return true;
@@ -354,18 +359,13 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 
 void CNavBotSupplies::AddCachedSupplyOrigin(Vector vOrigin, bool bHealth)
 {
+	auto& vCache = bHealth ? m_vCachedHealthOrigins : m_vCachedAmmoOrigins;
+
 	SupplyData_t tData;
 	tData.m_vOrigin = vOrigin;
-	if (bHealth)
-	{
-		m_vCachedHealthOrigins.push_back(tData);
-		m_vCachedHealthOrigins.back().m_pOriginalSelfPtr = &m_vCachedHealthOrigins.back();
-	}
-	else
-	{
-		m_vCachedAmmoOrigins.push_back(tData);
-		m_vCachedAmmoOrigins.back().m_pOriginalSelfPtr = &m_vCachedAmmoOrigins.back();
-	}
+	tData.m_iCacheIndex = static_cast<int>(vCache.size());
+	tData.m_bHealthCache = bHealth;
+	vCache.push_back(tData);
 }
 
 void CNavBotSupplies::ResetCachedOrigins()

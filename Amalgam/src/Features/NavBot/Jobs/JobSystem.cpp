@@ -1065,7 +1065,7 @@ bool CNavBotSnipe::IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bo
 		vEntOrigin.z += 40.0f;
 	vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 
-	float flMinDist = (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange && bShortRangeClass) ? 0.f : 1100.f + HALF_PLAYER_WIDTH;
+	float flMinDist = (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange && bShortRangeClass) ? 0.f : TFGame::SENTRY_MAX_RANGE + HALF_PLAYER_WIDTH;
 	if (vEntOrigin.DistTo(vAreaOrigin) <= flMinDist)
 		return false;
 
@@ -1086,16 +1086,39 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 	if (!pNavFile)
 		return false;
 
-	std::vector<NavAreaScore_t> vGoodAreas;
-	for (auto& area : pNavFile->m_vAreas)
-	{
+	if (!F::NavEngine.IsPriorityAllowed(PriorityListEnum::SnipeSentry))
+		return false;
 
-		if (!IsAreaValidForSnipe(vOrigin, area.m_vCenter, bShortRangeClass, false))
+	const bool bShortRangeAllowed = (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange) && bShortRangeClass;
+	const float flMinDist = bShortRangeAllowed ? 0.f : TFGame::SENTRY_MAX_RANGE + HALF_PLAYER_WIDTH;
+
+	std::vector<NavAreaScore_t> vCandidates;
+	for (auto& tArea : pNavFile->m_vAreas)
+	{
+		Vector vAreaOrigin = tArea.m_vCenter;
+		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
+		if (vOrigin.DistTo(vAreaOrigin) <= flMinDist)
 			continue;
-		vGoodAreas.push_back({ &area, area.m_vCenter.DistTo(vOrigin) });
+		vCandidates.push_back({ &tArea, tArea.m_vCenter.DistTo(vOrigin) });
 	}
 
-	return NavJobUtils::TryNavToAreaScores(vGoodAreas, PriorityListEnum::SnipeSentry, !F::NavBotCore.m_tSelectedConfig.m_bPreferFar);
+	const bool bLowestFirst = !F::NavBotCore.m_tSelectedConfig.m_bPreferFar;
+	std::sort(vCandidates.begin(), vCandidates.end(), [bLowestFirst](const NavAreaScore_t& a, const NavAreaScore_t& b)
+		{
+			return bLowestFirst ? a.m_flScore < b.m_flScore : a.m_flScore > b.m_flScore;
+		});
+
+	for (const auto& tCandidate : vCandidates)
+	{
+		Vector vAreaOrigin = tCandidate.m_pArea->m_vCenter;
+		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
+		if (!F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vOrigin, MASK_SHOT | CONTENTS_GRATE))
+			continue;
+		if (F::NavEngine.NavTo(tCandidate.m_pArea->m_vCenter, PriorityListEnum::SnipeSentry))
+			return true;
+	}
+
+	return false;
 }
 
 bool CNavBotSnipe::Run(CTFPlayer* pLocal)

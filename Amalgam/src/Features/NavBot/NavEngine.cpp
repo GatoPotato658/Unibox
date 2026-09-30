@@ -31,6 +31,18 @@ static int GetTransientVischeckExpireTick()
 	return TICKCOUNT_TIMESTAMP(flSeconds);
 }
 
+static Crumb_t ToCrumb(const CachedPathCrumb_t& tCached)
+{
+	Crumb_t tCrumb{};
+	tCrumb.m_pNavArea = tCached.m_pNavArea;
+	tCrumb.m_vPos = tCached.m_vPos;
+	tCrumb.m_vApproachDir = tCached.m_vApproachDir;
+	tCrumb.m_bRequiresDrop = tCached.m_bRequiresDrop;
+	tCrumb.m_flDropHeight = tCached.m_flDropHeight;
+	tCrumb.m_flApproachDistance = tCached.m_flApproachDistance;
+	return tCrumb;
+}
+
 static bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrigin)
 {
 	if (!pLocal || F::GameObjectiveController.m_eGameMode != TF_GAMETYPE_ESCORT)
@@ -162,7 +174,7 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 
 	if (F::Ticks.m_bWarp || F::Ticks.m_bDoubletap) { m_sLastFailureReason = "Warping/Doubletapping"; return false; }
 	if (!IsReady()) { m_sLastFailureReason = "Not ready"; return false; }
-	if (ePriority < m_eCurrentPriority || (m_uPendingRequestId != 0 && ePriority < m_ePendingPriority))
+	if (!IsPriorityAllowed(ePriority))
 	{
 		m_sLastFailureReason = "Priority too low";
 		return false;
@@ -250,14 +262,7 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 			return false;
 		}
 
-		Crumb_t tCrumb{};
-		tCrumb.m_pNavArea = tCached.m_pNavArea;
-		tCrumb.m_vPos = tCached.m_vPos;
-		tCrumb.m_vApproachDir = tCached.m_vApproachDir;
-		tCrumb.m_bRequiresDrop = tCached.m_bRequiresDrop;
-		tCrumb.m_flDropHeight = tCached.m_flDropHeight;
-		tCrumb.m_flApproachDistance = tCached.m_flApproachDistance;
-		vValidated.push_back(tCrumb);
+		vValidated.push_back(ToCrumb(tCached));
 	}
 
 	if (!m_bIgnoreTraces && !vValidated.empty())
@@ -458,6 +463,25 @@ float CNavEngine::GetPathCost(const Vector& vStart, const Vector& vDestination, 
 	return iResult == 0 || iResult == 3 ? flCost : FLT_MAX;
 }
 
+bool CNavEngine::GetPathCostField(CNavArea* pStartArea, std::vector<float>& vOutCost, float flMaxCost, const std::vector<CNavArea*>* pTargets)
+{
+	vOutCost.clear();
+	if (!m_pMap || !m_pMap->IsAreaValid(pStartArea))
+		return false;
+	SolveContext tCtx = CMap::BuildSolveContext();
+	std::lock_guard lock(m_pMap->m_mutex);
+	m_pMap->SolveCostField(pStartArea, tCtx, vOutCost, flMaxCost, pTargets);
+	return true;
+}
+
+float CNavEngine::GetFieldCost(const std::vector<float>& vCost, CNavArea* pArea) const
+{
+	if (!m_pMap || !m_pMap->IsAreaValid(pArea))
+		return FLT_MAX;
+	const size_t uIdx = m_pMap->GetAreaIndex(pArea);
+	return uIdx < vCost.size() ? vCost[uIdx] : FLT_MAX;
+}
+
 CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
 {
 	static Timer tRefresh{};
@@ -570,19 +594,13 @@ void CNavEngine::CheckBlacklist(CTFPlayer* pLocal)
 			return;
 		}
 
-		if (tCrumb.m_pNavArea)
+		if (tCrumb.m_pNavArea
+			&& m_pMap->GetAreaBlock(tCrumb.m_pNavArea, iNow) == CMap::AreaBlock::Stuck
+			&& iNow - m_iLastBlacklistAbandonTick >= iCooldown)
 		{
-			const auto tKey = std::pair<CNavArea*, CNavArea*>(tCrumb.m_pNavArea, tCrumb.m_pNavArea);
-			auto itVc = m_pMap->m_mVischeckCache.find(tKey);
-			if (itVc != m_pMap->m_mVischeckCache.end() && !itVc->second.m_bPassable
-				&& (itVc->second.m_iExpireTick == 0 || itVc->second.m_iExpireTick > iNow)
-				&& itVc->second.m_bStuckBlacklist
-				&& iNow - m_iLastBlacklistAbandonTick >= iCooldown)
-			{
-				m_iLastBlacklistAbandonTick = iNow;
-				AbandonPath("Area blacklisted (stuck)");
-				return;
-			}
+			m_iLastBlacklistAbandonTick = iNow;
+			AbandonPath("Area blacklisted (stuck)");
+			return;
 		}
 	}
 }
@@ -920,16 +938,7 @@ void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector
 			m_pMap->SolveCrumbs(vLocalOrigin, pArea, vTarget, pRecovery, tContext, vRecoveryCrumbs, nullptr);
 		}
 		for (const auto& tCached : vRecoveryCrumbs)
-		{
-			Crumb_t tCrumb{};
-			tCrumb.m_pNavArea = tCached.m_pNavArea;
-			tCrumb.m_vPos = tCached.m_vPos;
-			tCrumb.m_vApproachDir = tCached.m_vApproachDir;
-			tCrumb.m_bRequiresDrop = tCached.m_bRequiresDrop;
-			tCrumb.m_flDropHeight = tCached.m_flDropHeight;
-			tCrumb.m_flApproachDistance = tCached.m_flApproachDistance;
-			m_vCrumbs.push_back(tCrumb);
-		}
+			m_vCrumbs.push_back(ToCrumb(tCached));
 		m_eCurrentPriority = PriorityListEnum::Patrol;
 		m_tOffMeshTimer.Update();
 	}

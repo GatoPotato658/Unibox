@@ -1483,6 +1483,7 @@
     <ClInclude Include="src\Features\NavBot\NavEngine.h" />
     <ClInclude Include="src\Features\NavBot\Objectives.h" />
     <ClInclude Include="src\Features\NavBot\PathWorker.h" />
+    <ClInclude Include="src\Features\NavBot\TFConstants.h" />
     <ClInclude Include="src\Features\NavBot\Jobs\NavBotJobs.h" />
     <ClInclude Include="src\Features\Debug\Debug.h" />
     <ClInclude Include="src\Features\ImGui\Easings\Easings.h" />

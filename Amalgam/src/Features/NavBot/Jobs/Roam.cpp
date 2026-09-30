@@ -144,10 +144,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		if (pMap)
 		{
 			std::lock_guard lock(pMap->m_mutex);
-			auto tAreaKey = std::pair<CNavArea*, CNavArea*>(m_pCurrentTargetArea, m_pCurrentTargetArea);
-			auto it = pMap->m_mVischeckCache.find(tAreaKey);
-			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)) && it->second.m_bStuckBlacklist)
-				bBlacklisted = true;
+			bBlacklisted = pMap->GetAreaBlock(m_pCurrentTargetArea, I::GlobalVars ? I::GlobalVars->tickcount : 0) == CMap::AreaBlock::Stuck;
 		}
 
 		const bool bReached = F::NavEngine.GetLocalNavArea() == m_pCurrentTargetArea;
@@ -189,25 +186,17 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		m_pLastConnectedSeed = pLocalArea;
 	}
 
+	const int iNowTick = I::GlobalVars ? I::GlobalVars->tickcount : 0;
+	std::unique_lock tBlockLock(pMap->m_mutex);
 	for (auto& tArea : pMap->m_navfile.m_vAreas)
 	{
 		if (!m_sConnectedAreas.contains(&tArea))
 			continue;
 
-		bool bSoftBlocked = false;
-		if (pMap)
-		{
-			std::lock_guard lock(pMap->m_mutex);
-			auto tAreaKey = std::pair<CNavArea*, CNavArea*>(&tArea, &tArea);
-			auto it = pMap->m_mVischeckCache.find(tAreaKey);
-			if (it != pMap->m_mVischeckCache.end() && !it->second.m_bPassable && (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)))
-			{
-				if (it->second.m_bStuckBlacklist)
-					continue;
-
-				bSoftBlocked = true;
-			}
-		}
+		const auto eBlock = pMap->GetAreaBlock(&tArea, iNowTick);
+		if (eBlock == CMap::AreaBlock::Stuck)
+			continue;
+		const bool bSoftBlocked = eBlock == CMap::AreaBlock::Soft;
 
 		if (tArea.m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_RED))
 			continue;
@@ -220,6 +209,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		tCandidate.m_bSoftBlocked = bSoftBlocked;
 		vCandidates.push_back(tCandidate);
 	}
+	tBlockLock.unlock();
 
 	if (vCandidates.empty())
 		return false;
@@ -287,10 +277,16 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		});
 
 	const size_t uPathCostCandidates = std::min<size_t>(vScoredAreas.size(), 16);
+	std::vector<CNavArea*> vCostTargets(uPathCostCandidates, nullptr);
+	for (size_t i = 0; i < uPathCostCandidates; i++)
+		vCostTargets[i] = F::NavEngine.FindClosestNavArea(vScoredAreas[i].m_pArea->m_vCenter, false);
+	std::vector<float> vPathCost;
+	F::NavEngine.GetPathCostField(F::NavEngine.GetLocalNavArea(vLocalOrigin), vPathCost, FLT_MAX, &vCostTargets);
+
 	for (size_t i = 0; i < uPathCostCandidates; i++)
 	{
 		auto& tScoredArea = vScoredAreas[i];
-		const float flPathCost = F::NavEngine.GetPathCost(vLocalOrigin, tScoredArea.m_pArea->m_vCenter);
+		const float flPathCost = vCostTargets[i] ? F::NavEngine.GetFieldCost(vPathCost, vCostTargets[i]) : FLT_MAX;
 		if (std::isfinite(flPathCost) && flPathCost < FLT_MAX)
 			tScoredArea.m_flScore -= flPathCost * 0.12f;
 		else

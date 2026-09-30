@@ -632,6 +632,7 @@
     <ClInclude Include="src\Features\NavBot\NavBotConfig.h" />
     <ClInclude Include="src\Features\NavBot\Map.h" />
     <ClInclude Include="src\Features\NavBot\PathWorker.h" />
+    <ClInclude Include="src\Features\NavBot\TFConstants.h" />
     <ClInclude Include="src\Features\NavBot\Jobs\NavBotJobs.h" />
     <ClInclude Include="src\Features\Players\SteamProfileCache.h" />
     <ClInclude Include="src\Features\Createmove\Createmove.h" />

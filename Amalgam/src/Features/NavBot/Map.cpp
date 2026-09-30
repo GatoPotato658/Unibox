@@ -204,6 +204,69 @@ int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std:
 	return 1;
 }
 
+void CMap::SolveCostField(CNavArea* pStart, const SolveContext& tCtx, std::vector<float>& vOutCost, float flMaxCost, const std::vector<CNavArea*>* pTargets)
+{
+	constexpr float flUnreached = std::numeric_limits<float>::max();
+	vOutCost.assign(m_navfile.m_vAreas.size(), flUnreached);
+	if (!IsAreaValid(pStart))
+		return;
+
+	m_bSkipSpawn = !(pStart->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
+
+	std::vector<size_t> vTargets;
+	if (pTargets)
+	{
+		vTargets.reserve(pTargets->size());
+		for (CNavArea* pTarget : *pTargets)
+			if (IsAreaValid(pTarget))
+				vTargets.push_back(GetAreaIndex(pTarget));
+		std::sort(vTargets.begin(), vTargets.end());
+		vTargets.erase(std::unique(vTargets.begin(), vTargets.end()), vTargets.end());
+		if (vTargets.empty())
+			return;
+	}
+	size_t nTargetsLeft = vTargets.size();
+
+	using NodePair = std::pair<float, size_t>;
+	std::priority_queue<NodePair, std::vector<NodePair>, std::greater<NodePair>> qOpen;
+	const size_t uStartIdx = GetAreaIndex(pStart);
+	vOutCost[uStartIdx] = 0.f;
+	qOpen.push({ 0.f, uStartIdx });
+
+	std::vector<AdjacentEntry> vNeighbors;
+	vNeighbors.reserve(8);
+
+	while (!qOpen.empty())
+	{
+		const auto [flCost, uIdx] = qOpen.top();
+		qOpen.pop();
+		if (flCost > vOutCost[uIdx])
+			continue;
+
+		if (tCtx.m_pCancel && tCtx.m_pCancel->load(std::memory_order_relaxed))
+			return;
+
+		if (pTargets && std::binary_search(vTargets.begin(), vTargets.end(), uIdx) && --nTargetsLeft == 0)
+			return;
+
+		vNeighbors.clear();
+		GetAdjacent(&m_navfile.m_vAreas[uIdx], tCtx, vNeighbors);
+		for (const auto& tEdge : vNeighbors)
+		{
+			const float flNext = flCost + tEdge.m_flCost;
+			if (flNext > flMaxCost)
+				continue;
+
+			const size_t uNextIdx = GetAreaIndex(tEdge.m_pArea);
+			if (flNext < vOutCost[uNextIdx])
+			{
+				vOutCost[uNextIdx] = flNext;
+				qOpen.push({ flNext, uNextIdx });
+			}
+		}
+	}
+}
+
 SolveContext CMap::BuildSolveContext()
 {
 	SolveContext tCtx{};
@@ -362,15 +425,8 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		if (!std::isfinite(LookupHazard(pNextArea)))
 			continue;
 
-		const auto tAreaBlockKey = std::pair<CNavArea*, CNavArea*>(pNextArea, pNextArea);
-		if (auto itBlocked = m_mVischeckCache.find(tAreaBlockKey); itBlocked != m_mVischeckCache.end())
-		{
-			const auto& tEnt = itBlocked->second;
-			if (tEnt.m_eVischeckState == VischeckStateEnum::NotVisible
-				&& (tEnt.m_iExpireTick == 0 || tEnt.m_iExpireTick > iNow)
-				&& tEnt.m_bStuckBlacklist)
-				continue;
-		}
+		if (GetAreaBlock(pNextArea, iNow) == AreaBlock::Stuck)
+			continue;
 
 		const auto tKey = std::pair<CNavArea*, CNavArea*>(pCurrentArea, pNextArea);
 		CachedConnection_t& tEntry = m_mVischeckCache[tKey];
@@ -545,6 +601,19 @@ DropdownHint_t CMap::HandleDropdown(const NavPoints_t& tPoints)
 	return tHint;
 }
 
+CMap::AreaBlock CMap::GetAreaBlock(CNavArea* pArea, int iTick) const
+{
+	const auto it = m_mVischeckCache.find(std::pair<CNavArea*, CNavArea*>(pArea, pArea));
+	if (it == m_mVischeckCache.end())
+		return AreaBlock::None;
+
+	const auto& tEntry = it->second;
+	if (tEntry.m_bPassable || (tEntry.m_iExpireTick != 0 && tEntry.m_iExpireTick <= iTick))
+		return AreaBlock::None;
+
+	return tEntry.m_bStuckBlacklist ? AreaBlock::Stuck : AreaBlock::Soft;
+}
+
 bool CMap::HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const
 {
 	if (!pFrom || !pTo) return false;
@@ -686,7 +755,6 @@ void CMap::CollectAreasAround(const Vector& vOrigin, float flRadius, std::vector
 
 CNavArea* CMap::FindClosestNavArea(const Vector& vPos, bool bLocalOrigin)
 {
-	std::lock_guard lock(m_mutex);
 	if (m_navfile.m_vAreas.empty())
 		return nullptr;
 
@@ -733,17 +801,21 @@ CNavArea* CMap::FindClosestNavArea(const Vector& vPos, bool bLocalOrigin)
 	if (!bLocalOrigin || !pBest || CanFallToNavArea(vPos, *pBest))
 		return pBest;
 
+	constexpr size_t kMaxFallbackTraces = 64;
+	std::vector<std::pair<float, CNavArea*>> vScored;
+	vScored.reserve(m_navfile.m_vAreas.size());
 	for (auto& tArea : m_navfile.m_vAreas)
+		vScored.emplace_back(GetNearestAreaScore(tArea, vPos, true), &tArea);
+
+	const size_t nTraces = std::min(kMaxFallbackTraces, vScored.size());
+	std::partial_sort(vScored.begin(), vScored.begin() + nTraces, vScored.end());
+	for (size_t i = 0; i < nTraces; ++i)
 	{
-		const float flScore = GetNearestAreaScore(tArea, vPos, true);
-		if (flScore < flBestReachableScore && CanFallToNavArea(vPos, tArea))
-		{
-			flBestReachableScore = flScore;
-			pBestReachable = &tArea;
-		}
+		if (CanFallToNavArea(vPos, *vScored[i].second))
+			return vScored[i].second;
 	}
 
-	return pBestReachable;
+	return nullptr;
 }
 
 CNavFile::CNavFile(const char* szLevelname)
@@ -1001,6 +1073,8 @@ void CNavFile::BuildSpatialIndex()
 	m_vGrid.clear();
 	m_nGridW = 0;
 	m_nGridH = 0;
+	m_vQueryStamp.assign(m_vAreas.size(), 0u);
+	m_uQueryStamp = 0;
 	if (m_vAreas.empty())
 		return;
 
@@ -1060,15 +1134,27 @@ void CNavFile::QueryOverlapping(const Vector& vPos, float flRadius, std::vector<
 	const int iX1 = Cell(flX1, m_flGridMinX, m_nGridW);
 	const int iY1 = Cell(flY1, m_flGridMinY, m_nGridH);
 
-	std::unordered_map<CNavArea*, char> mSeen;
+	if (m_vQueryStamp.size() != m_vAreas.size())
+		m_vQueryStamp.assign(m_vAreas.size(), 0u);
+	if (++m_uQueryStamp == 0)
+	{
+		std::fill(m_vQueryStamp.begin(), m_vQueryStamp.end(), 0u);
+		m_uQueryStamp = 1;
+	}
+
+	const CNavArea* pFirst = m_vAreas.data();
 	for (int iY = iY0; iY <= iY1; ++iY)
 	{
 		for (int iX = iX0; iX <= iX1; ++iX)
 		{
 			for (CNavArea* pArea : m_vGrid[static_cast<size_t>(iY) * static_cast<size_t>(m_nGridW) + static_cast<size_t>(iX)])
 			{
-				if (mSeen.emplace(pArea, 1).second)
+				uint32_t& uStamp = m_vQueryStamp[static_cast<size_t>(pArea - pFirst)];
+				if (uStamp != m_uQueryStamp)
+				{
+					uStamp = m_uQueryStamp;
 					vOut.push_back(pArea);
+				}
 			}
 		}
 	}

@@ -254,9 +254,9 @@ bool CNavBotCapture::GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam
 	{
 		m_vCurrentCaptureSpot.reset();
 		if (auto pNavFile = F::NavEngine.GetNavFile())
-			for (auto tArea : pNavFile->m_vAreas)
+			for (const auto& tArea : pNavFile->m_vAreas)
 		{
-			for (auto& tHidingSpot : tArea.m_vHidingSpots)
+			for (const auto& tHidingSpot : tArea.m_vHidingSpots)
 			{
 				if (tHidingSpot.HasGoodCover() && tHidingSpot.m_vPos.DistTo(vPosition) <= flCapRadius)
 				{
