@@ -10,6 +10,7 @@
 #include "../../ImGui/RenderSync.h"
 #ifndef TEXTMODE
 #include <wrl/client.h>
+#include <cstring>
 #endif
 
 static inline bool GetDistanceThing(Vector vTargetPos, Vector vLocalPos, Group_t* pGroup, float& flOut)
@@ -874,18 +875,23 @@ static const char* GetClassIconTexture(int iClassNum)
 {
 	switch (iClassNum)
 	{
-	case TF_CLASS_SCOUT: return "hud/leaderboard_class_scout";
-	case TF_CLASS_SOLDIER: return "hud/leaderboard_class_soldier";
-	case TF_CLASS_PYRO: return "hud/leaderboard_class_pyro";
-	case TF_CLASS_DEMOMAN: return "hud/leaderboard_class_demo";
-	case TF_CLASS_HEAVY: return "hud/leaderboard_class_heavy";
-	case TF_CLASS_ENGINEER: return "hud/leaderboard_class_engineer";
-	case TF_CLASS_MEDIC: return "hud/leaderboard_class_medic";
-	case TF_CLASS_SNIPER: return "hud/leaderboard_class_sniper";
-	case TF_CLASS_SPY: return "hud/leaderboard_class_spy";
+	case TF_CLASS_SCOUT: return "hud/leaderboard_class_scout.vtf";
+	case TF_CLASS_SOLDIER: return "hud/leaderboard_class_soldier.vtf";
+	case TF_CLASS_PYRO: return "hud/leaderboard_class_pyro.vtf";
+	case TF_CLASS_DEMOMAN: return "hud/leaderboard_class_demo.vtf";
+	case TF_CLASS_HEAVY: return "hud/leaderboard_class_heavy.vtf";
+	case TF_CLASS_ENGINEER: return "hud/leaderboard_class_engineer.vtf";
+	case TF_CLASS_MEDIC: return "hud/leaderboard_class_medic.vtf";
+	case TF_CLASS_SNIPER: return "hud/leaderboard_class_sniper.vtf";
+	case TF_CLASS_SPY: return "hud/leaderboard_class_spy.vtf";
 	}
-	return "vgui/glyph_multiplayer";
+	return "vgui/glyph_multiplayer.vtf";
 }
+
+#ifndef TEXTMODE
+static bool s_bCaptureIcons = false;
+static IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
+#endif
 
 void CESP::CacheDrawInfo(CTFPlayer* pLocal)
 {
@@ -962,9 +968,30 @@ void CESP::CacheDrawInfo(CTFPlayer* pLocal)
 
 		if (tSource.m_iClassIcon)
 			tOut.m_vBadges.emplace_back(EESPBadge::Class, GetClassIconTexture(tSource.m_iClassIcon), Color_t(255, 255, 255, 255), 18.f, 18.f);
-		if (const CHudTexture* pIcon = tSource.m_pWeaponIcon; pIcon && !pIcon->bRenderUsingFont && pIcon->szTextureFile[0])
-			tOut.m_vBadges.emplace_back(EESPBadge::Weapon, pIcon->szTextureFile, Vars::Menu::Theme::Active.Value,
-				float(pIcon->Width()), float(pIcon->Height()), pIcon->texCoords[0], pIcon->texCoords[1], pIcon->texCoords[2], pIcon->texCoords[3]);
+		if (const CHudTexture* pIcon = tSource.m_pWeaponIcon)
+		{
+			if (pIcon->bRenderUsingFont && pIcon->hFont)
+			{
+				const unsigned char ucChar = (unsigned char)pIcon->cCharacterInFont;
+				int iA = 0, iB = 0, iC = 0;
+				I::MatSystemSurface->GetCharABCwide(pIcon->hFont, ucChar, iA, iB, iC);
+				const float flW = pIcon->Width() > 0 ? float(pIcon->Width()) : float(std::max(iB, 1));
+				const float flH = pIcon->Height() > 0 ? float(pIcon->Height()) : float(std::max(I::MatSystemSurface->GetFontTall(pIcon->hFont), 1));
+				tOut.m_vBadges.emplace_back(EESPBadge::Weapon, std::format("#font:{}:{}", (unsigned long)pIcon->hFont, (unsigned)ucChar),
+					Vars::Menu::Theme::Active.Value, flW, flH);
+			}
+			else if (pIcon->szTextureFile[0])
+				tOut.m_vBadges.emplace_back(EESPBadge::Weapon, pIcon->szTextureFile, Vars::Menu::Theme::Active.Value,
+					float(std::max(pIcon->Width(), 1)), float(std::max(pIcon->Height(), 1)),
+					pIcon->texCoords[0], pIcon->texCoords[1], pIcon->texCoords[2], pIcon->texCoords[3]);
+		}
+
+#ifndef TEXTMODE
+		s_bCaptureIcons = true;
+		for (const auto& tBadge : tOut.m_vBadges)
+			GetIconTexture(tBadge.m_sTexture);
+		s_bCaptureIcons = false;
+#endif
 
 		if (tSource.m_bBones)
 			CacheBones(pEntity->As<CTFPlayer>(), vOffset, tOut);
@@ -1151,6 +1178,43 @@ static inline float EaseOutCubic(float t)
 	return 1.f - f * f * f;
 }
 
+static void DrawSolidBox(ImDrawList* pDrawList, float x, float y, float w, float h, Color_t tColor, float flAlpha)
+{
+	if (w <= 1.f || h <= 1.f)
+		return;
+
+	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
+	x += 0.5f, y += 0.5f;
+	pDrawList->AddRect({ x, y }, { x + w, y + h }, ColorToU32(FadeColor(tColor, flAlpha)), 0.f, 0, flThickness);
+}
+
+static void DrawOutlineBox(ImDrawList* pDrawList, float x, float y, float w, float h, Color_t tColor, float flAlpha)
+{
+	if (w <= 1.f || h <= 1.f)
+		return;
+
+	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
+	const ImU32 uBlack = ColorToU32(FadeColor(Color_t(0, 0, 0, 255), flAlpha));
+	const ImU32 uMain = ColorToU32(FadeColor(tColor, flAlpha));
+	x += 0.5f, y += 0.5f;
+	pDrawList->AddRect({ x - flThickness, y - flThickness }, { x + w + flThickness, y + h + flThickness }, uBlack, 0.f, 0, flThickness);
+	pDrawList->AddRect({ x, y }, { x + w, y + h }, uMain, 0.f, 0, flThickness);
+	if (w > flThickness * 2.f && h > flThickness * 2.f)
+		pDrawList->AddRect({ x + flThickness, y + flThickness }, { x + w - flThickness, y + h - flThickness }, uBlack, 0.f, 0, flThickness);
+}
+
+static void DrawRoundedBox(ImDrawList* pDrawList, float x, float y, float w, float h, Color_t tColor, float flAlpha)
+{
+	if (w <= 1.f || h <= 1.f)
+		return;
+
+	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
+	const float flRound = std::clamp(std::min(w, h) * 0.15f, H::Draw.Scale(3.f), H::Draw.Scale(10.f));
+	x += 0.5f, y += 0.5f;
+	pDrawList->AddRect({ x + 1.f, y + 1.f }, { x + w + 1.f, y + h + 1.f }, ColorToU32(FadeColor(Color_t(0, 0, 0, 180), flAlpha)), flRound, 0, flThickness);
+	pDrawList->AddRect({ x, y }, { x + w, y + h }, ColorToU32(FadeColor(tColor, flAlpha)), flRound, 0, flThickness);
+}
+
 static void DrawCornerBox(ImDrawList* pDrawList, float x, float y, float w, float h, Color_t tColor, float flAlpha, float flGrow, bool bAccent)
 {
 	if (w <= 1.f || h <= 1.f)
@@ -1279,76 +1343,596 @@ static void DrawTextPill(ImDrawList* pDrawList, float x, float y, Color_t tColor
 }
 
 #ifndef TEXTMODE
+struct ESPIcon_t
+{
+	std::vector<byte> m_vRgba = {};
+	int m_iW = 0, m_iH = 0;
+	bool m_bReady = false;
+	int m_nFails = 0;
+	Microsoft::WRL::ComPtr<IDirect3DTexture9> m_pTexture = {};
+};
+
 static IDirect3DDevice9* s_pIconDevice = nullptr;
-static std::unordered_map<std::string, Microsoft::WRL::ComPtr<IDirect3DTexture9>> s_mIconTextures;
-static std::unordered_map<std::string, IMaterial*> s_mIconMaterials;
+static std::unordered_map<std::string, ESPIcon_t> s_mIcons = {};
 
 void InvalidateESPIconTextures()
 {
-	s_mIconTextures.clear();
+	s_mIcons.clear();
 	s_pIconDevice = nullptr;
 }
 
-static IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
+static uint16_t ReadU16(const byte* pData)
 {
-	IDirect3DDevice9* pDevice = F::Render.GetDevice();
-	if (!pDevice)
-		return nullptr;
-	if (pDevice != s_pIconDevice)
-		InvalidateESPIconTextures(), s_pIconDevice = pDevice;
+	return uint16_t(pData[0]) | (uint16_t(pData[1]) << 8);
+}
 
+static uint32_t ReadU32(const byte* pData)
+{
+	return uint32_t(pData[0]) | (uint32_t(pData[1]) << 8) | (uint32_t(pData[2]) << 16) | (uint32_t(pData[3]) << 24);
+}
+
+static int VtfImageBytes(int iFormat, int iW, int iH)
+{
+	iW = std::max(iW, 1);
+	iH = std::max(iH, 1);
+	const int iBlocksX = (iW + 3) / 4, iBlocksY = (iH + 3) / 4;
+	switch (iFormat)
+	{
+	case IMAGE_FORMAT_RGBA8888:
+	case IMAGE_FORMAT_ABGR8888:
+	case IMAGE_FORMAT_ARGB8888:
+	case IMAGE_FORMAT_BGRA8888:
+	case IMAGE_FORMAT_BGRX8888:
+		return iW * iH * 4;
+	case IMAGE_FORMAT_RGB888:
+	case IMAGE_FORMAT_BGR888:
+	case IMAGE_FORMAT_RGB888_BLUESCREEN:
+	case IMAGE_FORMAT_BGR888_BLUESCREEN:
+		return iW * iH * 3;
+	case IMAGE_FORMAT_I8:
+	case IMAGE_FORMAT_A8:
+		return iW * iH;
+	case IMAGE_FORMAT_IA88:
+		return iW * iH * 2;
+	case IMAGE_FORMAT_DXT1:
+	case IMAGE_FORMAT_DXT1_ONEBITALPHA:
+		return iBlocksX * iBlocksY * 8;
+	case IMAGE_FORMAT_DXT3:
+	case IMAGE_FORMAT_DXT5:
+		return iBlocksX * iBlocksY * 16;
+	default:
+		return 0;
+	}
+}
+
+static void Rgb565(uint16_t uColor, byte& r, byte& g, byte& b)
+{
+	r = byte(((uColor >> 11) & 31) * 255 / 31);
+	g = byte(((uColor >> 5) & 63) * 255 / 63);
+	b = byte((uColor & 31) * 255 / 31);
+}
+
+static void DecodeDxtColor(const byte* pBlock, byte aPx[16][4], bool bAlwaysFour)
+{
+	const uint16_t uC0 = ReadU16(pBlock), uC1 = ReadU16(pBlock + 2);
+	const uint32_t uIdx = ReadU32(pBlock + 4);
+	byte aColors[4][4] = {};
+	Rgb565(uC0, aColors[0][0], aColors[0][1], aColors[0][2]);
+	Rgb565(uC1, aColors[1][0], aColors[1][1], aColors[1][2]);
+	aColors[0][3] = aColors[1][3] = 255;
+	if (bAlwaysFour || uC0 > uC1)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			aColors[2][i] = byte((2 * int(aColors[0][i]) + aColors[1][i]) / 3);
+			aColors[3][i] = byte((int(aColors[0][i]) + 2 * aColors[1][i]) / 3);
+		}
+		aColors[2][3] = aColors[3][3] = 255;
+	}
+	else
+	{
+		for (int i = 0; i < 3; i++)
+			aColors[2][i] = byte((int(aColors[0][i]) + aColors[1][i]) / 2);
+		aColors[2][3] = 255;
+	}
+
+	for (int i = 0; i < 16; i++)
+	{
+		const int iColor = int((uIdx >> (i * 2)) & 3);
+		memcpy(aPx[i], aColors[iColor], 4);
+	}
+}
+
+static void WriteBlock(std::vector<byte>& oRgba, int iW, int iH, int iBlockX, int iBlockY, const byte aPx[16][4])
+{
+	for (int i = 0; i < 16; i++)
+	{
+		const int x = iBlockX * 4 + (i & 3);
+		const int y = iBlockY * 4 + (i >> 2);
+		if (x >= iW || y >= iH)
+			continue;
+		memcpy(oRgba.data() + (size_t(y) * iW + x) * 4, aPx[i], 4);
+	}
+}
+
+static bool DecodeBlocks(const byte* pData, size_t nSize, int iFormat, int iW, int iH, std::vector<byte>& oRgba)
+{
+	const int iBytes = VtfImageBytes(iFormat, iW, iH);
+	if (iBytes <= 0 || size_t(iBytes) > nSize)
+		return false;
+
+	oRgba.assign(size_t(iW) * iH * 4, 0);
+	const int iBlocksX = (iW + 3) / 4, iBlocksY = (iH + 3) / 4;
+	if (iFormat == IMAGE_FORMAT_DXT1 || iFormat == IMAGE_FORMAT_DXT1_ONEBITALPHA)
+	{
+		for (int iBy = 0; iBy < iBlocksY; iBy++)
+			for (int iBx = 0; iBx < iBlocksX; iBx++)
+			{
+				byte aPx[16][4];
+				DecodeDxtColor(pData + (size_t(iBy) * iBlocksX + iBx) * 8, aPx, false);
+				WriteBlock(oRgba, iW, iH, iBx, iBy, aPx);
+			}
+		return true;
+	}
+	if (iFormat != IMAGE_FORMAT_DXT3 && iFormat != IMAGE_FORMAT_DXT5)
+		return false;
+
+	for (int iBy = 0; iBy < iBlocksY; iBy++)
+		for (int iBx = 0; iBx < iBlocksX; iBx++)
+		{
+			const byte* pBlock = pData + (size_t(iBy) * iBlocksX + iBx) * 16;
+			byte aPx[16][4];
+			DecodeDxtColor(pBlock + 8, aPx, true);
+			if (iFormat == IMAGE_FORMAT_DXT5)
+			{
+				byte aAlpha[8];
+				aAlpha[0] = pBlock[0];
+				aAlpha[1] = pBlock[1];
+				if (aAlpha[0] > aAlpha[1])
+				{
+					for (int i = 1; i <= 6; i++)
+						aAlpha[i + 1] = byte(((7 - i) * aAlpha[0] + i * aAlpha[1]) / 7);
+				}
+				else
+				{
+					for (int i = 1; i <= 4; i++)
+						aAlpha[i + 1] = byte(((5 - i) * aAlpha[0] + i * aAlpha[1]) / 5);
+					aAlpha[6] = 0;
+					aAlpha[7] = 255;
+				}
+				uint64 uBits = 0;
+				for (int i = 0; i < 6; i++)
+					uBits |= uint64(pBlock[2 + i]) << (8 * i);
+				for (int i = 0; i < 16; i++)
+					aPx[i][3] = aAlpha[(uBits >> (i * 3)) & 7];
+			}
+			else
+			{
+				for (int i = 0; i < 16; i++)
+				{
+					const byte nNibble = (i & 1) ? (pBlock[i >> 1] >> 4) : (pBlock[i >> 1] & 0xF);
+					aPx[i][3] = byte(nNibble * 255 / 15);
+				}
+			}
+			WriteBlock(oRgba, iW, iH, iBx, iBy, aPx);
+		}
+	return true;
+}
+
+static void WriteStraight(std::vector<byte>& oRgba, int iW, int iH, const byte* pData, int iFormat)
+{
+	oRgba.resize(size_t(iW) * iH * 4);
+	for (int i = 0; i < iW * iH; i++)
+	{
+		byte* pOut = oRgba.data() + size_t(i) * 4;
+		switch (iFormat)
+		{
+		case IMAGE_FORMAT_RGBA8888:
+			memcpy(pOut, pData + size_t(i) * 4, 4);
+			break;
+		case IMAGE_FORMAT_BGRA8888:
+		case IMAGE_FORMAT_BGRX8888:
+			pOut[0] = pData[i * 4 + 2]; pOut[1] = pData[i * 4 + 1]; pOut[2] = pData[i * 4 + 0];
+			pOut[3] = iFormat == IMAGE_FORMAT_BGRX8888 ? 255 : pData[i * 4 + 3];
+			break;
+		case IMAGE_FORMAT_ARGB8888:
+			pOut[0] = pData[i * 4 + 1]; pOut[1] = pData[i * 4 + 2]; pOut[2] = pData[i * 4 + 3]; pOut[3] = pData[i * 4 + 0];
+			break;
+		case IMAGE_FORMAT_ABGR8888:
+			pOut[0] = pData[i * 4 + 3]; pOut[1] = pData[i * 4 + 2]; pOut[2] = pData[i * 4 + 1]; pOut[3] = pData[i * 4 + 0];
+			break;
+		case IMAGE_FORMAT_RGB888:
+		case IMAGE_FORMAT_RGB888_BLUESCREEN:
+			pOut[0] = pData[i * 3 + 0]; pOut[1] = pData[i * 3 + 1]; pOut[2] = pData[i * 3 + 2];
+			pOut[3] = (iFormat == IMAGE_FORMAT_RGB888_BLUESCREEN && pOut[0] == 0 && pOut[1] == 0 && pOut[2] == 255) ? 0 : 255;
+			break;
+		case IMAGE_FORMAT_BGR888:
+		case IMAGE_FORMAT_BGR888_BLUESCREEN:
+			pOut[0] = pData[i * 3 + 2]; pOut[1] = pData[i * 3 + 1]; pOut[2] = pData[i * 3 + 0];
+			pOut[3] = (iFormat == IMAGE_FORMAT_BGR888_BLUESCREEN && pOut[2] == 255 && pOut[0] == 0 && pOut[1] == 0) ? 0 : 255;
+			break;
+		case IMAGE_FORMAT_I8:
+			pOut[0] = pOut[1] = pOut[2] = pData[i]; pOut[3] = 255;
+			break;
+		case IMAGE_FORMAT_A8:
+			pOut[0] = pOut[1] = pOut[2] = 255; pOut[3] = pData[i];
+			break;
+		case IMAGE_FORMAT_IA88:
+			pOut[0] = pOut[1] = pOut[2] = pData[i * 2]; pOut[3] = pData[i * 2 + 1];
+			break;
+		}
+	}
+}
+
+static bool DecodeVtf(const byte* pData, size_t nSize, std::vector<byte>& oRgba, int& oW, int& oH)
+{
+	if (!pData || nSize < 64 || memcmp(pData, "VTF", 3) != 0 || pData[3] != 0)
+		return false;
+	const int iMinor = int(ReadU32(pData + 8));
+	if (ReadU32(pData + 4) != 7 || iMinor < 0 || iMinor > 5)
+		return false;
+
+	oW = ReadU16(pData + 16);
+	oH = ReadU16(pData + 18);
+	const uint32_t uFlags = ReadU32(pData + 20);
+	const int iFrames = std::max(int(ReadU16(pData + 24)), 1);
+	const int iFormat = int(ReadU32(pData + 52));
+	const int iMips = std::max(int(pData[56]), 1);
+	const int iLowFormat = int(ReadU32(pData + 57));
+	const int iLowW = pData[61], iLowH = pData[62];
+	if (oW <= 0 || oH <= 0 || oW > 2048 || oH > 2048 || (uFlags & 0x00004000))
+		return false;
+
+	const int iDepth = iMinor >= 2 && nSize >= 65 ? std::max(int(ReadU16(pData + 63)), 1) : 1;
+	size_t uOffset = 0;
+	if (iMinor >= 3)
+	{
+		if (nSize < 80)
+			return false;
+		const int nResources = std::clamp(int(ReadU32(pData + 68)), 0, 32);
+		bool bFound = false;
+		for (int i = 0; i < nResources; i++)
+		{
+			const size_t uEntry = 80 + size_t(i) * 8;
+			if (uEntry + 8 > nSize)
+				return false;
+			if (pData[uEntry] == 0x30 && pData[uEntry + 1] == 0 && pData[uEntry + 2] == 0 && !(pData[uEntry + 3] & 0x2))
+			{
+				uOffset = ReadU32(pData + uEntry + 4);
+				bFound = true;
+				break;
+			}
+		}
+		if (!bFound)
+			return false;
+	}
+	else
+	{
+		uOffset = ReadU32(pData + 12);
+		const int iLowBytes = (iLowW > 0 && iLowH > 0) ? VtfImageBytes(iLowFormat, iLowW, iLowH) : 0;
+		if (iLowBytes < 0)
+			return false;
+		uOffset += size_t(iLowBytes);
+	}
+
+	for (int iMip = iMips - 1; iMip >= 1; --iMip)
+	{
+		const int iBytes = VtfImageBytes(iFormat, std::max(oW >> iMip, 1), std::max(oH >> iMip, 1));
+		if (iBytes <= 0)
+			return false;
+		uOffset += size_t(iBytes) * iFrames * iDepth;
+	}
+	const int iImageBytes = VtfImageBytes(iFormat, oW, oH);
+	if (iImageBytes <= 0 || uOffset + size_t(iImageBytes) > nSize)
+		return false;
+
+	const byte* pImage = pData + uOffset;
+	switch (iFormat)
+	{
+	case IMAGE_FORMAT_DXT1:
+	case IMAGE_FORMAT_DXT1_ONEBITALPHA:
+	case IMAGE_FORMAT_DXT3:
+	case IMAGE_FORMAT_DXT5:
+		return DecodeBlocks(pImage, nSize - uOffset, iFormat, oW, oH, oRgba);
+	case IMAGE_FORMAT_RGBA8888:
+	case IMAGE_FORMAT_ABGR8888:
+	case IMAGE_FORMAT_ARGB8888:
+	case IMAGE_FORMAT_BGRA8888:
+	case IMAGE_FORMAT_BGRX8888:
+	case IMAGE_FORMAT_RGB888:
+	case IMAGE_FORMAT_BGR888:
+	case IMAGE_FORMAT_RGB888_BLUESCREEN:
+	case IMAGE_FORMAT_BGR888_BLUESCREEN:
+	case IMAGE_FORMAT_I8:
+	case IMAGE_FORMAT_A8:
+	case IMAGE_FORMAT_IA88:
+		WriteStraight(oRgba, oW, oH, pImage, iFormat);
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool ReadGameFile(const char* sPath, std::vector<byte>& oData)
+{
+	FileHandle_t hFile = I::FileSystem->Open(sPath, "rb", "GAME");
+	if (!hFile)
+		return false;
+	const unsigned int nSize = I::FileSystem->Size(hFile);
+	if (!nSize || nSize > 12 * 1024 * 1024)
+	{
+		I::FileSystem->Close(hFile);
+		return false;
+	}
+	oData.resize(nSize);
+	const int nRead = I::FileSystem->Read(oData.data(), int(nSize), hFile);
+	I::FileSystem->Close(hFile);
+	oData.resize(std::max(nRead, 0));
+	return nRead == int(nSize);
+}
+
+static bool DecodeFileIcon(const std::string& sTexture, std::vector<byte>& oRgba, int& oW, int& oH)
+{
 	std::string sPath = sTexture;
+	std::replace(sPath.begin(), sPath.end(), '\\', '/');
 	if (sPath.starts_with("materials/"))
 		sPath.erase(0, 10);
 	if (sPath.ends_with(".vtf"))
 		sPath.resize(sPath.size() - 4);
 	if (sPath.empty())
-		return nullptr;
+		return false;
 
-	auto [it, bNew] = s_mIconTextures.try_emplace(sPath);
-	if (!bNew)
-		return it->second.Get();
+	const std::string sFile = "materials/" + sPath + ".vtf";
+	std::vector<byte> vFile;
+	if (!ReadGameFile(sFile.c_str(), vFile) && !ReadGameFile((sPath + ".vtf").c_str(), vFile))
+		return false;
+	return DecodeVtf(vFile.data(), vFile.size(), oRgba, oW, oH);
+}
 
-	IMaterial*& pMaterial = s_mIconMaterials[sPath];
-	if (!pMaterial)
+static bool FaceMatches(HDC hDC, const char* sWanted)
+{
+	char sFace[128] = {};
+	return sWanted && sWanted[0] && GetTextFaceA(hDC, sizeof(sFace), sFace) && _stricmp(sFace, sWanted) == 0;
+}
+
+static void EnsureGameIconFonts()
+{
+	static bool bTried = false;
+	if (bTried)
+		return;
+	bTried = true;
+
+	static std::vector<std::vector<byte>> s_vFontFiles;
+	static std::vector<HANDLE> s_vFontResources;
+	s_vFontFiles.reserve(8);
+	for (const char* sFile : { "resource/tf.ttf", "resource/tf2.ttf", "resource/tf2build.ttf", "resource/tf2professor.ttf", "resource/tf2secondary.ttf" })
 	{
-		auto pKV = new KeyValues("UnlitGeneric");
-		pKV->SetString("$basetexture", sPath.c_str());
-		pKV->SetString("$translucent", "1");
-		const std::string sName = std::format("unibox_esp_icon_{:08x}", FNV1A::Hash32(sPath.c_str()));
-		pMaterial = I::MaterialSystem->CreateMaterial(sName.c_str(), pKV);
+		std::vector<byte> vData;
+		if (!ReadGameFile(sFile, vData) || vData.size() < 12)
+			continue;
+		s_vFontFiles.push_back(std::move(vData));
+		DWORD nFonts = 0;
+		if (HANDLE hRes = AddFontMemResourceEx(s_vFontFiles.back().data(), DWORD(s_vFontFiles.back().size()), nullptr, &nFonts))
+			s_vFontResources.push_back(hRes);
 	}
-	if (IsErrorMaterial(pMaterial))
-		return nullptr;
+}
 
-	int nWidth = 0, nHeight = 0;
-	ImageFormat eFormat = IMAGE_FORMAT_UNKNOWN;
-	bool bTranslucent = false;
-	if (pMaterial->GetPreviewImageProperties(&nWidth, &nHeight, &eFormat, &bTranslucent) != MATERIAL_PREVIEW_IMAGE_OK
-		|| nWidth <= 0 || nHeight <= 0 || nWidth > 1024 || nHeight > 1024)
-		return nullptr;
+static bool RasterizeFace(const char* sFace, int iTall, unsigned char ucChar, std::vector<byte>& oRgba, int& oW, int& oH)
+{
+	if (!sFace || !sFace[0])
+		return false;
 
-	std::vector<byte> vPixels(size_t(nWidth) * nHeight * 4);
-	if (pMaterial->GetPreviewImage(vPixels.data(), nWidth, nHeight, IMAGE_FORMAT_RGBA8888) != MATERIAL_PREVIEW_IMAGE_OK)
-		return nullptr;
+	HDC hScreen = GetDC(nullptr);
+	HDC hDC = hScreen ? CreateCompatibleDC(hScreen) : nullptr;
+	HFONT hGdi = CreateFontA(iTall, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+		OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, sFace);
+	HFONT hOld = (hDC && hGdi) ? (HFONT)SelectObject(hDC, hGdi) : nullptr;
+	bool bOk = false;
+	if (hDC && hGdi && FaceMatches(hDC, sFace))
+	{
+		GLYPHMETRICS tMetrics = {};
+		const MAT2 tMat = { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 1 } };
+		const DWORD nBytes = GetGlyphOutlineW(hDC, wchar_t(ucChar), GGO_GRAY8_BITMAP, &tMetrics, 0, nullptr, &tMat);
+		if (nBytes != GDI_ERROR && nBytes > 0 && nBytes < (1u << 20) && tMetrics.gmBlackBoxX > 0 && tMetrics.gmBlackBoxY > 0
+			&& tMetrics.gmBlackBoxX <= 256 && tMetrics.gmBlackBoxY <= 256
+			&& nBytes >= DWORD(((int(tMetrics.gmBlackBoxX) + 3) & ~3) * int(tMetrics.gmBlackBoxY)))
+		{
+			std::vector<byte> vBits(nBytes);
+			if (GetGlyphOutlineW(hDC, wchar_t(ucChar), GGO_GRAY8_BITMAP, &tMetrics, nBytes, vBits.data(), &tMat) != GDI_ERROR)
+			{
+				oW = int(tMetrics.gmBlackBoxX);
+				oH = int(tMetrics.gmBlackBoxY);
+				const int iPitch = (oW + 3) & ~3;
+				oRgba.assign(size_t(oW) * oH * 4, 0);
+				bool bInk = false;
+				for (int y = 0; y < oH; y++)
+				{
+					const byte* pRow = vBits.data() + size_t(y) * iPitch;
+					for (int x = 0; x < oW; x++)
+					{
+						const byte nAlpha = byte(std::min(255, int(pRow[x]) * 255 / 64));
+						byte* pOut = oRgba.data() + (size_t(y) * oW + x) * 4;
+						pOut[0] = pOut[1] = pOut[2] = 255;
+						pOut[3] = nAlpha;
+						bInk = bInk || nAlpha;
+					}
+				}
+				bOk = bInk;
+			}
+		}
+	}
+	if (hDC)
+	{
+		if (hOld)
+			SelectObject(hDC, hOld);
+		DeleteDC(hDC);
+	}
+	if (hGdi)
+		DeleteObject(hGdi);
+	if (hScreen)
+		ReleaseDC(nullptr, hScreen);
+	return bOk;
+}
+
+static bool PixelsHaveInk(const std::vector<byte>& vRgba)
+{
+	for (size_t i = 0; i + 3 < vRgba.size(); i += 4)
+	{
+		if (vRgba[i + 3] || vRgba[i] || vRgba[i + 1] || vRgba[i + 2])
+			return true;
+	}
+	return false;
+}
+
+static bool CaptureGlyph(HFont hFont, unsigned char ucChar, std::vector<byte>& oRgba, int& oW, int& oH)
+{
+	if (!s_bCaptureIcons)
+		return false;
+
+	wchar_t sChar[2] = { wchar_t(ucChar), 0 };
+	I::MatSystemSurface->DrawSetTextFont(hFont);
+	I::MatSystemSurface->PrecacheFontCharacters(hFont, sChar);
+	CharRenderInfo tInfo = {};
+	if (!I::MatSystemSurface->DrawGetUnicodeCharRenderInfo(sChar[0], tInfo) || !tInfo.valid || !tInfo.verts || tInfo.textureId <= 0)
+		return false;
+
+	float u0 = tInfo.verts[0].m_TexCoord.x, v0 = tInfo.verts[0].m_TexCoord.y, u1 = u0, v1 = v0;
+	for (int i = 1; i < 4; i++)
+	{
+		u0 = std::min(u0, tInfo.verts[i].m_TexCoord.x);
+		v0 = std::min(v0, tInfo.verts[i].m_TexCoord.y);
+		u1 = std::max(u1, tInfo.verts[i].m_TexCoord.x);
+		v1 = std::max(v1, tInfo.verts[i].m_TexCoord.y);
+	}
+	if (u1 <= u0 || v1 <= v0)
+		return false;
+
+	IMaterial* pMat = I::MatSystemSurface->DrawGetTextureMaterial(tInfo.textureId);
+	if (IsErrorMaterial(pMat))
+		return false;
+	int iSrcW = 0, iSrcH = 0;
+	I::MatSystemSurface->DrawGetTextureSize(tInfo.textureId, iSrcW, iSrcH);
+	if (iSrcW <= 0 || iSrcH <= 0)
+		return false;
+
+	oW = std::clamp(tInfo.abcB > 0 ? tInfo.abcB : 32, 1, 256);
+	oH = std::clamp(tInfo.fontTall > 0 ? tInfo.fontTall : oW, 1, 256);
+
+	static ITexture* s_pRT = nullptr;
+	if (!s_pRT)
+	{
+		s_pRT = I::MaterialSystem->CreateNamedRenderTargetTextureEx("unibox_esp_icon_rt", 256, 256, RT_SIZE_LITERAL, IMAGE_FORMAT_RGBA8888,
+			MATERIAL_RT_DEPTH_NONE, TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT | TEXTUREFLAGS_NOMIP | TEXTUREFLAGS_NODEPTHBUFFER, 0);
+		if (s_pRT)
+			s_pRT->IncrementReferenceCount();
+	}
+	if (!s_pRT || s_pRT->IsError())
+		return false;
+
+	IMatRenderContext* pCtx = I::MaterialSystem->GetRenderContext();
+	if (!pCtx)
+		return false;
+	pCtx->PushRenderTargetAndViewport(s_pRT, 0, 0, oW, oH);
+	pCtx->ClearColor4ub(0, 0, 0, 0);
+	pCtx->ClearBuffers(true, false, false);
+	pCtx->DrawScreenSpaceRectangle(pMat, 0, 0, oW, oH, u0 * iSrcW, v0 * iSrcH, std::max(u1 * iSrcW - 1.f, u0 * iSrcW), std::max(v1 * iSrcH - 1.f, v0 * iSrcH), iSrcW, iSrcH);
+	oRgba.resize(size_t(oW) * oH * 4);
+	pCtx->ReadPixels(0, 0, oW, oH, oRgba.data(), IMAGE_FORMAT_RGBA8888);
+	pCtx->PopRenderTargetAndViewport();
+	pCtx->Release();
+	if (!PixelsHaveInk(oRgba))
+		return false;
+
+	bool bPartialAlpha = false;
+	for (size_t i = 3; i < oRgba.size(); i += 4)
+	{
+		if (oRgba[i] && oRgba[i] < 250)
+		{
+			bPartialAlpha = true;
+			break;
+		}
+	}
+	if (!bPartialAlpha)
+	{
+		for (size_t i = 0; i + 3 < oRgba.size(); i += 4)
+		{
+			const byte n = std::max(oRgba[i], std::max(oRgba[i + 1], oRgba[i + 2]));
+			oRgba[i] = oRgba[i + 1] = oRgba[i + 2] = 255;
+			oRgba[i + 3] = n;
+		}
+	}
+	return PixelsHaveInk(oRgba);
+}
+
+static bool ParseFontKey(const std::string& sKey, HFont& hFont, unsigned char& ucChar)
+{
+	if (!sKey.starts_with("#font:"))
+		return false;
+	unsigned long uFont = 0, uChar = 0;
+	const char* s = sKey.c_str() + 6;
+	if (*s < '0' || *s > '9')
+		return false;
+	for (; *s && *s != ':'; ++s)
+	{
+		if (*s < '0' || *s > '9')
+			return false;
+		uFont = uFont * 10 + unsigned long(*s - '0');
+	}
+	if (*s != ':')
+		return false;
+	for (++s; *s; ++s)
+	{
+		if (*s < '0' || *s > '9')
+			return false;
+		uChar = uChar * 10 + unsigned long(*s - '0');
+	}
+	if (!uFont || uChar > 255)
+		return false;
+	hFont = HFont(uFont);
+	ucChar = (unsigned char)uChar;
+	return true;
+}
+
+static bool DecodeFontIcon(const std::string& sKey, std::vector<byte>& oRgba, int& oW, int& oH)
+{
+	HFont hFont = 0;
+	unsigned char ucChar = 0;
+	if (!ParseFontKey(sKey, hFont, ucChar))
+		return false;
+	if (CaptureGlyph(hFont, ucChar, oRgba, oW, oH))
+		return true;
+
+	const int iTall = std::clamp(I::MatSystemSurface->GetFontTall(hFont) * 2, 32, 128);
+	const char* sFamily = I::MatSystemSurface->GetFontFamilyName(hFont);
+	const char* sName = I::MatSystemSurface->GetFontName(hFont);
+	if (RasterizeFace(sFamily, iTall, ucChar, oRgba, oW, oH) || RasterizeFace(sName, iTall, ucChar, oRgba, oW, oH))
+		return true;
+	EnsureGameIconFonts();
+	return RasterizeFace(sFamily, iTall, ucChar, oRgba, oW, oH) || RasterizeFace(sName, iTall, ucChar, oRgba, oW, oH);
+}
+
+static bool UploadIcon(IDirect3DDevice9* pDevice, ESPIcon_t& tIcon)
+{
+	if (!pDevice || tIcon.m_iW <= 0 || tIcon.m_iH <= 0 || tIcon.m_vRgba.size() < size_t(tIcon.m_iW) * tIcon.m_iH * 4)
+		return false;
 
 	Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
 	bool bDefaultPool = false;
-	if (FAILED(pDevice->CreateTexture(nWidth, nHeight, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &pTexture, nullptr)))
+	if (FAILED(pDevice->CreateTexture(tIcon.m_iW, tIcon.m_iH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &pTexture, nullptr)))
 	{
 		bDefaultPool = true;
-		if (FAILED(pDevice->CreateTexture(nWidth, nHeight, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &pTexture, nullptr)))
-			return nullptr;
+		if (FAILED(pDevice->CreateTexture(tIcon.m_iW, tIcon.m_iH, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &pTexture, nullptr)))
+			return false;
 	}
 
 	D3DLOCKED_RECT tRect = {};
 	if (FAILED(pTexture->LockRect(0, &tRect, nullptr, bDefaultPool ? D3DLOCK_DISCARD : 0)))
-		return nullptr;
-	for (int y = 0; y < nHeight; ++y)
+		return false;
+	for (int y = 0; y < tIcon.m_iH; y++)
 	{
-		const byte* pSource = vPixels.data() + size_t(y) * nWidth * 4;
+		const byte* pSource = tIcon.m_vRgba.data() + size_t(y) * tIcon.m_iW * 4;
 		byte* pTarget = static_cast<byte*>(tRect.pBits) + size_t(y) * tRect.Pitch;
-		for (int x = 0; x < nWidth; ++x)
+		for (int x = 0; x < tIcon.m_iW; x++)
 		{
 			pTarget[x * 4 + 0] = pSource[x * 4 + 2];
 			pTarget[x * 4 + 1] = pSource[x * 4 + 1];
@@ -1357,8 +1941,45 @@ static IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
 		}
 	}
 	pTexture->UnlockRect(0);
-	it->second = std::move(pTexture);
-	return it->second.Get();
+	tIcon.m_pTexture = std::move(pTexture);
+	return tIcon.m_pTexture != nullptr;
+}
+
+static IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
+{
+	if (sTexture.empty())
+		return nullptr;
+
+	IDirect3DDevice9* pDevice = F::Render.GetDevice();
+	if (pDevice && pDevice != s_pIconDevice)
+	{
+		s_mIcons.clear();
+		s_pIconDevice = pDevice;
+	}
+
+	auto [it, _] = s_mIcons.try_emplace(sTexture);
+	ESPIcon_t& tIcon = it->second;
+	if (tIcon.m_pTexture)
+		return tIcon.m_pTexture.Get();
+	if (!tIcon.m_bReady)
+	{
+		if (tIcon.m_nFails >= 8)
+			return nullptr;
+		const bool bFont = sTexture.starts_with("#font:");
+		const bool bOk = bFont
+			? DecodeFontIcon(sTexture, tIcon.m_vRgba, tIcon.m_iW, tIcon.m_iH)
+			: DecodeFileIcon(sTexture, tIcon.m_vRgba, tIcon.m_iW, tIcon.m_iH);
+		if (!bOk)
+		{
+			if (!bFont || s_bCaptureIcons)
+				tIcon.m_nFails++;
+			return nullptr;
+		}
+		tIcon.m_bReady = true;
+	}
+	if (!pDevice || !UploadIcon(pDevice, tIcon))
+		return nullptr;
+	return tIcon.m_pTexture.Get();
 }
 #endif
 
@@ -1419,11 +2040,14 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 
 		if (tEntity.m_bBox)
 		{
-			if (tEntity.m_iBoxStyle == 1 || tEntity.m_iBoxStyle == 2)
-				DrawCornerBox(pDrawList, x, y, w, h, tEntity.m_tColor, flAlpha, flEase, tEntity.m_iBoxStyle == 1);
-			else
-				pDrawList->AddRect({ x + 0.5f, y + 0.5f }, { x + w + 0.5f, y + h + 0.5f },
-					ColorToU32(FadeColor(tEntity.m_tColor, flAlpha)), 0.f, 0, std::max(roundf(H::Draw.Scale(1.f)), 1.f));
+			switch (tEntity.m_iBoxStyle)
+			{
+			case 1: DrawCornerBox(pDrawList, x, y, w, h, tEntity.m_tColor, flAlpha, flEase, true); break;
+			case 2: DrawCornerBox(pDrawList, x, y, w, h, tEntity.m_tColor, flAlpha, flEase, false); break;
+			case 3: DrawOutlineBox(pDrawList, x, y, w, h, tEntity.m_tColor, flAlpha); break;
+			case 4: DrawRoundedBox(pDrawList, x, y, w, h, tEntity.m_tColor, flAlpha); break;
+			default: DrawSolidBox(pDrawList, x, y, w, h, tEntity.m_tColor, flAlpha); break;
+			}
 		}
 
 		float flHealthForText = std::min(tEntity.m_flHealth, 1.f);
@@ -1515,7 +2139,9 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 				if (!pTexture || tBadge.m_flW <= 0.f || tBadge.m_flH <= 0.f)
 					continue;
 				const ImTextureID pImage = reinterpret_cast<ImTextureID>(pTexture);
-				const ImVec2 vUV0(tBadge.m_flU0, tBadge.m_flV0), vUV1(tBadge.m_flU1, tBadge.m_flV1);
+				ImVec2 vUV0(tBadge.m_flU0, tBadge.m_flV0), vUV1(tBadge.m_flU1, tBadge.m_flV1);
+				if (vUV1.x <= vUV0.x || vUV1.y <= vUV0.y)
+					vUV0 = { 0.f, 0.f }, vUV1 = { 1.f, 1.f };
 				const ImU32 uTint = ColorToU32(FadeColor(tBadge.m_tColor, flAlpha));
 				if (tBadge.m_eType == EESPBadge::Class)
 				{

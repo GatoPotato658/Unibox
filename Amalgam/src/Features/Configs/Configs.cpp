@@ -395,7 +395,7 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 	{
 		LoadJson(*tChild, "Draw", v.Draw);
 		LoadJson(*tChild, "BoxStyle", v.BoxStyle);
-		v.BoxStyle = std::clamp(v.BoxStyle, 0, 2);
+		v.BoxStyle = std::clamp(v.BoxStyle, 0, 4);
 		LoadJson(*tChild, "BackgroundOpacity", v.BackgroundOpacity);
 		LoadJson(*tChild, "Start", v.Start);
 		LoadJson(*tChild, "End", v.End);

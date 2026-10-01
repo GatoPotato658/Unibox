@@ -1041,7 +1041,7 @@ void CMenu::MenuVisuals(int iTab)
 					{
 						FDropdown("Draw", &tGroup.m_tESP.Draw, vEntries, vValues, FDropdownEnum::Multi);
 						PushTransparent(Transparent || !(tGroup.m_tESP.Draw & ESPEnum::Box));
-						FDropdown("Box style", &tGroup.m_tESP.BoxStyle, { "Solid", "Accent", "Corners" });
+						FDropdown("Box style", &tGroup.m_tESP.BoxStyle, { "Solid", "Corner accent", "Corners only", "Outline", "Rounded" });
 						PopTransparent();
 						FSlider("Draw start## ESP", &tGroup.m_tESP.Start, 0.f, 2048.f, 128.f, "%.fHU", FSliderEnum::Left | FSliderEnum::Clamp);
 						FSlider("Draw end## ESP", &tGroup.m_tESP.End, 512.f, 8192.f, 128.f, "%.fHU", FSliderEnum::Right | FSliderEnum::Min);
