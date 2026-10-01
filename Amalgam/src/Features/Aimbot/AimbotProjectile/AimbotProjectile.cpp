@@ -2554,7 +2554,8 @@ void CAimbotProjectile::RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	}
 
 	m_iWeaponID = pWeapon->GetWeaponID();
-	m_pGrapplingHook = m_iWeaponID != TF_WEAPON_GRAPPLINGHOOK ? pLocal->GetEntityForLoadoutSlot(LOADOUT_POSITION_ACTION)->As<CTFGrapplingHook>() : pWeapon->As<CTFGrapplingHook>();
+	CBaseEntity* pActionItem = m_iWeaponID != TF_WEAPON_GRAPPLINGHOOK ? pLocal->GetEntityForLoadoutSlot(LOADOUT_POSITION_ACTION) : pWeapon;
+	m_pGrapplingHook = pActionItem && pActionItem->GetClassID() == ETFClassID::CTFGrapplingHook ? pActionItem->As<CTFGrapplingHook>() : nullptr;
 
 	if (!Vars::Aimbot::Projectile::GrapplingHookAim.Value)
 	{
