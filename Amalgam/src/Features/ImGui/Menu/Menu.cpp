@@ -29,11 +29,37 @@ struct CachedAvatar_t
 {
 	Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
 	uint64_t uRevision = 0;
+	double dLastUsed = 0.0;
 	bool bLoggedCreateFailure = false;
 	bool bLoggedCreateSuccess = false;
 };
 
 static std::unordered_map<uint32_t, CachedAvatar_t> s_mAvatarTextures;
+
+static void PruneAvatarTextures()
+{
+	static int iLastPruneFrame = -1;
+	if (ImGui::GetFrameCount() == iLastPruneFrame)
+		return;
+	iLastPruneFrame = ImGui::GetFrameCount();
+
+	const double dNow = ImGui::GetTime();
+	for (auto it = s_mAvatarTextures.begin(); it != s_mAvatarTextures.end();)
+	{
+		if (dNow - it->second.dLastUsed > 10.0)
+			it = s_mAvatarTextures.erase(it);
+		else
+			++it;
+	}
+}
+
+static bool ConsumeAvatarUploadBudget()
+{
+	static int iBudgetFrame = -1, iUploads = 0;
+	if (ImGui::GetFrameCount() != iBudgetFrame)
+		iBudgetFrame = ImGui::GetFrameCount(), iUploads = 0;
+	return iUploads++ < 3;
+}
 
 static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 {
@@ -44,7 +70,9 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 	if (!pDevice)
 		return static_cast<ImTextureID>(0);
 
+	PruneAvatarTextures();
 	auto& tCache = s_mAvatarTextures[uAccountID];
+	tCache.dLastUsed = ImGui::GetTime();
 
 	const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
 	constexpr Color_t tLogColor = { 175, 150, 255, 255 };
@@ -130,7 +158,7 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 	CSteamProfileCache::AvatarImage_t tImage;
 	if (F::SteamProfileCache.TryGetAvatarImage(uAccountID, tImage) && tImage.HasData())
 	{
-		if (!tCache.pTexture || tCache.uRevision != tImage.m_uRevision)
+		if ((!tCache.pTexture || tCache.uRevision != tImage.m_uRevision) && ConsumeAvatarUploadBudget())
 		{
 			if (ImTextureID pTexture = StoreTexture(tImage.m_pPixels->data(), tImage.m_uWidth, tImage.m_uHeight))
 			{
@@ -1012,6 +1040,9 @@ void CMenu::MenuVisuals(int iTab)
 					PushTransparent(tGroup.m_iTargets && !(tGroup.m_iTargets & TargetsEnum::ESP));
 					{
 						FDropdown("Draw", &tGroup.m_tESP.Draw, vEntries, vValues, FDropdownEnum::Multi);
+						PushTransparent(Transparent || !(tGroup.m_tESP.Draw & ESPEnum::Box));
+						FDropdown("Box style", &tGroup.m_tESP.BoxStyle, { "Solid", "Accent", "Corners" });
+						PopTransparent();
 						FSlider("Draw start## ESP", &tGroup.m_tESP.Start, 0.f, 2048.f, 128.f, "%.fHU", FSliderEnum::Left | FSliderEnum::Clamp);
 						FSlider("Draw end## ESP", &tGroup.m_tESP.End, 512.f, 8192.f, 128.f, "%.fHU", FSliderEnum::Right | FSliderEnum::Min);
 						FToggle("Distance to alpha## ESP", &tGroup.m_tESP.SmoothAlpha);
@@ -1335,31 +1366,65 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::UI::ScoreboardUtility, FToggleEnum::Right);
 					FToggle(Vars::Visuals::UI::ScoreboardColors, FToggleEnum::Left);
 					FToggle(Vars::Visuals::UI::CleanScreenshots, FToggleEnum::Right);
+					FToggle(Vars::Visuals::AntiObs::Enabled, FToggleEnum::Left);
 				} EndSection();
 				if (Section("Skins"))
 				{
 					FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
+					FToggle(Vars::Visuals::SkinChanger::AllowUnsupported);
 
-					auto pWeapon = H::Entities.GetWeapon();
-					const int iKey = pWeapon ? F::SkinChanger.Key(pWeapon->m_iItemDefinitionIndex()) : -1;
+					const HeldWeapon_t tHeld = F::SkinChanger.GetHeldWeapon();
+					const int iKey = tHeld.bValid ? tHeld.iKey : -1;
+					const bool bAllowUnsupported = Vars::Visuals::SkinChanger::AllowUnsupported.Value;
 					static std::string sWeaponLabel;
-					sWeaponLabel = pWeapon ? std::format("Editing {}", F::SkinChanger.WeaponLabel(iKey)) : "Hold a weapon to edit skins";
+					if (!tHeld.bValid)
+						sWeaponLabel = "Hold a weapon to edit skins";
+					else if (const char* sName = CSkinChanger::WeaponName(iKey))
+						sWeaponLabel = std::format("Editing {}", sName);
+					else
+						sWeaponLabel = std::format("Editing item #{}", iKey);
 					FText(sWeaponLabel.c_str());
 
-					PushDisabled(!pWeapon);
+					PushDisabled(!tHeld.bValid);
 					Skin_t tSkin = F::SkinChanger.Get(iKey);
+
+					static std::vector<std::string> vKitStrings;
+					static std::vector<int> vKitIds;
+					CSkinChanger::GetKits(iKey, bAllowUnsupported, tSkin.iPaintKit, vKitStrings, vKitIds);
 					std::vector<const char*> vKitNames;
-					std::vector<int> vKitIds;
-					F::SkinChanger.GetKits(iKey, vKitNames, vKitIds);
+					vKitNames.reserve(vKitStrings.size());
+					for (auto& sKit : vKitStrings)
+						vKitNames.push_back(sKit.c_str());
 					FDropdown("Paint kit", &tSkin.iPaintKit, vKitNames, vKitIds);
-					FToggle("Australium", &tSkin.bAustralium, FToggleEnum::Left);
-					FToggle("Festive", &tSkin.bFestive, FToggleEnum::Right);
+					if (tHeld.bValid && !CSkinChanger::CanPaint(iKey, false))
+						FText(bAllowUnsupported ? "Warpaints are not supported on this weapon" : "No warpaints for this weapon (see option above)");
+
+					static const std::vector<const char*> vWear = { "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle Scarred" };
+					PushTransparent(!tSkin.iPaintKit);
+					{
+						FDropdown("Wear", &tSkin.iWear, vWear, {}, FDropdownEnum::Left);
+					}
+					PopTransparent();
+					static const std::vector<const char*> vQualityNames = { "Default", "Normal", "Unique", "Vintage", "Genuine", "Strange", "Unusual", "Haunted", "Collector's", "Decorated", "Community", "Self-Made", "Valve" };
+					static const std::vector<int> vQualityValues = { -1, 0, 6, 3, 1, 11, 5, 13, 14, 15, 7, 9, 8 };
+					FDropdown("Quality", &tSkin.iQuality, vQualityNames, vQualityValues, FDropdownEnum::Right);
+
+					PushDisabled(!tHeld.bValid || !CSkinChanger::CanAustralium(iKey));
+					{
+						FToggle(CSkinChanger::IsGoldenPan(iKey) ? "Golden" : "Australium", &tSkin.bAustralium, FToggleEnum::Left);
+					}
+					PopDisabled();
+					PushDisabled(!tHeld.bValid || !CSkinChanger::CanFestive(iKey));
+					{
+						FToggle("Festive", &tSkin.bFestive, FToggleEnum::Right);
+					}
+					PopDisabled();
 					FSlider("Killstreak", &tSkin.iKillstreak, 0, 3, 1, "%i", FSliderEnum::Clamp);
 					static const std::vector<const char*> vSheen = { "Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod" };
 					static const std::vector<const char*> vUnusual = { "Off", "Hot", "Isotope", "Cool", "Energy orb" };
-					FDropdown("Sheen", &tSkin.iSheen, vSheen);
-					FDropdown("Weapon unusual", &tSkin.iUnusual, vUnusual);
-					if (pWeapon)
+					FDropdown("Sheen", &tSkin.iSheen, vSheen, {}, FDropdownEnum::Left);
+					FDropdown("Weapon unusual", &tSkin.iUnusual, vUnusual, {}, FDropdownEnum::Right);
+					if (tHeld.bValid && !(tSkin == F::SkinChanger.Get(iKey)))
 						F::SkinChanger.Set(iKey, tSkin);
 					PopDisabled();
 				} EndSection();
@@ -2320,22 +2385,44 @@ void CMenu::MenuAnticheat(int iTab)
 			SetCursorPosY(GetCursorPosY() + H::Draw.Scale(4));
 			FInputText("Search cheaters...", cheater_search, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
-			auto vCheaters = F::PlayerUtils.GetCheaterVector();
 			auto to_lower = [](std::string text) -> std::string
 				{
 					std::transform(text.begin(), text.end(), text.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
 					return text;
 				};
-			const std::string lowered_search = to_lower(cheater_search);
-			if (!lowered_search.empty())
+
+			static std::vector<std::pair<uint32_t, CheaterRecord_t>> s_vCheaterCache = {};
+			static std::string s_sCheaterCacheSearch = "";
+			static double s_dCheaterCacheTime = -1.0;
+			static bool s_bCheaterCacheDirty = true;
+			if (s_bCheaterCacheDirty || s_sCheaterCacheSearch != cheater_search || GetTime() - s_dCheaterCacheTime > 1.0)
 			{
-				vCheaters.erase(std::remove_if(vCheaters.begin(), vCheaters.end(), [&](const std::pair<uint32_t, CheaterRecord_t>& entry)
+				auto vFound = F::PlayerUtils.GetCheaterVector();
+				const std::string lowered_search = to_lower(cheater_search);
+				if (!lowered_search.empty())
+				{
+					vFound.erase(std::remove_if(vFound.begin(), vFound.end(), [&](const std::pair<uint32_t, CheaterRecord_t>& entry)
+						{
+							const CheaterRecord_t& record = entry.second;
+							const std::string search_text = std::format("{} {} {}", record.m_sName, record.m_sReason, entry.first);
+							return to_lower(search_text).find(lowered_search) == std::string::npos;
+						}), vFound.end());
+				}
+				std::sort(vFound.begin(), vFound.end(), [](const auto& a, const auto& b) -> bool
 					{
-						const CheaterRecord_t& record = entry.second;
-						const std::string search_text = std::format("{} {} {}", record.m_sName, record.m_sReason, entry.first);
-						return to_lower(search_text).find(lowered_search) == std::string::npos;
-					}), vCheaters.end());
+						if (a.second.m_bAuto != b.second.m_bAuto)
+							return a.second.m_bAuto > b.second.m_bAuto;
+						if (a.second.m_iDetections != b.second.m_iDetections)
+							return a.second.m_iDetections > b.second.m_iDetections;
+						return a.second.m_sName < b.second.m_sName;
+					});
+
+				s_vCheaterCache = std::move(vFound);
+				s_sCheaterCacheSearch = cheater_search;
+				s_dCheaterCacheTime = GetTime();
+				s_bCheaterCacheDirty = false;
 			}
+			const auto& vCheaters = s_vCheaterCache;
 
 			if (vCheaters.empty())
 			{
@@ -2369,19 +2456,9 @@ void CMenu::MenuAnticheat(int iTab)
 						return { 255, 120, 120, 255 };
 					};
 
-				std::sort(vCheaters.begin(), vCheaters.end(), [](const auto& a, const auto& b) -> bool
-					{
-						if (a.second.m_bAuto != b.second.m_bAuto)
-							return a.second.m_bAuto > b.second.m_bAuto;
-						if (a.second.m_iDetections != b.second.m_iDetections)
-							return a.second.m_iDetections > b.second.m_iDetections;
-						return a.second.m_sName < b.second.m_sName;
-					});
-
 				auto drawCheater = [&](const std::pair<uint32_t, CheaterRecord_t>& tEntry, int x, int y)
 					{
 						const auto& tRecord = tEntry.second;
-						F::SteamProfileCache.TouchAvatar(tEntry.first);
 						const std::string sName = tRecord.m_sName.empty() ? std::format("{}", tEntry.first) : tRecord.m_sName;
 						std::string sReason = tRecord.m_sReason.empty() ? (tRecord.m_bAuto ? "detected by unibox" : "tagged by the player") : tRecord.m_sReason;
 						if (!tRecord.m_bAuto)
@@ -2461,6 +2538,7 @@ void CMenu::MenuAnticheat(int iTab)
 						if (bRemove)
 						{
 							F::PlayerUtils.RemoveTag(tEntry.first, F::PlayerUtils.TagToIndex(CHEATER_TAG), true, sName.c_str());
+							s_bCheaterCacheDirty = true;
 							return;
 						}
 
@@ -2553,6 +2631,7 @@ void CMenu::MenuAnticheat(int iTab)
 							PopupSelectable("Remove tag", ICON_MD_DELETE, tDanger, [&]
 							{
 								F::PlayerUtils.RemoveTag(tEntry.first, F::PlayerUtils.TagToIndex(CHEATER_TAG), true, sName.c_str());
+							s_bCheaterCacheDirty = true;
 							});
 
 							PopStyleColor(3);
@@ -2561,15 +2640,25 @@ void CMenu::MenuAnticheat(int iTab)
 						}
 					};
 
-				int iBlu = 0, iRed = 0;
-				for (size_t i = 0; i < vCheaters.size(); i++)
+				int iRows = int((vCheaters.size() + 1) / 2);
 				{
-					int x = int(i % 2);
-					int y = int(i / 2);
-					drawCheater(vCheaters[i], x, y);
-					if (!x) iBlu++; else iRed++;
+					const float flStep = H::Draw.Scale(64);
+					const float flOrigin = GetDrawPos().y + H::Draw.Scale(64);
+					const ImRect& tClip = GetCurrentWindow()->ClipRect;
+					constexpr int iExtraRows = 3;
+					const int iFirst = std::max(int(floorf((tClip.Min.y - flOrigin) / flStep)) - iExtraRows, 0);
+					const int iLast = std::min(int(ceilf((tClip.Max.y - flOrigin) / flStep)) + iExtraRows, iRows - 1);
+					for (int y = iFirst; y <= iLast; y++)
+					{
+						for (int x = 0; x < 2; x++)
+						{
+							const size_t i = size_t(y) * 2 + x;
+							if (i < vCheaters.size())
+								drawCheater(vCheaters[i], x, y);
+						}
+					}
 				}
-				SetCursorPos({ 0, H::Draw.Scale(65 + 64 * std::max(iBlu, iRed)) });
+				SetCursorPos({ 0, H::Draw.Scale(65 + 64 * iRows) });
 				DebugDummy({ 0, H::Draw.Scale(8) });
 			}
 		}
@@ -3399,21 +3488,35 @@ void CMenu::MenuLogs(int iTab)
 			SetCursorPosY(GetCursorPosY() + H::Draw.Scale(4));
 			FInputText("Search marked players...", marked_player_search, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
-			auto vMarkedPlayers = F::PlayerUtils.GetMarkedPlayers();
 			auto to_lower = [](std::string text) -> std::string
 				{
 					std::transform(text.begin(), text.end(), text.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
 					return text;
 				};
-			const std::string lowered_search = to_lower(marked_player_search);
-			if (!lowered_search.empty())
+
+			static std::vector<MarkedPlayer_t> s_vMarkedCache = {};
+			static std::string s_sMarkedCacheSearch = "";
+			static double s_dMarkedCacheTime = -1.0;
+			static bool s_bMarkedCacheDirty = true;
+			if (s_bMarkedCacheDirty || s_sMarkedCacheSearch != marked_player_search || GetTime() - s_dMarkedCacheTime > 0.5)
 			{
-				vMarkedPlayers.erase(std::remove_if(vMarkedPlayers.begin(), vMarkedPlayers.end(), [&](const MarkedPlayer_t& entry)
-					{
-						const std::string search_text = std::format("{} {} {} {}", entry.m_sDisplayName, entry.m_sAlias, entry.m_sRoleName, entry.m_uAccountID);
-						return to_lower(search_text).find(lowered_search) == std::string::npos;
-					}), vMarkedPlayers.end());
+				auto vFound = F::PlayerUtils.GetMarkedPlayers();
+				const std::string lowered_search = to_lower(marked_player_search);
+				if (!lowered_search.empty())
+				{
+					vFound.erase(std::remove_if(vFound.begin(), vFound.end(), [&](const MarkedPlayer_t& entry)
+						{
+							const std::string search_text = std::format("{} {} {} {}", entry.m_sDisplayName, entry.m_sAlias, entry.m_sRoleName, entry.m_uAccountID);
+							return to_lower(search_text).find(lowered_search) == std::string::npos;
+						}), vFound.end());
+				}
+
+				s_vMarkedCache = std::move(vFound);
+				s_sMarkedCacheSearch = marked_player_search;
+				s_dMarkedCacheTime = GetTime();
+				s_bMarkedCacheDirty = false;
 			}
+			const auto& vMarkedPlayers = s_vMarkedCache;
 
 			if (vMarkedPlayers.empty())
 			{
@@ -3427,8 +3530,6 @@ void CMenu::MenuLogs(int iTab)
 				{
 					const std::string sCardId = std::format("MarkedPlayer{}", tEntry.m_uAccountID);
 					PushID(sCardId.c_str());
-
-					F::SteamProfileCache.TouchAvatar(tEntry.m_uAccountID);
 
 					const Color_t tCardColor = tEntry.m_tRole.m_tColor;
 					const ImColor tFillColor = ColorByteToFloat(tCardColor.Lerp(Vars::Menu::Theme::Background.Value, 0.55f, LerpEnum::NoAlpha));
@@ -3499,6 +3600,7 @@ void CMenu::MenuLogs(int iTab)
 					if (bClearRole)
 					{
 						F::PlayerUtils.SetPlayerRole(tEntry.m_uAccountID, -1, true, tEntry.m_sDisplayName.c_str());
+						s_bMarkedCacheDirty = true;
 						PopID();
 						return;
 					}
@@ -3579,6 +3681,7 @@ void CMenu::MenuLogs(int iTab)
 						fPopupSelectable(std::format("MarkedRole{}", tEntry.m_uAccountID), iPopupRow, "Clear role", ICON_MD_DELETE, tDanger, [&]
 						{
 							F::PlayerUtils.SetPlayerRole(tEntry.m_uAccountID, -1, true, tEntry.m_sDisplayName.c_str());
+						s_bMarkedCacheDirty = true;
 						});
 
 						for (int iID = 0; iID < F::PlayerUtils.m_vTags.size(); iID++)
@@ -3605,18 +3708,25 @@ void CMenu::MenuLogs(int iTab)
 					PopID();
 				};
 
-				int iBlu = 0, iRed = 0;
-				for (size_t i = 0; i < vMarkedPlayers.size(); i++)
+				int iRows = int((vMarkedPlayers.size() + 1) / 2);
 				{
-					int x = int(i % 2);
-					int y = int(i / 2);
-					drawMarkedPlayer(vMarkedPlayers[i], x, y);
-					if (!x)
-						iBlu++;
-					else
-						iRed++;
+					const float flStep = H::Draw.Scale(64);
+					const float flOrigin = GetDrawPos().y + H::Draw.Scale(64);
+					const ImRect& tClip = GetCurrentWindow()->ClipRect;
+					constexpr int iExtraRows = 3;
+					const int iFirst = std::max(int(floorf((tClip.Min.y - flOrigin) / flStep)) - iExtraRows, 0);
+					const int iLast = std::min(int(ceilf((tClip.Max.y - flOrigin) / flStep)) + iExtraRows, iRows - 1);
+					for (int y = iFirst; y <= iLast; y++)
+					{
+						for (int x = 0; x < 2; x++)
+						{
+							const size_t i = size_t(y) * 2 + x;
+							if (i < vMarkedPlayers.size())
+								drawMarkedPlayer(vMarkedPlayers[i], x, y);
+						}
+					}
 				}
-				SetCursorPos({ 0, H::Draw.Scale(65 + 64 * std::max(iBlu, iRed)) });
+				SetCursorPos({ 0, H::Draw.Scale(65 + 64 * iRows) });
 				DebugDummy({ 0, H::Draw.Scale(8) });
 			}
 		} EndSection();

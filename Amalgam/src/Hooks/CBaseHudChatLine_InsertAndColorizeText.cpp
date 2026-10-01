@@ -26,7 +26,7 @@ MAKE_HOOK(CBaseHudChatLine_InsertAndColorizeText, S::CBaseHudChatLine_InsertAndC
 		sName = sReplace;
 	}
 
-	if (Vars::Visuals::UI::ChatTags.Value && !(iType & NameTypeEnum::Privacy))
+	if (Vars::Visuals::UI::ChatTags.Value && !(iType & NameTypeEnum::Privacy) && !SDK::CleanScreenshot())
 	{
 		std::string sTag, cColor;
 		if (Vars::Visuals::UI::ChatTags.Value & Vars::Visuals::UI::ChatTagsEnum::Local && clientIndex == I::EngineClient->GetLocalPlayer())

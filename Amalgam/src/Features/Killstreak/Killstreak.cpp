@@ -7,6 +7,9 @@ int CKillstreak::GetCurrentStreak()
 
 void CKillstreak::ApplyKillstreak(int iLocalIdx)
 {
+	if (SDK::CleanScreenshot())
+		return;
+
 	if (const auto& pLocal = H::Entities.GetLocal())
 	{
 		if (const auto& pResource = H::Entities.GetResource())

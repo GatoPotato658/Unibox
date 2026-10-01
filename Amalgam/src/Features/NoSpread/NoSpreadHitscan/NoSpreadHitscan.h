@@ -1,11 +1,22 @@
 #pragma once
 #include "../../../SDK/SDK.h"
+#include "../../ImGui/IndicatorCache.h"
 
 //#define SEEDPRED_DEBUG
 
 class CNoSpreadHitscan
 {
 private:
+	struct DrawCache_t
+	{
+		std::string m_sUptime = {};
+		std::string m_sMantissaStep = {};
+		std::string m_sDelta = {};
+		Color_t m_tColor = {};
+		bool m_bValid = false;
+	};
+	CIndicatorCache<DrawCache_t> m_tDrawCache = {};
+
 	bool ShouldRun(CTFWeaponBase* pWeapon = nullptr);
 	int GetSeed(CUserCmd* pCmd);
 	float CalcMantissaStep(float flV);
@@ -25,7 +36,8 @@ public:
 	bool ParsePlayerPerf(const std::string& sMsg);
 
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
-	void Draw(CTFPlayer* pLocal);
+	void CacheDrawInfo(CTFPlayer* pLocal);
+	void Draw();
 
 	int m_iSeed = 0;
 	float m_flMantissaStep = 0.f;

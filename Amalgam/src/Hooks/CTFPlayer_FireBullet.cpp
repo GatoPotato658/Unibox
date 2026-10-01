@@ -14,7 +14,7 @@ MAKE_HOOK(CTFPlayer_FireBullet, S::CTFPlayer_FireBullet(), void,
 	DEBUG_RETURN(CTFPlayer_FireBullet, rcx, pWeapon, info, nDamageType, nDamageType, nCustomDamageType);
 
 	auto pLocal = reinterpret_cast<CTFPlayer*>(rcx);
-	if (pLocal != H::Entities.GetLocal() || !pWeapon || G::Unload)
+	if (pLocal != H::Entities.GetLocal() || !pWeapon || G::Unload || SDK::CleanScreenshot())
 		return CALL_ORIGINAL(rcx, pWeapon, info, bDoEffects, nDamageType, nCustomDamageType);
 
 	auto& sString = nDamageType & DMG_CRITICAL ? Vars::Visuals::Effects::CritTracer.Value : Vars::Visuals::Effects::BulletTracer.Value;

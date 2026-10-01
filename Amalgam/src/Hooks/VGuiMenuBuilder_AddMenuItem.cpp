@@ -39,7 +39,7 @@ MAKE_HOOK(VGuiMenuBuilder_AddMenuItem, S::VGuiMenuBuilder_AddMenuItem(), void*,
 	const auto dwDesired1 = S::CTFClientScoreBoardDialog_OnScoreBoardMouseRightRelease_AddMenuItem_CallProfile();
 	const auto dwDesired2 = S::CTFClientScoreBoardDialog_OnScoreBoardMouseRightRelease_AddMenuItem_CallSpectate();
 
-	if (dwRetAddr == dwDesired1 && Vars::Visuals::UI::ScoreboardUtility.Value)
+	if (dwRetAddr == dwDesired1 && Vars::Visuals::UI::ScoreboardUtility.Value && !SDK::AntiObs())
 	{
 		if (auto pResource = H::Entities.GetResource(); pResource && pResource->m_bValid(s_iPlayerIndex))
 		{
@@ -67,7 +67,7 @@ MAKE_HOOK(VGuiMenuBuilder_AddMenuItem, S::VGuiMenuBuilder_AddMenuItem(), void*,
 		}
 	}
 
-	if (dwRetAddr == dwDesired2 && Vars::Visuals::UI::ScoreboardUtility.Value)
+	if (dwRetAddr == dwDesired2 && Vars::Visuals::UI::ScoreboardUtility.Value && !SDK::AntiObs())
 		return nullptr;
 
 	return CALL_ORIGINAL(rcx, pszButtonText, pszCommand, pszCategoryName);

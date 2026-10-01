@@ -1,9 +1,19 @@
 #pragma once
 #include "../../SDK/SDK.h"
+#include "../ImGui/IndicatorCache.h"
 
 class CTicks
 {
 private:
+	struct DrawCache_t
+	{
+		int m_iTicks = 0;
+		int m_iMaxTicks = 0;
+		bool m_bWait = false;
+		bool m_bValid = false;
+	};
+	CIndicatorCache<DrawCache_t> m_tDrawCache = {};
+
 	void SendMoveFunc();
 	void MoveFunc(float accumulated_extra_samples, bool bFinalTick);
 	void MoveManage();
@@ -25,7 +35,8 @@ private:
 public:
 	void Move(float accumulated_extra_samples, bool bFinalTick);
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
-	void Draw(CTFPlayer* pLocal);
+	void CacheDrawInfo(CTFPlayer* pLocal);
+	void Draw();
 	void Reset();
 
 	void Start(CTFPlayer* pLocal, CUserCmd* pCmd);

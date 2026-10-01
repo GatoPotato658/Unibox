@@ -1153,6 +1153,7 @@
     <ClCompile Include="src\Features\CritHack\CritHack.cpp" />
     <ClCompile Include="src\Features\EnginePrediction\EnginePrediction.cpp" />
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
+    <ClCompile Include="src\Features\ImGui\Overlay\CaptureOverlay.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Menu.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
@@ -1521,6 +1522,7 @@
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
     <ClInclude Include="src\Features\Visuals\SkinChanger\SkinChanger.h" />
+    <ClInclude Include="src\Features\Visuals\SkinChanger\SkinData.h" />
     <ClInclude Include="src\Features\Visuals\Groups\Groups.h" />
     <ClInclude Include="src\Features\Visuals\PlayerConditions\PlayerConditions.h" />
     <ClInclude Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.h" />
@@ -1664,6 +1666,9 @@
     <ClInclude Include="src\Features\Binds\Binds.h" />
     <ClInclude Include="src\Features\Configs\Configs.h" />
     <ClInclude Include="src\Features\ImGui\Render.h" />
+    <ClInclude Include="src\Features\ImGui\IndicatorCache.h" />
+    <ClInclude Include="src\Features\ImGui\Overlay\CaptureOverlay.h" />
+    <ClInclude Include="src\Features\ImGui\RenderSync.h" />
     <ClInclude Include="src\Features\ImGui\IndicatorPanel.h" />
     <ClInclude Include="src\Features\ImGui\MaterialDesign\IconDefinitions.h" />
     <ClInclude Include="src\Features\ImGui\MaterialDesign\MaterialIcons.h" />

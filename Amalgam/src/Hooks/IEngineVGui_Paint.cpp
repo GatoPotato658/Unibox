@@ -38,30 +38,39 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		F::Visuals.DrawUni();
 #endif
 	}
-	else if (iMode & PAINT_INGAMEPANELS && !SDK::CleanScreenshot())
+	else if (iMode & PAINT_INGAMEPANELS)
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateW2SMatrix();
 
-		H::Draw.Start(true);
-		if (auto pLocal = H::Entities.GetLocal())
+		auto pLocal = H::Entities.GetLocal();
+
 		{
-			F::CameraWindow.Draw();
+			CTFPlayer* pCacheFor = SDK::TakingScreenshot() ? nullptr : pLocal;
+			F::ESP.CacheDrawInfo(pCacheFor);
+			F::Aimbot.CacheDrawInfo(pCacheFor);
+			F::Visuals.CacheBestAimPos(pCacheFor);
+		}
 
-			F::AntiAim.Draw(pLocal);
-			F::Visuals.DrawPickupTimers();
-			F::ESP.Draw();
-			F::Visuals.DrawBestAimPos(pLocal);
-			F::OffscreenArrows.Draw(pLocal);
-			F::Aimbot.Draw(pLocal);
+		if (!SDK::CleanScreenshot())
+		{
+			H::Draw.Start(true);
+			if (pLocal)
+			{
+				F::CameraWindow.Draw();
 
-			F::NavBotCore.DrawDangerOverlay(pLocal);
+				F::AntiAim.Draw(pLocal);
+				F::Visuals.DrawPickupTimers();
+				F::OffscreenArrows.Draw(pLocal);
+
+				F::NavBotCore.DrawDangerOverlay(pLocal);
 
 #ifdef DEBUG_INFO
-			F::Debug.Draw(pLocal);
+				F::Debug.Draw(pLocal);
 #endif
+			}
+			H::Draw.End();
 		}
-		H::Draw.End();
 	}
 
 	CALL_ORIGINAL(rcx, iMode);

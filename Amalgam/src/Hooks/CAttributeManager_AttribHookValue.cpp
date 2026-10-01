@@ -55,7 +55,7 @@ MAKE_HOOK(CAttributeManager_AttribHookInt, S::CAttributeManager_AttribHookInt(),
 
 	if (dwRetAddr == dwDesired && name && FNV1A::Hash32(name) == FNV1A::Hash32Const("halloween_footstep_type"))
 	{
-		if (Vars::Visuals::Effects::SpellFootsteps.Value && IsValidHookEntity(econent)
+		if (Vars::Visuals::Effects::SpellFootsteps.Value && !SDK::CleanScreenshot() && IsValidHookEntity(econent)
 			&& reinterpret_cast<CBaseEntity*>(econent)->entindex() == I::EngineClient->GetLocalPlayer())
 		{
 			switch (Vars::Visuals::Effects::SpellFootsteps.Value)

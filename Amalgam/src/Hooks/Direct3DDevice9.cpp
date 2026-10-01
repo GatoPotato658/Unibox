@@ -4,6 +4,8 @@
 #include "../SDK/SDK.h"
 #include "../Features/ImGui/Render.h"
 #include "../Features/ImGui/Menu/Menu.h"
+#include "../Features/ImGui/Overlay/CaptureOverlay.h"
+#include "../Features/Visuals/ESP/ESP.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -17,6 +19,8 @@ MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), H
 		F::Render.Render(pDevice);
 		SDK::TickCleanScreenshot();
 	}
+	else
+		F::CaptureOverlay.ReleaseDeviceObjects();
 
 	return CALL_ORIGINAL(pDevice, pSource, pDestination, pDirtyRegion);
 }
@@ -26,6 +30,8 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 {
 	DEBUG_RETURN(Direct3DDevice9_Reset, pDevice, pPresentationParameters);
 
+	F::CaptureOverlay.ReleaseDeviceObjects();
+	InvalidateESPIconTextures();
 	ImGui_ImplDX9_InvalidateDeviceObjects();
 	const HRESULT Original = CALL_ORIGINAL(pDevice, pPresentationParameters);
 	ImGui_ImplDX9_CreateDeviceObjects();

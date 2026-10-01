@@ -247,8 +247,12 @@ void CSteamProfileCache::TouchAvatar(uint32_t uAccountID)
 	EnsureCallbacksRegistered();
 	std::lock_guard tLock(m_mutex);
 	auto& tEntry = m_mEntries[uAccountID];
-	LoadAvatarFromDisk(uAccountID, tEntry);
 	RequestName(uAccountID, tEntry);
+	if (!tEntry.m_bDiskChecked)
+	{
+		tEntry.m_bDiskLoadQueued = true;
+		return;
+	}
 	RequestAvatar(uAccountID, tEntry, false);
 }
 
@@ -268,24 +272,51 @@ void CSteamProfileCache::Refresh(uint32_t uAccountID)
 
 void CSteamProfileCache::Pump()
 {
+	constexpr size_t MaxDiskLoadsPerPump = 2;
+	constexpr size_t MaxImagesPerPump = 4;
+	constexpr size_t MaxSavesPerPump = 2;
+
 	EnsureCallbacksRegistered();
 	std::vector<std::tuple<uint32_t, std::shared_ptr<std::vector<uint8_t>>, uint32_t, uint32_t>> vPendingSaves;
 	std::vector<std::pair<uint32_t, int>> vPendingImages;
+	std::vector<uint32_t> vPendingDiskLoads;
 	{
 		std::lock_guard tLock(m_mutex);
 		for (auto& [uAccountID, tEntry] : m_mEntries)
 		{
-			if (tEntry.m_bSavePending && tEntry.m_pAvatarPixels)
+			if (vPendingSaves.size() < MaxSavesPerPump && tEntry.m_bSavePending && tEntry.m_pAvatarPixels)
 			{
 				tEntry.m_bSavePending = false;
 				vPendingSaves.emplace_back(uAccountID, tEntry.m_pAvatarPixels, tEntry.m_uAvatarWidth, tEntry.m_uAvatarHeight);
 			}
-			if (tEntry.m_iPendingImage > 0)
+			if (vPendingImages.size() < MaxImagesPerPump && tEntry.m_iPendingImage > 0)
 			{
 				vPendingImages.emplace_back(uAccountID, tEntry.m_iPendingImage);
 				tEntry.m_iPendingImage = 0;
 			}
+			if (vPendingDiskLoads.size() < MaxDiskLoadsPerPump && tEntry.m_bDiskLoadQueued && !tEntry.m_bDiskChecked)
+			{
+				tEntry.m_bDiskLoadQueued = false;
+				tEntry.m_bDiskChecked = true;
+				vPendingDiskLoads.push_back(uAccountID);
+			}
 		}
+	}
+	for (const uint32_t uAccountID : vPendingDiskLoads)
+	{
+		std::vector<uint8_t> vPixels;
+		uint32_t uWidth = 0, uHeight = 0;
+		std::filesystem::file_time_type tTimestamp = {};
+		const bool bLoaded = ReadAvatarFile(uAccountID, vPixels, uWidth, uHeight, tTimestamp);
+
+		std::lock_guard tLock(m_mutex);
+		auto& tEntry = m_mEntries[uAccountID];
+		if (bLoaded)
+		{
+			StoreAvatar(uAccountID, std::move(vPixels), uWidth, uHeight, false);
+			tEntry.m_tAvatarTimestamp = tTimestamp;
+		}
+		RequestAvatar(uAccountID, tEntry, false);
 	}
 	for (const auto& [uAccountID, pPixels, uWidth, uHeight] : vPendingSaves)
 		SaveAvatarToDisk(uAccountID, *pPixels, uWidth, uHeight, nullptr, false);
@@ -358,24 +389,34 @@ void CSteamProfileCache::RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, boo
 		tEntry.m_iPendingImage = iImage;
 }
 
+bool CSteamProfileCache::ReadAvatarFile(uint32_t uAccountID, std::vector<uint8_t>& vPixels, uint32_t& uWidth, uint32_t& uHeight, std::filesystem::file_time_type& tTimestamp)
+{
+	const auto tPath = GetAvatarPath(uAccountID);
+	std::error_code ec;
+	if (tPath.empty() || !std::filesystem::is_regular_file(tPath, ec))
+		return false;
+	if (!DecodeAvatarPng(tPath, vPixels, uWidth, uHeight))
+		return false;
+	tTimestamp = std::filesystem::last_write_time(tPath, ec);
+	if (ec)
+		tTimestamp = std::filesystem::file_time_type::clock::now();
+	return true;
+}
+
 void CSteamProfileCache::LoadAvatarFromDisk(uint32_t uAccountID, Entry_t& tEntry)
 {
 	if (tEntry.m_bDiskChecked)
 		return;
 	tEntry.m_bDiskChecked = true;
-	const auto tPath = GetAvatarPath(uAccountID);
-	std::error_code ec;
-	if (tPath.empty() || !std::filesystem::is_regular_file(tPath, ec))
-		return;
+	tEntry.m_bDiskLoadQueued = false;
 
 	std::vector<uint8_t> vPixels;
 	uint32_t uWidth = 0, uHeight = 0;
-	if (!DecodeAvatarPng(tPath, vPixels, uWidth, uHeight))
+	std::filesystem::file_time_type tTimestamp = {};
+	if (!ReadAvatarFile(uAccountID, vPixels, uWidth, uHeight, tTimestamp))
 		return;
-	const auto tTimestamp = std::filesystem::last_write_time(tPath, ec);
 	StoreAvatar(uAccountID, std::move(vPixels), uWidth, uHeight, false);
-	if (!ec)
-		tEntry.m_tAvatarTimestamp = tTimestamp;
+	tEntry.m_tAvatarTimestamp = tTimestamp;
 }
 
 void CSteamProfileCache::CaptureSteamAvatar(uint32_t uAccountID, int iImage, uint32_t uWidth, uint32_t uHeight)

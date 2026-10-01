@@ -2,6 +2,7 @@
 #include "BotUtils.h"
 #include "Jobs/NavBotJobs.h"
 #include "NavBotConfig.h"
+#include "../ImGui/IndicatorCache.h"
 
 class CNavArea;
 class CNavBotCore
@@ -15,10 +16,17 @@ private:
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Reset();
-	void Draw(CTFPlayer* pLocal);
+	void CacheDrawInfo(CTFPlayer* pLocal);
+	void Draw();
 	void DrawDangerOverlay(CTFPlayer* pLocal);
 
 private:
+	struct NavIndicatorLine_t
+	{
+		std::string m_sText = {};
+		Color_t m_tColor = {};
+	};
+	CIndicatorCache<std::vector<NavIndicatorLine_t>> m_tDrawCache = {};
 
 	Timer m_tIdleTimer = {};
 	Timer m_tAntiStuckTimer = {};

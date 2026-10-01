@@ -402,40 +402,23 @@ static std::wstring BuildJobLabel()
 	}
 }
 
-void CNavBotCore::Draw(CTFPlayer* pLocal)
+void CNavBotCore::CacheDrawInfo(CTFPlayer* pLocal)
 {
-	struct NavIndicatorLine_t
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) || !pLocal || !pLocal->IsAlive())
 	{
-		std::string m_sText = {};
-		Color_t m_tColor = {};
-	};
-
-	static std::vector<NavIndicatorLine_t> vCachedLines = {};
-	static bool bCachedValid = false;
-
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot))
-	{
-		vCachedLines.clear();
-		bCachedValid = false;
+		m_tDrawCache.Set({});
 		return;
 	}
 
-	if (pLocal)
+	const bool b_is_ready = F::NavEngine.IsReady();
+	if (!Vars::Debug::Info.Value && !b_is_ready)
 	{
-		vCachedLines.clear();
-		if (!pLocal->IsAlive())
-		{
-			bCachedValid = false;
-			return;
-		}
+		m_tDrawCache.Set({});
+		return;
+	}
 
-		const bool b_is_ready = F::NavEngine.IsReady();
-		if (!Vars::Debug::Info.Value && !b_is_ready)
-		{
-			bCachedValid = false;
-			return;
-		}
-
+	std::vector<NavIndicatorLine_t> vCachedLines = {};
+	{
 		const auto& t_color = F::NavEngine.IsPathing() ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
 		const auto& t_ready_color = b_is_ready ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
 		int i_in_spawn = -1;
@@ -490,11 +473,15 @@ void CNavBotCore::Draw(CTFPlayer* pLocal)
 			const bool b_is_idle = F::NavEngine.m_eCurrentPriority == PriorityListEnum::None || !F::NavEngine.IsPathing();
 			vCachedLines.push_back({ std::format("Idle: {} ({:.1f}s)", b_is_idle ? "Yes" : "No", std::max(0.f, fl_idle_time)), b_is_idle ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value });
 		}
-
-		bCachedValid = !vCachedLines.empty();
 	}
 
-	if (!bCachedValid)
+	m_tDrawCache.Set(std::move(vCachedLines));
+}
+
+void CNavBotCore::Draw()
+{
+	const std::vector<NavIndicatorLine_t> vCachedLines = m_tDrawCache.Get();
+	if (vCachedLines.empty())
 		return;
 
 	int x = Vars::Menu::NavBotDisplay.Value.x;

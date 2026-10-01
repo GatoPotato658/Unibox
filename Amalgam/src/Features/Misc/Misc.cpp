@@ -896,6 +896,12 @@ void CMisc::TauntKartControl(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
+	static float flChargeGuard = 0.f;
+	if (pLocal->m_bShieldEquipped() && pCmd->buttons & (IN_ATTACK2 | IN_ATTACK3) && pLocal->m_flChargeMeter() >= 100.f)
+		flChargeGuard = I::GlobalVars->realtime + F::Backtrack.GetReal() + 0.25f;
+	if (I::GlobalVars->realtime < flChargeGuard)
+		return;
+
 	if (!pLocal->m_hGroundEntity() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
 		return;
 

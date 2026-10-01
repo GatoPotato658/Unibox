@@ -80,30 +80,35 @@ bool CSpectatorList::GetSpectators(CTFPlayer* pTarget)
 	return !m_vSpectators.empty();
 }
 
-void CSpectatorList::Draw(CTFPlayer* pLocal)
+void CSpectatorList::CacheDrawInfo(CTFPlayer* pLocal)
 {
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators))
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators) || !pLocal)
 	{
 		m_mRespawnCache.clear();
-		s_flCurrentHeight = 0.0f;
+		m_tDrawCache.Set({});
 		return;
 	}
 
-	if (pLocal)
+	auto pTarget = pLocal;
+	switch (pLocal->m_iObserverMode())
 	{
-		auto pTarget = pLocal;
-		switch (pLocal->m_iObserverMode())
-		{
-		case OBS_MODE_FIRSTPERSON:
-		case OBS_MODE_THIRDPERSON:
-			pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
-		}
-		if (!pTarget || !pTarget->IsPlayer()
-			|| !GetSpectators(pTarget))
-			return;
+	case OBS_MODE_FIRSTPERSON:
+	case OBS_MODE_THIRDPERSON:
+		pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
+	}
+	if (!pTarget || !pTarget->IsPlayer() || !GetSpectators(pTarget))
+	{
+		m_tDrawCache.Set({});
+		return;
 	}
 
-	if (m_vSpectators.empty())
+	m_tDrawCache.Set(m_vSpectators);
+}
+
+void CSpectatorList::Draw()
+{
+	const std::vector<Spectator_t> vSpectators = m_tDrawCache.Get();
+	if (vSpectators.empty())
 		return;
 
 	int x = Vars::Menu::SpectatorsDisplay.Value.x;
@@ -113,17 +118,17 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 
 	float flMaxTextWidth = 0.f;
-	for (auto& Spectator : m_vSpectators)
+	for (auto& Spectator : vSpectators)
 	{
 		const std::string sText = std::format("{} ({} - respawn {}s)", Spectator.m_sName, Spectator.m_sMode, static_cast<int>(Spectator.m_flRespawnIn));
 		flMaxTextWidth = std::max(flMaxTextWidth, ImGui::CalcTextSize(sText.c_str()).x);
 	}
 
 	int totalHeight = H::Draw.Scale(48);
-	totalHeight += static_cast<int>(m_vSpectators.size()) * nTall;
+	totalHeight += static_cast<int>(vSpectators.size()) * nTall;
 	totalHeight += H::Draw.Scale(4); 
 
-	s_flCurrentHeight = std::lerp(s_flCurrentHeight, static_cast<float>(totalHeight), I::GlobalVars->frametime * 10.0f);
+	s_flCurrentHeight = std::lerp(s_flCurrentHeight, static_cast<float>(totalHeight), std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 	totalHeight = static_cast<int>(std::round(s_flCurrentHeight));
 
 	const int boxWidth = std::max(H::Draw.Scale(220), static_cast<int>(flMaxTextWidth) + H::Draw.Scale(40)); 
@@ -155,7 +160,7 @@ void CSpectatorList::Draw(CTFPlayer* pLocal)
 	DrawIndicatorText(pDrawList, flX + H::Draw.Scale(16) + flSpecWidth, flY + H::Draw.Scale(5), tAccentColor, Vars::Menu::Theme::Background.Value, ALIGN_TOPLEFT, "tators");
 
 	flY += H::Draw.Scale(32);
-	for (auto& Spectator : m_vSpectators)
+	for (auto& Spectator : vSpectators)
 	{
 		Color_t tColor = tActiveColor;
 		if (Spectator.m_bIsFriend)

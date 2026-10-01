@@ -18,6 +18,11 @@
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
 #ifndef TEXTMODE
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#include "../Features/Ticks/Ticks.h"
+#include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
+#include "../Features/Visuals/PlayerConditions/PlayerConditions.h"
+#include "../Features/Visuals/SpectatorList/SpectatorList.h"
+#include "../Features/NavBot/NavBotCore.h"
 #endif
 #ifdef TEXTMODE
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
@@ -30,7 +35,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 	DEBUG_RETURN(CHLClient_FrameStageNotify, rcx, curStage);
 
 #ifndef TEXTMODE
-	if (curStage == FRAME_NET_UPDATE_POSTDATAUPDATE_END)
+	if (curStage == FRAME_NET_UPDATE_POSTDATAUPDATE_START)
 		F::SkinChanger.Apply();
 #endif
 
@@ -89,6 +94,17 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		if (I::EngineClient && I::EngineClient->IsTakingScreenshot())
 			SDK::NotifyCleanScreenshot();
 		SDK::UpdateSteamScreenshotHook();
+		{
+			auto pLocal = H::Entities.GetLocal();
+			F::Ticks.CacheDrawInfo(pLocal);
+			F::Backtrack.CacheDrawInfo(pLocal);
+			F::NoSpreadHitscan.CacheDrawInfo(pLocal);
+			F::PlayerConditions.CacheDrawInfo(pLocal);
+			F::SpectatorList.CacheDrawInfo(pLocal);
+			F::NavBotCore.CacheDrawInfo(pLocal);
+			F::SkinChanger.CacheMenuInfo(H::Entities.GetWeapon());
+			F::SkinChanger.Service();
+		}
 #endif
 #ifdef TEXTMODE
 		F::AutoQueue.Run();

@@ -171,6 +171,8 @@ namespace SDK
 	int GetPasstimeGoalMapTeam(const Vec3& vOrigin, std::string* pTargetname = nullptr);
 
 	bool CleanScreenshot();
+	bool TakingScreenshot();
+	bool AntiObs();
 	void NotifyCleanScreenshot();
 	void TickCleanScreenshot();
 	void UpdateSteamScreenshotHook();

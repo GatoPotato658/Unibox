@@ -596,8 +596,13 @@ NAMESPACE_BEGIN(Vars)
 			CVar(CleanScreenshots, "Clean screenshots", true);
 		NAMESPACE_END(UI)
 
+		NAMESPACE_BEGIN(AntiObs, ANTI-OBS)
+			CVar(Enabled, VA_LIST("ANTI-OBS (privacy mode)", "Anti-OBS"), false, VISUAL);
+		NAMESPACE_END(AntiObs)
+
 		NAMESPACE_BEGIN(SkinChanger)
 			CVar(Enabled, "Skin changer", false, VISUAL);
+			CVar(AllowUnsupported, "Enable applying not supported warpaints", false, VISUAL);
 			CVar(PaintKit, "Paint kit", 0, VISUAL | SLIDER_MIN, 0, 1600, 1);
 			CVar(Australium, "Australium", false, VISUAL);
 			CVar(Festive, "Festive", false, VISUAL);

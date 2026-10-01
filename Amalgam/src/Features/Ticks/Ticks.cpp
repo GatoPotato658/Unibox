@@ -525,50 +525,35 @@ bool CTicks::IsTimingUnsure()
 	return m_bTimingUnsure /*|| m_bWarp*/;
 }
 
-void CTicks::Draw(CTFPlayer* pLocal)
+void CTicks::CacheDrawInfo(CTFPlayer* pLocal)
+{
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks) || !pLocal || !pLocal->IsAlive())
+	{
+		m_tDrawCache.Set({});
+		return;
+	}
+
+	const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
+	const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
+	const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
+	m_tDrawCache.Set({ std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks), iMaxTicks, m_iWait != 0, true });
+}
+
+void CTicks::Draw()
 {
 	static float flCurrentProgress = 0.f;
-	static std::string sRightText = {};
-	static Color_t tBarColor = {};
-	static float flCachedProgress = 0.f;
-	static bool bCachedFooter = false;
-	static bool bCachedValid = false;
 
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks))
+	const DrawCache_t tCache = m_tDrawCache.Get();
+	if (!tCache.m_bValid)
 	{
 		flCurrentProgress = 0.f;
-		bCachedValid = false;
 		return;
 	}
 
-	if (pLocal)
-	{
-		if (!pLocal->IsAlive())
-		{
-			flCurrentProgress = 0.f;
-			bCachedValid = false;
-			return;
-		}
-
-		const int iAntiAimTicks = std::clamp(F::AntiAim.YawOn() ? F::AntiAim.AntiAimTicks() : 0, 0, std::max(m_iMaxUsrCmdProcessTicks, 0));
-		const int iChokedTicks = std::max(I::ClientState->chokedcommands - iAntiAimTicks, 0);
-		const int iMaxTicks = std::max(m_iMaxUsrCmdProcessTicks - iAntiAimTicks, 0);
-		const int iTicks = std::clamp(m_iShiftedTicks + iChokedTicks, 0, iMaxTicks);
-		const float flTargetProgress = iMaxTicks > 0 ? static_cast<float>(iTicks) / static_cast<float>(iMaxTicks) : 0.f;
-		flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
-		sRightText = std::format("{} / {}", iTicks, iMaxTicks);
-		tBarColor = m_iWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255);
-		flCachedProgress = flCurrentProgress;
-		bCachedFooter = m_iWait != 0;
-		bCachedValid = true;
-	}
-
-	if (!bCachedValid)
-		return;
+	const float flTargetProgress = tCache.m_iMaxTicks > 0 ? static_cast<float>(tCache.m_iTicks) / static_cast<float>(tCache.m_iMaxTicks) : 0.f;
+	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
-
-	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 	const float flPanelWidth = H::Draw.Scale(180.f);
 	const float flPanelHeight = H::Draw.Scale(29.f);
 	const ImVec2 vPanelPos =
@@ -578,16 +563,16 @@ void CTicks::Draw(CTFPlayer* pLocal)
 	};
 
 	DrawIndicatorPanel(
-		pDrawList,
+		ImGui::GetBackgroundDrawList(),
 		vPanelPos,
 		flPanelWidth,
 		flPanelHeight,
 		"Ticks",
-		sRightText.c_str(),
+		std::format("{} / {}", tCache.m_iTicks, tCache.m_iMaxTicks).c_str(),
 		Vars::Menu::Theme::Active.Value,
 		Vars::Menu::Theme::Active.Value,
-		tBarColor,
-		flCachedProgress,
-		bCachedFooter,
+		tCache.m_bWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255),
+		flCurrentProgress,
+		tCache.m_bWait,
 		"Not Ready");
 }

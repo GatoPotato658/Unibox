@@ -11,6 +11,8 @@
 #include "../Ticks/Ticks.h"
 #include "FakeAngle/FakeAngle.h"
 #include "../World/World.h"
+#include "../ImGui/IndicatorPanel.h"
+#include "../ImGui/RenderSync.h"
 
 MAKE_SIGNATURE(UTIL_PlayerByIndex, "server.dll", "48 83 EC ? 8B D1 85 C9 7E ? 48 8B 05", 0x0);
 MAKE_SIGNATURE(CBaseAnimating_DrawServerHitboxes, "server.dll", "44 88 44 24 ? 53 48 81 EC", 0x0);
@@ -695,12 +697,13 @@ void CVisuals::DrawHitboxes(int iStore)
 	}
 }
 
-void CVisuals::DrawBestAimPos(CTFPlayer* pLocal)
+void CVisuals::CacheBestAimPos(CTFPlayer* pLocal)
 {
-	if (!Vars::Visuals::Prediction::BestAimPos.Value || !Vars::Colors::AimPosColor.Value.a || F::AimbotProjectile.m_flAimAnglesSetTime < I::GlobalVars->curtime - TICK_INTERVAL)
+	if (!pLocal || !Vars::Visuals::Prediction::BestAimPos.Value || !Vars::Colors::AimPosColor.Value.a || F::AimbotProjectile.m_flAimAnglesSetTime < I::GlobalVars->curtime - TICK_INTERVAL)
 	{
-		if (I::GlobalVars->curtime - F::AimbotProjectile.m_flAimAnglesSetTime > 0.5f)
+		if (!pLocal || I::GlobalVars->curtime - F::AimbotProjectile.m_flAimAnglesSetTime > 0.5f)
 			m_vPrevAimAngles = {};
+		F::RenderSync.Set(m_tAimPosCache, AimPos_t{});
 		return;
 	}
 
@@ -726,10 +729,34 @@ void CVisuals::DrawBestAimPos(CTFPlayer* pLocal)
 
 	Vec3 vScreen;
 	if (SDK::W2S(vPoint, vScreen))
+		F::RenderSync.Set(m_tAimPosCache, AimPos_t{ true, vScreen.x, vScreen.y });
+	else
+		F::RenderSync.Set(m_tAimPosCache, AimPos_t{});
+}
+
+void CVisuals::DrawBestAimPos(ImDrawList* pDrawList)
+{
+	const AimPos_t tCache = m_tAimPosCache.Get();
+	if (!pDrawList || !tCache.m_bValid)
+		return;
+
+	const Color_t tColor = Vars::Colors::AimPosColor.Value;
+	const float flSize = H::Draw.Scale(5.f);
+	const float flGap = H::Draw.Scale(3.f);
+	const ImU32 uColor = ColorToU32(tColor);
+	const ImU32 uShadow = ColorToU32(Color_t(0, 0, 0, byte(tColor.a * 0.6f)));
+	const float flThickness = std::max(H::Draw.Scale(1.4f), 1.f);
+
+	const float flAngle = ImGui::GetTime() * 1.2f;
+	ImVec2 aPoints[4];
+	for (int i = 0; i < 4; i++)
 	{
-		Color_t tColor = Vars::Colors::AimPosColor.Value.Lerp(Vars::Colors::AimPosColor.Value.IsColorDark() ? Color_t{ 255, 255, 255, 255 } : Color_t{ 0, 0, 0, 0 }, 0.35f, LerpEnum::NoAlpha);
-		H::Draw.FillRectOutline(vScreen.x, vScreen.y, 10, 10, tColor, Vars::Colors::AimPosColor.Value);
+		const float flTheta = flAngle + float(i) * 1.5707963f;
+		aPoints[i] = { tCache.m_flX + cosf(flTheta) * flSize, tCache.m_flY + sinf(flTheta) * flSize };
 	}
+	pDrawList->AddPolyline(aPoints, 4, uShadow, ImDrawFlags_Closed, flThickness + 1.f);
+	pDrawList->AddPolyline(aPoints, 4, uColor, ImDrawFlags_Closed, flThickness);
+	pDrawList->AddCircleFilled({ tCache.m_flX, tCache.m_flY }, std::max(flSize - flGap, 1.f), ColorToU32(Color_t(tColor.r, tColor.g, tColor.b, byte(tColor.a * 0.55f))), 12);
 }
 
 MAKE_HOOK(CBaseAnimating_DrawServerHitboxes, S::CBaseAnimating_DrawServerHitboxes(), void,

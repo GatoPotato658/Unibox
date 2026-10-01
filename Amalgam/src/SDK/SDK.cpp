@@ -1687,13 +1687,23 @@ void SDK::ShutdownSteamScreenshotHook()
 	UnregisterSteamScreenshotCallback();
 }
 
-bool SDK::CleanScreenshot()
+bool SDK::TakingScreenshot()
 {
 	if (!Vars::Visuals::UI::CleanScreenshots.Value)
 		return false;
 	if (s_nCleanScreenshotFrames > 0)
 		return true;
 	return I::EngineClient && I::EngineClient->IsTakingScreenshot();
+}
+
+bool SDK::AntiObs()
+{
+	return Vars::Visuals::AntiObs::Enabled.Value;
+}
+
+bool SDK::CleanScreenshot()
+{
+	return AntiObs() || TakingScreenshot();
 }
 
 void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool& bPrimary, bool& bSecondary, bool& bReloading)

@@ -375,39 +375,34 @@ std::vector<std::string> CPlayerConditions::Get(CTFPlayer* pEntity)
 	return vConditions;
 }
 
-void CPlayerConditions::Draw(CTFPlayer* pLocal)
+void CPlayerConditions::CacheDrawInfo(CTFPlayer* pLocal)
 {
-	static std::vector<std::string> vCachedConditions = {};
-	static bool bCachedValid = false;
-
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Conditions))
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Conditions) || !pLocal)
 	{
-		vCachedConditions.clear();
-		bCachedValid = false;
+		m_tDrawCache.Set({});
 		return;
 	}
 
-	if (pLocal)
+	auto pTarget = pLocal;
+	switch (pLocal->m_iObserverMode())
 	{
-		auto pTarget = pLocal;
-		switch (pLocal->m_iObserverMode())
-		{
-		case OBS_MODE_FIRSTPERSON:
-		case OBS_MODE_THIRDPERSON:
-			pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
-		}
-		if (!pTarget || !pTarget->IsPlayer() || !pTarget->IsAlive())
-		{
-			vCachedConditions.clear();
-			bCachedValid = false;
-			return;
-		}
-
-		vCachedConditions = Get(pTarget);
-		bCachedValid = true;
+	case OBS_MODE_FIRSTPERSON:
+	case OBS_MODE_THIRDPERSON:
+		pTarget = pLocal->m_hObserverTarget()->As<CTFPlayer>();
+	}
+	if (!pTarget || !pTarget->IsPlayer() || !pTarget->IsAlive())
+	{
+		m_tDrawCache.Set({});
+		return;
 	}
 
-	if (!bCachedValid)
+	m_tDrawCache.Set(Get(pTarget));
+}
+
+void CPlayerConditions::Draw()
+{
+	const std::vector<std::string> vConditions = m_tDrawCache.Get();
+	if (vConditions.empty())
 		return;
 
 	int x = Vars::Menu::ConditionsDisplay.Value.x;
@@ -429,7 +424,7 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 	}
 
 	int iOffset = 0;
-	for (const std::string& sCondition : vCachedConditions)
+	for (const std::string& sCondition : vConditions)
 	{
 		DrawIndicatorText(pDrawList, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition);
 		iOffset += nTall;

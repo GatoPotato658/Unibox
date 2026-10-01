@@ -20,6 +20,10 @@
 #include "../Visuals/SpectatorList/SpectatorList.h"
 #include "../NavBot/NavBotCore.h"
 #include "../Aimbot/AutoHeal/AutoHeal.h"
+#include "../Visuals/ESP/ESP.h"
+#include "../Visuals/Visuals.h"
+#include "../Aimbot/Aimbot.h"
+#include "Overlay/CaptureOverlay.h"
 
 	static Color_t GetThemeSurface(Color_t tBackground, Color_t tAccent)
 	{
@@ -77,24 +81,38 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui::NewFrame();
 
 	F::Menu.Render();
-	if (I::EngineClient->IsInGame() && !SDK::CleanScreenshot())
+
+	const bool bAntiObs = SDK::AntiObs();
+	const bool bPrivate = bAntiObs && F::CaptureOverlay.Prepare(pDevice);
+	if (I::EngineClient->IsInGame() && (bPrivate || !bAntiObs && !SDK::TakingScreenshot()))
 	{
-		CTFPlayer* pLocal = H::Entities.GetLocal();
+		ImDrawList* pBackground = ImGui::GetBackgroundDrawList();
+
 		F::CritHack.Draw();
-		F::Ticks.Draw(pLocal);
+		F::Ticks.Draw();
 #ifdef DEBUG_VACCINATOR
-		F::AutoHeal.Draw(pLocal);
+		F::AutoHeal.Draw(H::Entities.GetLocal());
 #endif
-		F::NoSpreadHitscan.Draw(pLocal);
-		F::PlayerConditions.Draw(pLocal);
-		F::Backtrack.Draw(pLocal);
-		F::SpectatorList.Draw(pLocal);
-		F::NavBotCore.Draw(pLocal);
+		F::NoSpreadHitscan.Draw();
+		F::PlayerConditions.Draw();
+		F::Backtrack.Draw();
+		F::SpectatorList.Draw();
+		F::NavBotCore.Draw();
+
+		F::ESP.Draw(pBackground);
+		F::Aimbot.Draw(pBackground);
+		F::Visuals.DrawBestAimPos(pBackground);
 	}
+	if (!bPrivate)
+		F::CaptureOverlay.Hide();
 
 	ImGui::EndFrame();
 	ImGui::Render();
-	ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+
+	if (bPrivate)
+		F::CaptureOverlay.Present(pDevice, ImGui::GetDrawData());
+	else
+		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
 	pDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, dwOldRGB);
 }
 

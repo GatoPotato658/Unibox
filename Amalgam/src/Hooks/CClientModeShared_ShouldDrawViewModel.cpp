@@ -10,7 +10,7 @@ MAKE_HOOK(CClientModeShared_ShouldDrawViewModel, U::Memory.GetVirtual(I::ClientM
 #ifdef TEXTMODE
 	return false;
 #else
-	if (Vars::Visuals::UI::ZoomFieldOfView.Value)
+	if (Vars::Visuals::UI::ZoomFieldOfView.Value && !SDK::CleanScreenshot())
 	{
 		auto pLocal = H::Entities.GetLocal();
 		if (pLocal && pLocal->InCond(TF_COND_ZOOMED))

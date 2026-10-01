@@ -175,11 +175,11 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 	case PlayerGodRayEffect:
 	case PlayerTauntSoundLoopStart:
 	case PlayerTauntSoundLoopEnd:
-		return Vars::Visuals::Removals::Taunts.Value ? true : CALL_ORIGINAL(rcx, type, msgData);
+		return Vars::Visuals::Removals::Taunts.Value && !SDK::CleanScreenshot() ? true : CALL_ORIGINAL(rcx, type, msgData);
 	case Shake:
 	case Fade:
 	case Rumble:
-		return Vars::Visuals::Removals::ScreenEffects.Value ? true : CALL_ORIGINAL(rcx, type, msgData);
+		return Vars::Visuals::Removals::ScreenEffects.Value && !SDK::CleanScreenshot() ? true : CALL_ORIGINAL(rcx, type, msgData);
 	}
 
 	msgData.Reset();

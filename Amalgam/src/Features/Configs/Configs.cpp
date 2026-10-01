@@ -73,13 +73,15 @@ static ConfigMapRestore CaptureConfigMaps()
 static void SaveSkinChanger(boost::property_tree::ptree& tWrite)
 {
 	boost::property_tree::ptree tSub;
-	for (const auto& [iDef, tSkin] : F::SkinChanger.m_mSkins)
+	for (const auto& [iDef, tSkin] : F::SkinChanger.GetSkins())
 	{
 		if (tSkin.Empty())
 			continue;
 
 		boost::property_tree::ptree tChild;
 		F::Configs.SaveJson(tChild, "PaintKit", tSkin.iPaintKit);
+		F::Configs.SaveJson(tChild, "Wear", tSkin.iWear);
+		F::Configs.SaveJson(tChild, "Quality", tSkin.iQuality);
 		F::Configs.SaveJson(tChild, "Australium", tSkin.bAustralium);
 		F::Configs.SaveJson(tChild, "Festive", tSkin.bFestive);
 		F::Configs.SaveJson(tChild, "Killstreak", tSkin.iKillstreak);
@@ -92,29 +94,31 @@ static void SaveSkinChanger(boost::property_tree::ptree& tWrite)
 
 static void LoadSkinChanger(const boost::property_tree::ptree& tRead)
 {
-	F::SkinChanger.m_mSkins.clear();
-	auto tSub = tRead.get_child_optional("SkinChanger");
-	if (!tSub)
-		return;
-
-	for (const auto& tPair : *tSub)
+	std::unordered_map<int, Skin_t> mSkins;
+	if (auto tSub = tRead.get_child_optional("SkinChanger"))
 	{
-		int iDef = 0;
-		try { iDef = std::stoi(tPair.first); }
-		catch (...) { continue; }
-		if (iDef < 0)
-			continue;
+		for (const auto& tPair : *tSub)
+		{
+			int iDef = 0;
+			try { iDef = std::stoi(tPair.first); }
+			catch (...) { continue; }
+			if (iDef < 0)
+				continue;
 
-		Skin_t tSkin = {};
-		F::Configs.LoadJson(tPair.second, "PaintKit", tSkin.iPaintKit);
-		F::Configs.LoadJson(tPair.second, "Australium", tSkin.bAustralium);
-		F::Configs.LoadJson(tPair.second, "Festive", tSkin.bFestive);
-		F::Configs.LoadJson(tPair.second, "Killstreak", tSkin.iKillstreak);
-		F::Configs.LoadJson(tPair.second, "Sheen", tSkin.iSheen);
-		F::Configs.LoadJson(tPair.second, "Unusual", tSkin.iUnusual);
-		if (!tSkin.Empty())
-			F::SkinChanger.m_mSkins[F::SkinChanger.Key(iDef)] = tSkin;
+			Skin_t tSkin = {};
+			F::Configs.LoadJson(tPair.second, "PaintKit", tSkin.iPaintKit);
+			F::Configs.LoadJson(tPair.second, "Wear", tSkin.iWear);
+			F::Configs.LoadJson(tPair.second, "Quality", tSkin.iQuality);
+			F::Configs.LoadJson(tPair.second, "Australium", tSkin.bAustralium);
+			F::Configs.LoadJson(tPair.second, "Festive", tSkin.bFestive);
+			F::Configs.LoadJson(tPair.second, "Killstreak", tSkin.iKillstreak);
+			F::Configs.LoadJson(tPair.second, "Sheen", tSkin.iSheen);
+			F::Configs.LoadJson(tPair.second, "Unusual", tSkin.iUnusual);
+			if (!tSkin.Empty())
+				mSkins[CSkinChanger::Key(iDef)] = tSkin;
+		}
 	}
+	F::SkinChanger.SetSkins(std::move(mSkins));
 }
 
 template <class T> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const T& v)
@@ -236,6 +240,7 @@ template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::s
 {
 	boost::property_tree::ptree tChild;
 	SaveJson(tChild, "Draw", v.Draw);
+	SaveJson(tChild, "BoxStyle", v.BoxStyle);
 	SaveJson(tChild, "BackgroundOpacity", v.BackgroundOpacity);
 	SaveJson(tChild, "Start", v.Start);
 	SaveJson(tChild, "End", v.End);
@@ -389,6 +394,8 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 	if (auto tChild = t.get_child_optional(s))
 	{
 		LoadJson(*tChild, "Draw", v.Draw);
+		LoadJson(*tChild, "BoxStyle", v.BoxStyle);
+		v.BoxStyle = std::clamp(v.BoxStyle, 0, 2);
 		LoadJson(*tChild, "BackgroundOpacity", v.BackgroundOpacity);
 		LoadJson(*tChild, "Start", v.Start);
 		LoadJson(*tChild, "End", v.End);
@@ -722,7 +729,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 
 	std::vector<Bind_t> vOldBinds;
 	std::vector<Group_t> vOldGroups;
-	auto mOldSkins = F::SkinChanger.m_mSkins;
+	auto mOldSkins = F::SkinChanger.GetSkins();
 	ConfigMapRestore vRestore;
 	const std::string sOldCurrentConfig = m_sCurrentConfig;
 	const std::string sOldCurrentVisuals = m_sCurrentVisuals;
@@ -875,7 +882,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 			std::scoped_lock lock(F::Binds.m_mMutex);
 			F::Binds.m_vBinds = std::move(vOldBinds);
 			F::Groups.m_vGroups = std::move(vOldGroups);
-			F::SkinChanger.m_mSkins = std::move(mOldSkins);
+			F::SkinChanger.SetSkins(std::move(mOldSkins));
 			for (auto& fRestore : vRestore)
 				fRestore();
 			m_sCurrentConfig = sOldCurrentConfig;
@@ -995,7 +1002,7 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		return false;
 
 	std::vector<Group_t> vOldGroups;
-	auto mOldSkins = F::SkinChanger.m_mSkins;
+	auto mOldSkins = F::SkinChanger.GetSkins();
 	ConfigMapRestore vRestore;
 	const std::string sOldCurrentVisuals = m_sCurrentVisuals;
 	bool bTransaction = false;
@@ -1090,7 +1097,7 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		{
 			std::scoped_lock lock(F::Binds.m_mMutex);
 			F::Groups.m_vGroups = std::move(vOldGroups);
-			F::SkinChanger.m_mSkins = std::move(mOldSkins);
+			F::SkinChanger.SetSkins(std::move(mOldSkins));
 			for (auto& fRestore : vRestore)
 				fRestore();
 			m_sCurrentVisuals = sOldCurrentVisuals;
@@ -1147,7 +1154,7 @@ void CConfigs::ResetConfig(const std::string& sConfigName, bool bNotify)
 	{
 		F::Binds.m_vBinds.clear();
 		F::Groups.m_vGroups.clear();
-		F::SkinChanger.m_mSkins.clear();
+		F::SkinChanger.SetSkins({});
 
 		bool bNoSave = !Vars::Config::LoadDebugSettings.Value && !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
 		for (auto& pBase : G::Vars)
@@ -1208,7 +1215,7 @@ void CConfigs::ResetVisual(const std::string& sConfigName, bool bNotify)
 	try
 	{
 		F::Groups.m_vGroups.clear();
-		F::SkinChanger.m_mSkins.clear();
+		F::SkinChanger.SetSkins({});
 
 		bool bNoSave = !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
 		for (auto& pBase : G::Vars)

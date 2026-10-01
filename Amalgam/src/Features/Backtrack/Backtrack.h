@@ -1,5 +1,6 @@
 #pragma once
 #include "../../SDK/SDK.h"
+#include "../ImGui/IndicatorCache.h"
 #include <optional>
 
 struct Sequence_t
@@ -48,11 +49,20 @@ private:
 	float m_flFakeInterp = 0.015f;
 
 	bool m_bSettingUpBones = false;
+
+	struct DrawCache_t
+	{
+		std::string m_sPingText = {};
+		std::string m_sScoreboardText = {};
+		bool m_bValid = false;
+	};
+	CIndicatorCache<DrawCache_t> m_tDrawCache = {};
 public:
 	void Store();
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void SendLerp();
-	void Draw(CTFPlayer* pLocal);
+	void CacheDrawInfo(CTFPlayer* pLocal);
+	void Draw();
 	void Reset();
 
 	bool GetRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn);

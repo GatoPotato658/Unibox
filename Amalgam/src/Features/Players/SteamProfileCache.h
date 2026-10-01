@@ -44,6 +44,7 @@ private:
 		uint64_t m_uAvatarRevision = 0;
 		std::filesystem::file_time_type m_tAvatarTimestamp = {};
 		bool m_bDiskChecked = false;
+		bool m_bDiskLoadQueued = false;
 		bool m_bNameRequested = false;
 		bool m_bAvatarRequested = false;
 		bool m_bSavePending = false;
@@ -59,6 +60,7 @@ private:
 	void RequestName(uint32_t uAccountID, Entry_t& tEntry);
 	void RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, bool bForce);
 	void LoadAvatarFromDisk(uint32_t uAccountID, Entry_t& tEntry);
+	static bool ReadAvatarFile(uint32_t uAccountID, std::vector<uint8_t>& vPixels, uint32_t& uWidth, uint32_t& uHeight, std::filesystem::file_time_type& tTimestamp);
 	void CaptureSteamAvatar(uint32_t uAccountID, int iImage, uint32_t uWidth = 0, uint32_t uHeight = 0);
 	void StoreAvatar(uint32_t uAccountID, std::vector<uint8_t>&& vBgra, uint32_t uWidth, uint32_t uHeight, bool bSave);
 	void HandlePersonaStateChange(const PersonaStateChange_t& tCallback);

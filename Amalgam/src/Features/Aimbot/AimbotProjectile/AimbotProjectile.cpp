@@ -2542,6 +2542,52 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 	m_bLastTickHeld = Vars::Aimbot::General::AimType.Value;
 }
 
+void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+{
+	if (!Vars::Visuals::Prediction::BestAimPos.Value || !Vars::Colors::AimPosColor.Value.a)
+		return;
+	if (m_flAimAnglesSetTime == I::GlobalVars->curtime)
+		return;
+	if (!pLocal || !pWeapon || !pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
+		return;
+
+	m_iWeaponID = pWeapon->GetWeaponID();
+	switch (m_iWeaponID)
+	{
+	case TF_WEAPON_MECHANICAL_ARM:
+	case TF_WEAPON_GRAPPLINGHOOK:
+	case TF_WEAPON_PASSTIME_GUN:
+		return;
+	}
+	m_pSentryGun = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
+
+	m_vBestPlayerPath.clear();
+	m_bBestPlayerPathSet = false;
+	m_bBlockAimAnglesDraw = false;
+
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon, Vars::Aimbot::General::TargetSelectionProjectile.Value);
+	for (auto& tTarget : vTargets)
+	{
+		m_flTimeTo = std::numeric_limits<float>::max();
+		m_vPlayerPath.clear(); m_vProjectilePath.clear(); m_vBoxes.clear();
+
+		const int iResult = CanHit(tTarget, pLocal, pWeapon);
+		if (!iResult)
+		{
+			if (m_flAimAnglesSetTime != I::GlobalVars->curtime && m_bBestPlayerPathSet)
+				m_bBlockAimAnglesDraw = true;
+			continue;
+		}
+
+		m_vAimAngles = m_vPlainAngles;
+		m_flAimAnglesSetTime = I::GlobalVars->curtime;
+		break;
+	}
+
+	m_vPlayerPath.clear(); m_vProjectilePath.clear(); m_vBoxes.clear();
+	m_vBestPlayerPath.clear();
+}
+
 void CAimbotProjectile::RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	static auto tf_grapplinghook_enable = H::ConVars.FindVar("tf_grapplinghook_enable");

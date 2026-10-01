@@ -8,10 +8,10 @@ MAKE_HOOK(CTFRagdoll_CreateTFRagdoll, S::CTFRagdoll_CreateTFRagdoll(), void,
 	DEBUG_RETURN(CTFRagdoll_CreateTFRagdoll, rcx);
 
 #ifndef TEXTMODE
-	if (Vars::Visuals::Removals::Ragdolls.Value)
+	if (Vars::Visuals::Removals::Ragdolls.Value && !SDK::CleanScreenshot())
 		return;
 
-	if (!Vars::Visuals::Effects::RagdollEffects.Value)
+	if (!Vars::Visuals::Effects::RagdollEffects.Value || SDK::CleanScreenshot())
 		return CALL_ORIGINAL(rcx);
 
 	auto pRagdoll = reinterpret_cast<CTFRagdoll*>(rcx);

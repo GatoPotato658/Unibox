@@ -12,6 +12,10 @@
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/NavBot/NavEngine.h"
+#ifndef TEXTMODE
+#include "../Features/ImGui/Overlay/CaptureOverlay.h"
+#include "../Features/ImGui/RenderSync.h"
+#endif
 #include "../SDK/Events/Events.h"
 #ifdef TEXTMODE
 #include "../Features/Misc/NamedPipe/NamedPipe.h"
@@ -245,10 +249,12 @@ void CCore::Unload()
 	F::Materials.RequestUnload();
 	for (int i = 0; i < 200 && !F::Materials.IsUnloadComplete(); ++i)
 		Sleep(10);
+	F::RenderSync.WaitIdle(1000);
 #endif
 
 #ifndef TEXTMODE
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
+	F::CaptureOverlay.Shutdown();
 #endif
 	U::BytePatches.Unload();
 	H::Events.Unload();

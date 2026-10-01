@@ -6,7 +6,7 @@ MAKE_HOOK(CStudioRender_DrawModelStaticProp, U::Memory.GetVirtual(I::StudioRende
 	DEBUG_RETURN(CStudioRender_DrawModelStaticProp, rcx, pState, modelToWorld, flags);
 
 #ifndef TEXTMODE
-	if (Vars::Visuals::World::NearPropFade.Value)
+	if (Vars::Visuals::World::NearPropFade.Value && !SDK::CleanScreenshot())
 	{
 		if (auto pLocal = H::Entities.GetLocal())
 		{

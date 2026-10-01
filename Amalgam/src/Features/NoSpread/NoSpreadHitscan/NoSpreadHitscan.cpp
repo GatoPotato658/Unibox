@@ -204,36 +204,28 @@ void CNoSpreadHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* 
 	G::SilentAngles = true;
 }
 
-void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
+void CNoSpreadHitscan::CacheDrawInfo(CTFPlayer* pLocal)
 {
-	static std::string sUptime = {};
-	static std::string sMantissaStep = {};
-	static std::string sDelta = {};
-	static Color_t tCachedColor = {};
-	static bool bCachedValid = false;
-
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::SeedPrediction))
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::SeedPrediction)
+		|| !pLocal || !ShouldRun() || !pLocal->IsAlive())
 	{
-		bCachedValid = false;
+		m_tDrawCache.Set({});
 		return;
 	}
 
-	if (pLocal)
-	{
-		if (!ShouldRun() || !pLocal->IsAlive())
-		{
-			bCachedValid = false;
-			return;
-		}
+	m_tDrawCache.Set({
+		std::format("Uptime {}", GetFormat(m_flServerTime)),
+		std::format("Mantissa step {}", m_flMantissaStep),
+		std::format("Delta {:.3f}", m_dTimeDelta),
+		m_bSynced ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value,
+		true
+	});
+}
 
-		tCachedColor = m_bSynced ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
-		sUptime = std::format("Uptime {}", GetFormat(m_flServerTime));
-		sMantissaStep = std::format("Mantissa step {}", m_flMantissaStep);
-		sDelta = std::format("Delta {:.3f}", m_dTimeDelta);
-		bCachedValid = true;
-	}
-
-	if (!bCachedValid)
+void CNoSpreadHitscan::Draw()
+{
+	const DrawCache_t tCache = m_tDrawCache.Get();
+	if (!tCache.m_bValid)
 		return;
 
 	int x = Vars::Menu::SeedPredictionDisplay.Value.x;
@@ -254,8 +246,8 @@ void CNoSpreadHitscan::Draw(CTFPlayer* pLocal)
 		align = ALIGN_TOPRIGHT;
 	}
 
-	DrawIndicatorText(pDrawList, x, y, tCachedColor, Vars::Menu::Theme::Background.Value, align, sUptime);
-	DrawIndicatorText(pDrawList, x, y += nTall, tCachedColor, Vars::Menu::Theme::Background.Value, align, sMantissaStep);
+	DrawIndicatorText(pDrawList, x, y, tCache.m_tColor, Vars::Menu::Theme::Background.Value, align, tCache.m_sUptime);
+	DrawIndicatorText(pDrawList, x, y += nTall, tCache.m_tColor, Vars::Menu::Theme::Background.Value, align, tCache.m_sMantissaStep);
 	if (Vars::Debug::Info.Value)
-		DrawIndicatorText(pDrawList, x, y += nTall, tCachedColor, Vars::Menu::Theme::Background.Value, align, sDelta);
+		DrawIndicatorText(pDrawList, x, y += nTall, tCache.m_tColor, Vars::Menu::Theme::Background.Value, align, tCache.m_sDelta);
 }

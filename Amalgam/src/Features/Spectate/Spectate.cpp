@@ -10,6 +10,8 @@ void CSpectate::NetUpdateEnd(CTFPlayer* pLocal)
 	if (!pLocal)
 		return;
 
+	if (SDK::AntiObs())
+		m_iIntendedTarget = -1;
 	m_iTarget = m_iIntendedTarget;
 	CTFPlayer* pEntity = nullptr;
 	if (HasTarget())

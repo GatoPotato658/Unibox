@@ -760,7 +760,7 @@ void CCritHack::Draw()
 		return;
 	}
 
-	flCurrentProgress = std::lerp(flCurrentProgress, tCache.m_flTargetProgress, ImGui::GetIO().DeltaTime * 10.f);
+	flCurrentProgress = std::lerp(flCurrentProgress, tCache.m_flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 
 	const ImVec2 vPanelPos =
 	{

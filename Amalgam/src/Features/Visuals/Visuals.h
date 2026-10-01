@@ -1,5 +1,8 @@
 #pragma once
 #include "../../SDK/SDK.h"
+#include "../ImGui/IndicatorCache.h"
+
+struct ImDrawList;
 
 //#define DEBUG_UNI
 #ifdef DEBUG_UNI
@@ -41,6 +44,13 @@ private:
 	std::vector<KeyValues*> m_v_world_texture_key_values = {};
 	Vec3 m_vPrevAimAngles = {};
 
+	struct AimPos_t
+	{
+		bool m_bValid = false;
+		float m_flX = 0.f, m_flY = 0.f;
+	};
+	CIndicatorCache<AimPos_t> m_tAimPosCache = {};
+
 #ifdef DEBUG_UNI
 	struct ImageArrayInfo_t
 	{
@@ -71,7 +81,8 @@ public:
 	std::vector<DrawBox_t> GetHitboxes(matrix3x4* aBones, CBaseAnimating* pEntity, std::vector<int> vHitboxes = {}, int iTarget = -1);
 	void DrawEffects();
 	void DrawHitboxes(int iStore = 0);
-	void DrawBestAimPos(CTFPlayer* pLocal);
+	void CacheBestAimPos(CTFPlayer* pLocal);
+	void DrawBestAimPos(ImDrawList* pDrawList);
 
 	void FOV(CTFPlayer* pLocal, CViewSetup* pView);
 	void ThirdPerson(CTFPlayer* pLocal, CViewSetup* pView);

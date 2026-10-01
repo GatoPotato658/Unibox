@@ -424,6 +424,7 @@
     <ClInclude Include="src\SDK\Definitions\Interfaces\SteamInterfaces.h" />
     <ClInclude Include="src\Features\ImGui\Render.h" />
     <ClInclude Include="src\Features\ImGui\IndicatorPanel.h" />
+    <ClInclude Include="src\Features\ImGui\IndicatorCache.h" />
     <ClInclude Include="src\Features\Aimbot\Aimbot.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotGlobal\AimbotGlobal.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotHitscan\AimbotHitscan.h" />
@@ -457,6 +458,7 @@
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
     <ClInclude Include="src\Features\Visuals\SkinChanger\SkinChanger.h" />
+    <ClInclude Include="src\Features\Visuals\SkinChanger\SkinData.h" />
     <ClInclude Include="src\Features\Visuals\PlayerConditions\PlayerConditions.h" />
     <ClInclude Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.h" />
     <ClInclude Include="src\Features\Visuals\SpectatorList\SpectatorList.h" />

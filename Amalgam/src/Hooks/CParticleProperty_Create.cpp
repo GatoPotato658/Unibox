@@ -21,7 +21,7 @@ MAKE_HOOK(CParticleProperty_Create_Name, S::CParticleProperty_Create_Name(), voi
     const auto dwManageChargeEffect = S::CWeaponMedigun_ManageChargeEffect_CreateName_Call();
 
 	bool bUpdateEffects = dwRetAddr == dwUpdateEffects1 || dwRetAddr == dwUpdateEffects2, bManageChargeEffect = dwRetAddr == dwManageChargeEffect;
-	if (bUpdateEffects || bManageChargeEffect)
+	if ((bUpdateEffects || bManageChargeEffect) && !SDK::CleanScreenshot())
 	{
 		auto pLocal = H::Entities.GetLocal();
 		if (!pLocal)
@@ -106,7 +106,7 @@ MAKE_HOOK(CParticleProperty_Create_Point, S::CParticleProperty_Create_Point(), v
         }
     }
 
-    if (FNV1A::Hash32(Vars::Visuals::Effects::ProjectileTrail.Value.c_str()) != FNV1A::Hash32Const("Default") && pszParticleName)
+    if (FNV1A::Hash32(Vars::Visuals::Effects::ProjectileTrail.Value.c_str()) != FNV1A::Hash32Const("Default") && pszParticleName && !SDK::CleanScreenshot())
     {
         switch (FNV1A::Hash32(pszParticleName))
         {

@@ -1157,6 +1157,7 @@ public:
 struct ESP_t
 {
 	int		Draw = 0b0;
+	int		BoxStyle = 0;
 
 	byte	BackgroundOpacity = 200;
 	float	Start = 0.f;
@@ -1165,12 +1166,12 @@ struct ESP_t
 
 	inline bool operator==(const ESP_t& t) const
 	{
-		return Draw == t.Draw && BackgroundOpacity == t.BackgroundOpacity && Start == t.Start && End == t.End && SmoothAlpha == t.SmoothAlpha;
+		return Draw == t.Draw && BoxStyle == t.BoxStyle && BackgroundOpacity == t.BackgroundOpacity && Start == t.Start && End == t.End && SmoothAlpha == t.SmoothAlpha;
 	}
 
 	inline bool operator!=(const ESP_t& t) const
 	{
-		return Draw != t.Draw || BackgroundOpacity != t.BackgroundOpacity || Start != t.Start || End != t.End || SmoothAlpha != t.SmoothAlpha;
+		return Draw != t.Draw || BoxStyle != t.BoxStyle || BackgroundOpacity != t.BackgroundOpacity || Start != t.Start || End != t.End || SmoothAlpha != t.SmoothAlpha;
 	}
 
 	inline bool operator()() const

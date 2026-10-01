@@ -27,17 +27,17 @@ MAKE_HOOK(CTFPlayerShared_InCond, S::CTFPlayerShared_InCond(), bool,
 	switch (nCond)
 	{
 	case TF_COND_ZOOMED:
-		if (dwRetAddr == dwZoomPlayer || dwRetAddr == dwZoomWearable || dwRetAddr == dwZoomHudScope && Vars::Visuals::Removals::Scope.Value)
+		if (dwRetAddr == dwZoomPlayer || dwRetAddr == dwZoomWearable || dwRetAddr == dwZoomHudScope && Vars::Visuals::Removals::Scope.Value && !SDK::CleanScreenshot())
 			return false;
 		break;
 	case TF_COND_DISGUISED:
-		if (Vars::Visuals::Removals::Disguises.Value && pShared != rcx)
+		if (Vars::Visuals::Removals::Disguises.Value && pShared != rcx && !SDK::CleanScreenshot())
 			return false;
 		break;
 	case TF_COND_TAUNTING:
 		if (dwRetAddr == dwTaunt && Vars::Misc::Automation::TauntControl.Value)
 			return false;
-		if (Vars::Visuals::Removals::Taunts.Value && pShared != rcx)
+		if (Vars::Visuals::Removals::Taunts.Value && pShared != rcx && !SDK::CleanScreenshot())
 			return false;
 		break;
 	case TF_COND_HALLOWEEN_KART:
