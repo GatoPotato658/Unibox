@@ -101,6 +101,7 @@ void CMaterials::ServicePendingOperation()
 	switch (operation)
 	{
 	case PendingOperation::Load: sName = "Materials.Load"; break;
+	case PendingOperation::Refresh: sName = "Materials.Refresh"; break;
 	case PendingOperation::Reload: sName = "Materials.Reload"; break;
 	case PendingOperation::Unload: sName = "Materials.Unload"; break;
 	case PendingOperation::None: break;
@@ -112,6 +113,10 @@ void CMaterials::ServicePendingOperation()
 	case PendingOperation::Load:
 		if (!m_bLoaded)
 			LoadMaterials();
+		break;
+	case PendingOperation::Refresh:
+		UnloadMaterials();
+		LoadMaterials();
 		break;
 	case PendingOperation::Reload:
 		UnloadMaterials();
@@ -430,6 +435,15 @@ void CMaterials::ReloadMaterials()
 	PendingOperation pending = m_ePendingOperation.load();
 	while (pending != PendingOperation::Unload
 		&& !m_ePendingOperation.compare_exchange_weak(pending, PendingOperation::Reload))
+	{
+	}
+}
+
+void CMaterials::RefreshMaterials()
+{
+	PendingOperation pending = m_ePendingOperation.load();
+	while (pending != PendingOperation::Unload && pending != PendingOperation::Reload
+		&& !m_ePendingOperation.compare_exchange_weak(pending, PendingOperation::Refresh))
 	{
 	}
 }

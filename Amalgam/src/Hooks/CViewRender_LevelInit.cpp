@@ -23,7 +23,7 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	CALL_ORIGINAL(rcx);
 
 #ifndef TEXTMODE
-	F::Materials.ReloadMaterials();
+	F::Materials.RefreshMaterials();
 	F::Visuals.OverrideWorldTextures();
 	F::Killstreak.Reset();
 	F::Spectate.Reset();

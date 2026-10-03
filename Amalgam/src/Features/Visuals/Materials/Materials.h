@@ -25,6 +25,7 @@ public:
 	{
 		None,
 		Load,
+		Refresh,
 		Reload,
 		Unload
 	};
@@ -32,6 +33,7 @@ public:
 	void LoadMaterials();
 	void UnloadMaterials();
 	void ReloadMaterials();
+	void RefreshMaterials();
 	void RequestLoad();
 	void RequestUnload();
 	void ServicePendingOperation();
