@@ -7,16 +7,9 @@ MAKE_SIGNATURE(C_PhysPropClientside_ParseEntity_ExtractValue_Call, "client.dll",
 
 static Vector ParseVector(const char* szValue)
 {
-	Vector vOut;
-	std::string str(szValue);
-	size_t uOff = 0, uMaxSize = str.size();
-	for (int i = 0; i < 3; i++)
-	{
-		size_t uNextValue = str.find(' ', uOff) + 1;
-		std::string strSub = str.substr(uOff, (uNextValue == std::string::npos ? uMaxSize : uNextValue) - uOff);
-		uOff = uNextValue;
-		vOut[i] = atof(strSub.c_str());
-	}
+	Vector vOut = {};
+	if (szValue && *szValue)
+		sscanf_s(szValue, "%f %f %f", &vOut.x, &vOut.y, &vOut.z);
 	return vOut;
 }
 
@@ -25,7 +18,8 @@ static bool ParseTrigger(CEntityMapData* pData, TriggerTypeEnum::TriggerTypeEnum
 	char szKeyName[MAPKEY_MAXLENGTH];
 	char szValue[MAPKEY_MAXLENGTH];
 
-	if (pData->GetFirstKey(szKeyName, szValue))
+	CEntityMapData localData(*pData);
+	if (localData.GetFirstKey(szKeyName, szValue))
 	{
 		model_t* pModel = nullptr;
 		Vector vOrigin = {}, vAngles = {}, vRotate = {};
@@ -73,7 +67,7 @@ static bool ParseTrigger(CEntityMapData* pData, TriggerTypeEnum::TriggerTypeEnum
 				break;
 			}
 		}
-		while (pData->GetNextKey(szKeyName, szValue));
+		while (localData.GetNextKey(szKeyName, szValue));
 		if (pModel)
 		{
 			TriggerData_t tData = TriggerData_t{ pModel, eType, vOrigin, {}, vAngles, vRotate, iTeam, {} };
@@ -147,7 +141,7 @@ MAKE_HOOK(CEntityMapData_ExtractValue, S::CEntityMapData_ExtractValue(), bool,
 		case FNV1A::Hash32Const("item_healthkit_small"):
 		{
 			char szValue[MAPKEY_MAXLENGTH];
-			if (S::CEntityMapData_ExtractValue.Call<bool>(rcx, "origin", szValue))
+			if (CALL_ORIGINAL(rcx, "origin", szValue))
 				F::NavBotSupplies.AddCachedSupplyOrigin(ParseVector(szValue), bHealth);
 			break;
 		}

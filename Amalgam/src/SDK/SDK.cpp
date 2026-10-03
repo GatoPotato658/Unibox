@@ -7,6 +7,8 @@
 #include "../Features/Ticks/Ticks.h"
 
 #include <Windows.h>
+#include <charconv>
+#include <cstring>
 
 #pragma warning (disable : 6385)
 
@@ -36,58 +38,60 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 	return FALSE;
 }
 
-	static constexpr int BspHeaderID = ('V' << 24) | ('B' << 16) | ('S' << 8) | 'P';
-	static constexpr int BspHeaderLumps = 64;
-	static constexpr int BspLumpEntities = 0;
-
-	struct bsp_lump_t
+	static void SkipEntityWhitespace(std::string_view sData, size_t& iOffset)
 	{
-		int m_iFileOffset = 0;
-		int m_iFileLength = 0;
-		int m_iVersion = 0;
-		char m_chFourCC[4] = {};
-	};
-
-	struct bsp_header_t
-	{
-		int m_iIdent = 0;
-		int m_iVersion = 0;
-		bsp_lump_t m_aLumps[BspHeaderLumps] = {};
-		int m_iMapRevision = 0;
-	};
-
-	static void SkipEntityWhitespace(const std::string_view sData, size_t& iOffset)
-	{
-		while (iOffset < sData.size() && isspace(static_cast<unsigned char>(sData[iOffset])))
+		while (iOffset < sData.size() && static_cast<unsigned char>(sData[iOffset]) <= ' ')
 			iOffset++;
 	}
 
-	static auto ParseQuotedEntityToken(const std::string_view sData, size_t& iOffset) -> std::string
+	static bool ParseQuotedEntityTokenView(std::string_view sData, size_t& iOffset, std::string_view& sToken)
 	{
 		SkipEntityWhitespace(sData, iOffset);
 		if (iOffset >= sData.size() || sData[iOffset] != '"')
-			return {};
-
-		iOffset++;
-		std::string sOut = {};
-		while (iOffset < sData.size())
 		{
-			const char cCurrent = sData[iOffset++];
-			if (cCurrent == '"')
-				break;
-			if (cCurrent == '\\' && iOffset < sData.size())
-				sOut.push_back(sData[iOffset++]);
-			else
-				sOut.push_back(cCurrent);
+			sToken = {};
+			return false;
 		}
 
+		iOffset++;
+		const size_t iStart = iOffset;
+		while (iOffset < sData.size())
+		{
+			if (sData[iOffset] == '\\' && iOffset + 1 < sData.size())
+			{
+				iOffset += 2;
+				continue;
+			}
+			if (sData[iOffset] == '"')
+				break;
+			iOffset++;
+		}
+
+		const size_t iEnd = iOffset;
+		if (iOffset < sData.size() && sData[iOffset] == '"')
+			iOffset++;
+
+		sToken = sData.substr(iStart, iEnd - iStart);
+		return true;
+	}
+
+	static std::string UnescapeEntityToken(std::string_view sToken)
+	{
+		std::string sOut;
+		sOut.reserve(sToken.size());
+		for (size_t i = 0; i < sToken.size(); i++)
+		{
+			if (sToken[i] == '\\' && i + 1 < sToken.size())
+				i++;
+			sOut.push_back(sToken[i]);
+		}
 		return sOut;
 	}
 
-	static auto TriggerTypeFromClassname(const std::string& sClassname, bool& bRespawnRoomOut) -> TriggerTypeEnum::TriggerTypeEnum
+	static auto TriggerTypeFromClassname(std::string_view sClassname, bool& bRespawnRoomOut) -> TriggerTypeEnum::TriggerTypeEnum
 	{
 		bRespawnRoomOut = false;
-		switch (FNV1A::Hash32(sClassname.c_str()))
+		switch (FNV1A::Hash32(sClassname))
 		{
 		case FNV1A::Hash32Const("trigger_hurt"):
 			return TriggerTypeEnum::Hurt;
@@ -114,62 +118,105 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 		}
 	}
 
-	static Vector ParseEntityVector(const std::string& sValue)
+	static bool FastParseFloat(const char*& p, const char* pEnd, float& flOut)
+	{
+		while (p < pEnd && static_cast<unsigned char>(*p) <= ' ')
+			p++;
+		if (p >= pEnd)
+			return false;
+		if (*p == '+')
+		{
+			p++;
+			if (p >= pEnd || *p == '+' || *p == '-')
+				return false;
+		}
+		auto [next, ec] = std::from_chars(p, pEnd, flOut);
+		if (ec != std::errc() || next == p)
+			return false;
+		p = next;
+		return true;
+	}
+
+	static Vector ParseEntityVector(std::string_view sValue)
 	{
 		Vector vOut = {};
 		if (sValue.empty())
 			return vOut;
 
-		sscanf_s(sValue.c_str(), "%f %f %f", &vOut.x, &vOut.y, &vOut.z);
+		const char* p = sValue.data();
+		const char* pEnd = p + sValue.size();
+		if (FastParseFloat(p, pEnd, vOut.x) && FastParseFloat(p, pEnd, vOut.y))
+			FastParseFloat(p, pEnd, vOut.z);
 		return vOut;
 	}
 
-	static bool AppendTriggerFromKeyValues(const std::unordered_map<std::string, std::string>& mKeyValues)
+	static int ParseEntityInt(std::string_view sValue)
 	{
-		auto itClassname = mKeyValues.find("classname");
-		if (itClassname == mKeyValues.end())
+		if (sValue.empty())
+			return 0;
+
+		int iOut = 0;
+		const char* p = sValue.data();
+		const char* pEnd = p + sValue.size();
+		while (p < pEnd && static_cast<unsigned char>(*p) <= ' ')
+			p++;
+		if (p < pEnd && *p == '+')
+			p++;
+		std::from_chars(p, pEnd, iOut);
+		return iOut;
+	}
+
+	struct ParsedEntity_t
+	{
+		std::string_view m_sClassname = {};
+		std::string_view m_sModel = {};
+		std::string_view m_sParentname = {};
+		std::string_view m_sOrigin = {};
+		std::string_view m_sPushDir = {};
+		std::string_view m_sImpulseDir = {};
+		std::string_view m_sLaunchDir = {};
+		std::string_view m_sAngles = {};
+		std::string_view m_sTeamNum = {};
+		std::string m_sTargetname = {};
+		std::string_view m_sSpawnflags = {};
+		std::string_view m_sStartDisabled = {};
+	};
+
+	static bool AppendTriggerFromParsed(const ParsedEntity_t& tEnt)
+	{
+		if (tEnt.m_sClassname.empty() || tEnt.m_sModel.empty() || !tEnt.m_sParentname.empty())
 			return false;
 
 		bool bIsRespawnRoom = false;
-		const auto eType = TriggerTypeFromClassname(itClassname->second, bIsRespawnRoom);
+		const auto eType = TriggerTypeFromClassname(tEnt.m_sClassname, bIsRespawnRoom);
 		if (eType == TriggerTypeEnum::None)
 			return false;
 
-		auto itModel = mKeyValues.find("model");
-		if (itModel == mKeyValues.end() || itModel->second.empty())
+		char szModel[64] = {};
+		if (tEnt.m_sModel.size() >= sizeof(szModel))
 			return false;
+		std::memcpy(szModel, tEnt.m_sModel.data(), tEnt.m_sModel.size());
+		szModel[tEnt.m_sModel.size()] = '\0';
 
-		if (auto itParentname = mKeyValues.find("parentname"); itParentname != mKeyValues.end() && !itParentname->second.empty())
-			return false;
-
-		model_t* pModel = I::ModelLoader->FindModel(itModel->second.c_str());
+		model_t* pModel = I::ModelLoader->FindModel(szModel);
 		if (!pModel)
 			return false;
 
-		const auto GetKeyValueOrDefault = [&mKeyValues](const char* sKey) -> const char*
-			{
-				if (auto it = mKeyValues.find(sKey); it != mKeyValues.end())
-					return it->second.c_str();
-				return "";
-			};
-
-		const Vector vOrigin = ParseEntityVector(GetKeyValueOrDefault("origin"));
+		const Vector vOrigin = ParseEntityVector(tEnt.m_sOrigin);
 		Vector vAngles = {};
 		Vector vRotate = {};
 
-		if (const char* sAngles = GetKeyValueOrDefault("pushdir"); *sAngles)
-			vAngles = ParseEntityVector(sAngles);
-		else if (const char* sImpulseDir = GetKeyValueOrDefault("impulse_dir"); *sImpulseDir)
-			vAngles = ParseEntityVector(sImpulseDir);
-		else if (const char* sLaunchDir = GetKeyValueOrDefault("launchDirection"); *sLaunchDir)
-			vAngles = ParseEntityVector(sLaunchDir);
+		if (!tEnt.m_sPushDir.empty())
+			vAngles = ParseEntityVector(tEnt.m_sPushDir);
+		else if (!tEnt.m_sImpulseDir.empty())
+			vAngles = ParseEntityVector(tEnt.m_sImpulseDir);
+		else if (!tEnt.m_sLaunchDir.empty())
+			vAngles = ParseEntityVector(tEnt.m_sLaunchDir);
 
-		if (const char* sRotate = GetKeyValueOrDefault("angles"); *sRotate)
-			vRotate = ParseEntityVector(sRotate);
+		if (!tEnt.m_sAngles.empty())
+			vRotate = ParseEntityVector(tEnt.m_sAngles);
 
-		int iTeam = 0;
-		if (const char* sTeam = GetKeyValueOrDefault("TeamNum"); *sTeam)
-			iTeam = atoi(sTeam);
+		const int iTeam = ParseEntityInt(tEnt.m_sTeamNum);
 
 		TriggerData_t tTrigger = { pModel, eType, vOrigin, {}, vAngles, vRotate, iTeam, {} };
 		SDK::BuildTriggerGeometry(tTrigger);
@@ -179,28 +226,22 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 		return true;
 	}
 
-	static void AppendPasstimeGoalFromKeyValues(const std::unordered_map<std::string, std::string>& mKeyValues)
+	static void AppendPasstimeGoalFromParsed(const ParsedEntity_t& tEnt)
 	{
-		auto itClassname = mKeyValues.find("classname");
-		if (itClassname == mKeyValues.end() || itClassname->second != "func_passtime_goal")
+		if (tEnt.m_sClassname != "func_passtime_goal")
 			return;
 
 		PasstimeMapGoalData_t tGoal = {};
-		if (auto itOrigin = mKeyValues.find("origin"); itOrigin != mKeyValues.end())
-			tGoal.m_vOrigin = ParseEntityVector(itOrigin->second);
-		if (auto itTargetname = mKeyValues.find("targetname"); itTargetname != mKeyValues.end())
-			tGoal.m_sTargetname = itTargetname->second;
-		if (auto itTeam = mKeyValues.find("TeamNum"); itTeam != mKeyValues.end())
-			tGoal.m_iTeam = atoi(itTeam->second.c_str());
-		if (auto itSpawnflags = mKeyValues.find("spawnflags"); itSpawnflags != mKeyValues.end())
-			tGoal.m_iSpawnflags = atoi(itSpawnflags->second.c_str());
-		if (auto itStartDisabled = mKeyValues.find("StartDisabled"); itStartDisabled != mKeyValues.end())
-			tGoal.m_bStartDisabled = atoi(itStartDisabled->second.c_str()) != 0;
+		tGoal.m_vOrigin = ParseEntityVector(tEnt.m_sOrigin);
+		tGoal.m_sTargetname = tEnt.m_sTargetname;
+		tGoal.m_iTeam = ParseEntityInt(tEnt.m_sTeamNum);
+		tGoal.m_iSpawnflags = ParseEntityInt(tEnt.m_sSpawnflags);
+		tGoal.m_bStartDisabled = ParseEntityInt(tEnt.m_sStartDisabled) != 0;
 
 		G::PasstimeGoalStorage.push_back(std::move(tGoal));
 	}
 
-	static bool BuildTriggerStorageFromEntityLump(const std::string_view sEntityLump, int& iOutTriggers)
+	static bool BuildTriggerStorageFromEntityLump(std::string_view sEntityLump, int& iOutTriggers)
 	{
 		iOutTriggers = 0;
 		size_t iOffset = 0;
@@ -217,7 +258,8 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 			}
 
 			iOffset++;
-			std::unordered_map<std::string, std::string> mKeyValues = {};
+			ParsedEntity_t tEnt = {};
+			bool bMalformed = false;
 			while (iOffset < sEntityLump.size())
 			{
 				SkipEntityWhitespace(sEntityLump, iOffset);
@@ -229,54 +271,41 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 					break;
 				}
 
-				auto sKey = ParseQuotedEntityToken(sEntityLump, iOffset);
-				auto sValue = ParseQuotedEntityToken(sEntityLump, iOffset);
-				if (!sKey.empty())
-					mKeyValues[std::move(sKey)] = std::move(sValue);
+				std::string_view sKey, sValue;
+				if (!ParseQuotedEntityTokenView(sEntityLump, iOffset, sKey)
+					|| !ParseQuotedEntityTokenView(sEntityLump, iOffset, sValue))
+				{
+					bMalformed = true;
+					break;
+				}
+				if (sKey.empty())
+					continue;
+
+				switch (FNV1A::Hash32(sKey))
+				{
+				case FNV1A::Hash32Const("classname"):       tEnt.m_sClassname = sValue; break;
+				case FNV1A::Hash32Const("model"):           tEnt.m_sModel = sValue; break;
+				case FNV1A::Hash32Const("parentname"):      tEnt.m_sParentname = sValue; break;
+				case FNV1A::Hash32Const("origin"):          tEnt.m_sOrigin = sValue; break;
+				case FNV1A::Hash32Const("pushdir"):         tEnt.m_sPushDir = sValue; break;
+				case FNV1A::Hash32Const("impulse_dir"):     tEnt.m_sImpulseDir = sValue; break;
+				case FNV1A::Hash32Const("launchDirection"): tEnt.m_sLaunchDir = sValue; break;
+				case FNV1A::Hash32Const("angles"):          tEnt.m_sAngles = sValue; break;
+				case FNV1A::Hash32Const("TeamNum"):         tEnt.m_sTeamNum = sValue; break;
+				case FNV1A::Hash32Const("targetname"):      tEnt.m_sTargetname = UnescapeEntityToken(sValue); break;
+				case FNV1A::Hash32Const("spawnflags"):      tEnt.m_sSpawnflags = sValue; break;
+				case FNV1A::Hash32Const("StartDisabled"):   tEnt.m_sStartDisabled = sValue; break;
+				default: break;
+				}
 			}
 
-			AppendPasstimeGoalFromKeyValues(mKeyValues);
-			iOutTriggers += AppendTriggerFromKeyValues(mKeyValues) ? 1 : 0;
+			if (bMalformed)
+				continue;
+			AppendPasstimeGoalFromParsed(tEnt);
+			iOutTriggers += AppendTriggerFromParsed(tEnt) ? 1 : 0;
 		}
 
 		return iOutTriggers > 0;
-	}
-
-	static bool LoadBspEntityLump(std::string& sOutEntityLump)
-	{
-		const std::string sMapName = SDK::GetLevelName();
-		if (sMapName.empty() || sMapName == "None")
-			return false;
-
-		const std::string sMapPath = std::format("maps/{}.bsp", sMapName);
-		FileHandle_t hFile = I::FileSystem->Open(sMapPath.c_str(), "rb", "GAME");
-		if (!hFile)
-			return false;
-
-		bsp_header_t tHeader = {};
-		const bool bHeaderRead = I::FileSystem->Read(&tHeader, sizeof(tHeader), hFile) == sizeof(tHeader);
-		if (!bHeaderRead || tHeader.m_iIdent != BspHeaderID)
-		{
-			I::FileSystem->Close(hFile);
-			return false;
-		}
-
-		const auto& tEntityLump = tHeader.m_aLumps[BspLumpEntities];
-		if (tEntityLump.m_iFileOffset <= 0 || tEntityLump.m_iFileLength <= 0)
-		{
-			I::FileSystem->Close(hFile);
-			return false;
-		}
-
-		std::vector<char> vEntityData(static_cast<size_t>(tEntityLump.m_iFileLength) + 1, '\0');
-		I::FileSystem->Seek(hFile, tEntityLump.m_iFileOffset, FILESYSTEM_SEEK_HEAD);
-		const int iRead = I::FileSystem->Read(vEntityData.data(), tEntityLump.m_iFileLength, hFile);
-		I::FileSystem->Close(hFile);
-		if (iRead != tEntityLump.m_iFileLength)
-			return false;
-
-		sOutEntityLump.assign(vEntityData.data(), static_cast<size_t>(tEntityLump.m_iFileLength));
-		return true;
 	}
 
 
@@ -1442,20 +1471,27 @@ bool SDK::RefreshTriggerStorage(bool bForce)
 
 	static Timer tRetryTimer = {};
 	static std::string sLastMap = {};
+	static std::string sLastParsedMap = {};
 	const std::string sMapName = SDK::GetLevelName();
 	if (sMapName != sLastMap)
 	{
 		sLastMap = sMapName;
+		sLastParsedMap.clear();
 		tRetryTimer.Update();
 	}
 
-	if (!bForce && !G::TriggerStorage.empty() && F::NavEngine.HasRespawnRooms())
+	if (!bForce && !sLastParsedMap.empty() && sLastParsedMap == sMapName)
 		return true;
 	if (!bForce && !tRetryTimer.Run(1.0f))
 		return false;
 
-	std::string sEntityLump = {};
-	if (!LoadBspEntityLump(sEntityLump))
+	const char* pszEntityString = I::EngineClient->GetMapEntitiesString();
+	if (!pszEntityString || !*pszEntityString)
+	{
+		if (I::BSPData && I::BSPData->numentitychars > 0)
+			pszEntityString = I::BSPData->map_entitystring.Get();
+	}
+	if (!pszEntityString || !*pszEntityString)
 		return false;
 
 	const auto vOldTriggers = G::TriggerStorage;
@@ -1466,7 +1502,7 @@ bool SDK::RefreshTriggerStorage(bool bForce)
 	F::NavEngine.ClearRespawnRooms();
 
 	int iTriggerCount = 0;
-	if (!BuildTriggerStorageFromEntityLump(sEntityLump, iTriggerCount))
+	if (!BuildTriggerStorageFromEntityLump(pszEntityString, iTriggerCount))
 	{
 		G::TriggerStorage = vOldTriggers;
 		G::PasstimeGoalStorage = vOldPasstimeGoals;
@@ -1474,6 +1510,8 @@ bool SDK::RefreshTriggerStorage(bool bForce)
 			F::NavEngine.AddRespawnRoom(tRespawnRoom.m_iTeam, tRespawnRoom.tData);
 		return false;
 	}
+
+	sLastParsedMap = sMapName;
 
 	if (Vars::Debug::Logging.Value)
 	{

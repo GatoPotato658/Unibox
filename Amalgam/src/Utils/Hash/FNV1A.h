@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <string.h>
+#include <string_view>
 
 namespace FNV1A
 {
@@ -32,6 +33,22 @@ namespace FNV1A
 		}
 
 		return uHashed;
+	}
+	inline uint32_t Hash32(const char* szString, size_t uLength)
+	{
+		uint32_t uHashed = uHash32;
+
+		for (size_t i = 0; i < uLength; ++i)
+		{
+			uHashed ^= szString[i];
+			uHashed *= uPrime32;
+		}
+
+		return uHashed;
+	}
+	inline uint32_t Hash32(std::string_view sString)
+	{
+		return Hash32(sString.data(), sString.size());
 	}
 	inline uint64_t Hash64(const char* szString)
 	{

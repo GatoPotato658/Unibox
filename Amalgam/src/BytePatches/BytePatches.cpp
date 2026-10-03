@@ -134,6 +134,7 @@ bool CBytePatches::Initialize()
 		BytePatch("client.dll", "40 53 48 81 EC ? ? ? ? 0F B7 DA", 0xe8, "A7"),
 		// Removes loadout switch delay
 		BytePatch("client.dll", "73 ? 48 8D 0D ? ? ? ? FF 15 ? ? ? ? 32 C0", 0x0, "EB"),
+		BytePatch("client.dll", "80 7C 24 20 7B 0F 85 ? ? ? ? 48 8B C8 E8", 0x5, "75 0C 90 90 90 90"),
 	};
 
 	bool bFail = false;

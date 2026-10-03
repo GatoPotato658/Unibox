@@ -845,10 +845,11 @@ void CVisuals::ThirdPerson(CTFPlayer* pLocal, CViewSetup* pView)
 		return I::Input->CAM_ToFirstPerson();
 
 	const bool bForce = pLocal->IsTaunting() || pLocal->IsAGhost() || pLocal->InCond(TF_COND_HALLOWEEN_KART) || pLocal->InCond(TF_COND_STUNNED) && pLocal->m_iStunFlags() & (TF_STUN_CONTROLS | TF_STUN_LOSER_STATE);
+	const bool bZombie = Vars::Visuals::Thirdperson::AutoZombie.Value && SDK::GetLevelName().starts_with("zi_") && pLocal->m_iTeamNum() == TF_TEAM_BLUE;
 	//if (bForce)
 	//	return;
 
-	if (Vars::Visuals::Thirdperson::Enabled.Value && !SDK::CleanScreenshot() || bForce)
+	if ((Vars::Visuals::Thirdperson::Enabled.Value || bZombie) && !SDK::CleanScreenshot() || bForce)
 		I::Input->CAM_ToThirdPerson();
 	else
 		I::Input->CAM_ToFirstPerson();

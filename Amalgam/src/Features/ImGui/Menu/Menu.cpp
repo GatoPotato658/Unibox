@@ -1433,6 +1433,7 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::Thirdperson::Enabled, FToggleEnum::Left);
 					FToggle(Vars::Visuals::Thirdperson::Crosshair, FToggleEnum::Right);
 					FToggle(Vars::Visuals::Thirdperson::Collision, FToggleEnum::Left);
+					FToggle(Vars::Visuals::Thirdperson::AutoZombie, FToggleEnum::Right);
 					FSlider(Vars::Visuals::Thirdperson::Distance);
 					FSlider(Vars::Visuals::Thirdperson::Right);
 					FSlider(Vars::Visuals::Thirdperson::Up);
