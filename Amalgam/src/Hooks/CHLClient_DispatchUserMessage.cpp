@@ -146,7 +146,7 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 
 			if (FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#TF_Autobalance_TeamChangePending"))
 			{
-				if (Vars::Misc::Automation::AntiAutobalance.Value)
+				if (Vars::Misc::Automation::AntiAutobalance.Value && !I::EngineClient->IsPlayingDemo())
 				{
 					F::Misc.SetAutoBalanceTeamChangePending(true);
 					I::EngineClient->ClientCmd_Unrestricted("retry");
