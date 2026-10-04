@@ -89,6 +89,8 @@ void CAimbot::RunAimbot(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 
 void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	F::AimbotProjectile.ResetMainSearch();
+
 	if (F::AimbotProjectile.m_iLastTickCancel)
 	{
 		pCmd->weaponselect = F::AimbotProjectile.m_iLastTickCancel;

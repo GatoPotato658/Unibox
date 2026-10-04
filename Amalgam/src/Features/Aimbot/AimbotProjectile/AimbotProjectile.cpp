@@ -2141,6 +2141,7 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 #if defined(SPLASH_DEBUG2) && defined(DEBUG_TEXT)
 	F::Debug.ClearText();
 #endif
+	bool bAllMissed = true;
 	for (auto& tTarget : vTargets)
 	{
 		m_flTimeTo = std::numeric_limits<float>::max();
@@ -2174,6 +2175,7 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 				m_bBlockAimAnglesDraw = true;
 			continue;
 		}
+		bAllMissed = false;
 		m_vAimAngles = m_vPlainAngles;
 		if (iResult == 2)
 		{
@@ -2296,6 +2298,9 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 		}
 		return true;
 	}
+
+	if (bAllMissed && m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER)
+		m_bMainSearchComplete = true;
 
 	return false;
 }
@@ -2545,6 +2550,8 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	if (!Vars::Visuals::Prediction::BestAimPos.Value || !Vars::Colors::AimPosColor.Value.a)
+		return;
+	if (m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER && m_bMainSearchComplete)
 		return;
 	if (m_flAimAnglesSetTime == I::GlobalVars->curtime)
 		return;

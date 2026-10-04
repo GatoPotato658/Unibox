@@ -157,6 +157,7 @@ private:
 	bool m_bUpdate = true;
 	bool m_bBestPlayerPathSet = false;
 	bool m_bBlockAimAnglesDraw = false;
+	bool m_bMainSearchComplete = false;
 
 	struct GrappleInfo_t
 	{
@@ -183,6 +184,7 @@ private:
 	CObjectSentrygun* m_pSentryGun = nullptr;
 
 public:
+	void ResetMainSearch() { m_bMainSearchComplete = false; }
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	void RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
