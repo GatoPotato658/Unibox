@@ -948,7 +948,21 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 			CVar(TauntControl, "Taunt control", false);
 			CVar(KartControl, "Kart control", false);
-			CVar(AutoDisguise, "Auto disguise", false);
+			CVarEnum(AutoDisguise, VA_LIST("Auto disguise", "Auto disguise mode"), 0, NONE, nullptr,
+				VA_LIST("Off", "Random", "Lastdisguise", "Victim"),
+				Off, Random, Lastdisguise, Victim);
+			CVarEnum(AutoDisguiseClasses, VA_LIST("Auto disguise classes", "Auto disguise class filter"), 0b111111111, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Scout", "Sniper", "Soldier", "Demoman", "Medic", "Heavy", "Pyro", "Spy", "Engineer"),
+				Scout 		= 1 << 0,
+				Sniper 		= 1 << 1, 
+				Soldier 	= 1 << 2, 
+				Demoman 	= 1 << 3, 
+				Medic 		= 1 << 4, 
+				Heavy 		= 1 << 5, 
+				Pyro 		= 1 << 6, 
+				Spy 		= 1 << 7,
+				Engineer 	= 1 << 8
+			);
 			CVar(AutoTaunt, "Auto taunt on kill", false);
 			CVar(AutoTauntChance, "Auto taunt chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
 			CVar(AutoTauntSlot, "Auto taunt slot", 0, SLIDER_CLAMP, 0, 8);

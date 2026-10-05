@@ -24,6 +24,7 @@ private:
 	void VoiceCommandSpam(CTFPlayer* pLocal);
 	void ChatSpam(CTFPlayer* pLocal);
 	void AutoDisguise(CTFPlayer* pLocal);
+	void DisguiseVictim(int pVictim);
 
 	void AchievementSpam(CTFPlayer* pLocal);
 	void NoiseSpam(CTFPlayer* pLocal);
