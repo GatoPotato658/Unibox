@@ -720,7 +720,8 @@ void CMisc::NoiseSpam(CTFPlayer* pLocal)
 
 void CMisc::AutoDisguise(CTFPlayer* pLocal)
 {
-	if (Vars::Misc::Automation::AutoDisguise.Value == Vars::Misc::Automation::AutoDisguiseEnum::Off || !pLocal->IsAlive() || !pLocal->IsInValidTeam() || pLocal->m_iClass() != TF_CLASS_SPY)
+	const int iMode = Vars::Misc::Automation::AutoDisguise.Value;
+	if (iMode == Vars::Misc::Automation::AutoDisguiseEnum::Off || !pLocal->IsAlive() || !pLocal->IsInValidTeam() || pLocal->m_iClass() != TF_CLASS_SPY)
 		return;
 
 	if (pLocal->InCond(TF_COND_DISGUISING) || pLocal->InCond(TF_COND_DISGUISED) || pLocal->InCond(TF_COND_DISGUISE_WEARINGOFF))
@@ -730,85 +731,89 @@ void CMisc::AutoDisguise(CTFPlayer* pLocal)
 	if (!tDisguiseTimer.Run(0.75f))
 		return;
 
+	// when using victim disguises we want to keep the disguise until we get a new one
+	if (iMode == Vars::Misc::Automation::AutoDisguiseEnum::LastDisguise || iMode == Vars::Misc::Automation::AutoDisguiseEnum::Victim)
+	{
+		I::EngineClient->ClientCmd_Unrestricted("lastdisguise");
+		return;
+	}
+
 	auto pResource = H::Entities.GetResource();
 	if (!pResource)
 		return;
 
-	if (Vars::Misc::Automation::AutoDisguise.Value == Vars::Misc::Automation::AutoDisguiseEnum::Random) {
-		const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_RED ? TF_TEAM_BLUE : TF_TEAM_RED;
-		std::array<int, TF_CLASS_COUNT> aClassCounts = {};
-		int iTotalClasses = 0;
+	const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_RED ? TF_TEAM_BLUE : TF_TEAM_RED;
+	std::array<int, TF_CLASS_COUNT> aClassCounts = {};
+	int iTotalClasses = 0;
 
-		for (int i = 1; i <= I::EngineClient->GetMaxClients(); ++i)
-		{
-			if (!pResource->m_bValid(i) || !pResource->m_bConnected(i) || pResource->m_iTeam(i) != iEnemyTeam)
-				continue;
+	for (int i = 1; i <= I::EngineClient->GetMaxClients(); ++i)
+	{
+		if (!pResource->m_bValid(i) || !pResource->m_bConnected(i) || pResource->m_iTeam(i) != iEnemyTeam)
+			continue;
 
-			const int iEnemyClass = pResource->m_iPlayerClass(i);
-			if (iEnemyClass <= TF_CLASS_UNDEFINED || iEnemyClass >= TF_CLASS_COUNT)
-				continue;
-			if (!(Vars::Misc::Automation::AutoDisguiseClasses.Value & (1 << (iEnemyClass - 1))))
-				continue;
+		const int iEnemyClass = pResource->m_iPlayerClass(i);
+		if (iEnemyClass <= TF_CLASS_UNDEFINED || iEnemyClass >= TF_CLASS_COUNT || !(Vars::Misc::Automation::AutoDisguiseClasses.Value & (1 << (iEnemyClass - 1))))
+			continue;
 
-			++aClassCounts[iEnemyClass];
-			++iTotalClasses;
-		}
-		
-		int iClass = TF_CLASS_UNDEFINED;
-		if (!iTotalClasses){
-			std::array<int,TF_CLASS_COUNT> aEnabledClasses = {};
-			int iRandomEnabledClass = 0;
-			for (int i = TF_CLASS_SCOUT; i < TF_CLASS_COUNT; ++i)
-			{
-				if (Vars::Misc::Automation::AutoDisguiseClasses.Value & (1 << (i - 1)))
-					aEnabledClasses[iRandomEnabledClass++] = i;
-			}
-			if (!iRandomEnabledClass)
-				return;
-
-			iClass = aEnabledClasses[SDK::RandomInt(0,iRandomEnabledClass - 1)];
-		}
-		else {
-			int iRandomClass = SDK::RandomInt(1, iTotalClasses);
-			for (int i = TF_CLASS_SCOUT; i < TF_CLASS_COUNT; ++i)
-			{
-
-				if (iRandomClass > aClassCounts[i])
-				{
-					iRandomClass -= aClassCounts[i];
-					continue;
-				}
-
-				iClass = i;
-				break; 
-			}
-		}
-		if (iClass == TF_CLASS_UNDEFINED)
-			return;
-
-		I::EngineClient->ClientCmd_Unrestricted(std::format("disguise {} -1", iClass).c_str());
-	} 
-	else if (Vars::Misc::Automation::AutoDisguise.Value == Vars::Misc::Automation::AutoDisguiseEnum::Lastdisguise || Vars::Misc::Automation::AutoDisguise.Value == Vars::Misc::Automation::AutoDisguiseEnum::Victim) { 
-		// when using victim disguises we want to keep the disguise until we get a new one
-		I::EngineClient->ClientCmd_Unrestricted("lastdisguise");
-	} 
-}
-void CMisc::DisguiseVictim(int iVictim)
-{ 
-	if (auto pLocal = H::Entities.GetLocal()) {
-		if (!pLocal->IsAlive() || !pLocal->IsInValidTeam() || pLocal->m_iClass() != TF_CLASS_SPY)
-			return;
-
-		if (pLocal->InCond(TF_COND_DISGUISED))
-			return;
-
-		auto pResource = H::Entities.GetResource();
-		if (!pResource)
-			return;
-
-		int iVictimClass = pResource->m_iPlayerClass(iVictim);
-		I::EngineClient->ClientCmd_Unrestricted(std::format("disguise {} -1", iVictimClass).c_str());
+		++aClassCounts[iEnemyClass];
+		++iTotalClasses;
 	}
+
+	int iClass = TF_CLASS_UNDEFINED;
+	if (!iTotalClasses)
+	{
+		std::array<int, TF_CLASS_COUNT> aEnabledClasses = {};
+		int iEnabledClasses = 0;
+		for (int i = TF_CLASS_SCOUT; i < TF_CLASS_COUNT; ++i)
+		{
+			if (Vars::Misc::Automation::AutoDisguiseClasses.Value & (1 << (i - 1)))
+				aEnabledClasses[iEnabledClasses++] = i;
+		}
+		if (!iEnabledClasses)
+			return;
+
+		iClass = aEnabledClasses[SDK::RandomInt(0, iEnabledClasses - 1)];
+	}
+	else
+	{
+		int iRandomClass = SDK::RandomInt(1, iTotalClasses);
+		for (int i = TF_CLASS_SCOUT; i < TF_CLASS_COUNT; ++i)
+		{
+			if (iRandomClass > aClassCounts[i])
+			{
+				iRandomClass -= aClassCounts[i];
+				continue;
+			}
+
+			iClass = i;
+			break;
+		}
+	}
+
+	if (iClass == TF_CLASS_UNDEFINED)
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted(std::format("disguise {} -1", iClass).c_str());
+}
+
+void CMisc::DisguiseVictim(int iVictim)
+{
+	auto pLocal = H::Entities.GetLocal();
+	if (!pLocal || !pLocal->IsAlive() || !pLocal->IsInValidTeam() || pLocal->m_iClass() != TF_CLASS_SPY)
+		return;
+
+	if (pLocal->InCond(TF_COND_DISGUISED))
+		return;
+
+	auto pResource = H::Entities.GetResource();
+	if (!pResource)
+		return;
+
+	const int iVictimClass = pResource->m_iPlayerClass(iVictim);
+	if (iVictimClass <= TF_CLASS_UNDEFINED || iVictimClass >= TF_CLASS_COUNT)
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted(std::format("disguise {} -1", iVictimClass).c_str());
 }
 
 void CMisc::CallVoteSpam(CTFPlayer* pLocal)
@@ -1149,8 +1154,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 				m_sLastKilledName = pi.name;
 
 			DoKillSay(iVictim);
-			
-			// Disguise as victim if enabled
+
 			if (Vars::Misc::Automation::AutoDisguise.Value == Vars::Misc::Automation::AutoDisguiseEnum::Victim)
 				DisguiseVictim(iVictim);
 
