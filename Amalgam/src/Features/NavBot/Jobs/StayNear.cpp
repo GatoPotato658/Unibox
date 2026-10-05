@@ -416,11 +416,9 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	static Timer tStaynearCooldown{};
 	static Timer tInvalidTargetTimer{};
 	static Timer tTargetSwitchTimer{};
-	static int iStayNearTargetIdx = -1;
 
 	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
 	{
-		iStayNearTargetIdx = -1;
 		m_iStayNearTargetIdx = -1;
 		return false;
 	}
@@ -430,19 +428,18 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::StayNear)
 	{
-		iStayNearTargetIdx = -1;
 		m_iStayNearTargetIdx = -1;
 		return false;
 	}
 
-	const bool bPreviousTargetValid = IsStayNearTargetValid(pLocal, pWeapon, iStayNearTargetIdx);
+	const bool bPreviousTargetValid = IsStayNearTargetValid(pLocal, pWeapon, m_iStayNearTargetIdx);
 
 	if (bPreviousTargetValid)
 	{
 		tInvalidTargetTimer.Update();
 
 		Vector vOrigin;
-		if (F::BotUtils.GetDormantOrigin(iStayNearTargetIdx, &vOrigin))
+		if (F::BotUtils.GetDormantOrigin(m_iStayNearTargetIdx, &vOrigin))
 		{
 
 			if (F::NavEngine.IsPathing())
@@ -462,7 +459,7 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 				return true;
 		}
 
-		if (StayNearTarget(pLocal, pWeapon, iStayNearTargetIdx))
+		if (StayNearTarget(pLocal, pWeapon, m_iStayNearTargetIdx))
 			return true;
 
 		if (!tInvalidTargetTimer.Check(0.75f))
@@ -470,7 +467,7 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 	}
 
-	iStayNearTargetIdx = -1;
+	m_iStayNearTargetIdx = -1;
 	tInvalidTargetTimer.Update();
 
 	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear)
@@ -489,7 +486,7 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 					return a.second < b.second;
 				});
 
-			if (iStayNearTargetIdx != -1 && !tTargetSwitchTimer.Check(1.0f) && vCandidates.front().first != iStayNearTargetIdx)
+			if (m_iStayNearTargetIdx != -1 && !tTargetSwitchTimer.Check(1.0f) && vCandidates.front().first != m_iStayNearTargetIdx)
 				return F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear;
 
 			for (auto iIdx : vCandidates | std::views::keys)
@@ -497,9 +494,9 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 				if (!StayNearTarget(pLocal, pWeapon, iIdx))
 					continue;
 
-				if (iStayNearTargetIdx != iIdx)
+				if (m_iStayNearTargetIdx != iIdx)
 					tTargetSwitchTimer.Update();
-				iStayNearTargetIdx = iIdx;
+				m_iStayNearTargetIdx = iIdx;
 				return true;
 			}
 

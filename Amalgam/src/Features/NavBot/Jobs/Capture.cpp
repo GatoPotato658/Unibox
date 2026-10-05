@@ -672,7 +672,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	}
 
 	if (!tCaptureTimer.Check(2.f))
-		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::Capture;
+		return false;
 
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::Capture)
 		return false;
@@ -761,7 +761,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (!bGotTarget)
 	{
 		tCaptureTimer.Update();
-		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::Capture;
+		return false;
 	}
 
 	if (Vars::Debug::Info.Value)
@@ -815,6 +815,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 			if (Vars::Debug::Logging.Value)
 				SDK::Output("NavBotCapture", "Capture.Run: NavTo failed for capture target", { 255, 100, 100 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 			tCaptureTimer.Update();
+			return false;
 		}
 	}
 

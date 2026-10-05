@@ -197,7 +197,7 @@ bool CNavBotSupplies::GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocal
 		if (F::NavEngine.m_eCurrentPriority != ePriority)
 		{
 			if (!F::NavEngine.NavTo(pSupplyData->m_vOrigin, ePriority))
-				F::NavEngine.m_eCurrentPriority = ePriority;
+				return false;
 		}
 		return true;
 	}

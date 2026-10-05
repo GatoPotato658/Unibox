@@ -50,6 +50,46 @@ static bool IsEscapePathSafe(CNavArea* pFrom, CNavArea* pTo, bool bHasTarget, bo
 	return true;
 }
 
+const Hazard_t* CNavBotDanger::GetHazardAhead(CTFPlayer* pLocal) const
+{
+	if (!pLocal || !F::NavEngine.IsPathing())
+		return nullptr;
+	auto pCrumbs = F::NavEngine.GetCrumbs();
+	if (!pCrumbs || pCrumbs->size() < 2)
+		return nullptr;
+	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
+	const Hazard_t* pWorst = nullptr;
+	int iWorstRank = 0;
+	size_t nChecked = 0;
+	for (const auto& tCrumb : *pCrumbs)
+	{
+		if (nChecked >= 6)
+			break;
+		if (!tCrumb.m_pNavArea)
+			continue;
+		Vector vDelta = tCrumb.m_vPos - vLocalOrigin; vDelta.z = 0.f;
+		if (vDelta.LengthSqr() > 1000.f * 1000.f)
+			break;
+		++nChecked;
+		const Hazard_t* pHazard = F::Hazards.GetHazard(tCrumb.m_pNavArea);
+		if (!pHazard || !std::isfinite(F::Hazards.GetCost(tCrumb.m_pNavArea)))
+			continue;
+		if (F::Hazards.IgnoresSentries()
+			&& (pHazard->m_eKind == HazardKind::Sentry || pHazard->m_eKind == HazardKind::SentryMedium || pHazard->m_eKind == HazardKind::SentryLow))
+			continue;
+		const int iRank = IsHighDanger(*pHazard) ? 3 : IsMediumDanger(*pHazard) ? 2
+			: pHazard->m_eKind == HazardKind::SentryLow ? 1 : 0;
+		if (iRank > iWorstRank)
+		{
+			iWorstRank = iRank;
+			pWorst = pHazard;
+			if (iWorstRank >= 3)
+				break;
+		}
+	}
+	return iWorstRank > 0 ? pWorst : nullptr;
+}
+
 bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 {
 	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::EscapeDanger))
@@ -76,20 +116,24 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 		return false;
 
 	const Hazard_t* pLocalHazard = F::Hazards.GetHazard(pLocalArea);
+	const Hazard_t* pAheadHazard = !pLocalHazard ? GetHazardAhead(pLocal) : nullptr;
+	const bool bRespectAhead = !pAheadHazard || F::NavEngine.m_eCurrentPriority != PriorityListEnum::Capture
+		|| (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::SafeCapping);
+	const Hazard_t* pEffectiveHazard = pLocalHazard ? pLocalHazard : (bRespectAhead ? pAheadHazard : nullptr);
 
 	bool bInHighDanger = false;
 	bool bInMediumDanger = false;
 	bool bInLowDanger = false;
 
-	if (pLocalHazard)
+	if (pEffectiveHazard)
 	{
 		const bool bActiveEscapeJob = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger;
 		static Timer tRepathCooldown{};
 		if (bActiveEscapeJob && F::NavEngine.IsPathing() && !tRepathCooldown.Run(0.35f))
 			return true;
 
-		bInHighDanger = IsHighDanger(*pLocalHazard);
-		bInMediumDanger = IsMediumDanger(*pLocalHazard);
+		bInHighDanger = IsHighDanger(*pEffectiveHazard);
+		bInMediumDanger = IsMediumDanger(*pEffectiveHazard) || (pAheadHazard && pEffectiveHazard->m_eKind == HazardKind::SentryLow && pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.5f);
 		bInLowDanger = !bInHighDanger && !bInMediumDanger;
 
 		bool bShouldEscape = bInHighDanger ||

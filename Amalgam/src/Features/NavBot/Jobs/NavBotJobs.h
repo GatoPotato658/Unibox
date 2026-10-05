@@ -2,6 +2,7 @@
 
 #include "../BotUtils.h"
 #include "../NavEngine.h"
+#include "../Hazards.h"
 #include <optional>
 
 struct NavBotJobResult_t
@@ -163,6 +164,7 @@ public:
 	std::wstring m_sDangerStatus = {};
 public:
 	bool EscapeDanger(CTFPlayer* pLocal);
+	const Hazard_t* GetHazardAhead(CTFPlayer* pLocal) const;
 	bool EscapeProjectiles(CTFPlayer* pLocal);
 	bool EscapeSpawn(CTFPlayer* pLocal);
 	void ResetSpawn();

@@ -176,6 +176,13 @@
 			}
 		}
 
+	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack
+		|| F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload)
+	{
+		s_bDangerLatch = false;
+		return get_active_priority_score(PriorityListEnum::EscapeDanger, 0.f);
+	}
+
 		auto pLocalArea = F::NavEngine.GetLocalNavArea();
 		if (!pLocalArea || is_spawn_area(pLocalArea))
 		{
@@ -184,6 +191,27 @@
 		}
 
 		const Hazard_t* pHazard = F::Hazards.GetHazard(pLocalArea);
+		bool bAheadLow = false;
+		if (!pHazard)
+		{
+			const bool bRespectAhead = F::NavEngine.m_eCurrentPriority != PriorityListEnum::Capture
+				|| (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::SafeCapping);
+			if (bRespectAhead)
+			{
+				if (const Hazard_t* pAhead = F::NavBotDanger.GetHazardAhead(pLocal))
+				{
+					const auto eAheadKind = pAhead->m_eKind;
+					const bool bWorthEscaping = eAheadKind == HazardKind::Sentry || eAheadKind == HazardKind::Sticky
+						|| eAheadKind == HazardKind::EnemyInvuln || eAheadKind == HazardKind::SentryMedium
+						|| eAheadKind == HazardKind::EnemyNormal || eAheadKind == HazardKind::SentryLow;
+					if (bWorthEscaping)
+					{
+						pHazard = pAhead;
+						bAheadLow = eAheadKind == HazardKind::SentryLow;
+					}
+				}
+			}
+		}
 		if (!pHazard)
 		{
 			if (!s_bDangerLatch || s_tDangerCommit.Check(1.f))
@@ -209,6 +237,8 @@
 			flScore = flHealth < flMedHpThreshold ? 1425.f : 0.f;
 			break;
 		case HazardKind::SentryLow:
+			flScore = bAheadLow && flHealth < 0.5f ? 1425.f : 0.f;
+			break;
 		case HazardKind::EnemyDormant:
 			flScore = 0.f;
 			break;
@@ -861,7 +891,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnem
 
 	auto pEntity = I::ClientEntityList->GetClientEntity(tClosestEnemy.m_iEntIdx);
 	if (!pEntity || pEntity->IsDormant())
-		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack;
+		return false;
 
 	auto pPlayer = pEntity->As<CTFPlayer>();
 	if (pPlayer->IsInvulnerable() && G::SavedDefIndexes[SLOT_MELEE] != Heavy_t_TheHolidayPunch)
@@ -1359,7 +1389,7 @@ bool CNavBotGroup::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			if (m_flFormationDistance > 300.0f)
 				m_flFormationDistance = 120.0f;
 
-			return true;
+			return false;
 		}
 	}
 	else if (vLastTargetPos.DistTo(vTargetPos) > 50.f)

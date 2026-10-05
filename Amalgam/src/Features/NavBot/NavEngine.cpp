@@ -555,13 +555,26 @@ void CNavEngine::VischeckPath()
 	}
 }
 
+static float HazardAbandonThreshold(HazardKind eKind, bool bCapture, bool bSafeCapping)
+{
+	switch (eKind)
+	{
+	case HazardKind::Sentry: return 2500.f;
+	case HazardKind::EnemyInvuln: return 1200.f;
+	case HazardKind::Sticky: return (bCapture && !bSafeCapping) ? 2500.f : 900.f;
+	case HazardKind::SentryMedium: return (bCapture && !bSafeCapping) ? 2500.f : 700.f;
+	default: return std::numeric_limits<float>::infinity();
+	}
+}
+
 void CNavEngine::CheckBlacklist(CTFPlayer* pLocal)
 {
 	static Timer tCheck{};
 	if (!tCheck.Run(0.5f) || m_bIgnoreTraces) return;
 
-	F::Hazards.SetIgnoreSentries(m_eCurrentPriority == PriorityListEnum::SnipeSentry
-		|| m_eCurrentPriority == PriorityListEnum::Capture);
+	const bool bCapture = m_eCurrentPriority == PriorityListEnum::Capture;
+	const bool bSafeCapping = Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::SafeCapping;
+	F::Hazards.SetIgnoreSentries(m_eCurrentPriority == PriorityListEnum::SnipeSentry || (bCapture && !bSafeCapping));
 
 	F::Hazards.UpdateBotStanding(m_pLocalArea);
 	if (F::Hazards.BotStandingOnHazard() || pLocal->IsInvulnerable())
@@ -572,7 +585,6 @@ void CNavEngine::CheckBlacklist(CTFPlayer* pLocal)
 	const int iNow = I::GlobalVars->tickcount;
 	const int iCooldown = TIME_TO_TICKS(0.4f);
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
-	const float flThreshold = m_eCurrentPriority == PriorityListEnum::Capture ? 4000.f : 2500.f;
 
 	for (size_t i = 0; i < m_vCrumbs.size() && i < 20; ++i)
 	{
@@ -581,6 +593,8 @@ void CNavEngine::CheckBlacklist(CTFPlayer* pLocal)
 		if (vAhead.LengthSqr() > 1800.f * 1800.f) break;
 
 		const float flHazard = F::Hazards.GetCost(tCrumb.m_pNavArea);
+		const Hazard_t* pHazard = F::Hazards.GetHazard(tCrumb.m_pNavArea);
+		const float flThreshold = pHazard ? HazardAbandonThreshold(pHazard->m_eKind, bCapture, bSafeCapping) : (bCapture ? 4000.f : 2500.f);
 		if (std::isfinite(flHazard) && flHazard >= flThreshold && iNow - m_iLastBlacklistAbandonTick >= iCooldown)
 		{
 			m_iLastBlacklistAbandonTick = iNow;

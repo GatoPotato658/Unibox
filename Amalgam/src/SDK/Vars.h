@@ -121,7 +121,7 @@ public:
 
 		G::Vars.push_back(this);
 	}
-	
+
 	inline T& operator[](int i)
 	{
 		return Map[i];
@@ -156,7 +156,7 @@ public:
 #define NOBIND (1 << 29)
 #define DEBUGVAR (1 << 28)
 
-// flags to be automatically used in widgets. keep these as the same values as the flags in components, do not include visual flags
+
 #define SLIDER_CLAMP (1 << 2)
 #define SLIDER_MIN (1 << 3)
 #define SLIDER_MAX (1 << 4)
@@ -172,7 +172,7 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Config)
 		CVar(LoadDebugSettings, "Load debug settings", false);
 	NAMESPACE_END(Config)
-	
+
 	NAMESPACE_BEGIN(Menu)
 		CVar(CheatTitle, "Cheat title", std::string("unibox"), VISUAL | DROPDOWN_AUTOUPDATE);
 		CVar(CheatTag, "Cheat tag", std::string("[unibox]"), VISUAL);
@@ -353,7 +353,7 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(AutoDetonate, "Auto detonate", 0b00, DROPDOWN_MULTI, "Off",
 				VA_LIST("Stickies", "Flares", "##Divider", "Damage priority", "Prevent self damage", "Ignore invisible"),
 				Stickies = 1 << 0, Flares = 1 << 1, MaxDamage = 1 << 2, PreventSelfDamage = 1 << 3, IgnoreInvisible = 1 << 4);
-			CVarEnum(AutoAirblast, "Auto airblast", 0b000, DROPDOWN_MULTI, "Off", // todo: implement advanced redirect!!
+			CVarEnum(AutoAirblast, "Auto airblast", 0b000, DROPDOWN_MULTI, "Off",
 				VA_LIST("Enabled", "##Divider", "Redirect", "Ignore FOV"),
 				Enabled = 1 << 0, Redirect = 1 << 1, IgnoreFOV = 1 << 2);
 			CVarEnum(Hitboxes, VA_LIST("Hitboxes", "Projectile hitboxes"), 0b001111, DROPDOWN_MULTI, nullptr,
@@ -429,7 +429,7 @@ NAMESPACE_BEGIN(Vars)
 				RunReduce = 1 << 0, CalculateIncrease = 1 << 1);
 			CVar(AutodetAccountPing, "Auto detonate account for ping", true, DEBUGVAR);
 		NAMESPACE_END(Projectile)
-		
+
 		NAMESPACE_BEGIN(AutoEngie)
 			CVarEnum(AutoRepair, "Auto repair", 0b111, DROPDOWN_MULTI, "Off",
 				VA_LIST("Sentrygun","Dispenser", "Teleporter"),
@@ -483,7 +483,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AutoVaccinatorFlamethrowerDamageOnly, "Auto vaccinator flamethrower damage only", false, NOSAVE | DEBUGVAR);
 		NAMESPACE_END(Healing)
 	NAMESPACE_END(Aimbot)
-	
+
 	NAMESPACE_BEGIN(CritHack, Crit Hack)
 		CVar(ForceCrits, "Force crits", false);
 		CVar(AvoidRandomCrits, "Avoid random crits", false);
@@ -558,7 +558,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(HidePitchOnShot, "Hide pitch on shot", false);
 		CVar(AntiOverlap, "Anti-overlap", false);
 		CVar(TauntSpin, "Taunt Spin", false);
-		
+
 		CVar(AntiAimLines, "Antiaim lines", false, NOSAVE);
 	NAMESPACE_END(AntiAim)
 
@@ -626,7 +626,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(Scale, "Thirdperson scales", true, NOSAVE | DEBUGVAR);
 			CVar(Collision, "Thirdperson collision", true, NOSAVE | DEBUGVAR);
 		NAMESPACE_END(ThirdPerson)
-		
+
 		NAMESPACE_BEGIN(Removals)
 			CVar(Interpolation, VA_LIST("Interpolation", "Remove interpolation"), false);
 			CVar(Lerp, VA_LIST("Lerp", "Remove lerp"), true);
@@ -692,7 +692,7 @@ NAMESPACE_BEGIN(Vars)
 				Hurt = 1 << 0, Ignite = 1 << 1, Push = 1 << 2, Regenerate = 1 << 3, RespawnRoom = 1 << 4, CaptureArea = 1 << 5, Catapult = 1 << 6, ApplyImpulse = 1 << 7, ShowAngles = 1 << 8, ShowSurfaceCenters = 1 << 9, IgnoreZ = 1 << 10);
 		NAMESPACE_END(World)
 
-		NAMESPACE_BEGIN(Beams) // as of now, these will stay out of the menu
+		NAMESPACE_BEGIN(Beams)
 			CVar(Model, "Model", std::string("sprites/physbeam.vmt"), VISUAL);
 			CVar(Life, "Life", 2.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 			CVar(Width, "Width", 2.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
@@ -758,7 +758,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(SeparatorSpacing, "Separator spacing", 4, NOSAVE | DEBUGVAR, 1, 16);
 			CVar(SeparatorLength, "Separator length", 12.f, NOSAVE | DEBUGVAR, 2.f, 16.f);
 		NAMESPACE_END(Path)
-		
+
 		NAMESPACE_BEGIN(Other, Other Visuals)
 			CVar(KillstreakWeapons, "Killstreak weapons", false, VISUAL);
 		NAMESPACE_END(Other);
@@ -793,22 +793,8 @@ NAMESPACE_BEGIN(Vars)
 
 	NAMESPACE_BEGIN(Misc)
 
-/*
-I dont think this is a good idea to disable simulations completely:
-	1. Proj aim still runs and fails because there is no projectile/movement prediction (if you dont want it to run just dont give your bots projectile weapons)
-	2. Auto-scope also partially breaks if you disable simulations
-	3. In general a lot of features still partially run despite there being no point
-	4. People will start to complain because they might not even know this exists
-*/
-/*
-		NAMESPACE_BEGIN(Performance)
-#ifdef TEXTMODE
-			CVar(DisableSimulations, "Disable simulations", true);
-#else
-			CVar(DisableSimulations, "Disable simulations", false);
-#endif
-		NAMESPACE_END(Performance)
-*/
+
+
 
 		NAMESPACE_BEGIN(Movement)
 			CVarEnum(AutoStrafe, "Auto strafe", 0, NONE, nullptr,
@@ -861,7 +847,7 @@ I dont think this is a good idea to disable simulations completely:
 				CVarEnum(WeaponSlot, "Force weapon", 0, NONE, nullptr,
 					VA_LIST("Off", "Best", "Primary", "Secondary", "Melee", "PDA"),
 					Off, Best, Primary, Secondary, Melee, PDA);
-			
+
 				CVarEnum(AutoScope, "Auto scope", 0, NONE, nullptr,
 					VA_LIST("Off", "Simple", "MoveSim"),
 					Off, Simple, MoveSim);
@@ -874,7 +860,7 @@ I dont think this is a good idea to disable simulations completely:
 			NAMESPACE_BEGIN(NavBot)
 				CVar(Enabled, VA_LIST("Enabled", "Navbot enabled"), false);
 				CVarEnum(Blacklist, "Blacklist", 0b0111111, DROPDOWN_MULTI, "None",
-					VA_LIST("Normal threats", "Dormant threats", "##Divider", "Players", "Stickies", "Projectiles", "Sentries"),
+					VA_LIST("Normal threats", "Dormant threats", "##Divider", "Players", "Stickies", "Projectiles (reactive only)", "Sentries"),
 					NormalThreats = 1 << 0, DormantThreats = 1 << 1, Players = 1 << 2, Stickies = 1 << 3, Projectiles = 1 << 4, Sentries = 1 << 5);
 
 				CVar(BlacklistDelay, "Blacklist normal scan delay", 0.5f, SLIDER_MIN, 0.1f, 1.f, 0.1f, "%gs");
@@ -890,7 +876,7 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(RechargeDTDelay, "Recharge DT delay", 5, SLIDER_MIN, 0, 10, 1, "%is");
 
 				CVarEnum(Preferences, "Preferences", 0b100001111110111, DROPDOWN_MULTI, nullptr,
-					VA_LIST("Get health", "Get ammo", "Reload weapons", "Stalk enemies", "Defend objectives", "Capture objectives", "Help capture objectives", "Escape danger", "Safe capping", "Target sentries", "Auto engie", "##Divider", "Target sentries low range", "Help capture objective friend only", "Dont escape danger with intel", "Group with others", "MvM Sniper (overrides other jobs)"),
+					VA_LIST("Get health", "Get ammo", "Reload weapons", "Stalk enemies", "Defend objectives", "Capture objectives", "Help capture objectives", "Escape danger", "Safe capping", "Target sentries (attack only)", "Auto engie", "##Divider", "Target sentries low range", "Help capture objective friend only", "Dont escape danger with intel", "Group with others", "MvM Sniper (overrides other jobs)"),
 					SearchHealth = 1 << 0, SearchAmmo = 1 << 1, ReloadWeapons = 1 << 2, StalkEnemies = 1 << 3, DefendObjectives = 1 << 4, CaptureObjectives = 1 << 5, HelpCaptureObjectives = 1 << 6, EscapeDanger = 1 << 7, SafeCapping = 1 << 8, TargetSentries = 1 << 9, AutoEngie = 1 << 10, TargetSentriesLowRange = 1 << 11, HelpFriendlyCaptureObjectives = 1 << 12, DontEscapeDangerIntel = 1 << 13, GroupWithOthers = 1 << 14, MVMSniper = 1 << 15);
 				CVarEnum(Personality, "Personality", 1, NONE, nullptr,
 					VA_LIST("Yolo", "Balanced", "Cautious"),
@@ -1235,45 +1221,45 @@ I dont think this is a good idea to disable simulations completely:
 		NAMESPACE_END(TelemetryBlocker)
 
 		NAMESPACE_BEGIN(Queueing)
-			CVarEnum(ForceRegions, "Force regions", 0b0, DROPDOWN_MULTI, nullptr, // i'm not sure all of these are actually used for tf2 servers (they are)
+			CVarEnum(ForceRegions, "Force regions", 0b0, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Atlanta", "Chicago", "Dallas", "Los Angeles", "Seattle", "Virginia", "##Divider", "Amsterdam", "Falkenstein", "Frankfurt", "Helsinki", "London", "Madrid", "Paris", "Stockholm", "Vienna", "Warsaw", "##Divider", "Buenos Aires", "Lima", "Santiago", "Sao Paulo", "##Divider", "Chennai", "Dubai", "Hong Kong", "Mumbai", "Seoul", "Singapore", "Tokyo", "##Divider", "Sydney", "##Divider", "Johannesburg"),
-				// North America
-				ATL = 1 << 0, // Atlanta
-				ORD = 1 << 1, // Chicago
-				DFW = 1 << 2, // Dallas
-				LAX = 1 << 3, // Los Angeles
-				SEA = 1 << 4, // Seattle (+DC_EAT?)
-				IAD = 1 << 5, // Virginia
-				// Europe
-				AMS = 1 << 6, // Amsterdam
-				FSN = 1 << 7, // Falkenstein
-				FRA = 1 << 8, // Frankfurt
-				HEL = 1 << 9, // Helsinki
-				LHR = 1 << 10, // London
-				MAD = 1 << 11, // Madrid
-				PAR = 1 << 12, // Paris
-				STO = 1 << 13, // Stockholm
-				VIE = 1 << 14, // Vienna
-				WAW = 1 << 15, // Warsaw
-				// South America
-				EZE = 1 << 16, // Buenos Aires
-				LIM = 1 << 17, // Lima
-				SCL = 1 << 18, // Santiago
-				GRU = 1 << 19, // Sao Paulo
-				// Asia
-				MAA = 1 << 20, // Chennai
-				DXB = 1 << 21, // Dubai
-				HKG = 1 << 22, // Hong Kong
-				BOM = 1 << 23, // Mumbai
-				SEO = 1 << 24, // Seoul
-				SGP = 1 << 25, // Singapore
-				TYO = 1 << 26, // Tokyo
-				// Australia
-				SYD = 1 << 27, // Sydney
-				// Africa
-				JNB = 1 << 28, // Johannesburg
+
+				ATL = 1 << 0,
+				ORD = 1 << 1,
+				DFW = 1 << 2,
+				LAX = 1 << 3,
+				SEA = 1 << 4,
+				IAD = 1 << 5,
+
+				AMS = 1 << 6,
+				FSN = 1 << 7,
+				FRA = 1 << 8,
+				HEL = 1 << 9,
+				LHR = 1 << 10,
+				MAD = 1 << 11,
+				PAR = 1 << 12,
+				STO = 1 << 13,
+				VIE = 1 << 14,
+				WAW = 1 << 15,
+
+				EZE = 1 << 16,
+				LIM = 1 << 17,
+				SCL = 1 << 18,
+				GRU = 1 << 19,
+
+				MAA = 1 << 20,
+				DXB = 1 << 21,
+				HKG = 1 << 22,
+				BOM = 1 << 23,
+				SEO = 1 << 24,
+				SGP = 1 << 25,
+				TYO = 1 << 26,
+
+				SYD = 1 << 27,
+
+				JNB = 1 << 28,
 			);
-			CVarEnum(ExtendQueue, "Extend queue", 0, NONE, nullptr, 
+			CVarEnum(ExtendQueue, "Extend queue", 0, NONE, nullptr,
 				VA_LIST("Off", "Join", "Abandon"),
 				Off, Join, Abandon);
 			CVar(AutoCasualQueue, "Auto casual queue", false);
@@ -1283,7 +1269,7 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(AutoDumpProfiles, "Auto dump profiles", false);
 			CVar(AutoDumpDelay, "Auto dump delay", 15, SLIDER_CLAMP, 0, 120, 1, "%is");
 			CVar(QueueDelay, "Queue delay", 5, SLIDER_MIN, 0, 10, 1, "%im");
-			CVar(RQif, "Requeue if...", false); // Dropdown?
+			CVar(RQif, "Requeue if...", false);
 			CVar(RQplt, "Players LT", 12, SLIDER_MIN, 0, 100, 1, "%i");
 			CVar(RQpgt, "Players GT", 0, SLIDER_MIN, 0, 100, 1, "%i");
 			CVar(RQkick, "Kicked", false);
@@ -1386,8 +1372,8 @@ I dont think this is a good idea to disable simulations completely:
 			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3, LagCompAbuse = 1 << 4, CritManipulation = 1 << 5);
 		CVar(DetectionsRequired, "Detections required", 10, SLIDER_MIN, 0, 50);
 		CVar(MinChoking, "Min choking", 20, SLIDER_MIN, 4, 22);
-		CVar(MinFlick, "Min flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f); // min flick size to suspect
-		CVar(MaxNoise, "Max flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f); // max difference between angles before and after flick
+		CVar(MinFlick, "Min flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f);
+		CVar(MaxNoise, "Max flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f);
 		CVar(LagCompMinimumDelta, "Lag burst delta", 3, SLIDER_MIN, 2, 8);
 		CVar(LagCompWindow, "Lag burst window", 1.f, SLIDER_PRECISION, 0.25f, 2.f, 0.05f);
 		CVar(LagCompBurstCount, "Lag burst count", 3, SLIDER_MIN, 1, 6);

@@ -421,7 +421,7 @@ void CHazards::UpdateProjectiles(CTFPlayer* pLocal)
 		if (!pPipe || !pPipe->HasStickyEffects() || pPipe->IsDormant() || !pPipe->m_vecVelocity().IsZero(1.f))
 			continue;
 
-		constexpr float flRadius = 150.0f;
+		const float flRadius = static_cast<float>(Vars::Misc::Movement::NavBot::StickyDangerRange.Value);
 		std::vector<CNavArea*> vAreas;
 		pMap->CollectAreasAround(pPipe->GetAbsOrigin(), flRadius, vAreas);
 
