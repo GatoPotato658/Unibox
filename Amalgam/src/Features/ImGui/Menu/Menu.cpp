@@ -1954,7 +1954,12 @@ void CMenu::MenuMisc(int iTab)
 					FToggleSlider(Vars::Misc::Automation::AutoRetry, Vars::Misc::Automation::AutoRetryHealth);
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
-					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
+					FDropdown(Vars::Misc::Automation::AutoDisguise, FDropdownEnum::Left);
+					PushTransparent(Vars::Misc::Automation::AutoDisguise.Value != Vars::Misc::Automation::AutoDisguiseEnum::Random);
+					{
+						FDropdown(Vars::Misc::Automation::AutoDisguiseClasses, FDropdownEnum::Right);
+					}
+					PopTransparent();
 				} EndSection();
 				if (Section("Voting", 8))
 				{
