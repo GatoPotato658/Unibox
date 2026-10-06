@@ -17,12 +17,12 @@
   [![Freetype AVX2](.github/assets/freetype_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseFreetypeAVX2.zip)
   [![PDB Freetype AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseFreetypeAVX2PDB.zip)
   <br>
-  ## these are usually outdated
   [![Textmode](.github/assets/textmode.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmode.zip)
   [![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodePDB.zip)
   [![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2.zip)
   [![PDB Textmode AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2PDB.zip)
   <br>
+  ## these are usually outdated
   [![Ember Freetype](.github/assets/ember_freetype.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/ember/Amalgamx64ReleaseFreetype.zip)
   [![PDB Ember Freetype](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/ember/Amalgamx64ReleaseFreetypePDB.zip)
   [![Ember Freetype AVX2](.github/assets/ember_freetype_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/ember/Amalgamx64ReleaseFreetypeAVX2.zip)
