@@ -5773,6 +5773,90 @@ static inline void ManageVars()
 		Vars::ESP::ActiveGroups.m_vValues.push_back(tGroup.m_sName.c_str());
 }
 
+static inline std::string GetNoticePath()
+{
+	return F::Configs.m_sConfigPath + "notice_accepted.txt";
+}
+
+static inline bool IsRussianLocale()
+{
+	const auto fnIsRussian = [](LANGID iLang) { return PRIMARYLANGID(iLang) == LANG_RUSSIAN; };
+	return fnIsRussian(GetUserDefaultUILanguage()) || fnIsRussian(GetUserDefaultLangID()) || fnIsRussian(GetSystemDefaultLangID());
+}
+
+void CMenu::DrawNotice()
+{
+	using namespace ImGui;
+
+	static const bool bRussian = IsRussianLocale();
+	const auto fnText = [](const char8_t* sEnglish, const char8_t* sRussian) { return reinterpret_cast<const char*>(bRussian ? sRussian : sEnglish); };
+	constexpr const char* sRepo = "https://github.com/GatoPotato658/Unibox";
+	constexpr const char* sPopup = "##UniboxNotice";
+
+	if (!IsPopupOpen(sPopup))
+		OpenPopup(sPopup);
+
+	PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(16), H::Draw.Scale(12) });
+	if (FBeginPopupModal(sPopup))
+	{
+		static float flShown = 0.f;
+		if ((flShown += GetIO().DeltaTime) >= 30.f)
+		{
+			m_bNoticePending = false;
+			CloseCurrentPopup();
+			I::MatSystemSurface->SetCursorAlwaysVisible(m_bIsOpen = false);
+		}
+
+		PushTextWrapPos(GetCursorPos().x + H::Draw.Scale(440));
+
+		PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
+		PushFont(F::Render.IconFont);
+		TextUnformatted(ICON_MD_WARNING);
+		PopFont();
+		SameLine();
+		PushFont(F::Render.FontBold);
+		TextUnformatted(fnText(u8"important notice", u8"\u0432\u0430\u0436\u043D\u043E\u0435 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u0435"));
+		PopFont();
+		PopStyleColor();
+
+		Divider();
+
+		TextUnformatted(fnText(
+			u8"If you got this DLL directly from the official GitHub repository, you should be fine. Unibox is free and open-source software, which means anyone can download the source code, modify it, and redistribute their own version\u2014including versions with malicious code added.",
+			u8"\u0415\u0441\u043B\u0438 \u0432\u044B \u043F\u043E\u043B\u0443\u0447\u0438\u043B\u0438 \u044D\u0442\u0443 DLL \u043D\u0430\u043F\u0440\u044F\u043C\u0443\u044E \u0438\u0437 \u043E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F GitHub, \u0432\u0441\u0451 \u0432 \u043F\u043E\u0440\u044F\u0434\u043A\u0435. Unibox \u2014 \u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u043E\u0435 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u043E\u0435 \u043E\u0431\u0435\u0441\u043F\u0435\u0447\u0435\u043D\u0438\u0435 \u0441 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u043C \u043A\u043E\u0434\u043E\u043C, \u0430 \u0437\u043D\u0430\u0447\u0438\u0442, \u043B\u044E\u0431\u043E\u0439 \u043C\u043E\u0436\u0435\u0442 \u0441\u043A\u0430\u0447\u0430\u0442\u044C \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0439 \u043A\u043E\u0434, \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0435\u0433\u043E \u0438 \u0440\u0430\u0441\u043F\u0440\u043E\u0441\u0442\u0440\u0430\u043D\u044F\u0442\u044C \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u0443\u044E \u0432\u0435\u0440\u0441\u0438\u044E, \u0432 \u0442\u043E\u043C \u0447\u0438\u0441\u043B\u0435 \u0441 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u043C \u0432\u0440\u0435\u0434\u043E\u043D\u043E\u0441\u043D\u044B\u043C \u043A\u043E\u0434\u043E\u043C."));
+		TextUnformatted(fnText(
+			u8"If you paid for Unibox or downloaded a pre-built DLL from anywhere other than the official GitHub repository, there\u2019s a chance it may have been modified, so you should treat it as potentially unsafe.",
+			u8"\u0415\u0441\u043B\u0438 \u0432\u044B \u0437\u0430\u043F\u043B\u0430\u0442\u0438\u043B\u0438 \u0437\u0430 Unibox \u0438\u043B\u0438 \u0441\u043A\u0430\u0447\u0430\u043B\u0438 \u0433\u043E\u0442\u043E\u0432\u0443\u044E DLL \u043E\u0442\u043A\u0443\u0434\u0430-\u043B\u0438\u0431\u043E, \u043A\u0440\u043E\u043C\u0435 \u043E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F GitHub, \u043E\u043D\u0430 \u043C\u043E\u0433\u043B\u0430 \u0431\u044B\u0442\u044C \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0430, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u0441\u0447\u0438\u0442\u0430\u0439\u0442\u0435 \u0435\u0451 \u043F\u043E\u0442\u0435\u043D\u0446\u0438\u0430\u043B\u044C\u043D\u043E \u043D\u0435\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0439."));
+
+		PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
+		TextUnformatted(fnText(u8"Official repository:", u8"\u041E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u044B\u0439 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439:"));
+		PopStyleColor();
+		PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
+		TextUnformatted(sRepo);
+		PopStyleColor();
+		if (IsItemHovered())
+		{
+			SetMouseCursor(ImGuiMouseCursor_Hand);
+			GetWindowDrawList()->AddLine({ GetItemRectMin().x, GetItemRectMax().y }, GetItemRectMax(), F::Render.Accent, H::Draw.Scale());
+			if (IsMouseReleased(ImGuiMouseButton_Left))
+				ShellExecuteA(NULL, "open", sRepo, NULL, NULL, SW_SHOWNORMAL);
+		}
+
+		Divider();
+
+		if (FButton(fnText(u8"ok i understand.", u8"\u043E\u043A, \u044F \u043F\u043E\u043D\u0438\u043C\u0430\u044E."), FButtonEnum::None, { 440, 30 }))
+		{
+			std::ofstream{ GetNoticePath() };
+			m_bNoticePending = false;
+			CloseCurrentPopup();
+		}
+
+		PopTextWrapPos();
+		EndPopup();
+	}
+	PopStyleVar();
+}
+
 void CMenu::Render()
 {
 	using namespace ImGui;
@@ -5794,6 +5878,16 @@ void CMenu::Render()
 	if (U::KeyHandler.Pressed(Vars::Menu::PrimaryKey.Value) || U::KeyHandler.Pressed(Vars::Menu::SecondaryKey.Value))
 		I::MatSystemSurface->SetCursorAlwaysVisible(m_bIsOpen = !m_bIsOpen);
 
+	static bool bNoticeChecked = false;
+	if (!bNoticeChecked)
+	{
+		bNoticeChecked = true;
+		std::error_code ec;
+		const ImVec2 vDisplaySize = GetIO().DisplaySize;
+		if (m_bNoticePending = vDisplaySize.x >= 800.f && vDisplaySize.y >= 700.f && !std::filesystem::exists(GetNoticePath(), ec))
+			I::MatSystemSurface->SetCursorAlwaysVisible(m_bIsOpen = true);
+	}
+
 	PushFont(F::Render.FontRegular);
 
 	ProcessDeferredNotifications();
@@ -5813,6 +5907,8 @@ void CMenu::Render()
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
 
 		DrawMenu();
+		if (m_bNoticePending)
+			DrawNotice();
 
 		F::Render.Cursor = GetMouseCursor();
 		m_bWindowHovered = IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
