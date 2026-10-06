@@ -3,7 +3,10 @@
 bool CMvmQueue::EnsureTours()
 {
 	const auto pSchema = CEconItemSchema::GetInstance();
-	if (!pSchema || pSchema->m_iMvMTourCount() <= 0 || pSchema->m_iMvMMissionCount() <= 0)
+	const int iTourCount = pSchema ? pSchema->m_iMvMTourCount() : 0;
+	const int iMissionCount = pSchema ? pSchema->m_iMvMMissionCount() : 0;
+	if (!pSchema || !pSchema->m_pMvMTours() || !pSchema->m_pMvMMissions()
+		|| iTourCount <= 0 || iTourCount > 256 || iMissionCount <= 0 || iMissionCount > 1024)
 	{
 		if (m_pLastSchema)
 		{
@@ -16,7 +19,6 @@ bool CMvmQueue::EnsureTours()
 		return false;
 	}
 
-	const int iTourCount = pSchema->m_iMvMTourCount();
 	if (m_pLastSchema == pSchema && m_iLastTourCount == iTourCount && !m_vTours.empty())
 		return true;
 
@@ -27,7 +29,6 @@ bool CMvmQueue::EnsureTours()
 
 	const auto uToursBase = reinterpret_cast<uintptr_t>(pSchema->m_pMvMTours());
 	const auto uMissionsBase = reinterpret_cast<uintptr_t>(pSchema->m_pMvMMissions());
-	const int iMissionCount = pSchema->m_iMvMMissionCount();
 
 	for (int i = 0; i < iTourCount; i++)
 	{
