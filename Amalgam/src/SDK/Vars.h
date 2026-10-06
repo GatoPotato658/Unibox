@@ -1376,7 +1376,7 @@ NAMESPACE_BEGIN(Vars)
 			VA_LIST("Invalid pitch", "Packet choking", "Aim flicking", "Duck Speed", "Lagcomp abuse", "Critbucket"),
 			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3, LagCompAbuse = 1 << 4, CritManipulation = 1 << 5);
 		CVar(DetectionsRequired, "Detections required", 10, SLIDER_MIN, 0, 50);
-		CVar(MinChoking, "Min choking", 20, SLIDER_MIN, 4, 22);
+		CVar(MinChoking, "Min choking", 8, SLIDER_MIN, 4, 22);
 		CVar(MinFlick, "Min flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f);
 		CVar(MaxNoise, "Max flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f);
 		CVar(LagCompMinimumDelta, "Lag burst delta", 3, SLIDER_MIN, 2, 8);

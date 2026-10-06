@@ -27,7 +27,7 @@ bool CEntities::UpdatePlayerDetails(int n, CTFPlayer* pPlayer, int iLag)
 				m_aOrigins[n].pop_back();
 
 			if (pPlayer->IsAlive())
-				F::CheatDetection.ReportChoke(pPlayer, m_aChokes[n]);
+				F::CheatDetection.ReportPacket(pPlayer, m_aChokes[n], TIME_TO_TICKS(flSimTime - flOldSimTime));
 			m_aOldAngles[n] = m_aEyeAngles[n], m_aEyeAngles[n] = pPlayer->GetEyeAngles();
 		}
 	}

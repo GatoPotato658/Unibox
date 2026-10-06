@@ -13,25 +13,25 @@ struct PlayerInfo
 	std::string m_sName = "";
 
 	int m_iDetections = 0;
+	int m_iLastOutputTick = 0;
 
 	struct PacketChoking_t
 	{
-		std::deque<int> m_vChokes = {}; // store last 3 choke counts
-		bool m_bInfract = false; // infract the user for choking?
-
-		struct LagCompAbuse_t
-		{
-			std::deque<int> m_vBurstTicks = {}; // tickcounts of recent multi-cmd bursts
-			std::deque<int> m_vDeltaCmds = {}; // delta cmd counts for reference
-			bool m_bInfract = false;
-		} m_LagComp;
+		std::deque<int> m_vChokes = {};
+		bool m_bInfract = false;
 	} m_PacketChoking;
 
 	struct AimFlicking_t
 	{
-		std::deque<AngleHistory_t> m_vAngles = {}; // store last 3 angles & if damage was dealt
+		std::deque<AngleHistory_t> m_vAngles = {};
 	} m_AimFlicking;
-					
+
+	struct LagCompAbuse_t
+	{
+		std::deque<int> m_vViolationTicks = {};
+		bool m_bInfract = false;
+	} m_LagCompAbuse;
+
 	struct DuckSpeed_t
 	{
 		int m_iStartTick = 0;
@@ -59,7 +59,7 @@ private:
 	bool IsChoking(CTFPlayer* pEntity);
 	bool IsFlicking(CTFPlayer* pEntity);
 	bool IsDuckSpeed(CTFPlayer* pEntity);
-	bool IsLagCompAbusing(CTFPlayer* pEntity, int iDeltaTicks);
+	bool IsLagCompAbusing(CTFPlayer* pEntity);
 	bool IsCritManipulating(CTFPlayer* pEntity);
 	void TrackCritEvent(CTFPlayer* pEntity, CTFWeaponBase* pWeapon, bool bCrit);
 
@@ -70,7 +70,7 @@ private:
 public:
 	void Run();
 
-	void ReportChoke(CTFPlayer* pEntity, int iChoke);
+	void ReportPacket(CTFPlayer* pEntity, int iChoke, int iDelta);
 	void ReportDamage(IGameEvent* pEvent);
 	void Reset();
 };

@@ -58,6 +58,10 @@
   - Followbot
     - Automatically follows specified targets
     - Utilizes `Nav engine` if specified
+    - Options for follow/activation/abandon distances, target preference and priority, max path nodes, view snap avoidance and path drawing
+  - Navbot options: personality, smart jump, escape spawn, melee target range, blacklist scan delays, danger overlay
+  - Nav engine options: stuck detection/blacklist/expire times, vischeck, path in setup time, look at path (with speed)
+  - Navbot jobs: capture objectives, engineer, escape danger, get supplies, MvM sniper, roam, stay near; plus hazard avoidance
   - Namedpipe
     - Implements communication with [unibox botpanel](https://github.com/pupnoodle/unibox-botbox)
     - Sends client info such as localplayer's health, class, server name and map name
@@ -73,6 +77,16 @@
   - Auto class select
   - Auto disguise (disguises as a random class if not disguised already)
   - Auto edgebug (Nullifiews fall damage by landing on an edge of a surface. Can strafe automatically if specified)
+  - Telemetry blocker (Off/Lite/Balanced/Aggressive; disables stats tracking, Steamworks session ids, replay and matchmaking OGS reporting convars, restored on unload)
+  - Auto vote (tracks pending votes and handles votekicks automatically, with random vote delay and auto vote map)
+  - Auto retry (below a health threshold), auto taunt on kill (chance and slot), auto report players
+  - Random class (interval and exclusion list) and autojoin class
+  - Kill say and chat spam extras (team chat, randomize, auto reply, vote kick reply)
+  - Micspam, noise spam and callvote spam
+  - Anti-aim: anti-overlap and taunt spin
+  - Auto queue extras: auto casual join, auto competitive queue, BootCamp queue, only uncompleted MannUp missions, auto abandon if no navmesh, queue delay, profile stalker, auto dump profiles
+  - MvM extras: auto abandon Mann Up, Buybot auto class, chat commands (allowed users/tag)
+  - Skin changer (warpaint paint kit, unsupported warpaints, australium, festive, killstreak, sheen, weapon unusual effects)
   - Anti-autobalance option to try avoiding an autobalance on death if enemy team has more than 2 missing players
   - Changes to auto queue allowing for more customization:
     - Search community servers
@@ -91,6 +105,10 @@
     - Smooth curve (assist strength changes dynamically depending on this option and a curve percentage var)
     - Smooth+velocity aim type (same smooth aim type but also takes into account target's velocity for smooth curve)
     - Legit aim type for bots with legit look at path enabled (WIP)
+    - Separate target selection for hitscan, projectile and melee
+    - Grappling hook aim
+    - Auto short circuit minimum metal amount
+    - Auto heal: auto switch at health, activate friends only, activate at health percent
   - Spam features:
     - Voice command spam
     - Chat spam
@@ -114,18 +132,25 @@
     - `cat_achievement_lock_item`: Locks item achievements
     - `cat_achievement_lock_weapon`: Same as `cat_achievement_lock_item`
 - **Visual**
+  - ImGui-rendered ESP (boxes: solid/outline/rounded/corner, bars, etc.) instead of the engine-painted (`vgui`/surface) ESP
+  - ImGui-based UI elements: menu, notifications, indicator panels, spectator list, ticks/crithack indicators
+  - Anti-OBS: draws the ImGui overlay in a separate layered, click-through window excluded from screen capture (`WDA_EXCLUDEFROMCAPTURE`), so OBS/Discord/screenshots don't see the cheat visuals
   - Added option to turn on weapon killstreak count
   - Added option to reverse invisible condition in groups (`Invisible -> Not invisible`)
   - Esp, glow and chams:
     - Min and max draw/render distance
     - Distance to alpha (Transparency changes depending on current distance and minmax values of render distance)
   - Crithack, Ticks and Spectator List indicator changes
+  - Show triggers (hurt, ignite, push, regenerate, respawn room, capture area, catapult, apply impulse) with separate colors, trigger angle and surface center
+  - Best path and best aim pos drawing
+  - Auto zombie thirdperson
   - Nav engine:
     - Indicator: Shows info about `Navbot`'s current goal
     - Draw: Renders path, blacklisted nodes and local area
 - **Anticheat**
   - More methods of detecting cheaters
   - Import/export-able cheaterlist
+  - Lag burst detection (delta, window, burst count) and crit rate detection (window size, threshold)
 - **Other**
   - Added debug var automatic loading (`Load debug settings` in menu)
   - Changed loading process allowing for early injection (e.g. Xenos manual launch)
