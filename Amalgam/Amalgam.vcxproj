@@ -1208,6 +1208,7 @@
     <ClCompile Include="src\Hooks\CTFGCClientSystem_SOCreated.cpp" />
     <ClCompile Include="src\Hooks\CTFHudPlayerClass_UpdateModelPanel.cpp" />
     <ClCompile Include="src\Hooks\CTFInventoryManager_ShowItemsPickedUp.cpp" />
+    <ClCompile Include="src\Hooks\CQuestMapNode_GetObjectivePoints.cpp" />
     <ClCompile Include="src\Hooks\CModelLoader_Map_LoadModel.cpp" />
     <ClCompile Include="src\Hooks\CM_TraceToDispTree.cpp" />
     <ClCompile Include="src\Hooks\CMaterial_Uncache.cpp" />
