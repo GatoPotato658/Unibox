@@ -2549,7 +2549,9 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 
 void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
-	if (!Vars::Visuals::Prediction::BestAimPos.Value || !Vars::Colors::AimPosColor.Value.a)
+	const bool bAimPos = Vars::Visuals::Prediction::BestAimPos.Value && Vars::Colors::AimPosColor.Value.a;
+	const bool bPath = Vars::Visuals::Prediction::BestPathPreview.Value && Vars::Visuals::Prediction::BestPath.Value;
+	if (!bAimPos && !bPath)
 		return;
 	if (m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER && m_bMainSearchComplete)
 		return;
@@ -2589,6 +2591,14 @@ void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		m_vAimAngles = m_vPlainAngles;
 		m_flAimAnglesSetTime = I::GlobalVars->curtime;
 		break;
+	}
+
+	if (bPath && !m_vBestPlayerPath.empty())
+	{
+		if (Vars::Colors::BestPathIgnoreZ.Value.a)
+			G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPathIgnoreZ.Value, Vars::Visuals::Prediction::BestPath.Value);
+		if (Vars::Colors::BestPath.Value.a)
+			G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
 	}
 
 	m_vPlayerPath.clear(); m_vProjectilePath.clear(); m_vBoxes.clear();

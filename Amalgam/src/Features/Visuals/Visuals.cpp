@@ -741,22 +741,54 @@ void CVisuals::DrawBestAimPos(ImDrawList* pDrawList)
 		return;
 
 	const Color_t tColor = Vars::Colors::AimPosColor.Value;
-	const float flSize = H::Draw.Scale(5.f);
-	const float flGap = H::Draw.Scale(3.f);
-	const ImU32 uColor = ColorToU32(tColor);
-	const ImU32 uShadow = ColorToU32(Color_t(0, 0, 0, byte(tColor.a * 0.6f)));
-	const float flThickness = std::max(H::Draw.Scale(1.4f), 1.f);
+	const float flSize = H::Draw.Scale(Vars::Visuals::Prediction::AimPosSize.Value);
+	const float flThickness = std::max(roundf(H::Draw.Scale(Vars::Visuals::Prediction::AimPosThickness.Value)), 1.f);
+	const float flOffset = fmodf(flThickness, 2.f) ? 0.5f : 0.f;
+	const float flX = roundf(tCache.m_flX) + flOffset, flY = roundf(tCache.m_flY) + flOffset;
+	const auto fnPoint = [&](float flDX, float flDY) -> ImVec2 { return { flX + flDX, flY + flDY }; };
 
-	const float flAngle = ImGui::GetTime() * 1.2f;
-	ImVec2 aPoints[4];
-	for (int i = 0; i < 4; i++)
+	const auto fnShape = [&](ImU32 uColor, float flGrow)
 	{
-		const float flTheta = flAngle + float(i) * 1.5707963f;
-		aPoints[i] = { tCache.m_flX + cosf(flTheta) * flSize, tCache.m_flY + sinf(flTheta) * flSize };
-	}
-	pDrawList->AddPolyline(aPoints, 4, uShadow, ImDrawFlags_Closed, flThickness + 1.f);
-	pDrawList->AddPolyline(aPoints, 4, uColor, ImDrawFlags_Closed, flThickness);
-	pDrawList->AddCircleFilled({ tCache.m_flX, tCache.m_flY }, std::max(flSize - flGap, 1.f), ColorToU32(Color_t(tColor.r, tColor.g, tColor.b, byte(tColor.a * 0.55f))), 12);
+		const float flWidth = flThickness + flGrow;
+		switch (Vars::Visuals::Prediction::AimPosStyle.Value)
+		{
+		case Vars::Visuals::Prediction::AimPosStyleEnum::Square:
+			pDrawList->AddRect(fnPoint(-flSize, -flSize), fnPoint(flSize, flSize), uColor, 0.f, ImDrawFlags_None, flWidth);
+			break;
+		case Vars::Visuals::Prediction::AimPosStyleEnum::Brackets:
+		{
+			const float flArm = flSize * 0.6f;
+			for (const float flSX : { -1.f, 1.f })
+			{
+				for (const float flSY : { -1.f, 1.f })
+				{
+					const ImVec2 aPoints[3] = { fnPoint(flSX * flSize - flSX * flArm, flSY * flSize), fnPoint(flSX * flSize, flSY * flSize), fnPoint(flSX * flSize, flSY * flSize - flSY * flArm) };
+					pDrawList->AddPolyline(aPoints, 3, uColor, ImDrawFlags_RoundCornersNone, flWidth);
+				}
+			}
+			break;
+		}
+		case Vars::Visuals::Prediction::AimPosStyleEnum::Cross:
+		{
+			const float flGap = flSize * 0.35f;
+			pDrawList->AddLine(fnPoint(-flSize, 0.f), fnPoint(-flGap, 0.f), uColor, flWidth);
+			pDrawList->AddLine(fnPoint(flGap, 0.f), fnPoint(flSize, 0.f), uColor, flWidth);
+			pDrawList->AddLine(fnPoint(0.f, -flSize), fnPoint(0.f, -flGap), uColor, flWidth);
+			pDrawList->AddLine(fnPoint(0.f, flGap), fnPoint(0.f, flSize), uColor, flWidth);
+			break;
+		}
+		case Vars::Visuals::Prediction::AimPosStyleEnum::Dot:
+			pDrawList->AddCircleFilled(fnPoint(0.f, 0.f), std::max(flSize * 0.4f, 1.5f) + flGrow * 0.5f, uColor, 16);
+			break;
+		case Vars::Visuals::Prediction::AimPosStyleEnum::Ring:
+			pDrawList->AddCircle(fnPoint(0.f, 0.f), flSize, uColor, 24, flWidth);
+			break;
+		}
+	};
+
+	if (Vars::Visuals::Prediction::AimPosOutline.Value)
+		fnShape(ColorToU32(Color_t(0, 0, 0, byte(tColor.a * 0.8f))), std::max(roundf(H::Draw.Scale(2.f)), 2.f));
+	fnShape(ColorToU32(tColor), 0.f);
 }
 
 MAKE_HOOK(CBaseAnimating_DrawServerHitboxes, S::CBaseAnimating_DrawServerHitboxes(), void,

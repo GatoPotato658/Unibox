@@ -1201,6 +1201,19 @@ void CMenu::MenuVisuals(int iTab)
 					FColorPicker(Vars::Colors::BestPath, FColorPickerEnum::SameLine, { H::Draw.Scale(-10), H::Draw.Scale(-20) }, { H::Draw.Scale(10), H::Draw.Scale(20) });
 					FColorPicker(Vars::Colors::AimPosColor);
 					FToggle(Vars::Visuals::Prediction::BestAimPos, FToggleEnum::Right);
+					PushTransparent(!Vars::Visuals::Prediction::BestPath.Value);
+					{
+						FToggle(Vars::Visuals::Prediction::BestPathPreview);
+					}
+					PopTransparent();
+					PushTransparent(!Vars::Visuals::Prediction::BestAimPos.Value);
+					{
+						FDropdown(Vars::Visuals::Prediction::AimPosStyle, FDropdownEnum::Left);
+						FSlider(Vars::Visuals::Prediction::AimPosSize, FSliderEnum::Right);
+						FSlider(Vars::Visuals::Prediction::AimPosThickness, FSliderEnum::Left);
+						FToggle(Vars::Visuals::Prediction::AimPosOutline, FToggleEnum::Right);
+					}
+					PopTransparent();
 					FSlider(Vars::Visuals::Prediction::PlayerDrawDuration, FSliderEnum::Left, !Vars::Visuals::Prediction::PlayerDrawDuration[DEFAULT_BIND] ? "timed" : "%g");
 					FSlider(Vars::Visuals::Prediction::ProjectileDrawDuration, FSliderEnum::Right, !Vars::Visuals::Prediction::ProjectileDrawDuration[DEFAULT_BIND] ? "timed" : "%g");
 				} EndSection();

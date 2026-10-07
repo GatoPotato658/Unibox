@@ -731,7 +731,14 @@ NAMESPACE_BEGIN(Vars)
 			CVar(SwingLines, "Swing lines", false, VISUAL);
 			CVarValues(BestPath, "Best path", 0, VISUAL, nullptr,
 				"Off", "Line", "Separators", "Spaced", "Arrows", "Boxes");
+			CVar(BestPathPreview, "Best path preview", false, VISUAL);
 			CVar(BestAimPos, "Draw best aim pos", false, VISUAL);
+			CVarEnum(AimPosStyle, VA_LIST("Style", "Aim pos style"), 0, VISUAL, nullptr,
+				VA_LIST("Square", "Brackets", "Cross", "Dot", "Ring"),
+				Square, Brackets, Cross, Dot, Ring);
+			CVar(AimPosSize, VA_LIST("Size", "Aim pos size"), 7.f, VISUAL | SLIDER_CLAMP | SLIDER_PRECISION, 2.f, 20.f, 1.f);
+			CVar(AimPosThickness, VA_LIST("Thickness", "Aim pos thickness"), 2.f, VISUAL | SLIDER_CLAMP | SLIDER_PRECISION, 1.f, 4.f, 1.f);
+			CVar(AimPosOutline, VA_LIST("Outline", "Aim pos outline"), true, VISUAL);
 			CVar(PlayerDrawDuration, VA_LIST("Draw duration", "Player path draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 			CVar(ProjectileDrawDuration, VA_LIST("Draw duration", "Projectile path draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 
