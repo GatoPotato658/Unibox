@@ -864,8 +864,8 @@ NAMESPACE_BEGIN(Vars)
 
 				CVar(StickyIgnoreTime, "Sticky ignore time", 15, SLIDER_MIN, 15, 100, 5, "%is");
 				CVar(StuckDetectTime, "Stuck detect time", 1, SLIDER_MIN, 1, 26, 1, "%is");
-				CVar(StuckBlacklistTime, "Stuck blacklist time", 90, SLIDER_MIN, 20, 600, 20, "%is");
-				CVar(StuckExpireTime, "Stuck expire time", 20, SLIDER_MIN, 5, 100, 5, "%is");
+				CVar(StuckBlacklistTime, "Stuck blacklist time", 6, SLIDER_MIN, 1, 60, 1, "%is");
+				CVar(StuckExpireTime, "Stuck expire time", 100, SLIDER_MIN, 5, 300, 5, "%is");
 				CVar(StuckTime, "Stuck time", 0.25f, SLIDER_MIN, 0.25f, 0.9f, 0.05f, "%gs");
 				CVar(OffPathRepath, "Off-path repath", false, NOSAVE | DEBUGVAR);
 
