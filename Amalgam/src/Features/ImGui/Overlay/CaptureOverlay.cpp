@@ -114,7 +114,7 @@ bool CCaptureOverlay::CheckDevice(IDirect3DDevice9* pDevice)
 	HMODULE hD3D9 = nullptr;
 	wchar_t sModule[MAX_PATH]{}, sSystem[MAX_PATH]{};
 	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		reinterpret_cast<LPCWSTR>(*reinterpret_cast<void**>(pDevice)), &hD3D9)
+		reinterpret_cast<LPCWSTR>((*reinterpret_cast<void***>(pDevice))[0]), &hD3D9)
 		|| !GetModuleFileNameW(hD3D9, sModule, MAX_PATH)
 		|| !GetSystemDirectoryW(sSystem, MAX_PATH)
 		|| _wcsnicmp(sModule, sSystem, wcslen(sSystem)) != 0)

@@ -27,7 +27,7 @@ bool CCheatDetection::ShouldScan()
 bool CCheatDetection::InvalidPitch(CTFPlayer* pEntity)
 {
 	return Vars::CheatDetection::Methods.Value & Vars::CheatDetection::MethodsEnum::InvalidPitch
-		&& fabsf(pEntity->m_angEyeAnglesX()) > 89.05f;
+		&& fabsf(pEntity->m_angEyeAnglesX()) > 89.5f;
 }
 
 bool CCheatDetection::IsChoking(CTFPlayer* pEntity)
