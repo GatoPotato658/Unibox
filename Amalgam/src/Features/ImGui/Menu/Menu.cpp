@@ -638,6 +638,7 @@ void CMenu::MenuAimbot(int iTab)
 					}
 					PopTransparent();
 					FDropdown(Vars::Aimbot::Projectile::AutoDetonate, FDropdownEnum::Left);
+						FTooltip("WARNING: \"Aim at stickies\" silently snaps your view to stickies so the Scottish Resistance can detonate them. This is a blatant feature.");
 					FDropdown(Vars::Aimbot::Projectile::AutoAirblast, FDropdownEnum::Right);
 					FSlider(Vars::Aimbot::Projectile::AutodetRadius, FSliderEnum::Left);
 					FSlider(Vars::Aimbot::Projectile::SplashRadius, FSliderEnum::Right);

@@ -254,6 +254,26 @@ bool CAutoDetonate::SkipTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseE
 	return true;
 }
 
+bool CAutoDetonate::AimAtSticky(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CBaseEntity* pSticky)
+{
+	if (!pCmd || !pWeapon || !(Vars::Aimbot::Projectile::AutoDetonate.Value & Vars::Aimbot::Projectile::AutoDetonateEnum::AimAtStickies))
+		return true;
+
+	const bool bLookDetonate = pWeapon->m_iItemDefinitionIndex() == Demoman_s_TheScottishResistance
+		|| pWeapon->GetWeaponID() == TF_WEAPON_PIPEBOMBLAUNCHER && pWeapon->As<CTFPipebombLauncher>()->GetDetonateType() == TF_DETONATE_MODE_DOT;
+	if (!bLookDetonate)
+		return true;
+
+	if (G::Attacking == 1 || I::ClientState->chokedcommands)
+		return false;
+
+	Vec3 vAngleTo = Math::CalcAngle(pLocal->GetShootPos(), pSticky->m_vecOrigin());
+	SDK::FixMovement(pCmd, vAngleTo);
+	pCmd->viewangles = vAngleTo;
+	G::PSilentAngles = true;
+	return true;
+}
+
 bool CAutoDetonate::FlareCheck(CTFPlayer* pLocal)
 {
 	auto& vProjectiles = H::Entities.GetGroup(EntityEnum::LocalFlares);
@@ -358,7 +378,7 @@ bool CAutoDetonate::StickyCheck(CTFPlayer* pLocal, CUserCmd* pCmd)
 				bool bCheckPred = !flLatency || CanSee(pEntity, pSticky, vPredictedStickyOrigins[pSticky->entindex()], vRadiuses[pSticky->entindex()]);
 				RestorePlayer(pEntity);
 				if (bCheckPred && CanSee(pEntity, pSticky, vPredictedStickyOrigins[pSticky->entindex()], vRadiuses[pSticky->entindex()]))
-					return true;
+					return AimAtSticky(pLocal, pWeapon, pCmd, pSticky);
 			}
 		}
 	}
@@ -492,14 +512,7 @@ bool CAutoDetonate::StickyCheck(CTFPlayer* pLocal, CUserCmd* pCmd)
 						const bool bCheckPredicted{ flLatency ? CanSee(pVictim, pSticky, vPredictedStickyOrigins[pSticky->entindex()], vRadiuses[pSticky->entindex()]) : true };
 						if (bCheckPredicted && CanSee(pVictim, pSticky, pSticky->m_vecOrigin(), vRadiuses[pSticky->entindex()]))
 						{
-							if (pCmd && pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_PIPEBOMBLAUNCHER && pWeapon->As<CTFPipebombLauncher>()->GetDetonateType() == TF_DETONATE_MODE_DOT)
-							{
-								Vec3 vAngleTo = Math::CalcAngle(pLocal->GetShootPos(), pSticky->m_vecOrigin());
-								SDK::FixMovement(pCmd, vAngleTo);
-								pCmd->viewangles = vAngleTo;
-								G::PSilentAngles = true;
-							}
-							return true;
+							return AimAtSticky(pLocal, pWeapon, pCmd, pSticky);
 						}
 					}
 					continue;
@@ -516,17 +529,7 @@ bool CAutoDetonate::StickyCheck(CTFPlayer* pLocal, CUserCmd* pCmd)
 						auto [flMaxDamage, flMaxDamageNoBuff, iMaxTargetHealth] = mMaxDamageInfo[n];
 						if (CanKill(pVictim, flTotalDamage, flDamageNoBuff, flMaxDamage, flMaxDamageNoBuff, iMaxTargetHealth))
 						{
-							if (pCmd && pWeapon && pWeapon->m_iItemDefinitionIndex() == Demoman_s_TheScottishResistance)
-							{
-								if (G::Attacking == 1 || I::ClientState->chokedcommands)
-									return false;
-								
-								Vec3 vAngleTo = Math::CalcAngle(pLocal->GetShootPos(), pSticky->m_vecOrigin());
-								SDK::FixMovement(pCmd, vAngleTo);
-								pCmd->viewangles = vAngleTo;
-								G::PSilentAngles = true;
-							}
-							return true;
+							return AimAtSticky(pLocal, pWeapon, pCmd, pSticky);
 						}
 					}
 				}

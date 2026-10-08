@@ -19,6 +19,8 @@ private:
 	bool CanKill(CBaseEntity* pTarget, float& flDamage, float flDamageNoBuffs, float& flMaxDamage, float flMaxDamageNoBuffs, int iMaxHealth);
 	bool CanSee(CBaseEntity* pTarget, CBaseEntity* pProjectile, const Vec3 vProjectileOrigin, const float flRadius, Vec3* vOut = nullptr, Vec3* vCustomTargetPos = nullptr) const;
 
+	bool AimAtSticky(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CBaseEntity* pSticky);
+
 	bool FlareCheck(CTFPlayer* pLocal);
 	bool StickyCheck(CTFPlayer* pLocal, CUserCmd* pCmd);
 
