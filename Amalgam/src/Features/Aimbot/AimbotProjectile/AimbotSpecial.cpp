@@ -13,6 +13,17 @@ namespace
 	constexpr int kPressTicks = 2;
 	constexpr int kTailTicks = 2;
 
+	constexpr int kIdleSolveInterval = 4;
+	constexpr int kFailMemoryTicks = 8;
+	constexpr int kMaxSolveAttempts = 4;
+
+	int GetSolveInterval(int iDelay, bool bWindup)
+	{
+		if (bWindup && iDelay <= 1)
+			return 1;
+		return iDelay <= 3 ? 2 : 4;
+	}
+
 	constexpr float kSpitMaxChannel = 5.f + 1.f;
 	constexpr float kSpitOverloadStart = 3.5f;
 	constexpr float kSpitMinHold = 0.5f;
@@ -118,17 +129,34 @@ bool CAimbotProjectile::SolveAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	}
 
 	const float flMaxDist = Vars::Aimbot::Zombie::MaxDistance.Value;
+	const int iTick = I::GlobalVars->tickcount;
 	bool bReturn = false;
+	int iAttempts = 0;
 	for (auto& tTarget : vTargets)
 	{
 		if (flMaxDist && tTarget.m_flDistTo > flMaxDist * flMaxDist)
 			continue;
 
+		const int iEntity = tTarget.m_pEntity->entindex();
+		if (iEntity != m_tZombie.m_iTargetEnt)
+		{
+			auto it = m_tZombie.m_mFailTick.find(iEntity);
+			if (it != m_tZombie.m_mFailTick.end() && iTick - it->second < kFailMemoryTicks)
+				continue;
+			if (iAttempts >= kMaxSolveAttempts)
+				break;
+		}
+		iAttempts++;
+
 		m_flTimeTo = std::numeric_limits<float>::max();
 		m_vPlayerPath.clear(); m_vProjectilePath.clear(); m_vBoxes.clear();
 		if (CanHit(tTarget, pLocal, pWeapon, true) != 1)
+		{
+			m_tZombie.m_mFailTick[iEntity] = iTick;
 			continue;
+		}
 
+		m_tZombie.m_mFailTick.erase(iEntity);
 		tOut = tTarget;
 		bReturn = true;
 		break;
@@ -159,7 +187,7 @@ bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (tState.m_iPhase == ZombiePhaseEnum::Idle)
 	{
 		const int iSpecial = GetClassSpecial(pLocal);
-		if (!IsSpecialEnabled(iSpecial) || !IsAbilityReady(pLocal) || (!bAuto && !bUserHolding))
+		if (!IsSpecialEnabled(iSpecial) || !IsAbilityReady(pLocal) || (!bAuto && !bUserHolding) || iTick < tState.m_iNextIdleTick)
 			return false;
 
 		int iDelay = 0, iEnd = 0;
@@ -182,10 +210,14 @@ bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		tState.m_iTargetEnt = 0;
 		Target_t tTarget;
 		if (!SolveAbility(pLocal, pWeapon, iSpecial, iDelay, tTarget))
+		{
+			tState.m_iNextIdleTick = iTick + kIdleSolveInterval;
 			return false;
+		}
 
 		tState.m_iSpecial = iSpecial;
 		tState.m_iStartTick = iTick;
+		tState.m_iLastSolveTick = iTick;
 		tState.m_iEndTick = iTick + iEnd;
 		tState.m_iTargetEnt = tTarget.m_pEntity->entindex();
 		tState.m_iPhase = iSpecial == ProjSpecialEnum::SniperSpit ? ZombiePhaseEnum::Charge
@@ -212,13 +244,18 @@ bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		bPress = bAuto;
 		iDelay = std::max(GetEventTicks(kSpitMinHold) - iElapsed, 0);
 
-		Target_t tTarget;
-		const bool bSolved = SolveAbility(pLocal, pWeapon, tState.m_iSpecial, iDelay, tTarget);
-		if (bSolved)
+		bool bSolved = false;
+		if (iTick - tState.m_iLastSolveTick >= GetSolveInterval(iDelay, false))
 		{
-			tState.m_iTargetEnt = tTarget.m_pEntity->entindex();
-			tState.m_vAngle = tTarget.m_vAngleTo;
-			ShowTarget(1, tTarget);
+			tState.m_iLastSolveTick = iTick;
+			Target_t tTarget;
+			bSolved = SolveAbility(pLocal, pWeapon, tState.m_iSpecial, iDelay, tTarget);
+			if (bSolved)
+			{
+				tState.m_iTargetEnt = tTarget.m_pEntity->entindex();
+				tState.m_vAngle = tTarget.m_vAngleTo;
+				ShowTarget(1, tTarget);
+			}
 		}
 
 		const bool bRelease = bAuto
@@ -237,12 +274,16 @@ bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	{
 		iDelay = tState.m_iPhase == ZombiePhaseEnum::Windup ? std::max(tState.m_iEndTick - iTick, 0) : 0;
 
-		Target_t tTarget;
-		if (SolveAbility(pLocal, pWeapon, tState.m_iSpecial, iDelay, tTarget))
+		if (iTick - tState.m_iLastSolveTick >= GetSolveInterval(iDelay, tState.m_iPhase == ZombiePhaseEnum::Windup))
 		{
-			tState.m_iTargetEnt = tTarget.m_pEntity->entindex();
-			tState.m_vAngle = tTarget.m_vAngleTo;
-			ShowTarget(1, tTarget);
+			tState.m_iLastSolveTick = iTick;
+			Target_t tTarget;
+			if (SolveAbility(pLocal, pWeapon, tState.m_iSpecial, iDelay, tTarget))
+			{
+				tState.m_iTargetEnt = tTarget.m_pEntity->entindex();
+				tState.m_vAngle = tTarget.m_vAngleTo;
+				ShowTarget(1, tTarget);
+			}
 		}
 
 		if (iTick >= tState.m_iEndTick)

@@ -12,6 +12,8 @@ namespace
 	constexpr float kAskDistanceScale = 50.f;
 	constexpr int kThrowIdle = 0, kThrowCharging = 1, kThrowCharged = 2;
 	constexpr int kGoalFlagDisableBallScore = 2;
+	constexpr int kIdlePlanInterval = 4;
+	constexpr int kReplanInterval = 2;
 
 	struct BallThrow_t
 	{
@@ -585,10 +587,15 @@ bool CAimbotProjectile::RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, C
 			return false;
 		}
 
-		PasstimePlan_t tPlan;
-		if (!PlanPasstime(pLocal, pWeapon, tPlan))
+		if (iTick - tState.m_iLastPlanTick >= kReplanInterval)
+		{
+			tState.m_bPlanned = PlanPasstime(pLocal, pWeapon, tState.m_tPlan);
+			tState.m_iLastPlanTick = iTick;
+		}
+		if (!tState.m_bPlanned)
 			return false;
 
+		const PasstimePlan_t tPlan = tState.m_tPlan;
 		fShow(tPlan);
 		HoldAngles(pCmd, tPlan.m_vAngle);
 		return fFinish(true);
@@ -596,15 +603,20 @@ bool CAimbotProjectile::RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, C
 
 	if (tState.m_iPhase == PasstimePhaseEnum::Idle)
 	{
-		if (flNow < tState.m_flCooldownUntil || !G::CanPrimaryAttack || iThrowState != kThrowIdle && iThrowState != -1)
+		if (flNow < tState.m_flCooldownUntil || !G::CanPrimaryAttack || iThrowState != kThrowIdle && iThrowState != -1 || iTick < tState.m_iNextPlanTick)
 			return false;
 
 		PasstimePlan_t tPlan;
-		if (!PlanPasstime(pLocal, pWeapon, tPlan))
+		if (!PlanPasstime(pLocal, pWeapon, tPlan)
+			|| tPlan.m_iKind == PasstimeKindEnum::Goal && pLocal->m_hPasstimePassTarget().GetEntryIndex())
+		{
+			tState.m_iNextPlanTick = iTick + kIdlePlanInterval;
 			return false;
-		if (tPlan.m_iKind == PasstimeKindEnum::Goal && pLocal->m_hPasstimePassTarget().GetEntryIndex())
-			return false;
+		}
 
+		tState.m_tPlan = tPlan;
+		tState.m_bPlanned = true;
+		tState.m_iLastPlanTick = iTick;
 		tState.m_iKind = tPlan.m_iKind;
 		tState.m_iEntity = tPlan.m_iEntity;
 		tState.m_iTicks = 1;
@@ -618,8 +630,15 @@ bool CAimbotProjectile::RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, C
 		return fFinish(true);
 	}
 
-	PasstimePlan_t tPlan;
-	const bool bPlanned = PlanPasstime(pLocal, pWeapon, tPlan, tState.m_iKind, tState.m_iEntity) && tPlan.m_iEntity == tState.m_iEntity;
+	if (tState.m_iKind != PasstimeKindEnum::Goal || iTick - tState.m_iLastPlanTick >= kReplanInterval)
+	{
+		PasstimePlan_t tNew;
+		tState.m_bPlanned = PlanPasstime(pLocal, pWeapon, tNew, tState.m_iKind, tState.m_iEntity) && tNew.m_iEntity == tState.m_iEntity;
+		tState.m_tPlan = tNew;
+		tState.m_iLastPlanTick = iTick;
+	}
+	const PasstimePlan_t tPlan = tState.m_tPlan;
+	const bool bPlanned = tState.m_bPlanned;
 	tState.m_iFailTicks = bPlanned ? 0 : tState.m_iFailTicks + 1;
 	tState.m_iTicks++;
 

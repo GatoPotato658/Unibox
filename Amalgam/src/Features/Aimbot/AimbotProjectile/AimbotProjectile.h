@@ -159,6 +159,9 @@ private:
 		int m_iTargetEnt = 0;
 		Vec3 m_vAngle = {};
 		bool m_bHasAngle = false;
+		int m_iNextIdleTick = 0;
+		int m_iLastSolveTick = -1000;
+		std::unordered_map<int, int> m_mFailTick = {};
 
 		void Reset()
 		{
@@ -182,6 +185,10 @@ private:
 		float m_flCooldownUntil = 0.f;
 		int m_iBadEntity = 0;
 		float m_flBadUntil = 0.f;
+		int m_iNextPlanTick = 0;
+		int m_iLastPlanTick = -1000;
+		bool m_bPlanned = false;
+		PasstimePlan_t m_tPlan = {};
 
 		void Reset(float flCooldown = 0.f)
 		{
