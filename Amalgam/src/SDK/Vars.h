@@ -443,6 +443,31 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AutoUpgradeTeleporterLVL, "Teleporter LVL", 2, SLIDER_CLAMP, 1, 3);
 		NAMESPACE_END(AutoEngie)
 
+		NAMESPACE_BEGIN(Zombie)
+			CVarEnum(Abilities, VA_LIST("Abilities", "Zombie abilities"), 0b1111, DROPDOWN_MULTI, "Off",
+				VA_LIST("Sniper spit", "Spy EMP", "Pyro spew", "Heavy rock"),
+				SniperSpit = 1 << 0, SpyEmp = 1 << 1, PyroSpew = 1 << 2, HeavyRock = 1 << 3);
+			CVar(AutoCast, "Auto cast", true);
+			CVar(MaxDistance, "Max distance", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 3000.f, 100.f);
+		NAMESPACE_END(Zombie)
+
+		NAMESPACE_BEGIN(Passtime)
+			CVarEnum(Mode, VA_LIST("Mode", "Jack throw mode"), 1, NONE, nullptr,
+				VA_LIST("Off", "Auto", "Goal only", "Pass only"),
+				Off, Auto, GoalOnly, PassOnly);
+			CVar(AutoThrow, "Auto throw", true);
+			CVar(MaxGoalDistance, "Max goal distance", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 2500.f, 50.f);
+			CVar(PreferGoalDistance, "Prefer goal within", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 2500.f, 50.f);
+			CVarEnum(PassPreference, "Pass preference", 0, NONE, nullptr,
+				VA_LIST("Closest to goal", "Lowest threat", "Game target"),
+				ClosestToGoal, LowestThreat, GameTarget);
+			CVar(MinPassGain, "Min pass gain", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 1000.f, 25.f);
+			CVar(PressureRange, "Pressure range", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 1500.f, 50.f);
+			CVarEnum(Arc, "Arc", 2, NONE, nullptr,
+				VA_LIST("Flat", "High", "Auto"),
+				Flat, High, Auto);
+		NAMESPACE_END(Passtime)
+
 		NAMESPACE_BEGIN(Melee)
 			CVar(AutoBackstab, "Auto backstab", true);
 			CVar(IgnoreRazorback, "Ignore razorback", false);

@@ -39,6 +39,125 @@ static const char* GetPasstimeThrowArcCvar(CTFPlayer* pPlayer)
 		}
 	}
 
+const SpecialProjectile_t* CProjectileSimulation::GetSpecial(int iSpecial)
+{
+	static constexpr const char* sNade = "models/player/infection/w_grenade_emp.mdl";
+	static constexpr float flNoLifetime = std::numeric_limits<float>::max();
+	static const SpecialProjectile_t aSpecials[] = {
+		{ "", 0, "", 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f },
+		{ "Sniper spit", FNV1A::Hash32Const("zi/sniper_spit"), sNade, 2000.f, 0.f, 50.f, 0.f, 12.f, flNoLifetime, 130.f - 50.f * 0.70710678f, 130.f - 50.f * 0.70710678f, 0.5f },
+		{ "Spy EMP", FNV1A::Hash32Const("zi/spy_emp"), sNade, 1500.f, 0.f, -20.f, 0.f, 0.f, 1.75f, 900.f, 450.f, 0.f },
+		{ "Pyro spew", FNV1A::Hash32Const("zi/pyro_spew"), sNade, 1200.f, 0.f, 32.f, 0.f, 12.f, 5.f, 0.f, 0.f, 0.f },
+		{ "Heavy rock", FNV1A::Hash32Const("zi/heavy_rock"), sNade, 1100.f, 350.f, 40.f, -10.f, 12.f, 6.f, 150.f, 150.f, 1.9f },
+	};
+	return iSpecial > ProjSpecialEnum::None && iSpecial <= ProjSpecialEnum::HeavyRock ? &aSpecials[iSpecial] : nullptr;
+}
+
+float CProjectileSimulation::GetSpecialHull(const SpecialProjectile_t* pSpecial)
+{
+	if (pSpecial->m_flHull)
+		return pSpecial->m_flHull;
+
+	const int iIndex = I::ModelInfoClient->GetModelIndex(pSpecial->m_sModel);
+	const model_t* pModel = iIndex > 0 ? I::ModelInfoClient->GetModel(iIndex) : nullptr;
+	if (!pModel)
+		return 0.f;
+
+	Vec3 vMins, vMaxs; I::ModelInfoClient->GetModelBounds(pModel, vMins, vMaxs);
+	return std::max({ fabsf(vMins.x), fabsf(vMins.y), fabsf(vMins.z), fabsf(vMaxs.x), fabsf(vMaxs.y), fabsf(vMaxs.z) });
+}
+
+float CProjectileSimulation::GetSpecialDrag(const SpecialProjectile_t* pSpecial)
+{
+	if (!pSpecial)
+		return 0.f;
+	if (!m_pEnv)
+		m_pEnv = I::Physics->CreateEnvironment();
+
+	const int iSpecial = int(pSpecial - GetSpecial(ProjSpecialEnum::SniperSpit)) + ProjSpecialEnum::SniperSpit;
+	if (iSpecial <= ProjSpecialEnum::None || iSpecial > ProjSpecialEnum::HeavyRock)
+		return 0.f;
+	if (m_pSpecialCollide && m_aSpecialDragFor[iSpecial] == m_pSpecialCollide)
+		return m_aSpecialDrag[iSpecial];
+
+	ProjectileInfo* pOldCurrent = m_pCurrent;
+	const bool bOldPhysics = m_bPhysics;
+	const PhysicsObject_t tOldObj = m_tObj;
+	const SpecialProjectile_t* pOldSpecial = m_pSpecial;
+	m_pSpecial = pSpecial;
+
+	float flDrag = 0.f;
+	ProjectileInfo tInfo = {};
+	tInfo.m_uType = pSpecial->m_uType;
+	tInfo.m_flVelocity = pSpecial->m_flSpeed;
+	tInfo.m_flGravity = 0.f;
+	if (Initialize(tInfo) && m_bPhysics && m_pSpecialCollide)
+	{
+		const float flSpeed = GetVelocity().Length();
+		constexpr float flTimes[] = { 0.5f, 1.f };
+		float aFit[2] = {};
+		for (int i = 0, iTicks = 0; i < 2; i++)
+		{
+			const int iTarget = TIME_TO_TICKS(flTimes[i]);
+			for (; iTicks < iTarget; iTicks++)
+				RunTick(tInfo, false);
+
+			const float flNow = GetVelocity().Length();
+			aFit[i] = flNow > 0.f ? (flSpeed / flNow - 1.f) / (flSpeed * TICKS_TO_TIME(iTarget)) : 0.f;
+		}
+		flDrag = aFit[0];
+		m_aSpecialDragFor[iSpecial] = m_pSpecialCollide;
+		m_aSpecialDrag[iSpecial] = flDrag;
+
+		if (Vars::Debug::Logging.Value)
+			SDK::Output("ProjSim", std::format("{}: drag c={:.3e} (0.5s) {:.3e} (1s), basis {:.5f} {:.5f} {:.5f}", pSpecial->m_sName, aFit[0], aFit[1], m_pObj->m_dragBasis.x, m_pObj->m_dragBasis.y, m_pObj->m_dragBasis.z).c_str(), { 120, 200, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	}
+
+	m_pSpecial = pOldSpecial;
+	m_pCurrent = pOldCurrent;
+	m_bPhysics = bOldPhysics;
+	m_tObj = tOldObj;
+	return flDrag;
+}
+
+static float ReadSolidValue(const char* sText, const char* sKey, float flDefault)
+{
+	if (!sText)
+		return flDefault;
+
+	const std::string sNeedle = std::format("\"{}\" \"", sKey);
+	const char* sFound = strstr(sText, sNeedle.c_str());
+	return sFound ? strtof(sFound + sNeedle.size(), nullptr) : flDefault;
+}
+
+static IPhysicsObject* CreateSpecialObject(IPhysicsEnvironment* pEnv, const SpecialProjectile_t* pSpecial, const objectparams_t& tDefault, const CPhysCollide*& pCollideOut, IPhysicsObject*& pObject)
+{
+	const int iIndex = I::ModelInfoClient->GetModelIndex(pSpecial->m_sModel);
+	vcollide_t* pVCollide = iIndex > 0 ? I::ModelInfoClient->GetVCollide(iIndex) : nullptr;
+	if (!pVCollide || !pVCollide->solidCount || !pVCollide->solids || !pVCollide->solids[0])
+		return nullptr;
+
+	if (pObject && pCollideOut != pVCollide->solids[0])
+	{
+		pEnv->DestroyObject(pObject);
+		pObject = nullptr;
+	}
+	if (!pObject)
+	{
+		objectparams_t tParams = tDefault;
+		tParams.mass = ReadSolidValue(pVCollide->pKeyValues, "mass", tParams.mass);
+		tParams.inertia = ReadSolidValue(pVCollide->pKeyValues, "inertia", tParams.inertia);
+		tParams.damping = ReadSolidValue(pVCollide->pKeyValues, "damping", tParams.damping);
+		tParams.rotdamping = ReadSolidValue(pVCollide->pKeyValues, "rotdamping", tParams.rotdamping);
+		tParams.volume = ReadSolidValue(pVCollide->pKeyValues, "volume", tParams.volume);
+		tParams.enableCollisions = false;
+
+		pObject = pEnv->CreatePolyObject(pVCollide->solids[0], 0, {}, {}, &tParams);
+		pCollideOut = pVCollide->solids[0];
+	}
+	return pObject;
+}
+
 bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, Vec3 vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge)
 {
 	if (!pWeapon || !pPlayer->IsAlive() || pPlayer->IsAGhost() || pPlayer->IsTaunting())
@@ -46,6 +165,16 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 
 	float flGravity = SDK::GetGravity(); // vphysics projectiles affected by server start gravity
 	bool bDucking = pPlayer->m_fFlags() & FL_DUCKING;
+
+	if (m_pSpecial)
+	{
+		Vec3 vForward; Math::AngleVectors(vAngles, &vForward);
+		Vec3 vEye = iFlags & ProjSimEnum::Interp ? pPlayer->GetEyePosition() : pPlayer->GetShootPos();
+		Vec3 vPos = vEye + vForward * m_pSpecial->m_flSpawnDist + Vec3(0.f, 0.f, m_pSpecial->m_flSpawnHeight);
+		tProjInfo = { pPlayer, pWeapon, m_pSpecial->m_uType, vPos, vAngles, Vec3::Get(GetSpecialHull(m_pSpecial)), m_pSpecial->m_flSpeed, flGravity, m_pSpecial->m_flLifetime };
+		tProjInfo.m_vVelocityAdd = pPlayer->m_vecVelocity() + Vec3(0.f, 0.f, m_pSpecial->m_flLift);
+		return true;
+	}
 
 	bool bRedirect = iFlags & ProjSimEnum::Redirect;
 	bool bInterp = iFlags & ProjSimEnum::Interp;
@@ -392,17 +521,19 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 		if (!pThrowSpeed || !pThrowArc)
 			return false;
 
-		Vec3 vThrowAngles = vAngles;
-		vThrowAngles.x -= pThrowArc->GetFloat();
-		SDK::GetProjectileFireSetup(pPlayer, vThrowAngles, { 16.f, 8.f, -6.f }, vPos, vAngle, 0.f, 0.f, bInterp);
-
 		Vec3 vForward = {};
-		Math::AngleVectors(vAngle, &vForward);
-		float flSpeed = pThrowSpeed->GetFloat();
-		if (auto pScale = tf_passtime_throwspeed_velocity_scale)
-			flSpeed = std::max(0.f, flSpeed + pPlayer->m_vecVelocity().Dot(vForward) * pScale->GetFloat());
+		Math::AngleVectors(vAngles, &vForward);
+		const float flArc = pThrowArc->GetFloat();
+		Vec3 vLaunch = (vForward * (1.f - flArc) + Vec3(0.f, 0.f, flArc)).Normalized();
 
-		tProjInfo = { pPlayer, pWeapon, FNV1A::Hash32Const("models/passtime/ball/passtime_ball.mdl"), vPos, vAngle, { 3.f, 3.f, 3.f }, flSpeed, 1.f, 8.f };
+		vPos = bInterp ? pPlayer->GetEyePosition() : pPlayer->GetShootPos();
+		vAngle = Math::VectorAngles(vLaunch);
+		float flScale = tf_passtime_throwspeed_velocity_scale ? tf_passtime_throwspeed_velocity_scale->GetFloat() : 0.f;
+
+		static auto tf_passtime_ball_sphere_radius = H::ConVars.FindVar("tf_passtime_ball_sphere_radius");
+		static auto tf_passtime_ball_reset_time = H::ConVars.FindVar("tf_passtime_ball_reset_time");
+		tProjInfo = { pPlayer, pWeapon, FNV1A::Hash32Const("models/passtime/ball/passtime_ball.mdl"), vPos, vAngle, Vec3::Get(tf_passtime_ball_sphere_radius->GetFloat()), pThrowSpeed->GetFloat(), flGravity, tf_passtime_ball_reset_time->GetFloat() };
+		tProjInfo.m_vVelocityAdd = vForward * (vForward.Dot(pPlayer->m_vecVelocity()) * flScale);
 		return true;
 	}
 	}
@@ -466,7 +597,7 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 	if (!m_pEnv)
 		m_pEnv = I::Physics->CreateEnvironment();
 
-	if (!m_pObj)
+	if (!m_pObjBox)
 	{
 		CPhysCollide* pCollide = I::PhysicsCollision->BBoxToCollide({ -2.f, -2.f, -2.f }, { 2.f, 2.f, 2.f });
 		objectparams_t tParams = m_tPhysDefaultObjectParams;
@@ -476,12 +607,25 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 		tParams.rotInertiaLimit = 0.f;
 		tParams.enableCollisions = false;
 
-		m_pObj = m_pEnv->CreatePolyObject(pCollide, 0, tProjInfo.m_vPos, tProjInfo.m_vAng, &tParams);
-		m_pObj->Wake();
+		m_pObjBox = m_pEnv->CreatePolyObject(pCollide, 0, tProjInfo.m_vPos, tProjInfo.m_vAng, &tParams);
+	}
+
+	bool bSpecialObject = false;
+	m_pObj = m_pObjBox;
+	if (m_pSpecial && tProjInfo.m_uType == m_pSpecial->m_uType)
+	{
+		if (CreateSpecialObject(m_pEnv, m_pSpecial, m_tPhysDefaultObjectParams, m_pSpecialCollide, m_pObjSpecial))
+			m_pObj = m_pObjSpecial, bSpecialObject = true;
 	}
 
 	if (!m_pEnv || !m_pObj)
 		return false;
+
+	if (m_pObjBox && m_pObjBox != m_pObj)
+		m_pObjBox->Sleep();
+	if (m_pObjSpecial && m_pObjSpecial != m_pObj)
+		m_pObjSpecial->Sleep();
+	m_pObj->Wake();
 
 	m_pCurrent = &tProjInfo;
 
@@ -562,10 +706,16 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 			vAngDragBasis = { 0.035050f, 0.031199f, 0.022922f };
 		}
 
+		if (bSpecialObject)
+			flDrag = m_tPhysDefaultObjectParams.dragCoefficient;
+
 		m_pObj->SetDragCoefficient(&flDrag, &flDrag);
 
-		m_pObj->m_dragBasis = vDragBasis;
-		m_pObj->m_angDragBasis = vAngDragBasis;
+		if (!bSpecialObject)
+		{
+			m_pObj->m_dragBasis = vDragBasis;
+			m_pObj->m_angDragBasis = vAngDragBasis;
+		}
 		m_bPhysics = m_pObj->m_dragCoefficient && m_pObj->m_dragBasis;
 	}
 
@@ -641,6 +791,7 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 					}
 				}
 			}
+			vVelocity += tProjInfo.m_vVelocityAdd;
 		}
 		else // in the case of adding projectiles that already exist in the world
 		{
@@ -679,13 +830,15 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 
 		if (m_bPhysics)
 		{
-			m_pObj->SetPosition(tProjInfo.m_vPos, tProjInfo.m_vAng, true);
+			m_pObj->SetPosition(tProjInfo.m_vPos, bSpecialObject ? QAngle() : tProjInfo.m_vAng, true);
 			m_pObj->SetVelocity(&vVelocity, &vAngularVelocity);
 		}
 		else
 		{
 			m_tObj.m_vOrigin = tProjInfo.m_vPos;
 			m_tObj.m_vVelocity = vVelocity;
+			if (m_pSpecial && tProjInfo.m_uType == m_pSpecial->m_uType && vVelocity.Length() > k_flMaxVelocity)
+				m_tObj.m_vVelocity = vVelocity.Normalized() * k_flMaxVelocity;
 		}
 	}
 
@@ -710,6 +863,11 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 		case FNV1A::Hash32Const("models/workshop_partner/weapons/c_models/c_sd_cleaver/c_sd_cleaver.mdl"):
 		case FNV1A::Hash32Const("models/weapons/w_models/w_baseball.mdl"):
 		case FNV1A::Hash32Const("models/weapons/c_models/c_xms_festive_ornament.mdl"):
+			flMaxVelocity = k_flMaxVelocity;
+			vMaxAngularVelocity = k_flMaxAngularVelocity;
+		}
+		if (m_pSpecial && tProjInfo.m_uType == m_pSpecial->m_uType)
+		{
 			flMaxVelocity = k_flMaxVelocity;
 			vMaxAngularVelocity = k_flMaxAngularVelocity;
 		}

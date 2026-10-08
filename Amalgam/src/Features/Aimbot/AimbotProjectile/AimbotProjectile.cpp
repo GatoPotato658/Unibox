@@ -25,91 +25,12 @@ static std::map<std::string, int> s_mTraceCount = {};
 //#include "../../Debug/Debug.h"
 #endif
 
-static constexpr float PasstimeHoldTime = 0.18f;
-static constexpr float PasstimeThrowCooldown = 0.35f;
-static constexpr int PasstimePassPriorityThreshold = 80;
-
 static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	std::vector<Target_t> vTargets;
 
 	const Vec3 vLocalPos = F::Ticks.GetShootPos();
 	const Vec3 vLocalAngles = I::EngineClient->GetViewAngles();
-
-	if (pWeapon->GetWeaponID() == TF_WEAPON_PASSTIME_GUN && pLocal->m_bHasPasstimeBall())
-	{
-		auto GetNearbyThreatScore = [&](const Vector& vPos) -> float
-			{
-				float flScore = 0.0f;
-				for (auto pEnemyEnt : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
-				{
-					if (!pEnemyEnt || pEnemyEnt->IsDormant())
-						continue;
-
-					auto pEnemy = pEnemyEnt->As<CTFPlayer>();
-					if (!pEnemy || !pEnemy->IsAlive() || F::AimbotGlobal.ShouldIgnore(pEnemy, pLocal, pWeapon))
-						continue;
-
-					const float flDist = std::max(vPos.DistTo(pEnemy->GetAbsOrigin()), 1.0f);
-					if (flDist > 1200.0f)
-						continue;
-
-					flScore += 1.0f / flDist;
-				}
-				return flScore;
-			};
-
-		const int iLocalIndex = pLocal->entindex();
-		const int iPassTarget = pLocal->m_hPasstimePassTarget().GetEntryIndex();
-		const float flMaxPassRange = F::PasstimeController.GetMaxPassRange();
-		const int iOurTeam = pLocal->m_iTeamNum();
-		Vector vGoalPos = {};
-		const bool bHasGoal = F::PasstimeController.GetGoalPos(iOurTeam, pLocal->GetAbsOrigin(), vGoalPos);
-		const float flLocalGoalDist = bHasGoal ? pLocal->GetAbsOrigin().DistTo(vGoalPos) : FLT_MAX;
-		const float flLocalThreat = GetNearbyThreatScore(pLocal->GetAbsOrigin());
-
-		for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerTeam))
-		{
-			if (!pEntity || pEntity->IsDormant() || pEntity->entindex() == iLocalIndex)
-				continue;
-
-			auto pTeammate = pEntity->As<CTFPlayer>();
-			if (!pTeammate || !pTeammate->IsAlive() || pTeammate->m_bHasPasstimeBall())
-				continue;
-
-			float flFOVTo = 0.f;
-			Vec3 vPos = {}, vAngleTo = {};
-			if (!F::AimbotGlobal.PlayerBoneInFOV(pTeammate, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
-				continue;
-
-			float flDistTo = vLocalPos.DistTo(vPos);
-			if (flMaxPassRange != FLT_MAX && flDistTo > flMaxPassRange * 1.15f)
-				continue;
-
-			int iPriority = 0;
-			if (pTeammate->entindex() == iPassTarget || pTeammate->m_bIsTargetedForPasstimePass())
-				iPriority = std::numeric_limits<int>::max();
-			else
-			{
-				if (bHasGoal)
-				{
-					const float flGoalDist = pTeammate->GetAbsOrigin().DistTo(vGoalPos);
-					const float flGain = std::clamp(flLocalGoalDist - flGoalDist, -2000.f, 2000.f);
-					iPriority += int(flGain * 0.35f);
-				}
-
-				const float flThreatGain = std::clamp((flLocalThreat - GetNearbyThreatScore(pTeammate->GetAbsOrigin())) * 150000.0f, -250.0f, 250.0f);
-				iPriority += int(flThreatGain);
-
-				if (pTeammate->m_iHealth() > pLocal->m_iHealth())
-					iPriority += 20;
-			}
-
-			vTargets.emplace_back(pTeammate, TargetEnum::Player, vPos, vAngleTo, flFOVTo, flDistTo, iPriority);
-		}
-
-		return vTargets;
-	}
 
 	{
 		auto eGroup = EntityEnum::Invalid;
@@ -894,6 +815,7 @@ std::vector<Point_t> CAimbotProjectile::GetSplashPoints(Vec3 vOrigin, std::vecto
 {
 	std::vector<Point_t> vPoints = {};
 
+	iSimTime -= m_tInfo.m_iLaunchDelay;
 	m_tInfo.m_pTarget->m_vPos = vOrigin;
 	Vec3 vTargetEye = vOrigin + m_tInfo.m_vTargetEye;
 	float flRadiusSqr = powf(m_tInfo.m_flRadius, 2), flRadiusAirSqr = flRadiusSqr;
@@ -1087,8 +1009,88 @@ static inline float GetDrag(float flVelocity, ProjectileInfo* pInfo, int iFlags)
 	return !(iFlags & CalculateFlagsEnum::LobAngle) ? flRegularDrag : flLobDrag;
 }
 
+bool SolveLaunch(const Vec3& vDelta, float flSpeed, const Vec3& vAdd, float flGravity, bool bLob, Vec3& vOut, float& flTime, float flDrag)
+{
+	auto fReach = [&](float t) -> float
+		{
+			return flDrag > 0.f ? logf(1.f + flDrag * flSpeed * t) / flDrag : flSpeed * t;
+		};
+	auto fError = [&](float t) -> float
+		{
+			Vec3 vReach = vDelta - vAdd * t + Vec3(0.f, 0.f, flGravity * t * t / 2.f);
+			return vReach.LengthSqr() - powf(fReach(t), 2);
+		};
+
+	constexpr float flStep = 0.01f, flMax = 6.f;
+	float flLow = 0.f, flFlat = -1.f, flLob = -1.f;
+	float flLast = fError(flLow);
+	for (float t = flStep; t <= flMax; t += flStep)
+	{
+		float flNow = fError(t);
+		if (flLast >= 0.f != flNow >= 0.f)
+		{
+			float flA = t - flStep, flB = t;
+			for (int i = 0; i < 24; i++)
+			{
+				float flMid = (flA + flB) / 2.f;
+				if (fError(flMid) >= 0.f == flLast >= 0.f)
+					flA = flMid;
+				else
+					flB = flMid;
+			}
+			float flRoot = (flA + flB) / 2.f;
+			if (flNow >= 0.f)
+				flLob = flRoot;
+			else if (flFlat < 0.f)
+				flFlat = flRoot;
+		}
+		flLast = flNow;
+	}
+
+	float flRoot = bLob ? flLob : flFlat;
+	if (flRoot <= 0.f)
+		return false;
+
+	vOut = (vDelta - vAdd * flRoot + Vec3(0.f, 0.f, flGravity * flRoot * flRoot / 2.f)).Normalized();
+	flTime = flRoot;
+	return true;
+}
+
+static inline bool GetSpecialAngle(const Vec3& vLocalPos, const Vec3& vTargetPos, int iFlags, Info_t& tInfo, float& flPitch, float& flYaw, float& flTime)
+{
+	const bool bLob = iFlags & CalculateFlagsEnum::LobAngle;
+	Vec3 vForward = (vTargetPos - vLocalPos).Normalized();
+	for (int i = 0; i < 3; i++)
+	{
+		const Vec3 vDelta = vTargetPos - (vLocalPos + vForward * tInfo.m_flSpawnDist + Vec3(0.f, 0.f, tInfo.m_flSpawnHeight));
+		Vec3 vAim;
+		if (!SolveLaunch(vDelta, tInfo.m_flVelocity, tInfo.m_vVelAdd, tInfo.m_flGravity, bLob, vAim, flTime, tInfo.m_flDrag))
+			return false;
+
+		if ((vAim * tInfo.m_flVelocity + tInfo.m_vVelAdd).Length() > k_flMaxVelocity)
+		{
+			Vec3 vLaunch;
+			if (!SolveLaunch(vDelta, k_flMaxVelocity, {}, tInfo.m_flGravity, bLob, vLaunch, flTime, tInfo.m_flDrag))
+				return false;
+
+			const float flAlong = vLaunch.Dot(tInfo.m_vVelAdd), flRoot = flAlong * flAlong - tInfo.m_vVelAdd.LengthSqr() + powf(tInfo.m_flVelocity, 2);
+			if (flRoot < 0.f)
+				return false;
+			vAim = (vLaunch * (flAlong + sqrtf(flRoot)) - tInfo.m_vVelAdd) / tInfo.m_flVelocity;
+		}
+		vForward = vAim.Normalized();
+	}
+
+	flYaw = Math::Rad2Deg(atan2f(vForward.y, vForward.x));
+	flPitch = asinf(std::clamp(vForward.z, -1.f, 1.f));
+	return true;
+}
+
 static inline bool GetAngle(const Vec3& vLocalPos, const Vec3& vTargetPos, int iFlags, Info_t& tInfo, float& flPitch, float& flYaw, float& flTime)
 {
+	if (tInfo.m_pSpecial)
+		return GetSpecialAngle(vLocalPos, vTargetPos, iFlags, tInfo, flPitch, flYaw, flTime);
+
 	float flVelocity = tInfo.m_flVelocity;
 	float flGrav = tInfo.m_flGravity;
 	Vec3 vDelta = vTargetPos - vLocalPos;
@@ -1524,6 +1526,7 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 
 bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType, uint8_t iFlags)
 {
+	iSimTime -= m_tInfo.m_iLaunchDelay;
 	m_vPlainAngles = { flPitch, flYaw, 0.f };
 	if (!m_bBlockAimAnglesDraw && m_flAimAnglesSetTime != I::GlobalVars->curtime)
 	{
@@ -1736,10 +1739,25 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	m_tInfo.m_vHull = m_tProjInfo.m_vHull.Min(3);
 	m_tInfo.m_vOffset = m_tProjInfo.m_vPos - m_tInfo.m_vLocalEye; m_tInfo.m_vOffset.y *= -1;
 	m_tInfo.m_flOffsetTime = m_tInfo.m_vOffset.Length() / m_tInfo.m_flVelocity;
+	if (auto pSpecial = F::ProjSim.m_pSpecial)
+	{
+		m_tInfo.m_pSpecial = pSpecial;
+		m_tInfo.m_flVelocity = pSpecial->m_flSpeed;
+		m_tInfo.m_vAngFix = {};
+		m_tInfo.m_vOffset = {};
+		m_tInfo.m_flOffsetTime = 0.f;
+		m_tInfo.m_vVelAdd = m_tProjInfo.m_vVelocityAdd;
+		m_tInfo.m_flSpawnDist = pSpecial->m_flSpawnDist;
+		m_tInfo.m_flSpawnHeight = pSpecial->m_flSpawnHeight;
+		m_tInfo.m_flDrag = m_flSpecialDrag;
+		m_tInfo.m_iLaunchDelay = m_iLaunchDelay;
+	}
 
 	m_tInfo.m_flGravity = m_tProjInfo.m_flGravity;
 	m_tInfo.m_iSplashRestrict = !m_tInfo.m_flGravity ? Vars::Aimbot::Projectile::SplashRestrictDirect.Value : Vars::Aimbot::Projectile::SplashRestrictArc.Value;
-	m_tInfo.m_flRadius = GetSplashRadius(pWeapon, pLocal, Vars::Aimbot::Projectile::SplashRadius.Value / 100);
+	m_tInfo.m_flRadius = m_tInfo.m_pSpecial
+		? (tTarget.m_iTargetType == TargetEnum::Player ? m_tInfo.m_pSpecial->m_flSplashRadius : m_tInfo.m_pSpecial->m_flBuildingRadius) * Vars::Aimbot::Projectile::SplashRadius.Value / 100
+		: GetSplashRadius(pWeapon, pLocal, Vars::Aimbot::Projectile::SplashRadius.Value / 100);
 	m_tInfo.m_flBoundsTime = tTarget.m_pEntity->GetSize().Length() / m_tInfo.m_flVelocity;
 	m_tInfo.m_flRadiusTime = m_tInfo.m_flBoundsTime + m_tInfo.m_flRadius / m_tInfo.m_flVelocity;
 	m_tInfo.m_iArmTime = TIME_TO_TICKS(ArmTime(pWeapon));
@@ -1761,7 +1779,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	DirectHistory_t mDirectHistory = {};
 	SplashHistory_t mSplashHistory = {};
 
-	int iMaxTime = TIME_TO_TICKS(std::min(m_tProjInfo.m_flLifetime, Vars::Aimbot::Projectile::MaxSimulationTime.Value));
+	int iMaxTime = TIME_TO_TICKS(std::min(m_tProjInfo.m_flLifetime, Vars::Aimbot::Projectile::MaxSimulationTime.Value)) + m_tInfo.m_iLaunchDelay;
 	for (int i = 1 - TIME_TO_TICKS(m_tInfo.m_flLatency); i <= iMaxTime; i++)
 	{
 		if (!m_tMoveStorage.m_bFailed)
@@ -1769,7 +1787,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 			F::MoveSim.RunTick(m_tMoveStorage);
 			tTarget.m_vPos = m_tMoveStorage.m_vPredictedOrigin;
 		}
-		if (i < 0)
+		if (i < 0 || i < m_tInfo.m_iLaunchDelay)
 			continue;
 
 		for (auto& [iIndex, tOffset] : mDirects)
@@ -1801,7 +1819,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 					goto end;
 				tSolution.m_iCalculated = CalculateResultEnum::Bad; break;
 			default: end:
-				CalculateAngle(m_tInfo.m_vLocalEye, vPoint, i, tSolution, iFlags, iTolerance);
+				CalculateAngle(m_tInfo.m_vLocalEye, vPoint, i - m_tInfo.m_iLaunchDelay, tSolution, iFlags, iTolerance);
 			}
 			switch (tSolution.m_iCalculated)
 			{
@@ -1821,14 +1839,14 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 			if (*it == PointFlagsEnum::Lob && !m_tInfo.m_bIgnoreTiming)
 				iFlags |= CalculateFlagsEnum::LobAngle;
 
-			Solution_t tSolution; CalculateAngle(m_tInfo.m_vLocalEye, tTarget.m_vPos, i, tSolution, iFlags);
+			Solution_t tSolution; CalculateAngle(m_tInfo.m_vLocalEye, tTarget.m_vPos, i - m_tInfo.m_iLaunchDelay, tSolution, iFlags);
 			if (tSolution.m_iCalculated == CalculateResultEnum::Bad && mDirects.empty())
 			{
 				it = vSplashes.erase(it);
 				continue;
 			}
 
-			const float flTimeTo = tSolution.m_flTime - TICKS_TO_TIME(i);
+			const float flTimeTo = tSolution.m_flTime - TICKS_TO_TIME(i - m_tInfo.m_iLaunchDelay);
 			if (flTimeTo > m_tInfo.m_flRadiusTime || m_tInfo.m_iArmTime && m_tInfo.m_iArmTime > i)
 			{
 				++it;
@@ -2233,9 +2251,6 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 			case TF_WEAPON_LASER_POINTER:
 				pCmd->buttons &= ~IN_ATTACK2; // We are not ready to fire yet
 				break;
-			case TF_WEAPON_PASSTIME_GUN:
-				HandlePasstimeThrowInput(pCmd, tTarget.m_vAngleTo, tTarget.m_pEntity->entindex());
-				break;
 			case TF_WEAPON_ROCKETLAUNCHER:
 			case TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT:
 			case TF_WEAPON_PARTICLE_CANNON:
@@ -2449,8 +2464,8 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 
 	m_iWeaponID = pWeapon->GetWeaponID();
 	m_pSentryGun = pLocal->GetObjectOfType(OBJ_SENTRYGUN)->As<CObjectSentrygun>();
-	if (m_iWeaponID != TF_WEAPON_PASSTIME_GUN || !pLocal->m_bHasPasstimeBall())
-		m_tPasstimeThrow.Reset();
+	if (m_iWeaponID == TF_WEAPON_PASSTIME_GUN)
+		return;
 
 	m_vBestPlayerPath.clear();
 	m_bBestPlayerPathSet = false;
@@ -2473,12 +2488,6 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 				G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPathIgnoreZ.Value, Vars::Visuals::Prediction::BestPath.Value);
 			if (Vars::Colors::BestPath.Value.a)
 				G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
-		}
-
-		if (m_iWeaponID == TF_WEAPON_PASSTIME_GUN && m_tPasstimeThrow.m_bHolding)
-		{
-			pCmd->buttons &= ~IN_ATTACK;
-			m_tPasstimeThrow.Reset(I::GlobalVars->curtime + PasstimeThrowCooldown);
 		}
 	}
 	else
@@ -2973,7 +2982,7 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 			F::MoveSim.RunTick(m_tMoveStorage);
 			tTarget.m_vPos = m_tMoveStorage.m_vPredictedOrigin;
 		}
-		if (i < 0)
+		if (i < 0 || i < m_tInfo.m_iLaunchDelay)
 			continue;
 
 		for (auto& [iIndex, tOffset] : mDirects)
@@ -3002,7 +3011,7 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 					goto end;
 				tSolution.m_iCalculated = CalculateResultEnum::Bad; break;
 			default: end:
-				CalculateAngle(m_tInfo.m_vLocalEye, vPoint, i, tSolution, iFlags, iTolerance);
+				CalculateAngle(m_tInfo.m_vLocalEye, vPoint, i - m_tInfo.m_iLaunchDelay, tSolution, iFlags, iTolerance);
 			}
 			switch (tSolution.m_iCalculated)
 			{
@@ -3022,14 +3031,14 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 			if (*it == PointFlagsEnum::Lob && !m_tInfo.m_bIgnoreTiming)
 				iFlags |= CalculateFlagsEnum::LobAngle;
 
-			Solution_t tSolution; CalculateAngle(m_tInfo.m_vLocalEye, tTarget.m_vPos, i, tSolution, iFlags);
+			Solution_t tSolution; CalculateAngle(m_tInfo.m_vLocalEye, tTarget.m_vPos, i - m_tInfo.m_iLaunchDelay, tSolution, iFlags);
 			if (tSolution.m_iCalculated == CalculateResultEnum::Bad && mDirects.empty())
 			{
 				it = vSplashes.erase(it);
 				continue;
 			}
 
-			const float flTimeTo = tSolution.m_flTime - TICKS_TO_TIME(i);
+			const float flTimeTo = tSolution.m_flTime - TICKS_TO_TIME(i - m_tInfo.m_iLaunchDelay);
 			if (flTimeTo > m_tInfo.m_flRadiusTime)
 			{
 				++it;
@@ -3158,183 +3167,17 @@ bool CAimbotProjectile::AutoAirblast(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	return false;
 }
 
-bool CAimbotProjectile::HandlePasstimeThrowInput(CUserCmd* pCmd, const Vec3& vAngle, int iTargetEnt)
-{
-	if (!pCmd)
-		return false;
-
-	const int iRequiredHoldTicks = std::max(2, TIME_TO_TICKS(PasstimeHoldTime));
-	const float flCurtime = I::GlobalVars->curtime;
-	if (!m_tPasstimeThrow.m_bHolding && m_tPasstimeThrow.m_flCooldownUntil > flCurtime)
-		return false;
-
-	if (m_iMethod == Vars::Aimbot::General::AimTypeEnum::Assistive)
-		return false;
-
-	m_tPasstimeThrow.m_vAngle = vAngle;
-	m_tPasstimeThrow.m_iTargetEnt = iTargetEnt;
-
-	G::Attacking = true;
-	Aim(pCmd, m_tPasstimeThrow.m_vAngle);
-	pCmd->buttons &= ~IN_ATTACK2;
-
-	const float flAimError = Math::CalcFov(pCmd->viewangles, m_tPasstimeThrow.m_vAngle);
-	const float flAlignmentThreshold =
-		m_iMethod == Vars::Aimbot::General::AimTypeEnum::Smooth
-		|| m_iMethod == Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
-		|| m_iMethod == Vars::Aimbot::General::AimTypeEnum::Legit
-		? 4.5f
-		: 2.0f;
-	const bool bAligned = flAimError <= flAlignmentThreshold;
-
-	if (!m_tPasstimeThrow.m_bHolding)
-	{
-		m_tPasstimeThrow.m_bHolding = true;
-		m_tPasstimeThrow.m_iHoldTicks = 1;
-		pCmd->buttons |= IN_ATTACK;
-		if (Vars::Debug::Logging.Value)
-			SDK::Output("PasstimeThrow", std::format("Begin hold: target={} ticks={}", iTargetEnt, m_tPasstimeThrow.m_iHoldTicks).c_str(), { 120, 200, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		return true;
-	}
-
-	if (m_tPasstimeThrow.m_iHoldTicks < iRequiredHoldTicks)
-	{
-		m_tPasstimeThrow.m_iHoldTicks++;
-		pCmd->buttons |= IN_ATTACK;
-		if (Vars::Debug::Logging.Value)
-			SDK::Output("PasstimeThrow", std::format("Holding: target={} ticks={}/{}", iTargetEnt, m_tPasstimeThrow.m_iHoldTicks, iRequiredHoldTicks).c_str(), { 120, 200, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		return true;
-	}
-
-	if (!bAligned)
-	{
-		pCmd->buttons |= IN_ATTACK;
-		if (Vars::Debug::Logging.Value)
-			SDK::Output("PasstimeThrow", std::format("Waiting align: target={} error={:.2f}", iTargetEnt, flAimError).c_str(), { 255, 210, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		return true;
-	}
-
-	pCmd->buttons &= ~IN_ATTACK;
-	if (Vars::Debug::Logging.Value)
-		SDK::Output("PasstimeThrow", std::format("Release: target={} ticks={} error={:.2f}", iTargetEnt, m_tPasstimeThrow.m_iHoldTicks, flAimError).c_str(), { 120, 255, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-	m_tPasstimeThrow.Reset(flCurtime + PasstimeThrowCooldown);
-	return true;
-}
-
 bool CAimbotProjectile::AimPasstimePass(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
-	if (!pLocal || !pWeapon || !pCmd
-		|| pWeapon->GetWeaponID() != TF_WEAPON_PASSTIME_GUN
-		|| !pLocal->m_bHasPasstimeBall())
-		return false;
-
-	m_iWeaponID = pWeapon->GetWeaponID();
-	m_iMethod = Vars::Aimbot::General::AimType.Value;
-	if (!m_iMethod || !F::AimbotGlobal.ShouldAim())
-		return false;
-
-	const Vec3 vLocalPos = F::Ticks.GetShootPos();
-	const int iLocalIndex = pLocal->entindex();
-	const int iPassTarget = pLocal->m_hPasstimePassTarget().GetEntryIndex();
-	const float flMaxPassRange = F::PasstimeController.GetMaxPassRange();
-	const int iOurTeam = pLocal->m_iTeamNum();
-
-	auto get_nearby_threat_score = [&](const Vector& vPos) -> float
-		{
-			float flScore = 0.0f;
-			for (auto pEnemyEnt : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
-			{
-				if (!pEnemyEnt || pEnemyEnt->IsDormant())
-					continue;
-
-				auto pEnemy = pEnemyEnt->As<CTFPlayer>();
-				if (!pEnemy || !pEnemy->IsAlive() || F::AimbotGlobal.ShouldIgnore(pEnemy, pLocal, pWeapon))
-					continue;
-
-				const float flDist = std::max(vPos.DistTo(pEnemy->GetAbsOrigin()), 1.0f);
-				if (flDist > 1200.0f)
-					continue;
-
-				flScore += 1.0f / flDist;
-			}
-			return flScore;
-		};
-
-	Vector vGoalPos = {};
-	const bool bHasGoal = F::PasstimeController.GetGoalPos(iOurTeam, pLocal->GetAbsOrigin(), vGoalPos);
-	const float flLocalGoalDist = bHasGoal ? pLocal->GetAbsOrigin().DistTo(vGoalPos) : FLT_MAX;
-	const float flLocalThreat = get_nearby_threat_score(pLocal->GetAbsOrigin());
-
-	std::vector<Target_t> vTargets = {};
-	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerTeam))
-	{
-		if (!pEntity || pEntity->IsDormant() || pEntity->entindex() == iLocalIndex)
-			continue;
-
-		auto pTeammate = pEntity->As<CTFPlayer>();
-		if (!pTeammate || !pTeammate->IsAlive() || pTeammate->m_bHasPasstimeBall())
-			continue;
-
-		const Vec3 vPos = pTeammate->GetCenter();
-		const Vec3 vAngleTo = Math::CalcAngle(vLocalPos, vPos);
-		const float flFOVTo = Math::CalcFov(I::EngineClient->GetViewAngles(), vAngleTo);
-		const float flDistTo = vLocalPos.DistTo(vPos);
-		if (flMaxPassRange != FLT_MAX && flDistTo > flMaxPassRange * 1.15f)
-			continue;
-
-		int iPriority = 0;
-		if (pTeammate->entindex() == iPassTarget || pTeammate->m_bIsTargetedForPasstimePass())
-			iPriority = std::numeric_limits<int>::max();
-		else
-		{
-			if (bHasGoal)
-			{
-				const float flGoalDist = pTeammate->GetAbsOrigin().DistTo(vGoalPos);
-				const float flGain = std::clamp(flLocalGoalDist - flGoalDist, -2000.f, 2000.f);
-				iPriority += int(flGain * 0.35f);
-			}
-
-			const float flThreatGain = std::clamp((flLocalThreat - get_nearby_threat_score(pTeammate->GetAbsOrigin())) * 150000.0f, -250.0f, 250.0f);
-			iPriority += int(flThreatGain);
-
-			if (pTeammate->m_iHealth() > pLocal->m_iHealth())
-				iPriority += 20;
-
-			if (iPriority < PasstimePassPriorityThreshold)
-				continue;
-		}
-
-		vTargets.emplace_back(pTeammate, TargetEnum::Player, vPos, vAngleTo, flFOVTo, flDistTo, iPriority);
-	}
-
-	if (vTargets.empty())
-		return false;
-
-	std::sort(vTargets.begin(), vTargets.end(), [](const Target_t& a, const Target_t& b)
-		{
-			if (a.m_nPriority != b.m_nPriority)
-				return a.m_nPriority > b.m_nPriority;
-			if (fabsf(a.m_flFOVTo - b.m_flFOVTo) > 0.001f)
-				return a.m_flFOVTo < b.m_flFOVTo;
-			return a.m_flDistTo < b.m_flDistTo;
-		});
-
-	for (auto& tTarget : vTargets)
-	{
-		m_flTimeTo = std::numeric_limits<float>::max();
-		m_vPlayerPath.clear();
-		m_vProjectilePath.clear();
-		m_vBoxes.clear();
-
-		if (CanHit(tTarget, pLocal, pWeapon, false) != 1)
-			continue;
-
-		G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount };
-		G::AimPoint = { m_vTarget, I::GlobalVars->tickcount };
-		return HandlePasstimeThrowInput(pCmd, m_vAngleTo, tTarget.m_pEntity->entindex());
-	}
-
-	return false;
+	return RunPasstime(pLocal, pWeapon, pCmd);
 }
 
-// Passtime goal throwing intentionally disabled.
+std::vector<Target_t> CAimbotProjectile::GetAbilityTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+{
+	return F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon, Vars::Aimbot::General::TargetSelectionProjectile.Value);
+}
+
+void CAimbotProjectile::ShowTarget(int iResult, Target_t& tTarget)
+{
+	DrawVisuals(iResult, tTarget, m_vPlayerPath, m_vProjectilePath, m_vBoxes);
+}

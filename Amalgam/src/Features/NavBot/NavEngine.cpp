@@ -9,27 +9,35 @@
 #include "BotUtils.h"
 #include "../FollowBot/FollowBot.h"
 
-static Vector GetNearestPointOnArea(CNavArea* pArea, const Vector& vPos)
-{
-	if (!pArea) return vPos;
-	const float flX = std::clamp(vPos.x, pArea->m_vNwCorner.x, pArea->m_vSeCorner.x);
-	const float flY = std::clamp(vPos.y, pArea->m_vNwCorner.y, pArea->m_vSeCorner.y);
-	return { flX, flY, pArea->GetZ(flX, flY) };
-}
-
-static float GetAreaVerticalOutside(CNavArea* pArea, const Vector& vPos)
-{
-	if (!pArea) return FLT_MAX;
-	const float flBelow = std::max(pArea->m_flMinZ - vPos.z, 0.0f);
-	const float flAbove = std::max(vPos.z - pArea->m_flMaxZ, 0.0f);
-	return flBelow + flAbove;
-}
-
 static int GetTransientVischeckExpireTick()
 {
 	const float flSeconds = std::clamp(static_cast<float>(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value), 10.f, 500.f);
 	return TICKCOUNT_TIMESTAMP(flSeconds);
 }
+
+static void MarkConnection(CMap& tMap, CNavArea* pFrom, CNavArea* pTo, bool bPassable, int iExpireTick, bool bStuckBlacklist = false)
+{
+	auto& tEntry = tMap.m_mVischeckCache[std::pair<CNavArea*, CNavArea*>(pFrom, pTo)];
+	tEntry.m_iExpireTick = iExpireTick;
+	tEntry.m_eVischeckState = bPassable ? VischeckStateEnum::Visible : VischeckStateEnum::NotVisible;
+	tEntry.m_bPassable = bPassable;
+	tEntry.m_bStuckBlacklist = bStuckBlacklist;
+	if (!bPassable)
+		tEntry.m_flCachedCost = std::numeric_limits<float>::max();
+}
+
+class CTraceFilterDoors : public ITraceFilter
+{
+public:
+	bool ShouldHitEntity(IHandleEntity* pHandleEntity, int) override
+	{
+		if (!pHandleEntity)
+			return false;
+		const auto nClassID = reinterpret_cast<CBaseEntity*>(pHandleEntity)->GetClassID();
+		return nClassID == ETFClassID::CBaseDoor || nClassID == ETFClassID::CBasePropDoor;
+	}
+	TraceType_t GetTraceType() const override { return TRACE_EVERYTHING; }
+};
 
 static Crumb_t ToCrumb(const CachedPathCrumb_t& tCached)
 {
@@ -107,27 +115,21 @@ bool CNavEngine::IsSetupTime()
 	if (Vars::Misc::Movement::NavEngine::PathInSetup.Value)
 		return false;
 
-	if (auto pGameRules = I::TFGameRules(); pGameRules && pGameRules->m_bPlayingMannVsMachine())
+	const auto pGameRules = I::TFGameRules();
+	if (!pGameRules || pGameRules->m_bPlayingMannVsMachine())
 	{
 		bSetupTime = false;
 		return false;
 	}
 
-	auto pLocal = H::Entities.GetLocal();
-	if (pLocal && pLocal->IsAlive() && tCheckTimer.Run(0.5f))
+	if (tCheckTimer.Run(0.5f))
 	{
+		const auto pLocal = H::Entities.GetLocal();
 		const std::string sLevelName = SDK::GetLevelName();
-		if (sLevelName == "plr_pipeline") return false;
-
-		if (auto pGameRules = I::TFGameRules())
-		{
-			if (pGameRules->m_iRoundState() == GR_STATE_PREROUND) return bSetupTime = true;
-			if (pLocal->m_iTeamNum() == TF_TEAM_BLUE
-				&& (pGameRules->m_bInSetup()
-				|| (pGameRules->m_bInWaitingForPlayers() && (sLevelName.starts_with("pl_") || sLevelName.starts_with("cp_")))))
-				return bSetupTime = true;
-			bSetupTime = false;
-		}
+		const bool bBlueGated = pLocal && pLocal->m_iTeamNum() == TF_TEAM_BLUE && sLevelName != "plr_pipeline"
+			&& (pGameRules->m_bInSetup()
+				|| (pGameRules->m_bInWaitingForPlayers() && (sLevelName.starts_with("pl_") || sLevelName.starts_with("cp_"))));
+		bSetupTime = bBlueGated || (sLevelName != "plr_pipeline" && pGameRules->m_iRoundState() == GR_STATE_PREROUND);
 	}
 	return bSetupTime;
 }
@@ -181,9 +183,6 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 	}
 	if (!GetLocalNavArea()) { m_sLastFailureReason = "No local nav area"; return false; }
 
-	CNavArea* pDestArea = FindClosestNavArea(vDestination, false);
-	if (!pDestArea) { m_sLastFailureReason = "No destination nav area"; return false; }
-
 	constexpr float flReuseRadiusSq = 160.f * 160.f;
 	if (!m_bBypassFailedDestination
 		&& m_iFailedDestinationTick > (I::GlobalVars ? I::GlobalVars->tickcount : 0)
@@ -212,11 +211,13 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 		&& m_vLastDestination.DistToSqr(vDestination) <= flReuseRadiusSq;
 	if (bCanReuse)
 	{
-		m_vLastDestination = vDestination;
 		m_bRepathOnFail = bShouldRepath;
 		m_sLastFailureReason.clear();
 		return true;
 	}
+
+	CNavArea* pDestArea = FindClosestNavArea(vDestination, false);
+	if (!pDestArea) { m_sLastFailureReason = "No destination nav area"; return false; }
 
 	m_sLastFailureReason.clear();
 
@@ -228,14 +229,16 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 	tReq.m_vStart = pLocal->GetAbsOrigin();
 	tReq.m_vDestination = vDestination;
 	tReq.m_ePriority = ePriority;
-	tReq.m_tCtx = CMap::BuildSolveContext();
-	tReq.m_tCtx.m_bIgnoreTraces = bIgnoreTraces;
+	tReq.m_tCtx = CMap::BuildSolveContext(bIgnoreTraces);
 
-	m_ePriorityBeforePending = m_eCurrentPriority;
-	m_bRepathBeforePending = m_bRepathOnFail;
-	m_bIgnoreTracesBeforePending = m_bIgnoreTraces;
-	m_vDestinationBeforePending = m_vLastDestination;
-	m_bHadActivePathBeforePending = !m_vCrumbs.empty();
+	if (m_uPendingRequestId == 0)
+	{
+		m_ePriorityBeforePending = m_eCurrentPriority;
+		m_bRepathBeforePending = m_bRepathOnFail;
+		m_bIgnoreTracesBeforePending = m_bIgnoreTraces;
+		m_vDestinationBeforePending = m_vLastDestination;
+		m_bHadActivePathBeforePending = !m_vCrumbs.empty();
+	}
 	m_bRecoveryRetryUsed = m_bBypassFailedDestination;
 	m_pPathWorker->Submit(std::move(tReq));
 	m_eCurrentPriority = ePriority;
@@ -290,22 +293,12 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 				continue;
 			}
 
-			if (!IsPlayerPassableNavigation(pLocal, a.m_vPos, b.m_vPos))
+			const bool bPassable = IsPlayerPassableNavigation(pLocal, a.m_vPos, b.m_vPos);
+			MarkConnection(*m_pMap, a.m_pNavArea, b.m_pNavArea, bPassable, iExpire);
+			if (!bPassable)
 			{
-				auto& tEnt = m_pMap->m_mVischeckCache[tKey];
-				tEnt.m_iExpireTick = iExpire;
-				tEnt.m_eVischeckState = VischeckStateEnum::NotVisible;
-				tEnt.m_bPassable = false;
-				tEnt.m_flCachedCost = std::numeric_limits<float>::max();
 				bValid = false;
 				break;
-			}
-			else
-			{
-				auto& tEnt = m_pMap->m_mVischeckCache[tKey];
-				tEnt.m_iExpireTick = iExpire;
-				tEnt.m_eVischeckState = VischeckStateEnum::Visible;
-				tEnt.m_bPassable = true;
 			}
 		}
 
@@ -320,10 +313,9 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 	return true;
 }
 
-void CNavEngine::PollPathWorker()
+void CNavEngine::PollPathWorker(CTFPlayer* pLocal)
 {
 	if (!m_pPathWorker) return;
-	auto pLocal = H::Entities.GetLocal();
 
 	auto RestorePendingState = [&]()
 		{
@@ -357,6 +349,7 @@ void CNavEngine::PollPathWorker()
 			{
 				if (bClearTransientCache)
 				{
+					EnsureLocalExit();
 					std::lock_guard lock(m_pMap->m_mutex);
 					for (auto it = m_pMap->m_mVischeckCache.begin(); it != m_pMap->m_mVischeckCache.end();)
 					{
@@ -398,8 +391,6 @@ void CNavEngine::PollPathWorker()
 			continue;
 		}
 
-		if (!pLocal) { m_sLastFailureReason = "No local player"; continue; }
-
 		if (tResult.m_iSolveResult == 1 || tResult.m_iSolveResult == 2)
 		{
 			const char* sReason = tResult.m_iSolveResult == 1 ? "No solution found" : "Pathing engine error";
@@ -429,7 +420,7 @@ void CNavEngine::PollPathWorker()
 float CNavEngine::GetPathCost(CNavArea* pStartArea, CNavArea* pDestinationArea)
 {
 	if (!m_pMap || !pStartArea || !pDestinationArea) return FLT_MAX;
-	SolveContext tCtx = CMap::BuildSolveContext();
+	const SolveContext tCtx = CMap::BuildSolveContext();
 	std::lock_guard lock(m_pMap->m_mutex);
 	std::vector<CNavArea*> vPath;
 	float flCost = FLT_MAX;
@@ -442,7 +433,7 @@ bool CNavEngine::GetPathAreas(CNavArea* pStartArea, CNavArea* pDestinationArea, 
 	vOutAreas.clear();
 	if (!m_pMap || !pStartArea || !pDestinationArea)
 		return false;
-	SolveContext tCtx = CMap::BuildSolveContext();
+	const SolveContext tCtx = CMap::BuildSolveContext();
 	std::lock_guard lock(m_pMap->m_mutex);
 	const int iResult = m_pMap->Solve(pStartArea, pDestinationArea, tCtx, vOutAreas, nullptr);
 	return iResult == 0 || iResult == 3;
@@ -453,14 +444,7 @@ float CNavEngine::GetPathCost(const Vector& vStart, const Vector& vDestination, 
 	if (!IsNavMeshLoaded()) return FLT_MAX;
 	CNavArea* pStart = bLocal ? GetLocalNavArea(vStart) : FindClosestNavArea(vStart, false);
 	if (!pStart) return FLT_MAX;
-	CNavArea* pDest = FindClosestNavArea(vDestination, false);
-	if (!pDest) return FLT_MAX;
-	SolveContext tCtx = CMap::BuildSolveContext();
-	std::lock_guard lock(m_pMap->m_mutex);
-	std::vector<CNavArea*> vPath;
-	float flCost = FLT_MAX;
-	const int iResult = m_pMap->Solve(pStart, pDest, tCtx, vPath, &flCost);
-	return iResult == 0 || iResult == 3 ? flCost : FLT_MAX;
+	return GetPathCost(pStart, FindClosestNavArea(vDestination, false));
 }
 
 bool CNavEngine::GetPathCostField(CNavArea* pStartArea, std::vector<float>& vOutCost, float flMaxCost, const std::vector<CNavArea*>* pTargets)
@@ -468,7 +452,7 @@ bool CNavEngine::GetPathCostField(CNavArea* pStartArea, std::vector<float>& vOut
 	vOutCost.clear();
 	if (!m_pMap || !m_pMap->IsAreaValid(pStartArea))
 		return false;
-	SolveContext tCtx = CMap::BuildSolveContext();
+	const SolveContext tCtx = CMap::BuildSolveContext();
 	std::lock_guard lock(m_pMap->m_mutex);
 	m_pMap->SolveCostField(pStartArea, tCtx, vOutCost, flMaxCost, pTargets);
 	return true;
@@ -491,13 +475,25 @@ CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
 		return nullptr;
 	}
 
+	static Timer tNoAreaRetry{};
 	const bool bAreaInvalid = !m_pMap->IsAreaValid(m_pLocalArea);
+	if (bAreaInvalid && m_bLocalAreaSearchFailed && !tNoAreaRetry.Check(0.10f))
+	{
+		m_pLocalArea = nullptr;
+		return nullptr;
+	}
+
 	const bool bNeedsRefresh = bAreaInvalid
 		|| !m_pLocalArea->IsOverlapping(vLocalOrigin)
-		|| std::fabs(GetNearestPointOnArea(m_pLocalArea, vLocalOrigin).z - vLocalOrigin.z) > 18.0f
+		|| std::fabs(m_pLocalArea->GetNearestPoint(Vector2D(vLocalOrigin.x, vLocalOrigin.y)).z - vLocalOrigin.z) > 18.0f
 		|| !CMap::CanFallToNavArea(vLocalOrigin, *m_pLocalArea);
 	if (bNeedsRefresh || tRefresh.Run(0.10f))
+	{
 		m_pLocalArea = FindClosestNavArea(vLocalOrigin, true);
+		m_bLocalAreaSearchFailed = !m_pLocalArea;
+		if (m_bLocalAreaSearchFailed)
+			tNoAreaRetry.Update();
+	}
 	return m_pLocalArea;
 }
 
@@ -510,9 +506,12 @@ void CNavEngine::VischeckPath()
 	if (!pLocal) return;
 
 	const float flInterval = std::clamp(Vars::Misc::Movement::NavEngine::VischeckTime.Value, 0.5f, 3.f);
-	if (!tVischeck.Run(flInterval)) return;
+	if (!tVischeck.Check(flInterval)) return;
 
-	std::lock_guard lock(m_pMap->m_mutex);
+	std::unique_lock lock(m_pMap->m_mutex, std::try_to_lock);
+	if (!lock) return;
+	tVischeck.Update();
+
 	const int iExpire = GetTransientVischeckExpireTick();
 	const size_t nMax = std::min<size_t>(m_vCrumbs.size() - 1, 14);
 	for (size_t i = 0; i < nMax; ++i)
@@ -535,23 +534,16 @@ void CNavEngine::VischeckPath()
 			continue;
 		}
 
-		if (!IsPlayerPassableNavigation(pLocal, a.m_vPos, b.m_vPos))
+		const bool bPassable = IsPlayerPassableNavigation(pLocal, a.m_vPos, b.m_vPos);
+		if (!bPassable && bConnected)
+			continue;
+
+		MarkConnection(*m_pMap, a.m_pNavArea, b.m_pNavArea, bPassable, iExpire);
+		if (!bPassable)
 		{
-			if (bConnected)
-				continue;
-			auto& tEnt = m_pMap->m_mVischeckCache[tKey];
-			tEnt.m_iExpireTick = iExpire;
-			tEnt.m_eVischeckState = VischeckStateEnum::NotVisible;
-			tEnt.m_bPassable = false;
-			tEnt.m_flCachedCost = std::numeric_limits<float>::max();
 			AbandonPath("Traceline blocked");
 			break;
 		}
-
-		auto& tEnt = m_pMap->m_mVischeckCache[tKey];
-		tEnt.m_iExpireTick = iExpire;
-		tEnt.m_eVischeckState = VischeckStateEnum::Visible;
-		tEnt.m_bPassable = true;
 	}
 }
 
@@ -580,12 +572,14 @@ void CNavEngine::CheckBlacklist(CTFPlayer* pLocal)
 	if (F::Hazards.BotStandingOnHazard() || pLocal->IsInvulnerable())
 		return;
 
-	std::lock_guard lock(m_pMap->m_mutex);
-
 	const int iNow = I::GlobalVars->tickcount;
-	const int iCooldown = TIME_TO_TICKS(0.4f);
-	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
+	if (iNow - m_iLastBlacklistAbandonTick < TIME_TO_TICKS(0.4f))
+		return;
 
+	std::unique_lock lock(m_pMap->m_mutex, std::try_to_lock);
+	if (!lock) return;
+
+	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	for (size_t i = 0; i < m_vCrumbs.size() && i < 20; ++i)
 	{
 		const auto& tCrumb = m_vCrumbs[i];
@@ -595,25 +589,20 @@ void CNavEngine::CheckBlacklist(CTFPlayer* pLocal)
 		const float flHazard = F::Hazards.GetCost(tCrumb.m_pNavArea);
 		const Hazard_t* pHazard = F::Hazards.GetHazard(tCrumb.m_pNavArea);
 		const float flThreshold = pHazard ? HazardAbandonThreshold(pHazard->m_eKind, bCapture, bSafeCapping) : (bCapture ? 4000.f : 2500.f);
-		if (std::isfinite(flHazard) && flHazard >= flThreshold && iNow - m_iLastBlacklistAbandonTick >= iCooldown)
-		{
-			m_iLastBlacklistAbandonTick = iNow;
-			AbandonPath("Hazardous area ahead");
-			return;
-		}
-		if (!std::isfinite(flHazard) && iNow - m_iLastBlacklistAbandonTick >= iCooldown)
-		{
-			m_iLastBlacklistAbandonTick = iNow;
-			AbandonPath("Hard-blocked area ahead");
-			return;
-		}
 
-		if (tCrumb.m_pNavArea
-			&& m_pMap->GetAreaBlock(tCrumb.m_pNavArea, iNow) == CMap::AreaBlock::Stuck
-			&& iNow - m_iLastBlacklistAbandonTick >= iCooldown)
+		const char* sReason = nullptr;
+		if (!std::isfinite(flHazard))
+			sReason = "Hard-blocked area ahead";
+		else if (flHazard >= flThreshold)
+			sReason = "Hazardous area ahead";
+		else if (tCrumb.m_pNavArea && tCrumb.m_pNavArea != m_pLocalArea
+			&& m_pMap->GetAreaBlock(tCrumb.m_pNavArea, iNow) == CMap::AreaBlock::Stuck)
+			sReason = "Area blacklisted (stuck)";
+
+		if (sReason)
 		{
 			m_iLastBlacklistAbandonTick = iNow;
-			AbandonPath("Area blacklisted (stuck)");
+			AbandonPath(sReason);
 			return;
 		}
 	}
@@ -626,6 +615,7 @@ void CNavEngine::Reset(bool bForced)
 	m_iNextRepathTick = 0;
 	m_iLastBlacklistAbandonTick = 0;
 	m_pLocalArea = nullptr;
+	m_bLocalAreaSearchFailed = false;
 	m_tOffMeshTimer.Update();
 	m_vOffMeshTarget = {};
 
@@ -656,12 +646,12 @@ void CNavEngine::Reset(bool bForced)
 	}
 }
 
-void CNavEngine::shutdown()
+void CNavEngine::Shutdown()
 {
 	if (m_pPathWorker) m_pPathWorker->Stop();
 }
 
-bool CNavEngine::IsReady(bool)
+bool CNavEngine::IsReady()
 {
 	static Timer tRestartTimer{};
 	if (!Vars::Misc::Movement::NavEngine::Enabled.Value) { tRestartTimer.Update(); return false; }
@@ -669,24 +659,6 @@ bool CNavEngine::IsReady(bool)
 	if (!I::EngineClient->IsInGame())                     return false;
 	if (!m_pMap || m_pMap->m_eState != NavStateEnum::Active) return false;
 	return true;
-}
-
-bool CNavEngine::IsBlacklistIrrelevant()
-{
-	static bool bIrrelevant = false;
-	static Timer tUpdateTimer{};
-	if (tUpdateTimer.Run(0.5f))
-	{
-		int iRoundState = GR_STATE_RND_RUNNING;
-		if (auto pGameRules = I::TFGameRules())
-			iRoundState = pGameRules->m_iRoundState();
-
-		bIrrelevant = iRoundState == GR_STATE_TEAM_WIN
-			|| iRoundState == GR_STATE_STALEMATE
-			|| iRoundState == GR_STATE_PREROUND
-			|| iRoundState == GR_STATE_GAME_OVER;
-	}
-	return bIrrelevant;
 }
 
 void CNavEngine::ClearPathState()
@@ -701,35 +673,29 @@ void CNavEngine::ClearPathState()
 	m_vLastStuckSamplePos = {};
 	m_flLastDistToCrumb = FLT_MAX;
 	m_pLastProgressArea = nullptr;
-	m_tStuckFrom = {};
-	m_tStuckTo = {};
-	m_bHasStuckEdge = false;
+	m_iDoorWaitStartTick = 0;
 	m_tStuckSampleTimer.Update();
 	m_tLastProgressTimer.Update();
 }
 
-void CNavEngine::AbandonPath(const std::string& sReason)
+void CNavEngine::AbandonPath(const char* sReason, bool bStuck)
 {
 	if (!m_pMap) return;
 
 	m_sLastFailureReason = sReason;
-	const bool bStuck = sReason.find("Stuck") != std::string::npos;
-	const bool bOffPath = sReason == "Off track";
 	if (bStuck)
 		RecordStuckFailure();
 	ClearPathState();
 	m_uPendingRequestId = 0;
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
-	if (bStuck || (m_bRepathOnFail && !bOffPath) || (bOffPath && Vars::Misc::Movement::NavEngine::OffPathRepath.Value))
+	if (bStuck || m_bRepathOnFail)
 	{
 		if (SolveInline())
 			m_bRepathRequested = false;
 		else
 		{
 			m_bRepathRequested = true;
-			const float flDelay = (sReason.find("Blacklisted") != std::string::npos
-				|| sReason.find("Stuck") != std::string::npos) ? 0.45f : 0.2f;
-			m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(flDelay));
+			m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(bStuck ? 0.45f : 0.2f));
 		}
 	}
 	else
@@ -752,7 +718,7 @@ bool CNavEngine::SolveInline()
 	{
 		std::lock_guard lock(m_pMap->m_mutex);
 		const int iResult = m_pMap->SolveCrumbs(pLocal->GetAbsOrigin(), m_pLocalArea, m_vLastDestination, pDestArea,
-			CMap::BuildSolveContext(), vCrumbs, nullptr);
+			CMap::BuildSolveContext(m_bIgnoreTraces), vCrumbs, nullptr);
 		if (iResult != 0 && iResult != 3) return false;
 	}
 
@@ -766,53 +732,55 @@ void CNavEngine::RecordStuckFailure()
 {
 	if (!m_pMap) return;
 
-	CNavArea* pFrom = m_bHasStuckEdge ? m_tStuckFrom.m_pNavArea : m_tLastCrumb.m_pNavArea;
-	CNavArea* pTo = m_bHasStuckEdge ? m_tStuckTo.m_pNavArea : m_tCurrentCrumb.m_pNavArea;
-	pFrom = pFrom ? pFrom : m_pLocalArea;
-	pTo = pTo ? pTo : m_pLocalArea;
-	if (!pFrom || !pTo)
-	{
-		m_bHasStuckEdge = false;
-		return;
-	}
+	CNavArea* pFrom = m_tLastCrumb.m_pNavArea ? m_tLastCrumb.m_pNavArea : m_pLocalArea;
+	CNavArea* pTo = m_tCurrentCrumb.m_pNavArea ? m_tCurrentCrumb.m_pNavArea : m_pLocalArea;
+	if (!pFrom || !pTo) return;
 
 	std::lock_guard lock(m_pMap->m_mutex);
-	if (!m_pMap->IsAreaValid(pFrom) || !m_pMap->IsAreaValid(pTo))
-	{
-		m_bHasStuckEdge = false;
-		return;
-	}
+	if (!m_pMap->IsAreaValid(pFrom) || !m_pMap->IsAreaValid(pTo)) return;
 
 	const int iNow = I::GlobalVars ? I::GlobalVars->tickcount : 0;
 	const int iPenaltyExpire = TICKCOUNT_TIMESTAMP(std::max(Vars::Misc::Movement::NavEngine::StuckExpireTime.Value, 1));
 	const int iBlacklistExpire = TICKCOUNT_TIMESTAMP(std::max(Vars::Misc::Movement::NavEngine::StuckBlacklistTime.Value, 1));
-	const auto tKey = std::pair<CNavArea*, CNavArea*>(pFrom, pTo);
-	auto& tStuck = m_pMap->m_mConnectionStuckTime[tKey];
+	auto& tStuck = m_pMap->m_mConnectionStuckTime[std::pair<CNavArea*, CNavArea*>(pFrom, pTo)];
 	if (tStuck.m_iExpireTick != 0 && tStuck.m_iExpireTick <= iNow)
 		tStuck.m_iTimeStuck = 0;
 	tStuck.m_iTimeStuck++;
 	tStuck.m_iExpireTick = iPenaltyExpire;
 
-	if (tStuck.m_iTimeStuck >= 1)
-	{
-		auto& tEntry = m_pMap->m_mVischeckCache[tKey];
-		tEntry.m_iExpireTick = iBlacklistExpire;
-		tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
-		tEntry.m_bPassable = false;
-		tEntry.m_bStuckBlacklist = true;
-		tEntry.m_flCachedCost = std::numeric_limits<float>::max();
-	}
-
+	if (pFrom != pTo)
+		MarkConnection(*m_pMap, pFrom, pTo, false, iBlacklistExpire, true);
 	if (tStuck.m_iTimeStuck >= 3)
-	{
-		auto& tArea = m_pMap->m_mVischeckCache[std::pair<CNavArea*, CNavArea*>(pTo, pTo)];
-		tArea.m_iExpireTick = iBlacklistExpire;
-		tArea.m_eVischeckState = VischeckStateEnum::NotVisible;
-		tArea.m_bPassable = false;
-		tArea.m_bStuckBlacklist = true;
-		tArea.m_flCachedCost = std::numeric_limits<float>::max();
-	}
-	m_bHasStuckEdge = false;
+		MarkConnection(*m_pMap, pTo, pTo, false, iBlacklistExpire, true);
+	EnsureLocalExit();
+}
+
+void CNavEngine::EnsureLocalExit()
+{
+	if (!m_pMap || !m_pMap->IsAreaValid(m_pLocalArea)) return;
+
+	std::lock_guard lock(m_pMap->m_mutex);
+	if (!m_pMap->HasUsableExit(m_pLocalArea, I::GlobalVars->tickcount))
+		m_pMap->ShortenExitBlocks(m_pLocalArea, TICKCOUNT_TIMESTAMP(5.f));
+}
+
+bool CNavEngine::ShouldWaitForDoor(CTFPlayer* pLocal, const Vector& vCrumbTarget)
+{
+	Vector vOrigin = pLocal->GetAbsOrigin();
+	Vector vDir = vCrumbTarget - vOrigin; vDir.z = 0.f;
+	if (vDir.Normalize() < 1.f)
+		return false;
+
+	CTraceFilterDoors tFilter;
+	CGameTrace tTrace{};
+	SDK::TraceHull(vOrigin, vOrigin + vDir * 64.f, pLocal->m_vecMins(), pLocal->m_vecMaxs(), MASK_PLAYERSOLID, &tFilter, &tTrace);
+	if (!tTrace.DidHit())
+		return false;
+
+	const int iNow = I::GlobalVars->tickcount;
+	if (!m_iDoorWaitStartTick)
+		m_iDoorWaitStartTick = iNow;
+	return iNow - m_iDoorWaitStartTick < TIME_TO_TICKS(10.f);
 }
 
 void CNavEngine::ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget)
@@ -820,6 +788,7 @@ void CNavEngine::ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vC
 	m_vLastStuckSamplePos = vLocalOrigin;
 	m_flLastDistToCrumb = (vCrumbTarget - vLocalOrigin).Length();
 	m_pLastProgressArea = m_pLocalArea;
+	m_iDoorWaitStartTick = 0;
 	m_tLastProgressTimer.Update();
 }
 
@@ -847,7 +816,7 @@ void CNavEngine::CancelPath()
 
 void CNavEngine::UpdateRespawnRooms()
 {
-	if (m_vRespawnRooms.empty() || !m_pMap) return;
+	if (!m_pMap) return;
 
 	auto IsAreaInRespawnRoom = [](const TriggerData_t& tRoom, const CNavArea& tArea) -> bool
 		{
@@ -870,6 +839,9 @@ void CNavEngine::UpdateRespawnRooms()
 
 			return false;
 		};
+
+	std::lock_guard lock(m_pMap->m_mutex);
+	m_vRespawnRoomExitAreas.clear();
 
 	std::unordered_set<CNavArea*> setSpawnAreas;
 	for (const auto& tRoom : m_vRespawnRooms)
@@ -904,11 +876,14 @@ void CNavEngine::UpdateRespawnRooms()
 					m_vRespawnRoomExitAreas.push_back(tConn.m_pArea);
 			}
 
+	m_pMap->m_mVischeckCache.clear();
 	m_bUpdatedRespawnRooms = true;
 }
 
 void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector& vLocalOrigin)
 {
+	if (!m_tOffMeshRecoverTimer.Run(0.25f)) return;
+
 	std::vector<CNavArea*> vCandidates;
 	m_pMap->CollectAreasAround(vLocalOrigin, 325.0f, vCandidates);
 	if (pArea && std::find(vCandidates.begin(), vCandidates.end(), pArea) == vCandidates.end())
@@ -922,8 +897,8 @@ void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector
 	for (auto* pCand : vCandidates)
 	{
 		if (!pCand) continue;
-		Vector vCandTarget = GetNearestPointOnArea(pCand, vLocalOrigin);
-		const float flOutside = GetAreaVerticalOutside(pCand, vLocalOrigin);
+		Vector vCandTarget = pCand->GetNearestPoint(Vector2D(vLocalOrigin.x, vLocalOrigin.y));
+		const float flOutside = pCand->GetVerticalOutside(vLocalOrigin);
 		const float flSurfaceDelta = std::fabs(vCandTarget.z - vLocalOrigin.z);
 		if (flOutside > PLAYER_CROUCHED_JUMP_HEIGHT && flSurfaceDelta > PLAYER_HEIGHT + 24.0f)
 			continue;
@@ -944,15 +919,19 @@ void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector
 	if (pRecovery)
 	{
 		m_vOffMeshTarget = vTarget;
-		m_vCrumbs.clear();
 		std::vector<CachedPathCrumb_t> vRecoveryCrumbs;
 		const SolveContext tContext = CMap::BuildSolveContext();
 		{
 			std::lock_guard lock(m_pMap->m_mutex);
 			m_pMap->SolveCrumbs(vLocalOrigin, pArea, vTarget, pRecovery, tContext, vRecoveryCrumbs, nullptr);
 		}
+		if (vRecoveryCrumbs.empty())
+			return;
+
+		m_vCrumbs.clear();
 		for (const auto& tCached : vRecoveryCrumbs)
 			m_vCrumbs.push_back(ToCrumb(tCached));
+		m_vLastDestination = vTarget;
 		m_eCurrentPriority = PriorityListEnum::Patrol;
 		m_tOffMeshTimer.Update();
 	}
@@ -962,6 +941,13 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	m_bUnstucking = false;
 	NavPolicy::Update();
+	if (const uint32_t uEpoch = NavPolicy::GetEpoch(); uEpoch != m_uPolicyEpoch)
+	{
+		m_uPolicyEpoch = uEpoch;
+		if (m_pMap) m_pMap->ClearDynamicBlocks();
+		m_vFailedDestination = {};
+		m_iFailedDestinationTick = 0;
+	}
 	if (!pLocal)
 	{
 		CancelPath();
@@ -978,7 +964,7 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (!m_bUpdatedRespawnRooms) UpdateRespawnRooms();
 
-	PollPathWorker();
+	PollPathWorker(pLocal);
 
 	if (!pLocal->IsAlive() || F::FollowBot.m_bActive)
 	{
@@ -995,7 +981,7 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	if (m_bRepathRequested && I::GlobalVars->tickcount >= m_iNextRepathTick)
 	{
 		m_bRepathRequested = false;
-		if (!NavTo(m_vLastDestination, m_eCurrentPriority, true, m_bIgnoreTraces))
+		if (!NavTo(m_vLastDestination, m_eCurrentPriority, m_bRepathOnFail, m_bIgnoreTraces))
 			m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(0.25f));
 	}
 
@@ -1014,15 +1000,15 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (!pCmd
 		|| (pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT) && !F::Misc.m_bAntiAFK)
-		|| !IsReady(true))
+		|| !IsReady())
 		return;
 
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	CNavArea* pArea = GetLocalNavArea(vLocalOrigin);
 	const bool bOnNavMesh = pArea
 		&& pArea->IsOverlapping(vLocalOrigin)
-		&& GetAreaVerticalOutside(pArea, vLocalOrigin) <= 18.0f
-		&& std::fabs(GetNearestPointOnArea(pArea, vLocalOrigin).z - vLocalOrigin.z) < 18.0f;
+		&& pArea->GetVerticalOutside(vLocalOrigin) <= 18.0f
+		&& std::fabs(pArea->GetNearestPoint(Vector2D(vLocalOrigin.x, vLocalOrigin.y)).z - vLocalOrigin.z) < 18.0f;
 
 	if (bOnNavMesh || IsPathing())
 		m_tOffMeshTimer.Update();
@@ -1077,7 +1063,6 @@ StuckPhase CNavEngine::TickStuckSample(const Vector& vLocalOrigin, const Vector&
 		if (bProgress)
 		{
 			m_pLastProgressArea = m_pLocalArea;
-			m_bHasStuckEdge = false;
 			m_tLastProgressTimer.Update();
 			return StuckPhase::Idle;
 		}
@@ -1160,6 +1145,12 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 
 	if (m_vCrumbs.empty())
 	{
+		if (m_uPendingRequestId != 0 || m_bRepathRequested)
+		{
+			DoLookAtPath(pLocal, pCmd, {}, false);
+			return;
+		}
+
 		if (m_tOffMeshTimer.Check(6.0f))
 		{
 			m_eCurrentPriority = PriorityListEnum::Patrol;
@@ -1321,9 +1312,16 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			pCmd->buttons |= IN_DUCK;
 	}
 
+	if (ePhase == StuckPhase::Fail && ShouldWaitForDoor(pLocal, vCrumbTarget))
+	{
+		m_tLastProgressTimer.Update();
+		m_bUnstucking = false;
+		ePhase = StuckPhase::Idle;
+	}
+
 	if (ePhase == StuckPhase::Fail)
 	{
-		AbandonPath(bDropCrumb ? "Stuck on drop" : "Stuck (no progress)");
+		AbandonPath(bDropCrumb ? "Stuck on drop" : "Stuck (no progress)", true);
 		return;
 	}
 

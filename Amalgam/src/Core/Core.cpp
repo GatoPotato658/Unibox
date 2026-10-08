@@ -258,7 +258,7 @@ void CCore::Unload()
 #endif
 	U::BytePatches.Unload();
 	H::Events.Unload();
-	F::NavEngine.shutdown();
+	F::NavEngine.Shutdown();
 	F::TelemetryBlocker.Unload();
 
 	if (F::Menu.m_bIsOpen)

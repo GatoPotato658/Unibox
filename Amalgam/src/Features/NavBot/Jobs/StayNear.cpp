@@ -34,12 +34,15 @@ struct CoverCache_t
 	float m_flScore = 0.f;
 };
 
-static StalkProfile_t GetStalkProfile(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+static std::unordered_map<uint64_t, CoverCache_t> mCoverCache{};
+
+static StalkProfile_t GetStalkProfile(CTFPlayer* pLocal)
 {
 	StalkProfile_t tProfile{};
 	if (!pLocal)
 		return tProfile;
 
+	const bool bHuntsman = G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_COMPOUND_BOW;
 	switch (pLocal->m_iClass())
 	{
 	case TF_CLASS_SCOUT:
@@ -84,7 +87,7 @@ static StalkProfile_t GetStalkProfile(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		tProfile.m_flSideDistance = 90.f;
 		break;
 	case TF_CLASS_ENGINEER:
-		tProfile.m_flPreferredRadius = pWeapon && pWeapon->m_iItemDefinitionIndex() == Engi_t_TheGunslinger ? 150.f : 260.f;
+		tProfile.m_flPreferredRadius = G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger ? 150.f : 260.f;
 		tProfile.m_flMinRadius = 90.f;
 		tProfile.m_flMaxRadius = 650.f;
 		tProfile.m_flLeadBase = 0.16f;
@@ -100,10 +103,10 @@ static StalkProfile_t GetStalkProfile(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		tProfile.m_flSideDistance = 120.f;
 		break;
 	case TF_CLASS_SNIPER:
-		tProfile.m_flPreferredRadius = pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? 620.f : 920.f;
+		tProfile.m_flPreferredRadius = bHuntsman ? 620.f : 920.f;
 		tProfile.m_flMinRadius = 420.f;
 		tProfile.m_flMaxRadius = 1600.f;
-		tProfile.m_flLeadBase = pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? 0.28f : 0.38f;
+		tProfile.m_flLeadBase = bHuntsman ? 0.28f : 0.38f;
 		tProfile.m_flAheadDistance = 220.f;
 		tProfile.m_flSideDistance = 180.f;
 		tProfile.m_flCoverWeight = 0.45f;
@@ -140,18 +143,6 @@ static float GetStalkLeadTime(const StalkProfile_t& tProfile, float flTargetDist
 	return std::clamp(flLeadTime, 0.08f, 0.55f);
 }
 
-static Vector Normalize2D(const Vector& v)
-{
-	Vector vOut = v;
-	vOut.z = 0.f;
-	float flLength = vOut.Length();
-	if (flLength > 0.01f)
-		vOut /= flLength;
-	else
-		vOut = {};
-	return vOut;
-}
-
 static bool TraceVisible(const Vector& vFrom, const Vector& vTo)
 {
 	CGameTrace trace = {};
@@ -178,15 +169,13 @@ static float GetHidingSpotCoverScore(CNavArea* pArea, const Vector& vTargetOrigi
 		if (tHidingSpot.IsExposed())
 			flScore += bPreferSightline ? -20.f : 100.f;
 		if (!TraceVisible(vTargetOrigin, tHidingSpot.m_vPos + Vector(0.f, 0.f, PLAYER_CROUCHED_JUMP_HEIGHT)))
-			flScore -= bPreferSightline ? -140.f : 70.f;
+			flScore += bPreferSightline ? 140.f : -70.f;
 	}
 	return flScore;
 }
 
 static float GetFaceCoverScore(int iEntIndex, CNavArea* pArea, const Vector& vTargetOrigin, bool bPreferSightline)
 {
-	static std::unordered_map<uint64_t, CoverCache_t> mCoverCache{};
-
 	const uint64_t uKey = (static_cast<uint64_t>(iEntIndex) << 32) ^ pArea->m_uId;
 	const int iNow = I::GlobalVars ? I::GlobalVars->tickcount : 0;
 	auto it = mCoverCache.find(uKey);
@@ -200,12 +189,12 @@ static float GetFaceCoverScore(int iEntIndex, CNavArea* pArea, const Vector& vTa
 	const Vector vMaxs(pArea->m_vSeCorner.x + 56.f, pArea->m_vSeCorner.y + 56.f, pArea->m_flMaxZ + PLAYER_CROUCHED_JUMP_HEIGHT);
 	CTraceFilterWorldAndPropsOnly filter = {};
 	std::vector<Face_t> vFaces = F::World.GetFacesInAABB(vMins, vMaxs, MASK_SOLID, &filter, FaceTypeEnum::Cache);
-	Vector vToTarget = Normalize2D(vTargetOrigin - pArea->m_vCenter);
+	Vector vToTarget = NavJobUtils::NormalizePlanar(vTargetOrigin - pArea->m_vCenter);
 
 	float flScore = 0.f;
 	for (const auto& tFace : vFaces)
 	{
-		Vector vNormal = Normalize2D(tFace.m_vNormal);
+		Vector vNormal = NavJobUtils::NormalizePlanar(tFace.m_vNormal);
 		if (vNormal.IsZero() || vToTarget.IsZero())
 			continue;
 
@@ -226,7 +215,7 @@ static float GetBackstabScore(const Vector& vAreaOrigin, const Vector& vTargetOr
 	if (vTargetForward.IsZero())
 		return 0.f;
 
-	Vector vToArea = Normalize2D(vAreaOrigin - vTargetOrigin);
+	Vector vToArea = NavJobUtils::NormalizePlanar(vAreaOrigin - vTargetOrigin);
 	if (vToArea.IsZero())
 		return 240.f;
 
@@ -243,7 +232,6 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	auto pPlayer = pEntity->As<CTFPlayer>();
 
 	Vector vOrigin;
-
 	if (!F::BotUtils.GetDormantOrigin(iEntIndex, &vOrigin))
 		return false;
 
@@ -262,30 +250,30 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	const float flTargetDistance = vTargetOrigin.DistTo(pLocal->GetAbsOrigin());
 	const float flTargetSpeed = vTargetVelocity.Length2D();
 
-	const StalkProfile_t tProfile = GetStalkProfile(pLocal, pWeapon);
+	const StalkProfile_t tProfile = GetStalkProfile(pLocal);
 	const float flLeadTime = GetStalkLeadTime(tProfile, flTargetDistance, flTargetSpeed);
 	const Vector vPredictedOrigin = vTargetOrigin + vTargetVelocity * flLeadTime;
 
-	Vector vForward = Normalize2D(vTargetVelocity);
+	Vector vForward = NavJobUtils::NormalizePlanar(vTargetVelocity);
 	if (vForward.IsZero())
-		vForward = Normalize2D(vPredictedOrigin - pLocal->GetAbsOrigin());
+		vForward = NavJobUtils::NormalizePlanar(vPredictedOrigin - pLocal->GetAbsOrigin());
 
 	if (tProfile.m_bPreferBackstab && pPlayer && !pPlayer->IsDormant())
 	{
 		Vec3 vTargetForward;
 		Math::AngleVectors(pPlayer->GetEyeAngles(), &vTargetForward);
-		vForward = Normalize2D(vTargetForward);
+		vForward = NavJobUtils::NormalizePlanar(vTargetForward);
 	}
 
 	Vector vSide(-vForward.y, vForward.x, 0.f);
-	static int s_iLastFlankTarget = -1;
-	static float s_flFlankSide = 1.f;
-	if (iEntIndex != s_iLastFlankTarget)
+	static int iLastFlankTarget = -1;
+	static float flFlankSide = 1.f;
+	if (iEntIndex != iLastFlankTarget)
 	{
-		s_iLastFlankTarget = iEntIndex;
-		s_flFlankSide = SDK::RandomFloat(0.f, 1.f) < 0.5f ? -1.f : 1.f;
+		iLastFlankTarget = iEntIndex;
+		flFlankSide = SDK::RandomFloat(0.f, 1.f) < 0.5f ? -1.f : 1.f;
 	}
-	const float flSideSign = s_flFlankSide;
+	const float flSideSign = flFlankSide;
 	const Vector vAnchor = vPredictedOrigin + vForward * tProfile.m_flAheadDistance + vSide * (tProfile.m_flSideDistance * flSideSign);
 
 	auto pNavFile = F::NavEngine.GetNavFile();
@@ -297,10 +285,10 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 	for (auto& tArea : pNavFile->m_vAreas)
 	{
-		auto vAreaOrigin = tArea.m_vCenter;
-
 		if (!IsAreaValidForStayNear(vOrigin, &tArea, false))
 			continue;
+
+		const Vector& vAreaOrigin = tArea.m_vCenter;
 
 		const float flDistToPredicted = vAreaOrigin.DistTo(vPredictedOrigin);
 		if (flDistToPredicted < tProfile.m_flMinRadius || flDistToPredicted > tProfile.m_flMaxRadius)
@@ -316,7 +304,7 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 		float flAheadPenalty = 0.f;
 		if (!vForward.IsZero())
 		{
-			Vector vToArea = Normalize2D(vAreaOrigin - vPredictedOrigin);
+			Vector vToArea = NavJobUtils::NormalizePlanar(vAreaOrigin - vPredictedOrigin);
 			float flAheadDot = std::clamp(vToArea.Dot(vForward), -1.f, 1.f);
 			flAheadPenalty = tProfile.m_bPreferAhead ? (1.f - flAheadDot) * 120.f : (1.f + flAheadDot) * 120.f;
 		}
@@ -328,6 +316,9 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 		vCandidates.push_back({ &tArea, flScore });
 	}
+
+	if (vCandidates.empty())
+		return false;
 
 	std::sort(vCandidates.begin(), vCandidates.end(), [](const StalkCandidate_t& a, const StalkCandidate_t& b) -> bool
 		{
@@ -384,31 +375,34 @@ bool CNavBotStayNear::StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 bool CNavBotStayNear::IsAreaValidForStayNear(Vector vEntOrigin, CNavArea* pArea, bool bFixLocalZ)
 {
+	if (!pArea || NavJobUtils::IsSpawnArea(pArea))
+		return false;
+
 	if (bFixLocalZ)
 		vEntOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 	auto vAreaOrigin = pArea->m_vCenter;
 	vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 
-	float flDist = vEntOrigin.DistTo(vAreaOrigin);
-
-	if (flDist < F::NavBotCore.m_tSelectedConfig.m_flMinFullDanger)
+	const float flDist = vEntOrigin.DistTo(vAreaOrigin);
+	if (flDist < F::NavBotCore.m_tSelectedConfig.m_flMinFullDanger || flDist > F::NavBotCore.m_tSelectedConfig.m_flMax)
 		return false;
 
-	if (F::Hazards.HasHazard(pArea))
-		return false;
-
-	if (flDist > F::NavBotCore.m_tSelectedConfig.m_flMax)
-		return false;
-
-	return true;
+	return !F::Hazards.HasHazard(pArea);
 }
 
-int CNavBotStayNear::IsStayNearTargetValid(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex)
+bool CNavBotStayNear::IsStayNearTargetValid(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex)
 {
 	if (!pLocal || iEntIndex <= 0 || iEntIndex == pLocal->entindex())
-		return 0;
+		return false;
 
 	return F::BotUtils.ShouldTarget(pLocal, pWeapon, iEntIndex) == ShouldTargetEnum::Target;
+}
+
+void CNavBotStayNear::Reset()
+{
+	m_iStayNearTargetIdx = -1;
+	m_sFollowTargetName.clear();
+	mCoverCache.clear();
 }
 
 bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
@@ -417,9 +411,11 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	static Timer tInvalidTargetTimer{};
 	static Timer tTargetSwitchTimer{};
 
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
 	{
 		m_iStayNearTargetIdx = -1;
+		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear)
+			F::NavEngine.CancelPath();
 		return false;
 	}
 
@@ -432,29 +428,19 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		return false;
 	}
 
-	const bool bPreviousTargetValid = IsStayNearTargetValid(pLocal, pWeapon, m_iStayNearTargetIdx);
-
-	if (bPreviousTargetValid)
+	if (IsStayNearTargetValid(pLocal, pWeapon, m_iStayNearTargetIdx))
 	{
 		tInvalidTargetTimer.Update();
 
 		Vector vOrigin;
 		if (F::BotUtils.GetDormantOrigin(m_iStayNearTargetIdx, &vOrigin))
 		{
-
 			if (F::NavEngine.IsPathing())
 			{
 				auto pCrumbs = F::NavEngine.GetCrumbs();
-
-				if (pCrumbs->size() > 2)
-				{
-					auto tLastCrumb = (*pCrumbs)[pCrumbs->size() - 2];
-
-					if (IsAreaValidForStayNear(vOrigin, tLastCrumb.m_pNavArea))
-						return true;
-				}
+				if (pCrumbs->size() > 2 && IsAreaValidForStayNear(vOrigin, (*pCrumbs)[pCrumbs->size() - 2].m_pNavArea))
+					return true;
 			}
-
 			else if (F::NavBotCore.m_tSelectedConfig.m_bPreferFar && IsAreaValidForStayNear(vOrigin, F::NavEngine.GetLocalNavArea()))
 				return true;
 		}
@@ -464,7 +450,6 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 		if (!tInvalidTargetTimer.Check(0.75f))
 			return F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear;
-
 	}
 
 	m_iStayNearTargetIdx = -1;

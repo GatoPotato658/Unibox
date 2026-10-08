@@ -10,9 +10,10 @@ class CNavBotCore
 public:
 	NavBotClassConfig_t m_tSelectedConfig = NavBotConfig::CONFIG_MID_RANGE;
 private:
-	void UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy);
+	void UpdateSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy);
 	void UpdateRunReloadInput(CUserCmd* pCmd, bool bShouldHold);
 	void ResetRuntimeState(CUserCmd* pCmd);
+	void ResetBusy(CUserCmd* pCmd);
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Reset();

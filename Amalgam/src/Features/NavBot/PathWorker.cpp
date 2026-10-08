@@ -86,41 +86,20 @@ namespace PathWorker
 				m_pActiveCancellation = tRequest.m_tToken.m_pCancelled;
 			}
 
-			if (tRequest.m_tToken.IsCancelled() || !m_pMap)
-			{
-				PathResult tResult{};
-				tResult.m_uRequestId        = tRequest.m_uRequestId;
-				tResult.m_uWorldGeneration  = tRequest.m_uWorldGeneration;
-				tResult.m_ePriority         = tRequest.m_ePriority;
-				tResult.m_iSolveResult      = -1;
-				tResult.m_bCancelled        = true;
+			PathResult tResult{};
+			tResult.m_uRequestId = tRequest.m_uRequestId;
+			tResult.m_uWorldGeneration = tRequest.m_uWorldGeneration;
+			tResult.m_ePriority = tRequest.m_ePriority;
 
-				{
-					std::lock_guard lock(m_mPending);
-					m_pActiveCancellation.reset();
-				}
-				std::lock_guard lock(m_mCompleted);
-				m_vCompleted.push_back(std::move(tResult));
-				continue;
-			}
-
-			std::vector<CachedPathCrumb_t> vCrumbs;
-			int iResult = -1;
-			tRequest.m_tCtx.m_pCancel = tRequest.m_tToken.m_pCancelled.get();
+			if (m_pMap && !tRequest.m_tToken.IsCancelled())
 			{
+				tRequest.m_tCtx.m_pCancel = tRequest.m_tToken.m_pCancelled.get();
 				std::lock_guard lock(m_pMap->m_mutex);
 				if (!tRequest.m_tToken.IsCancelled())
-					iResult = m_pMap->SolveCrumbs(tRequest.m_vStart, tRequest.m_pStartArea, tRequest.m_vDestination,
-						tRequest.m_pDestArea, tRequest.m_tCtx, vCrumbs, nullptr);
+					tResult.m_iSolveResult = m_pMap->SolveCrumbs(tRequest.m_vStart, tRequest.m_pStartArea, tRequest.m_vDestination,
+						tRequest.m_pDestArea, tRequest.m_tCtx, tResult.m_vCrumbs, nullptr);
 			}
-
-			PathResult tResult{};
-			tResult.m_uRequestId        = tRequest.m_uRequestId;
-			tResult.m_uWorldGeneration  = tRequest.m_uWorldGeneration;
-			tResult.m_ePriority         = tRequest.m_ePriority;
-			tResult.m_iSolveResult      = iResult;
-			tResult.m_bCancelled        = tRequest.m_tToken.IsCancelled();
-			tResult.m_vCrumbs           = std::move(vCrumbs);
+			tResult.m_bCancelled = !m_pMap || tRequest.m_tToken.IsCancelled();
 
 			{
 				std::lock_guard lock(m_mPending);

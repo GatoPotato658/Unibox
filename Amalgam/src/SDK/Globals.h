@@ -129,6 +129,7 @@ struct PasstimeMapGoalData_t
 	std::string m_sTargetname = {};
 	int m_iTeam = 0;
 	int m_iSpawnflags = 0;
+	int m_iPoints = 1;
 	bool m_bStartDisabled = false;
 };
 

@@ -39,6 +39,8 @@
     <ClCompile Include="src\Features\Aimbot\AimbotHitscan\AimbotHitscan.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotMelee\AimbotMelee.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotProjectile.cpp" />
+    <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotSpecial.cpp" />
+    <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotPasstime.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoAirblast\AutoAirblast.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.cpp" />
@@ -189,6 +191,13 @@
     <ClCompile Include="src\Features\Misc\AutoItem\AutoItem.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine.cpp" />
     <ClCompile Include="src\Features\NavBot\Objectives.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesMvM.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesPasstime.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesPD.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesVSH.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesRD.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesZI.cpp" />
+    <ClCompile Include="src\Features\NavBot\ObjectivesSpecialMaps.cpp" />
     <ClCompile Include="src\Features\Misc\NamedPipe\NamedPipe.cpp" />
     <ClCompile Include="src\Features\FollowBot\FollowBot.cpp" />
     <ClCompile Include="src\Features\NavBot\BotUtils.cpp" />
@@ -205,6 +214,11 @@
     <ClCompile Include="src\Features\NavBot\Jobs\Engineer.cpp" />
     <ClCompile Include="src\Features\NavBot\Jobs\EscapeDanger.cpp" />
     <ClCompile Include="src\Features\NavBot\Jobs\JobSystem.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\JobUtils.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Melee.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Reload.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Snipe.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Group.cpp" />
     <ClCompile Include="src\Features\Players\SteamProfileCache.cpp" />
     <ClCompile Include="src\Features\Createmove\Createmove.cpp" />
     <ClCompile Include="src\Hooks\CGameEventManager_FireEventClientSide.cpp" />

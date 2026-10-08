@@ -27,10 +27,21 @@ class CBotUtils
 private:
 	std::unordered_map<int, bool> m_mAutoScopeCache;
 	std::unordered_map<int, bool> m_mAutoRevCache;
+	bool m_bScopeKeep = false;
+	bool m_bScopeClearCache = false;
+	Timer m_tScopeTimer = {};
+	bool m_bRevKeep = false;
+	bool m_bRevClearCache = false;
+	Timer m_tRevTimer = {};
 	ClosestEnemy_t UpdateCloseEnemies(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 
 	bool HasMedigunTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	void UpdateBestSlot(CTFPlayer* pLocal);
+	void DoSlowAim(Vec3& vWishAngles, float flSpeed, Vec3 vPreviousAngles);
+	bool IsSurfaceWalkable(const Vector& vNormal);
+	bool SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd);
+	void AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	void AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 
 	EJumpState m_eJumpState = STATE_AWAITING_JUMP;
 
@@ -92,19 +103,13 @@ public:
 
 	void SetSlot(CTFPlayer* pLocal, int iSlot);
 
-	void DoSlowAim(Vec3& vWishAngles, float flSpeed, Vec3 vPreviousAngles);
 	void LookAtPath(CUserCmd* pCmd, Vec2 vDest, Vec3 vLocalEyePos, bool bSilent);
 	void LookAtPath(CUserCmd* pCmd, Vec3 vWishAngles, Vec3 vLocalEyePos, bool bSilent, bool bSmooth = true);
 	void LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, bool bSilent);
 	void InvalidateLLAP();
 
-	bool IsSurfaceWalkable(const Vector& vNormal);
-	bool SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void HandleSmartJump(CTFPlayer* pLocal, CUserCmd* pCmd);
-	void ForceJump() { if (Vars::Misc::Movement::NavBot::SmartJump.Value && m_eJumpState == STATE_AWAITING_JUMP) m_eJumpState = Vars::Misc::Movement::AutoCTap.Value ? STATE_CTAP : STATE_JUMP; }
 
-	void AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
-	void AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Reset();
 };

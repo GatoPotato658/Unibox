@@ -10,6 +10,7 @@ inline constexpr float HAZARD_COST_SENTRY_MEDIUM  = 800.f;
 inline constexpr float HAZARD_COST_SENTRY_LOW     = 400.f;
 inline constexpr float HAZARD_COST_ENEMY_NORMAL   = 300.f;
 inline constexpr float HAZARD_COST_ENEMY_DORMANT  = 200.f;
+inline constexpr float HAZARD_COST_BOSS           = 1200.f;
 
 enum class HazardKind : uint8_t
 {
@@ -21,6 +22,7 @@ enum class HazardKind : uint8_t
 	EnemyDormant,
 	EnemyInvuln,
 	Sticky,
+	Boss,
 };
 
 enum class HazardPolicy : uint8_t
@@ -59,19 +61,18 @@ private:
 	std::unordered_map<int, SentryCoverage_t> m_mSentryCoverage;
 	float m_flStandingEyeHeight = TFGame::VIEW_HEIGHT_DEFAULT;
 
-	uint64_t m_iGenerationId = 1;
-
 	int m_iLastUpdateTick = 0;
 	CNavArea* m_pStandingHazardArea = nullptr;
 	bool m_bIgnoreSentries = false;
 	float m_flPlayerScanRadius = 350.f;
 
 	void UpdatePlayers(CTFPlayer* pLocal);
+	void UpdateBoss(CTFPlayer* pLocal);
 	void UpdateBuildings(CTFPlayer* pLocal);
 	void UpdateProjectiles(CTFPlayer* pLocal);
 	void ExpireStale();
 
-	bool RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePolicy, float flCost, const Vector& vOrigin, int iExpireTick);
+	void RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePolicy, float flCost, const Vector& vOrigin, int iExpireTick);
 	static float CostForKind(HazardKind eKind);
 	static int PriorityForKind(HazardKind eKind);
 
@@ -82,9 +83,7 @@ public:
 
 	float GetCost(CNavArea* pArea) const;
 	const Hazard_t* GetHazard(CNavArea* pArea) const;
-	bool IsHardBlocked(CNavArea* pArea) const;
 	bool HasHazard(CNavArea* pArea) const;
-	uint64_t GetGenerationId() const { return m_iGenerationId; }
 
 	void SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const;
 
@@ -93,10 +92,6 @@ public:
 
 	void UpdateBotStanding(CNavArea* pLocalArea);
 	bool BotStandingOnHazard() const { return m_pStandingHazardArea != nullptr; }
-
-	void AddHazard(CNavArea* pArea, HazardKind eKind, float flCost = 0.f, int iExpireTick = 0, HazardPolicy ePolicy = HazardPolicy::SoftCost);
-	void ClearByKind(HazardKind eKind);
-	void ClearAll();
 
 	const std::unordered_map<CNavArea*, Hazard_t>& GetHazardMap() const { return m_mAreaHazards; }
 };

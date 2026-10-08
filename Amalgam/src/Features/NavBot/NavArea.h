@@ -264,6 +264,11 @@ public:
 		return northZ + v * (southZ - northZ);
 	}
 
+	float GetVerticalOutside(const Vector& vPos) const
+	{
+		return std::max(m_flMinZ - vPos.z, 0.0f) + std::max(vPos.z - m_flMaxZ, 0.0f);
+	}
+
 	Vector GetNearestPoint(const Vector2D vPoint) const
 	{
 		float x, y, z;

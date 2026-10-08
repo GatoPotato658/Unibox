@@ -180,6 +180,7 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 		std::string m_sTargetname = {};
 		std::string_view m_sSpawnflags = {};
 		std::string_view m_sStartDisabled = {};
+		std::string_view m_sPoints = {};
 	};
 
 	static bool AppendTriggerFromParsed(const ParsedEntity_t& tEnt)
@@ -237,6 +238,8 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 		tGoal.m_iTeam = ParseEntityInt(tEnt.m_sTeamNum);
 		tGoal.m_iSpawnflags = ParseEntityInt(tEnt.m_sSpawnflags);
 		tGoal.m_bStartDisabled = ParseEntityInt(tEnt.m_sStartDisabled) != 0;
+		if (!tEnt.m_sPoints.empty())
+			tGoal.m_iPoints = ParseEntityInt(tEnt.m_sPoints);
 
 		G::PasstimeGoalStorage.push_back(std::move(tGoal));
 	}
@@ -295,6 +298,7 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 				case FNV1A::Hash32Const("targetname"):      tEnt.m_sTargetname = UnescapeEntityToken(sValue); break;
 				case FNV1A::Hash32Const("spawnflags"):      tEnt.m_sSpawnflags = sValue; break;
 				case FNV1A::Hash32Const("StartDisabled"):   tEnt.m_sStartDisabled = sValue; break;
+				case FNV1A::Hash32Const("points"):          tEnt.m_sPoints = sValue; break;
 				default: break;
 				}
 			}
@@ -1766,6 +1770,9 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 			if (iActualWeaponSlot < SLOT_PRIMARY || iActualWeaponSlot > SLOT_PDA2)
 				continue;
 
+			const bool bWeaponChanged = G::SavedDefIndexes[iActualWeaponSlot] != iDefIndex
+				|| G::SavedWepIds[iActualWeaponSlot] != iWeaponID;
+
 			G::SavedWepSlots[i] = iActualWeaponSlot;
 			G::SavedDefIndexes[iActualWeaponSlot] = iDefIndex;
 			G::SavedWepIds[iActualWeaponSlot] = iWeaponID;
@@ -1774,8 +1781,7 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 			{
 				G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->m_iClip1();
 				G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
-				if (G::SavedDefIndexes[iActualWeaponSlot] != iDefIndex 
-					|| G::SavedWepIds[iActualWeaponSlot] != iWeaponID)
+				if (bWeaponChanged)
 				{
 					G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->m_pWeaponInfo()->iMaxClip1 : 0;
 					G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = SDK::GetWeaponMaxReserveAmmo(iWeaponID, iDefIndex);

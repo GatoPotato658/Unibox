@@ -781,6 +781,25 @@ void CMenu::MenuAimbot(int iTab)
 					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeDispenserLVL);
 					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeTeleporterLVL);
 				} EndSection();
+				if (Section("Zombie Infection", 8))
+				{
+					FDropdown(Vars::Aimbot::Zombie::Abilities, FDropdownEnum::Left);
+					FToggle(Vars::Aimbot::Zombie::AutoCast, FToggleEnum::Right);
+					FSlider(Vars::Aimbot::Zombie::MaxDistance, FSliderEnum::None, Vars::Aimbot::Zombie::MaxDistance[DEFAULT_BIND] <= 0.f ? "Auto" : "%g");
+					FTooltip("Aims the Sniper spit, Spy EMP, Pyro spew and Heavy rock abilities on zi_ maps. Needs an aim type other than off. Auto = no distance limit besides what the projectile can reach.");
+				} EndSection();
+				if (Section("Passtime", 8))
+				{
+					FDropdown(Vars::Aimbot::Passtime::Mode, FDropdownEnum::Left);
+					FDropdown(Vars::Aimbot::Passtime::PassPreference, FDropdownEnum::Right);
+					FToggle(Vars::Aimbot::Passtime::AutoThrow, FToggleEnum::Left);
+					FDropdown(Vars::Aimbot::Passtime::Arc, FDropdownEnum::Right);
+					FSlider(Vars::Aimbot::Passtime::MaxGoalDistance, FSliderEnum::Left, Vars::Aimbot::Passtime::MaxGoalDistance[DEFAULT_BIND] <= 0.f ? "Auto" : "%g");
+					FSlider(Vars::Aimbot::Passtime::PreferGoalDistance, FSliderEnum::Right, Vars::Aimbot::Passtime::PreferGoalDistance[DEFAULT_BIND] <= 0.f ? "Auto" : "%g");
+					FSlider(Vars::Aimbot::Passtime::MinPassGain, FSliderEnum::Left, Vars::Aimbot::Passtime::MinPassGain[DEFAULT_BIND] <= 0.f ? "Auto" : "%g");
+					FSlider(Vars::Aimbot::Passtime::PressureRange, FSliderEnum::Right, Vars::Aimbot::Passtime::PressureRange[DEFAULT_BIND] <= 0.f ? "Auto" : "%g");
+					FTooltip("Jack throws: shoots goals when a collision free arc exists, otherwise passes to a teammate the game can lock. Auto values come from the game: max goal distance = whatever the throw can reach, prefer goal within = the class' flat ground throw range (speed^2 / gravity), min pass gain = tf_passtime_ball_seek_range, pressure range = tf_passtime_pack_range.");
+				} EndSection();
 			}
 			EndTable();
 		}

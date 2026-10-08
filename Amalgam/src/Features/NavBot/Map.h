@@ -68,6 +68,7 @@ namespace NavPolicy
 {
 	void Update();
 	void Reset();
+	uint32_t GetEpoch();
 	NavPolicyState Snapshot(int iTeam);
 	bool IsAreaTraversable(const CNavArea& tArea, const NavPolicyState& tState);
 	bool IsEnemySpawn(const CNavArea& tArea, int iTeam);
@@ -112,7 +113,6 @@ struct CachedConnection_t
 	NavPoints_t m_tPoints = {};
 	bool m_bPassable = false;
 	bool m_bStuckBlacklist = false;
-	size_t m_uNavMeshHash = 0;
 };
 
 struct CachedStucktime_t
@@ -146,8 +146,6 @@ public:
 	std::unordered_map<std::pair<CNavArea*, CNavArea*>, CachedConnection_t, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_mVischeckCache;
 	std::unordered_map<std::pair<CNavArea*, CNavArea*>, CachedStucktime_t, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_mConnectionStuckTime;
 
-	bool m_bSkipSpawn = false;
-
 	explicit CMap(const char* sMapName)
 		: m_navfile(sMapName), m_sMapName(sMapName)
 	{
@@ -160,7 +158,7 @@ public:
 		float flMaxCost = std::numeric_limits<float>::max(), const std::vector<CNavArea*>* pTargets = nullptr);
 	size_t GetAreaIndex(const CNavArea* pArea) const { return static_cast<size_t>(pArea - m_navfile.m_vAreas.data()); }
 
-	static SolveContext BuildSolveContext();
+	static SolveContext BuildSolveContext(bool bIgnoreTraces = false);
 	int SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
 		const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost);
 
@@ -171,6 +169,9 @@ public:
 
 	enum class AreaBlock : uint8_t { None, Soft, Stuck };
 	AreaBlock GetAreaBlock(CNavArea* pArea, int iTick) const;
+	bool HasUsableExit(CNavArea* pArea, int iTick) const;
+	void ShortenExitBlocks(CNavArea* pArea, int iExpireTick);
+	void ClearDynamicBlocks();
 
 	void CollectAreasAround(const Vector& vOrigin, float flRadius, std::vector<CNavArea*>& vOutAreas);
 
@@ -205,7 +206,6 @@ private:
 	uint32_t m_iQueryId = 0;
 
 	struct AdjacentEntry { CNavArea* m_pArea; float m_flCost; };
-	void GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::vector<AdjacentEntry>& vOut);
-	size_t GetConnectionNavMeshHash(CNavArea* pFrom, CNavArea* pTo) const;
+	void GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bSkipSpawn, std::vector<AdjacentEntry>& vOut);
 	float EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown, int iTeam) const;
 };

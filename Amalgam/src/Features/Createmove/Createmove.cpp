@@ -88,6 +88,8 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::FollowBot.Run(pLocal, pCmd);
 		F::NavBotCore.Run(pLocal, pWeapon, pCmd);
 		F::NavEngine.Run(pLocal, pWeapon, pCmd);
+		F::VSHController.RunBoss(pLocal, pCmd);
+		F::ZIController.CreateMove(pLocal, pCmd);
 		F::BotUtils.HandleSmartJump(pLocal, pCmd);
 		F::CritHack.Run(pLocal, pWeapon, pCmd);
 		F::CritHack.CacheDrawInfo(pLocal);

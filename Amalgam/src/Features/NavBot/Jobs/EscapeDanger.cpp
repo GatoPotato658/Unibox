@@ -8,7 +8,8 @@ static bool IsHighDanger(const Hazard_t& tHazard)
 	return tHazard.m_ePolicy != HazardPolicy::SoftCost
 		|| tHazard.m_eKind == HazardKind::Sentry
 		|| tHazard.m_eKind == HazardKind::Sticky
-		|| tHazard.m_eKind == HazardKind::EnemyInvuln;
+		|| tHazard.m_eKind == HazardKind::EnemyInvuln
+		|| tHazard.m_eKind == HazardKind::Boss;
 }
 
 static bool IsMediumDanger(const Hazard_t& tHazard)
@@ -44,7 +45,7 @@ static bool IsEscapePathSafe(CNavArea* pFrom, CNavArea* pTo, bool bHasTarget, bo
 		const Hazard_t* pHazard = F::Hazards.GetHazard(vAreas[i]);
 		if (!pHazard)
 			continue;
-		if (!CanUseDangerArea(pHazard, bHasTarget, bLowHealth) || !std::isfinite(F::Hazards.GetCost(vAreas[i])))
+		if ((pHazard->m_eKind != HazardKind::Boss && !CanUseDangerArea(pHazard, bHasTarget, bLowHealth)) || !std::isfinite(F::Hazards.GetCost(vAreas[i])))
 			return false;
 	}
 	return true;
@@ -92,14 +93,13 @@ const Hazard_t* CNavBotDanger::GetHazardAhead(CTFPlayer* pLocal) const
 
 bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 {
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::EscapeDanger))
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::EscapeDanger))
 		return false;
 
-	if (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::DontEscapeDangerIntel && F::GameObjectiveController.m_eGameMode == TF_GAMETYPE_CTF)
+	if (NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::DontEscapeDangerIntel) && F::GameObjectiveController.m_eGameMode == TF_GAMETYPE_CTF)
 	{
 		const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
-		auto iFlagCarrierIdx = F::FlagController.GetCarrier(iEnemyTeam);
-		if (iFlagCarrierIdx == pLocal->entindex())
+		if (F::FlagController.GetCarrier(iEnemyTeam) == pLocal->entindex())
 			return false;
 	}
 
@@ -109,16 +109,13 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 		return false;
 
 	auto pLocalArea = F::NavEngine.GetLocalNavArea();
-	if (!pLocalArea)
-		return false;
-	if (pLocalArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_RED ||
-		pLocalArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_BLUE)
+	if (!pLocalArea || NavJobUtils::IsSpawnArea(pLocalArea))
 		return false;
 
 	const Hazard_t* pLocalHazard = F::Hazards.GetHazard(pLocalArea);
 	const Hazard_t* pAheadHazard = !pLocalHazard ? GetHazardAhead(pLocal) : nullptr;
 	const bool bRespectAhead = !pAheadHazard || F::NavEngine.m_eCurrentPriority != PriorityListEnum::Capture
-		|| (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::SafeCapping);
+		|| NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::SafeCapping);
 	const Hazard_t* pEffectiveHazard = pLocalHazard ? pLocalHazard : (bRespectAhead ? pAheadHazard : nullptr);
 
 	bool bInHighDanger = false;
@@ -146,7 +143,7 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 		if (!bShouldEscape && bImportantTask)
 			return false;
 
-		if (bInLowDanger && !bInMediumDanger && !bInHighDanger && F::NavEngine.m_eCurrentPriority != 0)
+		if (bInLowDanger && F::NavEngine.m_eCurrentPriority != PriorityListEnum::None)
 			return false;
 
 		if (bActiveEscapeJob && m_pEscapeTargetArea && !F::Hazards.HasHazard(m_pEscapeTargetArea))
@@ -164,17 +161,14 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 		Vector vReferencePosition;
 		bool bHasTarget = false;
 
-		if (F::NavEngine.m_eCurrentPriority != 0 && F::NavEngine.m_eCurrentPriority != PriorityListEnum::EscapeDanger && F::NavEngine.IsPathing())
+		auto pCrumbs = F::NavEngine.GetCrumbs();
+		if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::None && F::NavEngine.m_eCurrentPriority != PriorityListEnum::EscapeDanger && !pCrumbs->empty())
 		{
-
-			vReferencePosition = F::NavEngine.GetCrumbs()->back().m_vPos;
+			vReferencePosition = pCrumbs->back().m_vPos;
 			bHasTarget = true;
 		}
 		else
-		{
-
 			vReferencePosition = pLocal->GetAbsOrigin();
-		}
 		const bool bLowHealth = pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.5f;
 
 		std::vector<NavAreaScore_t> vSafeAreas;
@@ -187,15 +181,9 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 			if (!CanUseDangerArea(F::Hazards.GetHazard(pArea), bHasTarget, bLowHealth))
 				continue;
 
-			float flDistToReference = pArea->m_vCenter.DistTo(vReferencePosition);
-			float flDistToCurrent = pArea->m_vCenter.DistTo(pLocal->GetAbsOrigin());
-
+			const float flDistToCurrent = pArea->m_vCenter.DistTo(pLocal->GetAbsOrigin());
 			if (flDistToCurrent > 200.f)
-			{
-
-				float flScore = bHasTarget ? flDistToReference : flDistToCurrent;
-				vSafeAreas.push_back({ pArea, flScore });
-			}
+				vSafeAreas.push_back({ pArea, bHasTarget ? pArea->m_vCenter.DistTo(vReferencePosition) : flDistToCurrent });
 		}
 
 		std::sort(vSafeAreas.begin(), vSafeAreas.end(), [](const NavAreaScore_t& a, const NavAreaScore_t& b) -> bool
@@ -205,17 +193,18 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 		int iCalls = 0;
 
+		auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
 		for (const auto& tPair : vSafeAreas)
 		{
+			if (!pWeaponEntity)
+				break;
+
 			CNavArea* pArea = tPair.m_pArea;
 			iCalls++;
 			if (iCalls > 10)
 				break;
 
 			bool bIsSafe = true;
-			auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
-			if (!pWeaponEntity)
-				continue;
 			for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 			{
 				if (F::BotUtils.ShouldTarget(pLocal, pWeaponEntity->As<CTFWeaponBase>(), pEntity->entindex()) != ShouldTargetEnum::Target)
@@ -246,7 +235,6 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 		if (iCalls <= 0 || (bInHighDanger && iCalls < 10))
 		{
-
 			std::sort(vAreaPointers.begin(), vAreaPointers.end(), [&](CNavArea* a, CNavArea* b) -> bool
 				{
 					return a->m_vCenter.DistTo(pLocal->GetAbsOrigin()) < b->m_vCenter.DistTo(pLocal->GetAbsOrigin());
@@ -303,48 +291,57 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 	return false;
 }
 
-static bool IsPositionSafe(Vector vPos, int iLocalTeam)
+bool CNavBotDanger::GetProjectileThreatRange(CBaseEntity* pEntity, int iLocalTeam, float& flOutRange)
 {
-	if (!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies) &&
-		!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles))
-		return true;
+	if (!pEntity || pEntity->m_iTeamNum() == iLocalTeam)
+		return false;
 
+	const auto iClassId = pEntity->GetClassID();
+	if (iClassId == ETFClassID::CTFProjectile_Rocket)
+	{
+		if (!NavJobUtils::HasBlacklist(Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles))
+			return false;
+
+		flOutRange = Vars::Misc::Movement::NavBot::ProjectileDangerRange.Value;
+		return true;
+	}
+
+	if (iClassId != ETFClassID::CTFGrenadePipebombProjectile)
+		return false;
+
+	switch (pEntity->As<CTFGrenadePipebombProjectile>()->m_iType())
+	{
+	case TF_GL_MODE_REMOTE_DETONATE:
+		if (!NavJobUtils::HasBlacklist(Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies))
+			return false;
+
+		flOutRange = Vars::Misc::Movement::NavBot::StickyDangerRange.Value;
+		return true;
+	case TF_GL_MODE_REGULAR:
+		if (!NavJobUtils::HasBlacklist(Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles))
+			return false;
+
+		flOutRange = Vars::Misc::Movement::NavBot::ProjectileDangerRange.Value;
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool IsPositionSafe(const Vector& vPos, int iLocalTeam)
+{
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 	{
-		if (pEntity->m_iTeamNum() == iLocalTeam)
-			continue;
-
-		auto iClassId = pEntity->GetClassID();
-
-		if (Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies && iClassId == ETFClassID::CTFGrenadePipebombProjectile)
-		{
-
-			if (pEntity->As<CTFGrenadePipebombProjectile>()->m_iType() != TF_GL_MODE_REMOTE_DETONATE)
-				continue;
-
-			float flDist = pEntity->m_vecOrigin().DistTo(vPos);
-			if (flDist < Vars::Misc::Movement::NavBot::StickyDangerRange.Value)
-				return false;
-		}
-
-		if (Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles)
-		{
-			if (iClassId == ETFClassID::CTFProjectile_Rocket ||
-				(iClassId == ETFClassID::CTFGrenadePipebombProjectile && pEntity->As<CTFGrenadePipebombProjectile>()->m_iType() == TF_GL_MODE_REGULAR))
-			{
-				float flDist = pEntity->m_vecOrigin().DistTo(vPos);
-				if (flDist < Vars::Misc::Movement::NavBot::ProjectileDangerRange.Value)
-					return false;
-			}
-		}
+		float flThreatRange = 0.f;
+		if (CNavBotDanger::GetProjectileThreatRange(pEntity, iLocalTeam, flThreatRange) && pEntity->m_vecOrigin().DistTo(vPos) < flThreatRange)
+			return false;
 	}
 	return true;
 }
 
 bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 {
-	if (!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies) &&
-		!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles))
+	if (!NavJobUtils::HasBlacklist(Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies | Vars::Misc::Movement::NavBot::BlacklistEnum::Projectiles))
 		return false;
 
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::EscapeDanger)
@@ -386,7 +383,6 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 
 	for (auto& pArea : vAreaPointers)
 	{
-
 		if (pArea == pLocalArea)
 			continue;
 
@@ -425,47 +421,35 @@ bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 	if (!pLocalArea)
 		return false;
 
-	if (!(pLocalArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)))
+	if (!NavJobUtils::IsSpawnArea(pLocalArea))
 	{
+		m_iSpawnExitAttempt = 0;
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeSpawn)
 			F::NavEngine.CancelPath();
 		return false;
 	}
 
 	static Timer tSpawnEscapeCooldown{};
-	bool bActive = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeSpawn;
+	const bool bActive = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeSpawn;
 	if (bActive || !tSpawnEscapeCooldown.Run(2.f))
 		return bActive;
 
+	auto vExitAreas = *F::NavEngine.GetRespawnRoomExitAreas();
+	if (vExitAreas.empty())
+		return false;
+
 	const auto vLocalOrigin = pLocal->GetAbsOrigin();
-	if (!m_pSpawnExitArea || m_pSpawnExitArea->m_vCenter.DistTo(vLocalOrigin) > 1500.f)
-	{
-
-		float flMinDist = FLT_MAX;
-		for (auto pArea : *F::NavEngine.GetRespawnRoomExitAreas())
+	std::sort(vExitAreas.begin(), vExitAreas.end(), [&](CNavArea* a, CNavArea* b) -> bool
 		{
-			float flDist = pArea->m_vCenter.DistTo(vLocalOrigin);
-			if (flMinDist > flDist)
-			{
-				m_pSpawnExitArea = pArea;
-				flMinDist = flDist;
-			}
-		}
-	}
+			return a->m_vCenter.DistToSqr(vLocalOrigin) < b->m_vCenter.DistToSqr(vLocalOrigin);
+		});
 
-	if (m_pSpawnExitArea)
-	{
-
-		if (F::NavEngine.NavTo(m_pSpawnExitArea->m_vCenter, PriorityListEnum::EscapeSpawn))
-			return true;
-	}
-
-	return false;
+	return F::NavEngine.NavTo(vExitAreas[m_iSpawnExitAttempt++ % vExitAreas.size()]->m_vCenter, PriorityListEnum::EscapeSpawn);
 }
 
 void CNavBotDanger::ResetSpawn()
 {
-	m_pSpawnExitArea = nullptr;
+	m_iSpawnExitAttempt = 0;
 	m_pEscapeTargetArea = nullptr;
 	m_pProjectileTargetArea = nullptr;
 	m_sDangerStatus.clear();

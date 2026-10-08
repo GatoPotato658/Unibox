@@ -1,8 +1,9 @@
 #include "Hazards.h"
 #include "BotUtils.h"
 #include "NavEngine.h"
+#include "Objectives.h"
 
-inline float GetPlayerDangerRadius(int iClass)
+static float GetPlayerDangerRadius(int iClass)
 {
 	switch (iClass)
 	{
@@ -23,6 +24,7 @@ float CHazards::CostForKind(HazardKind eKind)
 	case HazardKind::SentryLow:      return HAZARD_COST_SENTRY_LOW;
 	case HazardKind::EnemyInvuln:    return HAZARD_COST_ENEMY_INVULN;
 	case HazardKind::Sticky:         return HAZARD_COST_STICKY;
+	case HazardKind::Boss:           return HAZARD_COST_BOSS;
 	case HazardKind::EnemyNormal:    return HAZARD_COST_ENEMY_NORMAL;
 	case HazardKind::EnemyDormant:   return HAZARD_COST_ENEMY_DORMANT;
 	default:                         return 0.f;
@@ -36,6 +38,7 @@ int CHazards::PriorityForKind(HazardKind eKind)
 	case HazardKind::Sentry:         return 100;
 	case HazardKind::EnemyInvuln:    return 90;
 	case HazardKind::Sticky:         return 80;
+	case HazardKind::Boss:           return 85;
 	case HazardKind::SentryMedium:   return 70;
 	case HazardKind::SentryLow:      return 50;
 	case HazardKind::EnemyNormal:    return 30;
@@ -44,57 +47,20 @@ int CHazards::PriorityForKind(HazardKind eKind)
 	}
 }
 
-bool CHazards::RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePolicy, float flCost, const Vector& vOrigin, int iExpireTick)
+void CHazards::RecordHazard(CNavArea* pArea, HazardKind eKind, HazardPolicy ePolicy, float flCost, const Vector& vOrigin, int iExpireTick)
 {
-	if (!pArea) return false;
+	if (!pArea) return;
 
 	auto& tHazard = m_mAreaHazards[pArea];
-	const bool bWasAbsent = tHazard.m_eKind == HazardKind::None;
-	const int iIncomingPriority = PriorityForKind(eKind);
-	const int iExistingPriority = PriorityForKind(tHazard.m_eKind);
+	if (PriorityForKind(eKind) < PriorityForKind(tHazard.m_eKind))
+		return;
 
-	if (iIncomingPriority < iExistingPriority)
-		return false;
 	tHazard.m_iLastUpdateTick = m_iLastUpdateTick;
-
-	const bool bMaterialChange =
-		bWasAbsent
-		|| tHazard.m_eKind != eKind
-		|| tHazard.m_ePolicy != ePolicy;
-
 	tHazard.m_eKind = eKind;
 	tHazard.m_ePolicy = ePolicy;
 	tHazard.m_flCost = std::max(tHazard.m_flCost, flCost);
 	tHazard.m_vOrigin = vOrigin;
 	if (iExpireTick) tHazard.m_iExpireTick = std::max(tHazard.m_iExpireTick, iExpireTick);
-
-	return bMaterialChange;
-}
-
-void CHazards::AddHazard(CNavArea* pArea, HazardKind eKind, float flCost, int iExpireTick, HazardPolicy ePolicy)
-{
-	if (!pArea) return;
-	if (flCost <= 0.f) flCost = CostForKind(eKind);
-
-	if (RecordHazard(pArea, eKind, ePolicy, flCost, pArea->m_vCenter, iExpireTick))
-		++m_iGenerationId;
-}
-
-void CHazards::ClearByKind(HazardKind eKind)
-{
-	const size_t nBefore = m_mAreaHazards.size();
-	std::erase_if(m_mAreaHazards, [eKind](const auto& e) { return e.second.m_eKind == eKind; });
-	if (m_pStandingHazardArea && !m_mAreaHazards.contains(m_pStandingHazardArea))
-		m_pStandingHazardArea = nullptr;
-	if (m_mAreaHazards.size() != nBefore) ++m_iGenerationId;
-}
-
-void CHazards::ClearAll()
-{
-	if (m_mAreaHazards.empty()) { m_pStandingHazardArea = nullptr; return; }
-	m_mAreaHazards.clear();
-	m_pStandingHazardArea = nullptr;
-	++m_iGenerationId;
 }
 
 void CHazards::Reset()
@@ -102,7 +68,6 @@ void CHazards::Reset()
 	m_mAreaHazards.clear();
 	m_mSentryCoverage.clear();
 	m_flStandingEyeHeight = TFGame::VIEW_HEIGHT_DEFAULT;
-	m_iGenerationId = 1;
 	m_iLastUpdateTick = 0;
 	m_pStandingHazardArea = nullptr;
 	m_bIgnoreSentries = false;
@@ -132,14 +97,6 @@ const Hazard_t* CHazards::GetHazard(CNavArea* pArea) const
 {
 	const auto it = m_mAreaHazards.find(pArea);
 	return it != m_mAreaHazards.end() ? &it->second : nullptr;
-}
-
-bool CHazards::IsHardBlocked(CNavArea* pArea) const
-{
-	if (!pArea || pArea == m_pStandingHazardArea) return false;
-	auto it = m_mAreaHazards.find(pArea);
-	if (it == m_mAreaHazards.end()) return false;
-	return it->second.m_ePolicy == HazardPolicy::HardBlock || it->second.m_ePolicy == HazardPolicy::TempForbid;
 }
 
 void CHazards::SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const
@@ -181,21 +138,17 @@ void CHazards::UpdateBotStanding(CNavArea* pLocalArea)
 
 void CHazards::ExpireStale()
 {
-	bool bAnyChange = false;
 	const int iNow = I::GlobalVars->tickcount;
 
-	std::erase_if(m_mAreaHazards, [&](const auto& e)
+	std::erase_if(m_mAreaHazards, [iNow](const auto& e)
 		{
 			const auto& tHazard = e.second;
 			const bool bExpiredByTick = tHazard.m_iExpireTick && tHazard.m_iExpireTick < iNow;
 			const bool bStale = std::abs(iNow - tHazard.m_iLastUpdateTick) > TIME_TO_TICKS(2.0f);
-			if (bExpiredByTick || bStale) { bAnyChange = true; return true; }
-			return false;
+			return bExpiredByTick || bStale;
 		});
 	if (m_pStandingHazardArea && !m_mAreaHazards.contains(m_pStandingHazardArea))
 		m_pStandingHazardArea = nullptr;
-
-	if (bAnyChange) ++m_iGenerationId;
 }
 
 void CHazards::Update(CTFPlayer* pLocal)
@@ -210,8 +163,12 @@ void CHazards::Update(CTFPlayer* pLocal)
 
 	m_flPlayerScanRadius = GetPlayerDangerRadius(pLocal->m_iClass());
 
-	UpdatePlayers(pLocal);
-	UpdateBuildings(pLocal);
+	if (!F::ZIController.IsZombie())
+	{
+		UpdatePlayers(pLocal);
+		UpdateBoss(pLocal);
+		UpdateBuildings(pLocal);
+	}
 	UpdateProjectiles(pLocal);
 }
 
@@ -224,12 +181,10 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 	auto* pMap = F::NavEngine.GetNavMap();
 	if (!pMap) return;
 
-	bool bAnyChange = false;
-
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
 		auto pPlayer = pEntity->As<CTFPlayer>();
-		if (!pPlayer || !pPlayer->IsAlive() || pPlayer == pLocal) continue;
+		if (!pPlayer || !pPlayer->IsAlive() || pPlayer == pLocal || F::VSHController.IsBossLocal() || F::VSHController.IsBoss(pPlayer->entindex())) continue;
 
 		const bool bDormant = pPlayer->IsDormant();
 		const bool bInvuln = pPlayer->InCond(TF_COND_INVULNERABLE) || pPlayer->InCond(TF_COND_PHASE);
@@ -268,11 +223,68 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 			if (!bDormant && !F::NavEngine.IsVectorVisibleNavigation(vOrigin + Vector(0, 0, 60), pArea->m_vCenter + Vector(0, 0, 40)))
 				continue;
 
-			bAnyChange |= RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flFinal, vOrigin, 0);
+			RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flFinal, vOrigin, 0);
 		}
 	}
+}
 
-	if (bAnyChange) ++m_iGenerationId;
+static float DistToSegment2D(const Vector& vPoint, const Vector& vFrom, const Vector& vTo)
+{
+	const Vector2D vSegment(vTo.x - vFrom.x, vTo.y - vFrom.y);
+	const Vector2D vDelta(vPoint.x - vFrom.x, vPoint.y - vFrom.y);
+	const float flLengthSqr = vSegment.x * vSegment.x + vSegment.y * vSegment.y;
+	const float flT = flLengthSqr > 0.001f ? std::clamp((vDelta.x * vSegment.x + vDelta.y * vSegment.y) / flLengthSqr, 0.f, 1.f) : 0.f;
+	const float flDx = vDelta.x - vSegment.x * flT;
+	const float flDy = vDelta.y - vSegment.y * flT;
+	return std::sqrt(flDx * flDx + flDy * flDy);
+}
+
+void CHazards::UpdateBoss(CTFPlayer* pLocal)
+{
+	if (!(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::Players))
+		return;
+
+	auto* pMap = F::NavEngine.GetNavMap();
+	if (!pMap) return;
+
+	std::vector<VSHZone_t> vZones;
+	F::VSHController.GetBossZones(pLocal, vZones);
+	const int iExpireTick = I::GlobalVars->tickcount + TIME_TO_TICKS(0.35f);
+
+	for (const auto& tZone : vZones)
+	{
+		const Vector vCenter = tZone.m_bLane ? (tZone.m_vFrom + tZone.m_vTo) * 0.5f : tZone.m_vFrom;
+		const float flReach = tZone.m_bLane ? tZone.m_vFrom.DistTo(tZone.m_vTo) * 0.5f + tZone.m_flRadius : tZone.m_flRadius;
+
+		std::vector<CNavArea*> vAreas;
+		pMap->CollectAreasAround(vCenter, flReach, vAreas);
+
+		for (auto* pArea : vAreas)
+		{
+			if (!pArea) continue;
+
+			float flCost = tZone.m_bStrict ? HAZARD_COST_BOSS * 2.f : HAZARD_COST_BOSS;
+			if (tZone.m_bLane)
+			{
+				if (DistToSegment2D(pArea->m_vCenter, tZone.m_vFrom, tZone.m_vTo) > tZone.m_flRadius)
+					continue;
+			}
+			else
+			{
+				const float flDist = pArea->m_vCenter.DistTo(tZone.m_vFrom);
+				if (flDist > tZone.m_flRadius || flDist < tZone.m_flInnerRadius)
+					continue;
+
+				if (!tZone.m_bStrict && flDist > 350.f
+					&& !F::NavEngine.IsVectorVisibleNavigation(tZone.m_vFrom + Vector(0, 0, 60), pArea->m_vCenter + Vector(0, 0, 40)))
+					continue;
+
+				flCost *= 0.5f + 0.5f * (1.f - flDist / tZone.m_flRadius);
+			}
+
+			RecordHazard(pArea, HazardKind::Boss, HazardPolicy::SoftCost, flCost, tZone.m_vFrom, iExpireTick);
+		}
+	}
 }
 
 static bool IsLocalIgnoredBySentry(CTFPlayer* pLocal, CObjectSentrygun* pSentry)
@@ -311,8 +323,6 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 	constexpr float flHighRadius = 900.0f;
 	constexpr float flMedRadius = TFGame::SENTRY_MAX_RANGE;
 	constexpr float flLowRadius = TFGame::SENTRY_MAX_RANGE + 100.0f;
-
-	bool bAnyChange = false;
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingEnemy))
 	{
@@ -391,13 +401,11 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 			const float flScore = eKind == HazardKind::Sentry ? flBaseScore
 				: eKind == HazardKind::SentryMedium ? HAZARD_COST_SENTRY_MEDIUM
 				: HAZARD_COST_SENTRY_LOW;
-			bAnyChange |= RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flScore, vOrigin, 0);
+			RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flScore, vOrigin, 0);
 		}
 	}
 
 	std::erase_if(m_mSentryCoverage, [iNow](const auto& tEntry) { return tEntry.second.m_iSeenTick != iNow; });
-
-	if (bAnyChange) ++m_iGenerationId;
 }
 
 void CHazards::UpdateProjectiles(CTFPlayer* pLocal)
@@ -410,7 +418,6 @@ void CHazards::UpdateProjectiles(CTFPlayer* pLocal)
 	if (!pMap) return;
 
 	const int iExpireTick = TICKCOUNT_TIMESTAMP(Vars::Misc::Movement::NavEngine::StickyIgnoreTime.Value);
-	bool bAnyChange = false;
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 	{
@@ -428,11 +435,9 @@ void CHazards::UpdateProjectiles(CTFPlayer* pLocal)
 		for (auto* pArea : vAreas)
 		{
 			if (!pArea) continue;
-			bAnyChange |= RecordHazard(pArea, HazardKind::Sticky, HazardPolicy::SoftCost, HAZARD_COST_STICKY, pPipe->GetAbsOrigin(), iExpireTick);
+			RecordHazard(pArea, HazardKind::Sticky, HazardPolicy::SoftCost, HAZARD_COST_STICKY, pPipe->GetAbsOrigin(), iExpireTick);
 		}
 	}
-
-	if (bAnyChange) ++m_iGenerationId;
 }
 
 void CHazards::Render()
@@ -456,7 +461,8 @@ void CHazards::Render()
 		case HazardKind::SentryLow:      tColor = { 255,   0,   0, 255 }; break;
 		case HazardKind::EnemyInvuln:
 		case HazardKind::EnemyNormal:
-		case HazardKind::EnemyDormant:   tColor = { 255, 128,   0, 255 }; break;
+		case HazardKind::EnemyDormant:
+		case HazardKind::Boss:           tColor = { 255, 128,   0, 255 }; break;
 		case HazardKind::Sticky:         tColor = { 255, 255,   0, 255 }; break;
 		default:                          tColor = Vars::Colors::NavbotBlacklist.Value; break;
 		}

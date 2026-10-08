@@ -106,6 +106,8 @@ void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	F::AutoRocketJump.Run(pLocal, pWeapon, pCmd);
 	if (F::AutoRocketJump.IsRunning())
 		return;
+	if (F::AimbotProjectile.RunZombieAbility(pLocal, pWeapon, pCmd))
+		return;
 	if (!ShouldRun(pLocal, pWeapon, pCmd))
 		return;
 
@@ -114,6 +116,11 @@ void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	F::AutoHeal.Run(pLocal, pWeapon, pCmd);
 
 	auto iWeaponID = pWeapon->GetWeaponID();
+	if (iWeaponID == TF_WEAPON_PASSTIME_GUN)
+	{
+		F::AimbotProjectile.RunPasstime(pLocal, pWeapon, pCmd);
+		return;
+	}
 	if (iWeaponID == TF_WEAPON_LASER_POINTER ||
 		iWeaponID == TF_WEAPON_MECHANICAL_ARM)
 	{

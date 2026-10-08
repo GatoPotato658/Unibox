@@ -4,7 +4,7 @@
 
 namespace NavBotConfig
 {
-	NavBotClassConfig_t Select(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+	NavBotClassConfig_t Select(CTFPlayer* pLocal)
 	{
 		if (!pLocal)
 			return CONFIG_MID_RANGE;
@@ -18,12 +18,9 @@ namespace NavBotConfig
 			if (!F::NavBotEngineer.IsEngieMode(pLocal))
 				return CONFIG_SHORT_RANGE;
 
-			if (pWeapon && pWeapon->m_iItemDefinitionIndex() == Engi_t_TheGunslinger)
-				return CONFIG_GUNSLINGER_ENGINEER;
-
-			return CONFIG_ENGINEER;
+			return G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger ? CONFIG_GUNSLINGER_ENGINEER : CONFIG_ENGINEER;
 		case TF_CLASS_SNIPER:
-			return pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_COMPOUND_BOW ? CONFIG_MID_RANGE : CONFIG_LONG_RANGE;
+			return G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_COMPOUND_BOW ? CONFIG_MID_RANGE : CONFIG_LONG_RANGE;
 		default:
 			return CONFIG_MID_RANGE;
 		}

@@ -32,6 +32,26 @@ struct ProjectileInfo
 	std::vector<Vec3> m_vPath = {};
 
 	uint8_t m_iFlags = 0;
+
+	Vec3 m_vVelocityAdd = {};
+};
+
+Enum(ProjSpecial, None, SniperSpit, SpyEmp, PyroSpew, HeavyRock)
+
+struct SpecialProjectile_t
+{
+	const char* m_sName;
+	uint32_t m_uType;
+	const char* m_sModel;
+	float m_flSpeed;
+	float m_flLift;
+	float m_flSpawnDist;
+	float m_flSpawnHeight;
+	float m_flHull;
+	float m_flLifetime;
+	float m_flSplashRadius;
+	float m_flBuildingRadius;
+	float m_flLaunchDelay;
 };
 
 struct PhysicsObject_t
@@ -214,9 +234,19 @@ public:
 		return flReturn;
 	}
 
+	const SpecialProjectile_t* GetSpecial(int iSpecial);
+	float GetSpecialHull(const SpecialProjectile_t* pSpecial);
+	float GetSpecialDrag(const SpecialProjectile_t* pSpecial);
+	const SpecialProjectile_t* m_pSpecial = nullptr;
+
 	IPhysicsEnvironment* m_pEnv = nullptr;
 
 	IPhysicsObject* m_pObj = nullptr;
+	IPhysicsObject* m_pObjBox = nullptr;
+	IPhysicsObject* m_pObjSpecial = nullptr;
+	const CPhysCollide* m_pSpecialCollide = nullptr;
+	float m_aSpecialDrag[ProjSpecialEnum::HeavyRock + 1] = {};
+	const CPhysCollide* m_aSpecialDragFor[ProjSpecialEnum::HeavyRock + 1] = {};
 	PhysicsObject_t m_tObj = {};
 	bool m_bPhysics = false;
 

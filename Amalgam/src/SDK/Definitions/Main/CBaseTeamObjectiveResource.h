@@ -17,4 +17,7 @@ public:
 	NETVAR_ARRAY(m_bCPLocked, bool, "CBaseTeamObjectiveResource", "m_bCPLocked");
 	NETVAR_ARRAY(m_bTeamCanCap, bool, "CBaseTeamObjectiveResource", "m_bTeamCanCap");
 	NETVAR_ARRAY(m_bInMiniRound, bool, "CBaseTeamObjectiveResource", "m_bInMiniRound");
+	NETVAR_ARRAY(m_flTeamCapTime, float, "CBaseTeamObjectiveResource", "m_flTeamCapTime");
+	NETVAR_ARRAY(m_iNumTeamMembers, int, "CBaseTeamObjectiveResource", "m_iNumTeamMembers");
+	NETVAR_ARRAY(m_iCappingTeam, int, "CBaseTeamObjectiveResource", "m_iCappingTeam");
 };

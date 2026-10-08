@@ -11,6 +11,9 @@ Enum(PointFlags, None = 0, Regular = 1 << 0, Lob = 1 << 1)
 Enum(PointType, Direct, Geometry, Air)
 Enum(CalculateFlags, None = 0, TwoPass = 1 << 0, SetupClip = 1 << 1, AccountDrag = 1 << 2, LobAngle = 1 << 3, Accuracy = TwoPass | SetupClip | AccountDrag)
 Enum(CalculateResult, Pending, Good, Time, Bad)
+Enum(ZombiePhase, Idle, Charge, Windup, Burst, Tail)
+Enum(PasstimePhase, Idle, Aim, Hold)
+Enum(PasstimeKind, None, Goal, Pass)
 
 struct Info_t
 {
@@ -36,6 +39,13 @@ struct Info_t
 	int m_iArmTime = 0;
 	float m_flNormalOffset = 0.f;
 	bool m_bIgnoreTiming = false;
+
+	const SpecialProjectile_t* m_pSpecial = nullptr;
+	Vec3 m_vVelAdd = {};
+	float m_flSpawnDist = 0.f;
+	float m_flSpawnHeight = 0.f;
+	float m_flDrag = 0.f;
+	int m_iLaunchDelay = 0;
 };
 
 #pragma pack(1)
@@ -88,6 +98,20 @@ struct Splash_t : History_t
 using DirectHistory_t = std::unordered_map<uint8_t, std::vector<Direct_t>>;
 using SplashHistory_t = std::unordered_map<uint8_t, std::vector<Splash_t>>;
 
+struct PasstimePlan_t
+{
+	int m_iKind = PasstimeKindEnum::None;
+	int m_iEntity = 0;
+	Vec3 m_vAngle = {};
+	Vec3 m_vPoint = {};
+	float m_flTime = 0.f;
+	int m_iTier = 0;
+	float m_flKey1 = 0.f;
+	float m_flKey2 = 0.f;
+};
+
+bool SolveLaunch(const Vec3& vDelta, float flSpeed, const Vec3& vAdd, float flGravity, bool bLob, Vec3& vOut, float& flTime, float flDrag = 0.f);
+
 class CAimbotProjectile
 {
 private:
@@ -122,23 +146,54 @@ private:
 	std::vector<Setup_t> m_vSplashPoints = {};
 
 	bool m_bLastTickHeld = false;
-	struct PasstimeThrowState_t
+
+	int m_iLaunchDelay = 0;
+	float m_flSpecialDrag = 0.f;
+
+	struct ZombieState_t
 	{
-		bool m_bHolding = false;
-		int m_iHoldTicks = 0;
+		int m_iPhase = ZombiePhaseEnum::Idle;
+		int m_iSpecial = ProjSpecialEnum::None;
+		int m_iStartTick = 0;
+		int m_iEndTick = 0;
 		int m_iTargetEnt = 0;
 		Vec3 m_vAngle = {};
-		float m_flCooldownUntil = 0.0f;
+		bool m_bHasAngle = false;
 
-		void Reset(float flCooldown = 0.0f)
+		void Reset()
 		{
-			m_bHolding = false;
-			m_iHoldTicks = 0;
-			m_iTargetEnt = 0;
-			m_vAngle = {};
-			m_flCooldownUntil = flCooldown;
+			*this = {};
 		}
-	} m_tPasstimeThrow;
+	} m_tZombie;
+	bool IsZombieMap();
+	bool IsAbilityReady(CTFPlayer* pLocal);
+	bool SolveAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iSpecial, int iDelayTicks, Target_t& tOut);
+	void HoldAngles(CUserCmd* pCmd, const Vec3& vAngles);
+
+	struct PasstimeState_t
+	{
+		int m_iPhase = PasstimePhaseEnum::Idle;
+		int m_iKind = PasstimeKindEnum::None;
+		int m_iEntity = 0;
+		int m_iTicks = 0;
+		int m_iFailTicks = 0;
+		int m_iLastTick = -1;
+		bool m_bLastResult = false;
+		float m_flCooldownUntil = 0.f;
+		int m_iBadEntity = 0;
+		float m_flBadUntil = 0.f;
+
+		void Reset(float flCooldown = 0.f)
+		{
+			PasstimeState_t tKeep = {};
+			tKeep.m_iLastTick = m_iLastTick, tKeep.m_bLastResult = m_bLastResult, tKeep.m_iBadEntity = m_iBadEntity, tKeep.m_flBadUntil = m_flBadUntil;
+			tKeep.m_flCooldownUntil = flCooldown;
+			*this = tKeep;
+		}
+	} m_tPasstime;
+	bool PlanPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, PasstimePlan_t& tPlan, int iForceKind = PasstimeKindEnum::None, int iForceEntity = 0);
+	bool SolvePasstimeGoal(CTFPlayer* pLocal, CBaseEntity* pGoal, PasstimePlan_t& tPlan);
+	bool SolvePasstimePass(CTFPlayer* pLocal, CTFPlayer* pTeammate, PasstimePlan_t& tPlan);
 
 	float m_flTimeTo = std::numeric_limits<float>::max();
 	std::vector<Vec3> m_vBestPlayerPath = {};
@@ -189,11 +244,14 @@ public:
 	void RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	void RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	bool AimPasstimePass(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	bool RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	bool RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	std::vector<Target_t> GetAbilityTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
+	void ShowTarget(int iResult, Target_t& tTarget);
 	float GetSplashRadius(CTFWeaponBase* pWeapon, CTFPlayer* pPlayer, float flScale = 1.f);
 
 	bool AutoAirblast(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CBaseEntity* pProjectile);
 	float GetSplashRadius(CBaseEntity* pProjectile, CTFWeaponBase* pWeapon = nullptr, CTFPlayer* pPlayer = nullptr, float flScale = 1.f);
-	bool HandlePasstimeThrowInput(CUserCmd* pCmd, const Vec3& vAngle, int iTargetEnt);
 
 	int m_iLastTickCancel = 0;
 	int m_iAimLock = 0;

@@ -1,7 +1,7 @@
 #pragma once
 #include "Map.h"
 
-namespace PathWorker { class CPathWorker; struct PathResult; }
+namespace PathWorker { class CPathWorker; }
 
 Enum(PriorityList, None,
 	Patrol = 5,
@@ -41,7 +41,7 @@ struct RespawnRoom_t
 	TriggerData_t tData = {};
 };
 
-enum class StuckPhase : int { Idle = 0, Jump, Skip, Fail };
+enum class StuckPhase : int { Idle = 0, Jump, Fail };
 
 class CNavEngine
 {
@@ -51,6 +51,9 @@ private:
 	std::vector<RespawnRoom_t> m_vRespawnRooms;
 	std::vector<CNavArea*> m_vRespawnRoomExitAreas;
 	CNavArea* m_pLocalArea = nullptr;
+	bool m_bLocalAreaSearchFailed = false;
+	uint32_t m_uPolicyEpoch = 0;
+	int m_iDoorWaitStartTick = 0;
 
 	Timer m_tStuckSampleTimer = {};
 	Timer m_tLastProgressTimer = {};
@@ -59,6 +62,7 @@ private:
 	CNavArea* m_pLastProgressArea = nullptr;
 
 	Timer m_tOffMeshTimer = {};
+	Timer m_tOffMeshRecoverTimer = {};
 	Vector m_vOffMeshTarget = {};
 
 	bool m_bRepathRequested = false;
@@ -71,9 +75,6 @@ private:
 	Vector m_vDestinationBeforePending = {};
 	bool m_bRecoveryRetryUsed = false;
 	bool m_bBypassFailedDestination = false;
-	Crumb_t m_tStuckFrom = {};
-	Crumb_t m_tStuckTo = {};
-	bool m_bHasStuckEdge = false;
 
 	bool m_bUpdatedRespawnRooms = false;
 
@@ -94,10 +95,12 @@ private:
 	size_t m_iRecentFallSpeedIndex = 0;
 	size_t m_nRecentFallSpeedCount = 0;
 
-	void AbandonPath(const std::string& sReason);
+	void AbandonPath(const char* sReason, bool bStuck = false);
 	void RecordStuckFailure();
+	void EnsureLocalExit();
+	bool ShouldWaitForDoor(CTFPlayer* pLocal, const Vector& vCrumbTarget);
 	void ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
-	void PollPathWorker();
+	void PollPathWorker(CTFPlayer* pLocal);
 	bool StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCrumbs, CTFPlayer* pLocal);
 	bool SolveInline();
 	void UpdateRespawnRooms();
@@ -138,7 +141,7 @@ public:
 	bool HasRespawnRooms() const { return !m_vRespawnRooms.empty(); }
 
 	void ClearRespawnRooms() { m_vRespawnRooms.clear(); m_vRespawnRoomExitAreas.clear(); m_bUpdatedRespawnRooms = false; }
-	void AddRespawnRoom(int iTeam, TriggerData_t tTrigger) { m_vRespawnRooms.emplace_back(iTeam, tTrigger); }
+	void AddRespawnRoom(int iTeam, TriggerData_t tTrigger) { m_vRespawnRooms.emplace_back(iTeam, tTrigger); m_bUpdatedRespawnRooms = false; }
 	const std::vector<RespawnRoom_t>& GetRespawnRooms() const { return m_vRespawnRooms; }
 	std::vector<CNavArea*>* GetRespawnRoomExitAreas() { return &m_vRespawnRoomExitAreas; }
 
@@ -150,8 +153,7 @@ public:
 
 	std::vector<Crumb_t>* GetCrumbs() { return &m_vCrumbs; }
 
-	bool IsReady(bool bRoundCheck = false);
-	bool IsBlacklistIrrelevant();
+	bool IsReady();
 	void CancelPath();
 
 	bool NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority = PriorityListEnum::Forced, bool bShouldRepath = true, bool bIgnoreTraces = false);
@@ -166,7 +168,7 @@ public:
 
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Reset(bool bForced = false);
-	void shutdown();
+	void Shutdown();
 	void Render();
 
 	void FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);

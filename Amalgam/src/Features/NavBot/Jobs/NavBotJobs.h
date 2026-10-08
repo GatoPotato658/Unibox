@@ -46,19 +46,64 @@ struct BuildingSpot_t
 	Vector m_vPos = {};
 };
 
+struct FailedSpot_t
+{
+	Vector m_vPos = {};
+	float m_flExpire = 0.f;
+};
+
 struct FocusPoint_t
 {
 	bool m_bDefensive = false;
 	bool m_bBack = false;
-	float flTime = FLT_MAX;
+	float m_flTime = FLT_MAX;
 	Vector m_vPos = {};
 	CNavArea* m_pArea = nullptr;
 };
 
 namespace NavJobUtils
 {
-	auto FindClosestTargetEnemy(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> ClosestEnemy_t;
 	auto TryNavToAreaScores(std::vector<NavAreaScore_t>& vAreaScores, PriorityListEnum::PriorityListEnum ePriority, bool bLowestScoreFirst = true, size_t nMaxAttempts = 0) -> bool;
+
+	inline bool IsSpawnArea(const CNavArea* pArea)
+	{
+		return pArea && (pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
+	}
+
+	inline bool IsShortRangeClass(CTFPlayer* pLocal)
+	{
+		return pLocal->m_iClass() == TF_CLASS_SCOUT || pLocal->m_iClass() == TF_CLASS_PYRO;
+	}
+
+	inline bool IsBeingHealed(CTFPlayer* pLocal)
+	{
+		return pLocal->InCond(TF_COND_HEALTH_BUFF);
+	}
+
+	inline bool HasPreference(int iFlag)
+	{
+		return (Vars::Misc::Movement::NavBot::Preferences.Value & iFlag) != 0;
+	}
+
+	inline bool HasBlacklist(int iFlag)
+	{
+		return (Vars::Misc::Movement::NavBot::Blacklist.Value & iFlag) != 0;
+	}
+
+	inline Vector NormalizePlanar(Vector vDirection)
+	{
+		vDirection.z = 0.f;
+		const float flLength = vDirection.Length();
+		return flLength > 0.01f ? vDirection / flLength : Vector();
+	}
+}
+
+namespace NavJobTuning
+{
+	inline constexpr float HEALTH_START = 0.64f;
+	inline constexpr float HEALTH_START_LOW_PRIO = 0.80f;
+	inline constexpr float HEALTH_RESUME = 0.90f;
+	inline constexpr float HEALTH_RESUME_LOW_PRIO = 0.92f;
 }
 
 namespace NavAreaUtils
@@ -74,20 +119,19 @@ public:
 	void Reset();
 
 private:
-	auto TryEscapeSpawn(CTFPlayer* pLocal) -> bool;
-	auto TryEscapeProjectiles(CTFPlayer* pLocal) -> bool;
-	auto TryEscapeDanger(CTFPlayer* pLocal) -> bool;
-	auto TryGetHealth(CUserCmd* pCmd, CTFPlayer* pLocal, bool bLowPrio) -> bool;
-	auto TryGetAmmo(CUserCmd* pCmd, CTFPlayer* pLocal) -> bool;
-	auto TryEngineer(CUserCmd* pCmd, CTFPlayer* pLocal) -> bool;
-	auto TryRunReload(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> bool;
-	auto TrySafeReload(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> bool;
-	auto TryMelee(CUserCmd* pCmd, CTFPlayer* pLocal) -> bool;
-	auto TryCapture(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> bool;
-	auto TrySnipeSentry(CTFPlayer* pLocal) -> bool;
-	auto TryStayNear(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> bool;
-	auto TryGroupWithOthers(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> bool;
-	auto TryRoam(CTFPlayer* pLocal, CTFWeaponBase* pWeapon) -> bool;
+	bool m_bDangerLatch = false;
+	Timer m_tDangerCommit{};
+
+	auto GetEscapeDangerScore(CTFPlayer* pLocal) -> float;
+};
+
+struct CapturePlan_t
+{
+	bool m_bGotTarget = false;
+	bool m_bOverwrite = false;
+	bool m_bWalkTo = false;
+	Vector m_vTarget = {};
+	std::wstring m_sStatus = L"";
 };
 
 class CNavBotCapture
@@ -99,6 +143,11 @@ private:
 	std::optional<Vector> m_vCurrentCaptureCenter;
 	std::optional<Vector> m_vLastClaimedCaptureSpot;
 
+	Timer m_tCaptureTimer{};
+	Timer m_tPlanRefresh{};
+	CapturePlan_t m_tCachedPlan{};
+	Vector m_vPreviousTarget = {};
+
 public:
 	bool m_bOverwriteCapture = false;
 	bool m_bWalkTo = false;
@@ -106,12 +155,23 @@ public:
 	std::wstring m_sCaptureStatus = L"";
 
 private:
-	bool ShouldAvoidPlayer(int iIndex);
+	bool IsThreatPlayer(int iIndex);
 	void ClaimCaptureSpot(const Vector& vSpot, int iPointIdx);
 	void ReleaseCaptureSpotClaim();
+	bool FindCoverNearPoint(const Vector& vPoint, float flRadius, Vector& vOut) const;
+	bool GetObjectiveGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam, Vector& vOut);
+	bool GetCachedGoal(CTFPlayer* pLocal, bool (CNavBotCapture::*pfnGoal)(CTFPlayer*, Vector&), Vector& vOut);
+	bool GetStagedPointGoal(CTFPlayer* pLocal, int iOurTeam, Vector& vOut);
+	bool GetPlayerDestructionGoal(CTFPlayer* pLocal, Vector& vOut);
+	bool GetRobotDestructionGoal(CTFPlayer* pLocal, Vector& vOut);
+	bool GetZombieInfectionGoal(Vector& vOut);
+	void LookAtObjective(CUserCmd* pCmd, CTFPlayer* pLocal, const Vec3& vTarget, bool bTargetValid);
+	void HoldObjective(CUserCmd* pCmd, CTFPlayer* pLocal, const Vector& vTarget);
 
 public:
+	static bool CanCaptureObjective();
 	bool GetPayloadGoal(const CHandle<CTFPlayer> hLocal, const Vector vLocalOrigin, int iOurTeam, Vector& vOut);
+	bool GetTugOfWarGoal(CTFPlayer* pLocal, int iOurTeam, Vector& vOut);
 	bool GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam, Vector& vOut);
 	bool GetCtfGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam, Vector& vOut);
 	bool GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam, Vector& vOut);
@@ -127,16 +187,18 @@ private:
 	float m_flBuildYaw = 0.0f;
 	std::vector<BuildingSpot_t>  m_vBuildingSpots;
 	FocusPoint_t m_tCurrentFocusPoint = {};
-	std::vector<Vector> m_vFailedSpots;
+	std::vector<FailedSpot_t> m_vFailedSpots;
 private:
-	bool BuildingNeedsToBeSmacked(CBaseObject* pBuilding);
-	bool NavToSentrySpot(Vector vLocalOrigin);
+	bool IsBuildSpotFailed(const Vector& vPos) const;
+	void MarkSpotFailed(const Vector& vPos);
+	bool NavToBuildingSpot();
 	bool BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy, bool bDispenser);
 	bool SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObject* pBuilding);
 
 	bool GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy, bool bDefensive, FocusPoint_t& tOut);
 public:
 	bool IsEngieMode(CTFPlayer* pLocal);
+	bool BuildingNeedsToBeSmacked(CBaseObject* pBuilding);
 	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy);
 
 	void RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy, bool bForce = false);
@@ -145,8 +207,8 @@ public:
 	void Render();
 
 	BuildingSpot_t m_tCurrentBuildingSpot = {};
-	CObjectSentrygun* m_pMySentryGun;
-	CObjectDispenser* m_pMyDispenser;
+	CObjectSentrygun* m_pMySentryGun = nullptr;
+	CObjectDispenser* m_pMyDispenser = nullptr;
 	float m_flDistToSentry = FLT_MAX;
 	float m_flDistToDispenser = FLT_MAX;
 
@@ -156,13 +218,14 @@ public:
 class CNavBotDanger
 {
 private:
-	CNavArea* m_pSpawnExitArea = nullptr;
 	CNavArea* m_pEscapeTargetArea = nullptr;
 	Timer m_tEscapeRefresh{};
 	CNavArea* m_pProjectileTargetArea = nullptr;
+	int m_iSpawnExitAttempt = 0;
 public:
 	std::wstring m_sDangerStatus = {};
 public:
+	static bool GetProjectileThreatRange(CBaseEntity* pEntity, int iLocalTeam, float& flOutRange);
 	bool EscapeDanger(CTFPlayer* pLocal);
 	const Hazard_t* GetHazardAhead(CTFPlayer* pLocal) const;
 	bool EscapeProjectiles(CTFPlayer* pLocal);
@@ -178,49 +241,67 @@ private:
 	std::vector<SupplyData_t> m_vTempDispensers;
 	std::vector<SupplyData_t> m_vTempMain;
 
-	bool GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bool bHealth = false);
+	bool m_bWasForce = false;
+	bool m_bHasRememberedDispenser = false;
+	Vector m_vRememberedDispenser = {};
+	Timer m_tRememberedDispenser{};
+	Timer m_tStickyLock{};
+	Timer m_tCooldown{};
+	Timer m_tRepathCooldown{};
+
+	bool GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bool bAmmo);
 	bool GetDispensersData(CTFPlayer* pLocal);
 
 	bool ShouldSearchHealth(CTFPlayer* pLocal, bool bLowPrio = false);
 	bool ShouldSearchAmmo(CTFPlayer* pLocal);
-	bool GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocalOrigin, SupplyData_t* pSupplyData, const int iPriority);
+	bool GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocalOrigin, SupplyData_t* pSupplyData, PriorityListEnum::PriorityListEnum ePriority);
 
 	void UpdateTakenState();
 public:
 	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags);
+	float GetAmmoNeed(bool bActive) const;
 
 	void AddCachedSupplyOrigin(Vector vOrigin, bool bHealth);
 	void ResetCachedOrigins();
-	void ResetTemp();
+	void Reset();
 };
 
 class CNavBotGroup
 {
 private:
-	bool GetFormationOffset(CTFPlayer* pLocal, int iPositionIndex, Vector& vOut);
+	bool GetFormationOffset(CTFPlayer* pLeader, int iPositionIndex, Vector& vOut);
 
 	int m_iPositionInFormation = -1;
 	float m_flFormationDistance = 120.0f;
-	Timer m_tUpdateFormationTimer;
+	int m_iConsecutiveFailures = 0;
+	Vector m_vLastTargetPos = {};
+	Timer m_tUpdateFormationTimer{};
 	Timer m_tFormationNavTimer{};
-	std::vector<std::pair<uint32_t, Vector>> m_vLocalBotPositions;
+	std::vector<uint32_t> m_vLocalBotUserIds;
 public:
-	void UpdateLocalBotPositions(CTFPlayer* pLocal);
-	bool Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
+	void UpdateLocalBots(CTFPlayer* pLocal);
+	bool Run(CTFPlayer* pLocal);
+	void Reset();
 };
 
 class CNavBotMelee
 {
+private:
+	int m_iVisibilityTarget = -1;
+	bool m_bTargetVisible = false;
+	Timer m_tVisibility{};
 public:
-	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, ClosestEnemy_t tClosestEnemy);
+	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const ClosestEnemy_t& tClosestEnemy);
+	void Reset();
 };
 
 class CNavBotReload
 {
 public:
-	bool Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
-	bool RunSafe(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
-	int GetReloadWeaponSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy);
+	bool Run();
+	bool RunSafe();
+	int GetReloadWeaponSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy);
+	bool HasTask() const { return G::Reloading || (m_iLastReloadSlot >= SLOT_PRIMARY && m_iLastReloadSlot <= SLOT_SECONDARY); }
 
 	int m_iLastReloadSlot = -1;
 };
@@ -234,9 +315,18 @@ private:
 	CNavArea* m_pCurrentTargetArea = nullptr;
 	CNavArea* m_pDefendSpotArea = nullptr;
 	CNavArea* m_pLastConnectedSeed = nullptr;
-	void* m_pLastMap = nullptr;
+	const void* m_pLastMap = nullptr;
+	const void* m_pLastAreaData = nullptr;
+	size_t m_nLastAreaCount = 0;
+
+	Timer m_tRoamTimer{};
+	Timer m_tVisitedAreasClear{};
+	Timer m_tConnectedAreasRefresh{};
 
 	int m_iConsecutiveFails = 0;
+
+	bool GetDefendTarget(CTFPlayer* pLocal, Vector& vOut);
+	bool RunDefend(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const Vector& vTarget);
 public:
 	bool Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	void Reset();
@@ -246,7 +336,7 @@ public:
 class CNavBotSnipe
 {
 private:
-	bool IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bool bShortRangeClass, bool bFixSentryZ = true);
+	bool IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bool bShortRangeClass);
 	bool TryToSnipe(int iEntIdx, bool bShortRangeClass);
 public:
 	bool Run(CTFPlayer* pLocal);
@@ -259,9 +349,10 @@ class CNavBotStayNear
 private:
 	bool StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex);
 	bool IsAreaValidForStayNear(Vector vEntOrigin, CNavArea* pArea, bool bFixLocalZ = true);
-	int IsStayNearTargetValid(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex);
+	bool IsStayNearTargetValid(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex);
 public:
 	bool Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
+	void Reset();
 
 	int m_iStayNearTargetIdx = -1;
 	std::wstring m_sFollowTargetName = {};
