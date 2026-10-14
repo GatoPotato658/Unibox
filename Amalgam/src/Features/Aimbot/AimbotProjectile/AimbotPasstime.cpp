@@ -13,6 +13,7 @@ namespace
 	constexpr int kThrowIdle = 0, kThrowCharging = 1, kThrowCharged = 2;
 	constexpr int kGoalFlagDisableBallScore = 2;
 	constexpr int kIdlePlanInterval = 4;
+	constexpr int kMaxIdlePlanInterval = 10;
 	constexpr int kReplanInterval = 2;
 
 	struct BallThrow_t
@@ -206,11 +207,26 @@ namespace
 
 	bool HasLockLine(CTFPlayer* pLocal, const Vec3& vEye, CTFPlayer* pTeammate)
 	{
+		static int iCacheTick = -1;
+		static Vec3 vCacheEye = {};
+		static std::unordered_map<int, bool> mCache = {};
+		if (iCacheTick != I::GlobalVars->tickcount || vCacheEye != vEye)
+		{
+			mCache.clear();
+			iCacheTick = I::GlobalVars->tickcount, vCacheEye = vEye;
+		}
+
+		const int iIndex = pTeammate->entindex();
+		if (auto it = mCache.find(iIndex); it != mCache.end())
+			return it->second;
+
 		CTraceFilterWorldAndPropsOnly filter(pLocal);
 		CGameTrace trace = {};
 		const Vec3 vCenter = pTeammate->GetCenter();
 		SDK::Trace(vEye, vCenter, MASK_PLAYERSOLID, &filter, &trace);
-		return trace.fraction >= 1.f && !IsLineBlocked(pLocal, vEye, vCenter, pTeammate, 0.f, false);
+		const bool bLine = trace.fraction >= 1.f && !IsLineBlocked(pLocal, vEye, vCenter, pTeammate, 0.f, false);
+		mCache[iIndex] = bLine;
+		return bLine;
 	}
 
 	float GetNearbyRange()
@@ -610,7 +626,8 @@ bool CAimbotProjectile::RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, C
 		if (!PlanPasstime(pLocal, pWeapon, tPlan)
 			|| tPlan.m_iKind == PasstimeKindEnum::Goal && pLocal->m_hPasstimePassTarget().GetEntryIndex())
 		{
-			tState.m_iNextPlanTick = iTick + kIdlePlanInterval;
+			tState.m_iNextPlanTick = iTick + std::min(kIdlePlanInterval + tState.m_iIdleFails * 2, kMaxIdlePlanInterval);
+			tState.m_iIdleFails++;
 			return false;
 		}
 

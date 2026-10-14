@@ -14,6 +14,7 @@ namespace
 	constexpr int kTailTicks = 2;
 
 	constexpr int kIdleSolveInterval = 4;
+	constexpr int kMaxIdleSolveInterval = 10;
 	constexpr int kFailMemoryTicks = 8;
 	constexpr int kMaxSolveAttempts = 4;
 
@@ -130,6 +131,7 @@ bool CAimbotProjectile::SolveAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 	const float flMaxDist = Vars::Aimbot::Zombie::MaxDistance.Value;
 	const int iTick = I::GlobalVars->tickcount;
+	const int iMaxAttempts = m_tZombie.m_iPhase == ZombiePhaseEnum::Idle ? kMaxSolveAttempts : 1;
 	bool bReturn = false;
 	int iAttempts = 0;
 	for (auto& tTarget : vTargets)
@@ -143,7 +145,7 @@ bool CAimbotProjectile::SolveAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 			auto it = m_tZombie.m_mFailTick.find(iEntity);
 			if (it != m_tZombie.m_mFailTick.end() && iTick - it->second < kFailMemoryTicks)
 				continue;
-			if (iAttempts >= kMaxSolveAttempts)
+			if (iAttempts >= iMaxAttempts)
 				break;
 		}
 		iAttempts++;
@@ -211,7 +213,8 @@ bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		Target_t tTarget;
 		if (!SolveAbility(pLocal, pWeapon, iSpecial, iDelay, tTarget))
 		{
-			tState.m_iNextIdleTick = iTick + kIdleSolveInterval;
+			tState.m_iNextIdleTick = iTick + std::min(kIdleSolveInterval + tState.m_iIdleFails * 2, kMaxIdleSolveInterval);
+			tState.m_iIdleFails++;
 			return false;
 		}
 
