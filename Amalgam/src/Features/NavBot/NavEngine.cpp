@@ -8,6 +8,7 @@
 #include "../Misc/Misc.h"
 #include "BotUtils.h"
 #include "../FollowBot/FollowBot.h"
+#include <numeric>
 
 static int GetTransientVischeckExpireTick()
 {
@@ -615,6 +616,7 @@ void CNavEngine::Reset(bool bForced)
 	m_iNextRepathTick = 0;
 	m_iLastBlacklistAbandonTick = 0;
 	m_pLocalArea = nullptr;
+	m_vBlockedDoors.clear();
 	m_bLocalAreaSearchFailed = false;
 	m_tOffMeshTimer.Update();
 	m_vOffMeshTarget = {};
@@ -780,7 +782,95 @@ bool CNavEngine::ShouldWaitForDoor(CTFPlayer* pLocal, const Vector& vCrumbTarget
 	const int iNow = I::GlobalVars->tickcount;
 	if (!m_iDoorWaitStartTick)
 		m_iDoorWaitStartTick = iNow;
-	return iNow - m_iDoorWaitStartTick < TIME_TO_TICKS(10.f);
+	if (iNow - m_iDoorWaitStartTick < TIME_TO_TICKS(4.f))
+		return true;
+
+	BlockDoor(tTrace.m_pEnt);
+	return false;
+}
+
+void CNavEngine::BlockDoor(CBaseEntity* pDoor)
+{
+	if (!m_pMap || !pDoor)
+		return;
+
+	const int iIndex = pDoor->entindex();
+	auto it = std::ranges::find(m_vBlockedDoors, iIndex, &BlockedDoor_t::m_iEntIndex);
+	if (it == m_vBlockedDoors.end())
+	{
+		m_vBlockedDoors.emplace_back();
+		it = m_vBlockedDoors.end() - 1;
+		it->m_iEntIndex = iIndex;
+	}
+	if (it->m_bActive)
+		return;
+
+	const Vector vOrigin = pDoor->GetAbsOrigin();
+	const Vector vMins = vOrigin + pDoor->m_vecMins() - Vector(12.f, 12.f, 0.f);
+	const Vector vMaxs = vOrigin + pDoor->m_vecMaxs() + Vector(12.f, 12.f, 0.f);
+
+	std::lock_guard lock(m_pMap->m_mutex);
+
+	std::vector<CNavArea*> vCandidates;
+	const Vector vCenter = (vMins + vMaxs) * 0.5f;
+	m_pMap->m_navfile.QueryOverlapping(vCenter, (vMaxs - vMins).Length() * 0.5f + 64.f, vCandidates);
+
+	it->m_vAreas.clear();
+	it->m_iStrikes++;
+	it->m_vClosedOrigin = vOrigin;
+	it->m_iExpireTick = TICKCOUNT_TIMESTAMP(30.f * std::min(it->m_iStrikes, 6));
+	it->m_bActive = true;
+
+	for (auto pArea : vCandidates)
+	{
+		const float flMinX = std::min(pArea->m_vNwCorner.x, pArea->m_vSeCorner.x), flMaxX = std::max(pArea->m_vNwCorner.x, pArea->m_vSeCorner.x);
+		const float flMinY = std::min(pArea->m_vNwCorner.y, pArea->m_vSeCorner.y), flMaxY = std::max(pArea->m_vNwCorner.y, pArea->m_vSeCorner.y);
+		if (flMaxX < vMins.x || flMinX > vMaxs.x || flMaxY < vMins.y || flMinY > vMaxs.y
+			|| pArea->m_flMaxZ < vMins.z || pArea->m_flMinZ > vMaxs.z)
+			continue;
+
+		it->m_vAreas.push_back(pArea);
+		MarkConnection(*m_pMap, pArea, pArea, false, it->m_iExpireTick, true);
+	}
+
+	if (Vars::Debug::Logging.Value)
+		SDK::Output("NavEngine", std::format("Blocked closed door #{} ({} areas)", iIndex, it->m_vAreas.size()).c_str(), { 255, 200, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+}
+
+void CNavEngine::ReleaseBlockedDoor(BlockedDoor_t& tDoor)
+{
+	tDoor.m_bActive = false;
+	if (!m_pMap)
+		return;
+
+	std::lock_guard lock(m_pMap->m_mutex);
+	for (auto pArea : tDoor.m_vAreas)
+	{
+		const auto it = m_pMap->m_mVischeckCache.find(std::pair<CNavArea*, CNavArea*>(pArea, pArea));
+		if (it != m_pMap->m_mVischeckCache.end() && it->second.m_bStuckBlacklist && !it->second.m_bPassable)
+			m_pMap->m_mVischeckCache.erase(it);
+	}
+	tDoor.m_vAreas.clear();
+}
+
+void CNavEngine::UpdateBlockedDoors()
+{
+	if (m_vBlockedDoors.empty() || !m_tDoorUpdateTimer.Run(0.25f))
+		return;
+
+	const int iNow = I::GlobalVars->tickcount;
+	for (auto& tDoor : m_vBlockedDoors)
+	{
+		if (!tDoor.m_bActive)
+			continue;
+
+		auto pEntity = I::ClientEntityList->GetClientEntity(tDoor.m_iEntIndex);
+		auto pDoor = pEntity ? pEntity->As<CBaseEntity>() : nullptr;
+		const bool bGone = !pDoor;
+		const bool bMoved = pDoor && !pDoor->IsDormant() && pDoor->GetAbsOrigin().DistToSqr(tDoor.m_vClosedOrigin) > 8.f * 8.f;
+		if (bGone || bMoved || iNow >= tDoor.m_iExpireTick)
+			ReleaseBlockedDoor(tDoor);
+	}
 }
 
 void CNavEngine::ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget)
@@ -865,6 +955,8 @@ void CNavEngine::UpdateRespawnRooms()
 		if (tArea.m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE))
 			setSpawnAreas.insert(&tArea);
 
+	BridgeSpawnIslands(H::Entities.GetLocal());
+
 	std::unordered_set<CNavArea*> setExitAreas;
 	for (auto pArea : setSpawnAreas)
 		for (auto& tConn : pArea->m_vConnections)
@@ -878,6 +970,124 @@ void CNavEngine::UpdateRespawnRooms()
 
 	m_pMap->m_mVischeckCache.clear();
 	m_bUpdatedRespawnRooms = true;
+}
+
+void CNavEngine::BridgeSpawnIslands(CTFPlayer* pLocal)
+{
+	auto& vAreas = m_pMap->m_navfile.m_vAreas;
+	const size_t nAreas = vAreas.size();
+	if (!pLocal || !nAreas)
+		return;
+
+	constexpr float flMaxGap = 160.f;
+	constexpr int iMaxPasses = 3;
+	const CNavArea* pFirst = vAreas.data();
+	auto IndexOf = [&](const CNavArea* pArea) { return static_cast<size_t>(pArea - pFirst); };
+
+	auto Connect = [](CNavArea* pFrom, CNavArea* pTo)
+		{
+			if (std::ranges::any_of(pFrom->m_vConnections, [&](const NavConnect_t& tConn) { return tConn.m_pArea == pTo; }))
+				return;
+
+			NavConnect_t tConn{};
+			tConn.m_uId = pTo->m_uId;
+			tConn.m_pArea = pTo;
+			pFrom->m_vConnections.push_back(tConn);
+
+			const Vector vDelta = pTo->m_vCenter - pFrom->m_vCenter;
+			const int iDir = std::fabs(vDelta.x) > std::fabs(vDelta.y) ? (vDelta.x > 0.f ? 1 : 3) : (vDelta.y > 0.f ? 2 : 0);
+			pFrom->m_vConnectionsDir[iDir].push_back(tConn);
+			pFrom->m_uConnectionCount++;
+		};
+
+	int iBridges = 0;
+	for (int iPass = 0; iPass < iMaxPasses; ++iPass)
+	{
+		std::vector<size_t> vParent(nAreas);
+		std::iota(vParent.begin(), vParent.end(), size_t{ 0 });
+		auto Find = [&](size_t i)
+			{
+				while (vParent[i] != i)
+					i = vParent[i] = vParent[vParent[i]];
+				return i;
+			};
+
+		for (size_t i = 0; i < nAreas; ++i)
+			for (const auto& tConn : vAreas[i].m_vConnections)
+				if (tConn.m_pArea && tConn.m_pArea >= pFirst && tConn.m_pArea < pFirst + nAreas)
+					vParent[Find(i)] = Find(IndexOf(tConn.m_pArea));
+
+		std::vector<size_t> vSize(nAreas, 0);
+		std::vector<char> vSpawn(nAreas, 0);
+		for (size_t i = 0; i < nAreas; ++i)
+		{
+			const size_t uRoot = Find(i);
+			vSize[uRoot]++;
+			if (vAreas[i].m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE))
+				vSpawn[uRoot] = 1;
+		}
+
+		struct Bridge_t { CNavArea* m_pFrom = nullptr; CNavArea* m_pTo = nullptr; float m_flScore = FLT_MAX; };
+		std::unordered_map<size_t, std::unordered_map<size_t, Bridge_t>> mBridges;
+
+		std::vector<CNavArea*> vNear;
+		for (size_t i = 0; i < nAreas; ++i)
+		{
+			CNavArea* pArea = &vAreas[i];
+			const size_t uRoot = Find(i);
+			if (!vSpawn[uRoot])
+				continue;
+
+			const float flHalfDiag = (pArea->m_vSeCorner - pArea->m_vNwCorner).Length2D() * 0.5f;
+			m_pMap->m_navfile.QueryOverlapping(pArea->m_vCenter, flHalfDiag + flMaxGap + 64.f, vNear);
+			for (auto pOther : vNear)
+			{
+				const size_t uOtherRoot = Find(IndexOf(pOther));
+				if (uOtherRoot == uRoot || vSize[uOtherRoot] <= vSize[uRoot])
+					continue;
+
+				Vector vFrom = pArea->GetNearestPoint(Vector2D(pOther->m_vCenter.x, pOther->m_vCenter.y));
+				const Vector vTo = pOther->GetNearestPoint(Vector2D(vFrom.x, vFrom.y));
+				vFrom = pArea->GetNearestPoint(Vector2D(vTo.x, vTo.y));
+
+				const float flGap = (vFrom - vTo).Length2D();
+				const float flDeltaZ = std::fabs(vFrom.z - vTo.z);
+				if (flGap > flMaxGap || flDeltaZ > PLAYER_JUMP_HEIGHT)
+					continue;
+
+				const float flScore = flGap + flDeltaZ * 2.f;
+				auto& tBest = mBridges[uRoot][uOtherRoot];
+				if (flScore >= tBest.m_flScore || !IsPlayerPassableNavigation(pLocal, vFrom, vTo))
+					continue;
+
+				tBest = { pArea, pOther, flScore };
+			}
+		}
+
+		int iPassBridges = 0;
+		for (auto& [uRoot, mTargets] : mBridges)
+		{
+			std::vector<Bridge_t> vBest;
+			for (auto& [uTarget, tBridge] : mTargets)
+				if (tBridge.m_pFrom)
+					vBest.push_back(tBridge);
+			std::ranges::sort(vBest, {}, &Bridge_t::m_flScore);
+
+			for (size_t i = 0; i < vBest.size() && i < 2; ++i)
+			{
+				Connect(vBest[i].m_pFrom, vBest[i].m_pTo);
+				Connect(vBest[i].m_pTo, vBest[i].m_pFrom);
+				iPassBridges++;
+			}
+		}
+
+		iBridges += iPassBridges;
+		if (!iPassBridges)
+			break;
+	}
+
+	if (iBridges && Vars::Debug::Logging.Value)
+		SDK::Output("NavEngine", std::format("Bridged {} isolated spawn connections", iBridges).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 }
 
 void CNavEngine::RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector& vLocalOrigin)
@@ -945,6 +1155,7 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	{
 		m_uPolicyEpoch = uEpoch;
 		if (m_pMap) m_pMap->ClearDynamicBlocks();
+		m_vBlockedDoors.clear();
 		m_vFailedDestination = {};
 		m_iFailedDestinationTick = 0;
 	}
@@ -964,6 +1175,7 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (!m_bUpdatedRespawnRooms) UpdateRespawnRooms();
 
+	UpdateBlockedDoors();
 	PollPathWorker(pLocal);
 
 	if (!pLocal->IsAlive() || F::FollowBot.m_bActive)

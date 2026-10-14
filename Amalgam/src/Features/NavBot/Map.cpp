@@ -1433,6 +1433,9 @@ NavPolicyState NavPolicy::Snapshot(int iTeam)
 			|| (F::GameObjectiveController.m_bVSH && !tState.m_bInSetup);
 	}
 
+	if (const CNavArea* pLocalArea = F::NavEngine.GetLocalNavArea())
+		tState.m_bStartInEnemySpawn = IsEnemySpawn(*pLocalArea, iTeam);
+
 	return tState;
 }
 
@@ -1461,7 +1464,7 @@ bool NavPolicy::IsAreaTraversable(const CNavArea& tArea, const NavPolicyState& t
 	if (IsPointCaptureBlocked(tArea, tState.m_iHighestCapturedPoint))
 		return false;
 
-	if (!tState.m_bRoundWon && IsEnemySpawn(tArea, tState.m_iTeam))
+	if (!tState.m_bRoundWon && !tState.m_bStartInEnemySpawn && IsEnemySpawn(tArea, tState.m_iTeam))
 		return false;
 
 	return true;

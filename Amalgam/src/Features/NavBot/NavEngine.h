@@ -41,6 +41,16 @@ struct RespawnRoom_t
 	TriggerData_t tData = {};
 };
 
+struct BlockedDoor_t
+{
+	int m_iEntIndex = 0;
+	int m_iStrikes = 0;
+	int m_iExpireTick = 0;
+	bool m_bActive = false;
+	Vector m_vClosedOrigin = {};
+	std::vector<CNavArea*> m_vAreas;
+};
+
 enum class StuckPhase : int { Idle = 0, Jump, Fail };
 
 class CNavEngine
@@ -54,6 +64,8 @@ private:
 	bool m_bLocalAreaSearchFailed = false;
 	uint32_t m_uPolicyEpoch = 0;
 	int m_iDoorWaitStartTick = 0;
+	std::vector<BlockedDoor_t> m_vBlockedDoors;
+	Timer m_tDoorUpdateTimer = {};
 
 	Timer m_tStuckSampleTimer = {};
 	Timer m_tLastProgressTimer = {};
@@ -99,6 +111,10 @@ private:
 	void RecordStuckFailure();
 	void EnsureLocalExit();
 	bool ShouldWaitForDoor(CTFPlayer* pLocal, const Vector& vCrumbTarget);
+	void BlockDoor(CBaseEntity* pDoor);
+	void UpdateBlockedDoors();
+	void ReleaseBlockedDoor(BlockedDoor_t& tDoor);
+	void BridgeSpawnIslands(CTFPlayer* pLocal);
 	void ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
 	void PollPathWorker(CTFPlayer* pLocal);
 	bool StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCrumbs, CTFPlayer* pLocal);

@@ -61,6 +61,7 @@ struct NavPolicyState
 	bool m_bInSetup = false;
 	bool m_bIgnoreSetupGates = false;
 	bool m_bRoundWon = false;
+	bool m_bStartInEnemySpawn = false;
 	int m_iHighestCapturedPoint = -1;
 };
 
