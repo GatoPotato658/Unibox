@@ -2245,7 +2245,6 @@ void CMenu::MenuMisc(int iTab)
 					PopTransparent();
 					FDropdown(Vars::Misc::Automation::VoiceCommandSpam);
 					FToggle(Vars::Misc::Automation::Micspam, FToggleEnum::Left);
-#if 0
 					FToggle(Vars::Misc::Automation::AchievementSpam, FToggleEnum::Right);
 					PushTransparent(!Vars::Misc::Automation::AchievementSpam.Value);
 					{
@@ -2255,7 +2254,6 @@ void CMenu::MenuMisc(int iTab)
 							Vars::Misc::Automation::GetAchievementSpamDropdownIDs());
 					}
 					PopTransparent();
-#endif
 					FToggle(Vars::Misc::Automation::NoiseSpam, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::CallVoteSpam, FToggleEnum::Right);
 					// if (FButton("HELP", FButtonEnum::Left, { 0, 24 }))
