@@ -150,7 +150,7 @@
 - **Anticheat**
   - More methods of detecting cheaters
   - Import/export-able cheaterlist
-  - Lag burst detection (delta, window, burst count) and crit rate detection (window size, threshold)
+  - Lag burst detection (delta, window, burst count) and crit rate detection (window size, threshold) 
 - **Other**
   - Added debug var automatic loading (`Load debug settings` in menu)
   - Changed loading process allowing for early injection (e.g. Xenos manual launch)
