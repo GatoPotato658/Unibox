@@ -1,6 +1,7 @@
 #include "../SDK/SDK.h"
 
 #include "../Features/Commands/Commands.h"
+#include "../Features/AntiCheatCompatibility/AntiCheatCompatibility.h"
 //#include "../Features/Debug/Debug.h"
 
 MAKE_SIGNATURE(Cbuf_ExecuteCommand, "engine.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B 05 ? ? ? ? 48 8D 3D", 0x0);
@@ -20,6 +21,21 @@ MAKE_HOOK(Cbuf_ExecuteCommand, S::Cbuf_ExecuteCommand(), void,
 
 	if (args.ArgC())
 	{
+		if (F::AntiCheatCompatibility.Active())
+		{
+			if (std::string_view(args.GetCommandString()).find("playerperf") != std::string_view::npos)
+				return;
+
+			if ((_stricmp(args[0], "say") == 0 || _stricmp(args[0], "say_team") == 0)
+				&& (strchr(args.GetCommandString(), '\n') || strchr(args.GetCommandString(), '\r')))
+			{
+				std::string sCmd = args.GetCommandString();
+				CAntiCheatCompatibility::SanitizeString(sCmd);
+				I::EngineClient->ClientCmd_Unrestricted(sCmd.c_str());
+				return;
+			}
+		}
+
         const char* sCommand = args[0];
 		std::deque<const char*> vArgs;
 		for (int i = 1; i < args.ArgC(); i++)

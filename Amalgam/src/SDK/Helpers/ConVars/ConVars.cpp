@@ -64,3 +64,12 @@ ConVar* CConVars::FindVar(const char* sCVar)
 		m_mCVarMap[uHash] = I::CVar->FindVar(sCVar);
 	return m_mCVarMap[uHash];
 }
+
+int CConVars::GetOriginalFlags(ConCommandBase* pCmd)
+{
+	std::lock_guard<std::mutex> lock(m_Mutex);
+
+	if (auto it = m_mFlagMap.find(pCmd); it != m_mFlagMap.end())
+		return it->second;
+	return pCmd->m_nFlags;
+}

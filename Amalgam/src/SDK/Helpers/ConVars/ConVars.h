@@ -23,6 +23,7 @@ public:
 	bool Modify(bool bUnlock);
 
 	ConVar* FindVar(const char* sCVar);
+	int GetOriginalFlags(ConCommandBase* pCmd);
 };
 
 ADD_FEATURE_CUSTOM(CConVars, ConVars, H);

@@ -427,6 +427,7 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(MovesimFrictionFlags, "Movesim friction flags", 0b01, NOSAVE | DEBUGVAR | DROPDOWN_MULTI, nullptr,
 				VA_LIST("Run reduce", "Calculate increase"),
 				RunReduce = 1 << 0, CalculateIncrease = 1 << 1);
+			CVar(AccountPing, "Account for ping", true, DEBUGVAR);
 			CVar(AutodetAccountPing, "Auto detonate account for ping", true, DEBUGVAR);
 		NAMESPACE_END(Projectile)
 

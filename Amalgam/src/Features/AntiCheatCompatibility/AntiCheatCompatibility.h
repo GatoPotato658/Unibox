@@ -27,6 +27,7 @@ public:
     void BunnyHop(CUserCmd* pCmd, bool bCurrValid, bool bLastValid);
     void RespondCvarValue(INetMessage& msg);
 	void EnforceSettings();
+	static void SanitizeString(std::string& sText);
 
     inline bool Active() { return Vars::Misc::Game::AntiCheatCompatibility.Value; }
 };
