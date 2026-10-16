@@ -11,10 +11,10 @@ MAKE_SIGNATURE(GetMvmTourBadgeMask, "client.dll", "48 89 5C 24 08 48 89 6C 24 18
 class CEconItemSchema
 {
 public:
-	OFFSET(m_pMvMMissions, void*, 2248);
-	OFFSET(m_iMvMMissionCount, int, 2264);
-	OFFSET(m_pMvMTours, void*, 2280);
-	OFFSET(m_iMvMTourCount, int, 2296);
+	OFFSET(m_pMvMMissions, void*, 2320);
+	OFFSET(m_iMvMMissionCount, int, 2336);
+	OFFSET(m_pMvMTours, void*, 2352);
+	OFFSET(m_iMvMTourCount, int, 2368);
 
 	static CEconItemSchema* GetInstance()
 	{
