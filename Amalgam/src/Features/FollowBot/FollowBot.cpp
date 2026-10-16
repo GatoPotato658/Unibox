@@ -35,8 +35,9 @@ static bool ShouldCancelFollowNav(const FollowTarget_t& tTarget, const Vec3& vLo
 	if (!tTarget.m_bNew && bClose)
 		return true;
 
-	return !tTarget.m_vLastKnownPos.IsZero() && F::NavEngine.IsPathing() &&
-		tTarget.m_vLastKnownPos.DistTo(F::NavEngine.GetCrumbs()->back().m_vPos) >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value;
+	auto pCrumbs = F::NavEngine.GetCrumbs();
+	return !tTarget.m_vLastKnownPos.IsZero() && !pCrumbs->empty() &&
+		tTarget.m_vLastKnownPos.DistTo(pCrumbs->back().m_vPos) >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value;
 }
 
 static bool ShouldStartFollowNav(const FollowTarget_t& tTarget, size_t nCurrentPathSize)
@@ -262,6 +263,9 @@ bool CFollowBot::IsAfkTarget(CTFPlayer* pPlayer)
 
 void CFollowBot::LookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, std::deque<Vec3>* vIn, bool bSmooth)
 {
+	if (!vIn || vIn->empty())
+		return;
+
 	bool bSilent = Vars::Misc::Movement::FollowBot::LookAtPath.Value == Vars::Misc::Movement::FollowBot::LookAtPathEnum::Silent;
 	if (!bSilent || !G::AntiAim)
 	{
@@ -476,7 +480,8 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 			vCurrentAngles.push_back(vDest);
 
 		std::deque<Vec3>* pFinalAngles = !vCurrentAngles.empty() ? &vCurrentAngles : pCurrentAngles;
-		LookAtPath(pLocal, pCmd, pFinalAngles, Vars::Misc::Movement::FollowBot::LookAtPathNoSnap.Value && Math::CalcFov(pFinalAngles->front(), F::BotUtils.m_vLastAngles) > 3.f);
+		if (pFinalAngles && !pFinalAngles->empty())
+			LookAtPath(pLocal, pCmd, pFinalAngles, Vars::Misc::Movement::FollowBot::LookAtPathNoSnap.Value && Math::CalcFov(pFinalAngles->front(), F::BotUtils.m_vLastAngles) > 3.f);
 	}
 
 	SyncBestSlot(pLocal);

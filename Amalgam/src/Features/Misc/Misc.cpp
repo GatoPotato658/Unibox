@@ -2099,7 +2099,8 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 	}
 
 	auto pGameRules = I::TFGameRules();
-	if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine())
+	const bool bFreakyFair = SDK::GetLevelName().find("cp_freaky_fair") != std::string::npos;
+	if (!pGameRules || (!pGameRules->m_bPlayingMannVsMachine() && !bFreakyFair))
 	{
 		CancelBuyBotPath();
 		ResetBuyBot();
@@ -2117,6 +2118,9 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 	if (Vars::Misc::MannVsMachine::MaxCash.Value > 0 && pLocal->m_nCurrency() >= Vars::Misc::MannVsMachine::MaxCash.Value)
 		m_bBuybotCashLimitReached = true;
 
+	if (bFreakyFair)
+		m_bBuybotCashLimitReached = true;
+	else
 	{
 		auto pObjRes = H::Entities.GetObjectiveResource();
 		if (pObjRes)
@@ -2269,13 +2273,13 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 	if (m_bBuybotCashLimitReached)
 	{
-		if (pLocal->m_iClass() == TF_CLASS_MEDIC)
+		if (!bFreakyFair && pLocal->m_iClass() == TF_CLASS_MEDIC)
 		{
 			m_flBuybotClock = flCurTime + 0.2f;
 			return;
 		}
 
-		if (pLocal->m_iClass() == TF_CLASS_SCOUT)
+		if (!bFreakyFair && pLocal->m_iClass() == TF_CLASS_SCOUT)
 		{
 			static Timer tScoutEquipTimer{};
 			if (tScoutEquipTimer.Run(3.f))
@@ -2468,12 +2472,20 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 		if (m_iBuybotUpgradeIndex >= iMaxUpgradeIndex)
 		{
 			m_iBuybotUpgradeIndex = 0;
-			m_iBuybotUpgradeSlotStep++;
-			if (m_iBuybotUpgradeSlotStep >= static_cast<int>(std::size(aSlots)))
+			if (bFreakyFair)
 			{
-				m_bBuybotFinishedUpgrades = true;
-				m_bBuybotUsingNav = false;
-				m_vBuybotStationTarget = {};
+				m_iBuybotPriorityStep = 0;
+				m_iBuybotUpgradeSlotStep = 0;
+			}
+			else
+			{
+				m_iBuybotUpgradeSlotStep++;
+				if (m_iBuybotUpgradeSlotStep >= static_cast<int>(std::size(aSlots)))
+				{
+					m_bBuybotFinishedUpgrades = true;
+					m_bBuybotUsingNav = false;
+					m_vBuybotStationTarget = {};
+				}
 			}
 		}
 
