@@ -1,4 +1,5 @@
 #include "../SDK/SDK.h"
+#include "../Features/Backtrack/Backtrack.h"
 
 MAKE_SIGNATURE(CTFPlayer_BuildTransformations, "client.dll", "48 8B C4 48 89 58 ? 48 89 68 ? 57 41 54", 0x0);
 
@@ -6,6 +7,9 @@ MAKE_HOOK(CTFPlayer_BuildTransformations, S::CTFPlayer_BuildTransformations(), v
 	void* rcx, CStudioHdr* hdr, Vector* pos, Quaternion q[], const matrix3x4& cameraTransform, int boneMask, void* boneComputed)
 {
 	DEBUG_RETURN(CTFPlayer_BuildTransformations, rcx, hdr, pos, q, cameraTransform, boneMask, boneComputed);
+
+	if (F::Backtrack.IsSettingUpBones())
+		return CALL_ORIGINAL(rcx, hdr, pos, q, cameraTransform, boneMask, boneComputed);
 
 	auto pPlayer = reinterpret_cast<CTFPlayer*>(rcx);
 	auto iOriginal = pPlayer->m_fFlags();

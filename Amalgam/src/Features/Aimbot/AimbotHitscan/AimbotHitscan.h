@@ -5,9 +5,8 @@
 
 struct HitscanHitbox_t
 {
-	const mstudiobbox_t* m_pBox = nullptr; // bone
-	std::optional<Vec3> m_vPos = std::nullopt; // custom position
-	// otherwise use entity transform
+	const mstudiobbox_t* m_pBox = nullptr;
+	std::optional<Vec3> m_vPos = std::nullopt;
 
 	int m_iHitbox = 0;
 };
@@ -32,8 +31,6 @@ private:
 		float m_flFov = -1.f;
 		float m_flSimTime = -1.f;
 
-		// If our shoot pos is inside this record its the one that is most likely to be hit
-		// Fun fact: hitting this backtrack record at a right angle might send our target flying
 		bool m_bInsideThisRecord = false;
 	};
 	CrosshairRecordInfo_t GetCrosshairRecord(const Vec3 vAngles, const Vec3 vPos, std::vector<TickRecord*> vRecords, const std::vector<const mstudiobbox_t*> vHitboxes);
@@ -42,6 +39,9 @@ private:
 
 	matrix3x4 m_mMatrix = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } };
 	matrix3x4 m_mHullMatrix = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } };
+
+	std::deque<TickRecord> m_vForwardRecords = {};
+	void BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRecord, std::vector<TickRecord*>& vRecords);
 
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);

@@ -27,6 +27,10 @@ struct MoveStorage
 
 	bool m_bFailed = false;
 	bool m_bInitFailed = false;
+
+	int m_iTick = 0;
+	bool m_bCached = false;
+	int m_iSubstepCounter = 0;
 };
 
 struct MoveData
@@ -37,6 +41,30 @@ struct MoveData
 	Vec3 m_vVelocity = {};
 	Vec3 m_vOrigin = {};
 	bool m_bInputDirection = false;
+};
+
+struct SimTickRecord
+{
+	Vec3 m_vOrigin = {};
+	Vec3 m_vVelocity = {};
+	Vec3 m_vPredictedOrigin = {};
+	float m_flSimTime = 0.f;
+	bool m_bPredictNetworked = true;
+	bool m_bDirectMove = true;
+};
+
+struct TrajectoryCache
+{
+	int m_iTickCount = -1;
+	float m_flSimulationTime = -1.f;
+	Vec3 m_vInitialOrigin = {};
+	Vec3 m_vInitialVelocity = {};
+	bool m_bFailed = false;
+	float m_flAverageYaw = 0.f;
+	float m_flPredictedDelta = 0.f;
+	float m_flPredictedSimTime = 0.f;
+	bool m_bDirectMove = true;
+	std::vector<SimTickRecord> m_vTicks = {};
 };
 
 class CMovementSimulation
@@ -59,6 +87,7 @@ private:
 
 	std::unordered_map<int, std::deque<MoveData>> m_mRecords = {};
 	std::unordered_map<int, std::deque<float>> m_mSimTimes = {};
+	std::unordered_map<int, TrajectoryCache> m_mTrajectoryCache = {};
 
 public:
 	void Store();
@@ -71,6 +100,13 @@ public:
 	void Restore(MoveStorage& tMoveStorage);
 
 	float GetPredictedDelta(CBaseEntity* pEntity);
+
+	float GetAccuracy() const;
+	float GetMaxSimulationTime(float flDesiredMaxTime) const;
+	int GetStrafeSamples(int iBaseSamples) const;
+	int GetSubstep(int iCurrentSimTick) const;
+	int GetMaxTargetCandidates(int iConfiguredMax) const;
+	void ClearCache();
 };
 
 ADD_FEATURE(CMovementSimulation, MoveSim);

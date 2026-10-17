@@ -148,8 +148,6 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 	return vTargets;
 }
 
-
-
 std::vector<HitscanHitbox_t> CAimbotHitscan::GetHitboxes(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget)
 {
 	std::vector<HitscanHitbox_t> vHitboxes = {};
@@ -161,7 +159,7 @@ std::vector<HitscanHitbox_t> CAimbotHitscan::GetHitboxes(CTFPlayer* pLocal, CTFW
 
 		Vec3 vOrigin = pTarget->m_vecOrigin();
 		{
-			MoveStorage tMoveStorage; // run movesim based on ping
+			MoveStorage tMoveStorage;
 			F::MoveSim.Initialize(pTarget, tMoveStorage);
 			if (!tMoveStorage.m_bFailed)
 			{
@@ -321,7 +319,7 @@ void CAimbotHitscan::GetHitboxInfo(HitscanHitbox_t& tHitbox, CBaseEntity* pTarge
 void CAimbotHitscan::GetHullInfo(CBaseEntity* pTarget, TickRecord* pRecord, const matrix3x4** pTransform, Vec3* pMins, Vec3* pMaxs, float* pModelScale)
 {
 	if (!pTarget->IsPlayer())
-		return; // only really important for player targets to check that our trace will be in the bbox
+		return;
 
 	if (pModelScale)
 		*pModelScale = pTarget->As<CBaseAnimating>()->m_flModelScale();
@@ -353,7 +351,7 @@ std::vector<Vec3> CAimbotHitscan::GetHitboxPoints(CBaseEntity* pTarget, CTFWeapo
 	case Vars::Aimbot::General::AimTypeEnum::Smooth:
 	case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		if (!Vars::Aimbot::General::AssistStrength.Value)
-			return vPoints; // triggerbot
+			return vPoints;
 	}
 
 	float flScale = !bPlayer ? 0.5f : Vars::Aimbot::Hitscan::MultipointScale.Value / 100;
@@ -375,6 +373,102 @@ std::vector<Vec3> CAimbotHitscan::GetHitboxPoints(CBaseEntity* pTarget, CTFWeapo
 	return vPoints;
 }
 
+void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRecord, std::vector<TickRecord*>& vRecords)
+{
+	const int iMode = Vars::Aimbot::Hitscan::ForwardTrack.Value;
+	if (!iMode || !pTarget || !pBaseRecord || !pTarget->IsAlive() || pTarget->IsDormant() || pTarget->IsAGhost())
+		return;
+
+	if (Vars::Aimbot::Hitscan::ForwardTrackAirOnly.Value && pTarget->IsOnGround())
+		return;
+
+	if (pTarget->m_vecVelocity().Length2DSqr() < 1.0f)
+		return;
+
+	const bool bBrokenLagComp = H::Entities.GetLagCompensation(pTarget->entindex());
+	const int iChoke = H::Entities.GetChoke(pTarget->entindex());
+
+	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackEnum::BrokenLagComp && !bBrokenLagComp)
+		return;
+	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackEnum::ChokedOnly && iChoke <= 0 && !bBrokenLagComp)
+		return;
+
+	int iMaxTicks = Vars::Aimbot::Hitscan::ForwardTrackTicks.Value;
+	if (pTarget->IsOnGround())
+		iMaxTicks = std::min(iMaxTicks, 2);
+
+	int iSimTicks = iMaxTicks;
+	if (bBrokenLagComp)
+	{
+		float flLatency = F::Backtrack.GetReal(MAX_FLOWS, false) + F::Backtrack.GetFakeInterp();
+		iSimTicks = std::clamp(TIME_TO_TICKS(flLatency) + F::Backtrack.GetAnticipatedChoke(), 1, iMaxTicks);
+	}
+	else if (iChoke > 0)
+	{
+		iSimTicks = std::clamp(iChoke, 1, iMaxTicks);
+	}
+	else
+	{
+		iSimTicks = std::clamp(TIME_TO_TICKS(F::Backtrack.GetReal(FLOW_OUTGOING)) + 1, 1, iMaxTicks);
+	}
+
+	MoveStorage tMoveStorage;
+	if (!F::MoveSim.Initialize(pTarget, tMoveStorage, false, true, false) || tMoveStorage.m_bFailed)
+	{
+		F::MoveSim.Restore(tMoveStorage);
+		return;
+	}
+
+	const Vec3 vBaseOrigin = pBaseRecord->m_vOrigin;
+	const size_t uStart = m_vForwardRecords.size();
+
+	for (int tick = 1; tick <= iSimTicks; tick++)
+	{
+		F::MoveSim.RunTick(tMoveStorage, false);
+		if (tMoveStorage.m_bFailed)
+			break;
+
+		TickRecord& predRecord = m_vForwardRecords.emplace_back();
+		predRecord.m_flSimTime = pBaseRecord->m_flSimTime + TICKS_TO_TIME(tick);
+		predRecord.m_vOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
+		predRecord.m_vMins = pBaseRecord->m_vMins;
+		predRecord.m_vMaxs = pBaseRecord->m_vMaxs;
+		predRecord.m_bOnShot = false;
+		predRecord.m_bInvalid = false;
+
+		const Vec3 vDelta = predRecord.m_vOrigin - vBaseOrigin;
+		for (int b = 0; b < MAXSTUDIOBONES; b++)
+		{
+			memcpy(predRecord.m_aBones[b], pBaseRecord->m_aBones[b], sizeof(matrix3x4));
+			predRecord.m_aBones[b][0][3] += vDelta.x;
+			predRecord.m_aBones[b][1][3] += vDelta.y;
+			predRecord.m_aBones[b][2][3] += vDelta.z;
+		}
+	}
+
+	F::MoveSim.Restore(tMoveStorage);
+
+	if (m_vForwardRecords.size() == uStart)
+		return;
+
+	if (bBrokenLagComp)
+	{
+		vRecords.clear();
+		for (size_t i = uStart; i < m_vForwardRecords.size(); i++)
+			vRecords.push_back(&m_vForwardRecords[i]);
+	}
+	else
+	{
+		std::vector<TickRecord*> vMerged;
+		vMerged.reserve(m_vForwardRecords.size() - uStart + vRecords.size());
+		for (size_t i = uStart; i < m_vForwardRecords.size(); i++)
+			vMerged.push_back(&m_vForwardRecords[i]);
+		for (auto pRec : vRecords)
+			vMerged.push_back(pRec);
+		vRecords = std::move(vMerged);
+	}
+}
+
 int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Unsimulated && H::Entities.GetChoke(tTarget.m_pEntity->entindex()) > Vars::Aimbot::General::TickTolerance.Value)
@@ -390,17 +484,41 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 	if (F::Backtrack.GetRecords(tTarget.m_pEntity, vRecords) && !bWrangler)
 	{
 		vRecords = F::Backtrack.GetValidRecords(vRecords, pLocal);
+		if (bPlayer && !vRecords.empty())
+			BuildForwardRecords(tTarget.m_pEntity->As<CTFPlayer>(), vRecords.front(), vRecords);
+		else if (bPlayer)
+		{
+			std::vector<TickRecord*> vAllRecords;
+			if (F::Backtrack.GetRecords(tTarget.m_pEntity, vAllRecords) && !vAllRecords.empty())
+				BuildForwardRecords(tTarget.m_pEntity->As<CTFPlayer>(), vAllRecords.front(), vRecords);
+		}
 		if (vRecords.empty())
 			return false;
 	}
 	else
 	{
-		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), Vec3(), Vec3() };
-		if (!tTarget.m_pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
+		auto pEntity = tTarget.m_pEntity;
+		const Vec3 vOldAbsOrigin = pEntity->GetAbsOrigin();
+		const Vec3 vOldAbsAngles = pEntity->GetAbsAngles();
+		pEntity->SetAbsOrigin(pEntity->m_vecOrigin());
+		pEntity->SetAbsAngles(pEntity->m_angRotation());
+		pEntity->InvalidateBoneCache();
+
+		F::Backtrack.m_tRecord = { pEntity->m_flSimulationTime(), pEntity->m_vecOrigin(), pEntity->m_vecMins(), pEntity->m_vecMaxs() };
+		F::Backtrack.SetSettingUpBones(true);
+		bool bSetup = pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pEntity->m_flSimulationTime());
+		F::Backtrack.SetSettingUpBones(false);
+
+		pEntity->SetAbsOrigin(vOldAbsOrigin);
+		pEntity->SetAbsAngles(vOldAbsAngles);
+		pEntity->InvalidateBoneCache();
+
+		if (!bSetup)
 			return false;
 
 		vRecords = { &F::Backtrack.m_tRecord };
-		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin() };
+		if (bPlayer && !bWrangler)
+			BuildForwardRecords(pEntity->As<CTFPlayer>(), &F::Backtrack.m_tRecord, vRecords);
 	}
 
 	auto vHitboxes = GetHitboxes(pLocal, pWeapon, tTarget.m_pEntity);
@@ -423,7 +541,6 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 		}
 	}
 
-	// if we're doubletapping, we can't change viewangles so work around that
 	static int iTargetBone = 0;
 	Vec3* pHoldAngle = F::Ticks.GetShootAngle(); if (pHoldAngle && bPlayer && vRecords.size() > 1)
 	{
@@ -471,15 +588,14 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 				{
 					bRunPeekCheck = false;
 					if (!SDK::VisPos(pLocal, tTarget.m_pEntity, *vPeekPos, vOrigin))
-						goto skip; // if we can't hit our primary hitbox, don't bother
+						goto skip;
 				}
 
 				Vec3 vAngles; bool bChanged = Aim(G::CurrentUserCmd->viewangles, Math::CalcAngle(m_vEyePos, vOrigin), vAngles);
-				if (pHoldAngle) vAngles -= F::NoSpread.GetOffset(); // hold angle recorded with nospread, correct it
+				if (pHoldAngle) vAngles -= F::NoSpread.GetOffset();
 				if (!F::AimbotGlobal.ShouldAimAtAngle(vAngles) || !bChanged && !SDK::VisPos(pLocal, tTarget.m_pEntity, m_vEyePos, vOrigin))
 					continue;
 
-				// for the time being, no vischecks against other hitboxes
 				Vec3 vForward; Math::AngleVectors(vAngles, &vForward);
 				if ((!bChanged || Math::RayToOBB(m_vEyePos, vForward, vCheckMins, vCheckMaxs, *pTransform, flModelScale) && SDK::VisPos(pLocal, tTarget.m_pEntity, m_vEyePos, m_vEyePos + vForward * m_vEyePos.DistTo(vOrigin)))
 					&& (!pHullTransform || Math::RayToOBB(m_vEyePos, vForward, vHullMins, vHullMaxs, *pHullTransform)))
@@ -509,8 +625,6 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 
 	return iReturn;
 }
-
-
 
 bool CAimbotHitscan::ShouldFire(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, const Target_t& tTarget)
 {
@@ -621,12 +735,10 @@ bool CAimbotHitscan::Aim(const Vec3& vCurAngle, Vec3 vToAngle, Vec3& vOut, int i
 		break;
 	}
 
-	//if (iMethod != Vars::Aimbot::General::AimTypeEnum::Silent || F::AntiCheatCompatibility.Active())
 		Math::ClampAngles(vOut);
 	return bReturn;
 }
 
-// assume angle calculated outside with other overload
 void CAimbotHitscan::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 {
 	Vec3 vOldView = pCmd->viewangles;
@@ -724,7 +836,6 @@ static inline void DrawVisuals(CTFPlayer* pLocal, Target_t& tTarget, int nWeapon
 	}
 }
 
-// There's probably a better way of doing this
 CAimbotHitscan::CrosshairRecordInfo_t CAimbotHitscan::GetCrosshairRecord(const Vec3 vAngles, const Vec3 vPos, std::vector<TickRecord*> vRecords, const std::vector<const mstudiobbox_t*> vHitboxes)
 {
 	float flMinFov = 45.f;
@@ -741,7 +852,6 @@ CAimbotHitscan::CrosshairRecordInfo_t CAimbotHitscan::GetCrosshairRecord(const V
 			const float flFOVTo = Math::CalcFov(vAngles, vAngleTo);
 			const float flDistTo = vPos.DistTo(vCenter);
 
-			// We are inside this record (probably)
 			if (flDistTo < flMinDist)
 			{
 				flSimTime = pRecord->m_flSimTime;
@@ -767,8 +877,8 @@ void CAimbotHitscan::BacktrackToCrosshair(CUserCmd* pCmd)
 	std::vector<CrosshairRecordInfo_t> vValidRecords;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
-		if (!pEntity->As<CTFPlayer>()->IsAlive() 
-			|| pEntity->As<CTFPlayer>()->IsAGhost() 
+		if (!pEntity->As<CTFPlayer>()->IsAlive()
+			|| pEntity->As<CTFPlayer>()->IsAGhost()
 			|| pEntity->As<CTFPlayer>()->IsInvulnerable())
 			continue;
 
@@ -778,7 +888,7 @@ void CAimbotHitscan::BacktrackToCrosshair(CUserCmd* pCmd)
 		std::vector<TickRecord*> vRecords;
 		if (!F::Backtrack.GetRecords(pEntity, vRecords))
 			continue;
-		
+
 		std::vector<const mstudiobbox_t*> vHitboxes;
 		for (int i = 0; i < pSet->numhitboxes; i++)
 			if (auto pBox = pSet->pHitbox(i)) vHitboxes.emplace_back(pBox);
@@ -810,11 +920,13 @@ void CAimbotHitscan::BacktrackToCrosshair(CUserCmd* pCmd)
 			};
 			return bResult;
 		});
-	pCmd->tick_count = TIME_TO_TICKS(pFinalTick->m_flSimTime + F::Backtrack.GetFakeInterp());
+	pCmd->tick_count = TIME_TO_TICKS(pFinalTick->m_flSimTime) + TIME_TO_TICKS(F::Backtrack.GetFakeInterp());
 }
 
 void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	m_vForwardRecords.clear();
+
 	const int nWeaponID = pWeapon->GetWeaponID();
 
 	static int iStaticAimType = Vars::Aimbot::General::AimType.Value;
@@ -929,7 +1041,13 @@ void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pC
 				F::Resolver.HitscanRan(pLocal, tTarget.m_pEntity->As<CTFPlayer>(), pWeapon, tTarget.m_nAimedHitbox);
 
 			if (tTarget.m_bBacktrack)
-				pCmd->tick_count = TIME_TO_TICKS(tTarget.m_pRecord->m_flSimTime + F::Backtrack.GetFakeInterp());
+			{
+				const bool bBrokenLagComp = tTarget.m_pEntity->IsPlayer() && H::Entities.GetLagCompensation(tTarget.m_pEntity->entindex());
+				if (bBrokenLagComp)
+					pCmd->tick_count = TIME_TO_TICKS(tTarget.m_pRecord->m_flSimTime) + TIME_TO_TICKS(F::Backtrack.GetFakeInterp());
+				else
+					pCmd->tick_count = TIME_TO_TICKS(tTarget.m_pRecord->m_flSimTime) + TIME_TO_TICKS(F::Backtrack.GetFakeInterp());
+			}
 		}
 		DrawVisuals(pLocal, tTarget, nWeaponID);
 
@@ -939,7 +1057,7 @@ void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pC
 			switch (nWeaponID)
 			{
 			case TF_WEAPON_MEDIGUN:
-				//case TF_WEAPON_LASER_POINTER: // we can psilent with the wrangler though probably with some hacks
+
 				G::SilentAngles = false, G::PSilentAngles = true;
 			}
 		}

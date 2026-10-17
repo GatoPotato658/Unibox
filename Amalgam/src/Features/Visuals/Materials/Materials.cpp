@@ -10,6 +10,30 @@
 #include <filesystem>
 #include <fstream>
 
+static bool IsSafeMaterialName(const std::string& sName)
+{
+	if (sName.empty() || sName == "." || sName == ".." || sName.size() > 128)
+		return false;
+
+	for (unsigned char c : sName)
+	{
+		if (c < 32 || c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
+			return false;
+	}
+	if (sName.back() == '.' || sName.back() == ' ')
+		return false;
+
+	std::string sDevice = sName.substr(0, sName.find('.'));
+	for (char& c : sDevice)
+		c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+	if (sDevice == "CON" || sDevice == "PRN" || sDevice == "AUX" || sDevice == "NUL")
+		return false;
+	if (sDevice.size() == 4 && (sDevice.starts_with("COM") || sDevice.starts_with("LPT")) && sDevice.back() >= '1' && sDevice.back() <= '9')
+		return false;
+
+	return std::filesystem::path(sName).filename() == sName;
+}
+
 static std::filesystem::path GetMaterialFilePath(const char* sName)
 {
 	if (!sName || !*sName)
@@ -17,12 +41,18 @@ static std::filesystem::path GetMaterialFilePath(const char* sName)
 
 	try
 	{
-		const std::filesystem::path tName(sName);
-		if (tName == "." || tName == ".." || tName.has_root_name() || tName.has_root_directory() || tName.has_parent_path())
+		std::string sCleanName = sName;
+		if (sCleanName.ends_with(".vmt"))
+			sCleanName.erase(sCleanName.size() - 4);
+
+		if (!IsSafeMaterialName(sCleanName))
 			return {};
 
-		const std::filesystem::path tDirectory = std::filesystem::path(F::Configs.m_sMaterialsPath).lexically_normal();
-		const std::filesystem::path tPath = (tDirectory / (tName.string() + ".vmt")).lexically_normal();
+		std::filesystem::path tDirectory = std::filesystem::path(F::Configs.m_sMaterialsPath).lexically_normal();
+		if (!tDirectory.empty() && (tDirectory.filename().empty() || tDirectory.filename() == ".") && tDirectory != tDirectory.root_path())
+			tDirectory = tDirectory.parent_path();
+
+		const std::filesystem::path tPath = (tDirectory / (sCleanName + ".vmt")).lexically_normal();
 		return tPath.parent_path() == tDirectory ? tPath : std::filesystem::path{};
 	}
 	catch (...)
@@ -161,8 +191,6 @@ void CMaterials::Remove(IMaterial* pMaterial)
 	pMaterial = nullptr;
 }
 
-
-
 void CMaterials::StoreStruct(const std::string& sName, const std::string& sVMT, bool bLocked)
 {
 	Material_t tMaterial = {};
@@ -220,15 +248,12 @@ static inline std::string modify_vmt(const std::string& vmt)
 	return modified;
 }
 
-
-
 void CMaterials::LoadMaterials()
 {
 	SDK::CInitTimingScope tTotal("LoadMaterials total");
 	const bool bDx9Shaders = SDK::SupportsDX9Shaders();
 
-	// default materials
-	StoreStruct( // hacky
+	StoreStruct(
 		"None",
 			"\"UnlitGeneric\""
 			"\n{"
@@ -319,12 +344,12 @@ void CMaterials::LoadMaterials()
 			  "\n\t$additive \"1\""
 			  "\n}",
 		true);
-	// user materials
+
 	std::error_code tError;
 	for (std::filesystem::directory_iterator tIterator(F::Configs.m_sMaterialsPath, tError), tEnd; !tError && tIterator != tEnd; tIterator.increment(tError))
 	{
 		auto& tEntry = *tIterator;
-		// Ignore all non-material files
+
 		if (!tEntry.is_regular_file(tError) || tError || tEntry.path().extension() != ".vmt")
 		{
 			tError.clear();
@@ -337,6 +362,9 @@ void CMaterials::LoadMaterials()
 
 		std::string sName = tEntry.path().filename().string();
 		sName.erase(sName.end() - 4, sName.end());
+		if (sName.empty())
+			continue;
+
 		std::string sVMT((std::istreambuf_iterator(fStream)), std::istreambuf_iterator<char>());
 
 		auto uHash = FNV1A::Hash32(sName.c_str());
@@ -345,7 +373,7 @@ void CMaterials::LoadMaterials()
 
 		StoreStruct(sName, sVMT);
 	}
-	// create materials
+
 	for (auto& tMaterial : m_mMaterials | std::views::values)
 	{
 		const double flStart = SDK::InitNowMs();
@@ -354,7 +382,7 @@ void CMaterials::LoadMaterials()
 		const double flMs = SDK::InitNowMs() - flStart;
 		if (flMs >= 5.0)
 			SDK::LogInitTiming(std::format("LoadMaterials create {}", tMaterial.m_sName).c_str(), flMs);
-		//StoreVars(tMaterial);
+
 	}
 
 	{
@@ -420,7 +448,7 @@ void CMaterials::LoadMaterials()
 void CMaterials::UnloadMaterials()
 {
 	m_bLoaded = false;
-	
+
 	F::Glow.Unload();
 	F::CameraWindow.Unload();
 
@@ -448,8 +476,6 @@ void CMaterials::RefreshMaterials()
 	}
 }
 
-
-
 void CMaterials::SetColor(Material_t* pMaterial, Color_t tColor)
 {
 	float r = tColor.r / 255.f;
@@ -470,8 +496,6 @@ void CMaterials::SetColor(Material_t* pMaterial, Color_t tColor)
 	}
 }
 
-
-
 Material_t* CMaterials::GetMaterial(uint32_t uHash)
 {
 	if (uHash == FNV1A::Hash32Const("Original"))
@@ -490,33 +514,38 @@ std::string CMaterials::GetVMT(uint32_t uHash)
 
 void CMaterials::AddMaterial(const char* sName)
 {
-	const std::filesystem::path tPath = GetMaterialFilePath(sName);
+	std::string sCleanName = sName ? sName : "";
+	if (sCleanName.ends_with(".vmt"))
+		sCleanName.erase(sCleanName.size() - 4);
+
+	const std::filesystem::path tPath = GetMaterialFilePath(sCleanName.c_str());
 	if (tPath.empty())
 		return;
 
-	auto uHash = FNV1A::Hash32(sName);
+	auto uHash = FNV1A::Hash32(sCleanName.c_str());
 	std::error_code tError;
 	if (uHash == FNV1A::Hash32Const("Original") || std::filesystem::exists(tPath, tError) || tError || m_mMaterials.contains(uHash))
 		return;
 
 	StoreStruct(
-		sName,
+		sCleanName,
 			"\"VertexLitGeneric\""
 			"\n{"
-			"\n\t"
+			"\n\t$basetexture \"white\""
 			"\n}"
 		);
 	auto& tMaterial = m_mMaterials[uHash];
 
 	const std::string material_vmt = modify_vmt(tMaterial.m_sVMT);
-	tMaterial.m_pMaterial = create_from_vmt(sName, material_vmt);
+	tMaterial.m_pMaterial = create_from_vmt(sCleanName.c_str(), material_vmt);
 	if (!tMaterial.m_pMaterial)
 	{
 		m_mMaterials.erase(uHash);
 		return;
 	}
 
-	//StoreVars(tMaterial);
+	std::error_code ec;
+	std::filesystem::create_directories(tPath.parent_path(), ec);
 
 	std::ofstream outStream(tPath);
 	if (!outStream)
@@ -561,11 +590,9 @@ void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 		}
 
 		Remove(tMaterial.m_pMaterial);
-		RemoveVars(tMaterial);
 		tMaterial.m_pMaterial = pNewMaterial;
+		RemoveVars(tMaterial);
 		tMaterial.m_sVMT = sVMT;
-
-		//StoreVars(tMaterial);
 
 		std::ofstream outStream(tPath);
 		if (!outStream)

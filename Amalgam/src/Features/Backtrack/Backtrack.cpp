@@ -25,7 +25,6 @@ void CBacktrack::Reset()
 	m_tRecord = {};
 }
 
-
 float CBacktrack::GetReal(int iFlow, bool bNoFake)
 {
 	auto pNetChan = I::EngineClient->GetNetChannelInfo();
@@ -74,7 +73,7 @@ int CBacktrack::GetAnticipatedChoke(int iMethod)
 	if (F::Ticks.CanChoke() && G::PrimaryWeaponType != EWeaponType::HITSCAN && Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Silent)
 		iAnticipatedChoke = 1;
 	if (F::FakeLag.m_iGoal && !Vars::Fakelag::UnchokeOnAttack.Value && F::Ticks.m_iShiftedTicks == F::Ticks.m_iShiftedGoal && !F::Ticks.m_bDoubletap)
-		iAnticipatedChoke = F::FakeLag.m_iGoal - I::ClientState->chokedcommands; // iffy, unsure if there is a good way to get it to work well without unchoking
+		iAnticipatedChoke = F::FakeLag.m_iGoal - I::ClientState->chokedcommands;
 	return iAnticipatedChoke;
 }
 
@@ -83,7 +82,6 @@ void CBacktrack::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 	if (F::AntiCheatCompatibility.Active())
 		return;
 
-	// correct tick_count for fakeinterp / nointerp
 	pCmd->tick_count += TIME_TO_TICKS(GetFakeInterp());
 	if (!Vars::Visuals::Removals::Lerp.Value && !Vars::Visuals::Removals::Interpolation.Value)
 		pCmd->tick_count -= TIME_TO_TICKS(G::Lerp);
@@ -139,8 +137,6 @@ void CBacktrack::UpdateDatagram()
 		m_dSequences.pop_back();
 }
 
-
-
 bool CBacktrack::GetRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn)
 {
 	if (!m_mRecords.contains(pEntity))
@@ -170,6 +166,9 @@ std::vector<TickRecord*> CBacktrack::GetValidRecords(std::vector<TickRecord*>& v
 	{
 		for (auto pRecord : vRecords)
 		{
+			if (pRecord->m_bInvalid)
+				continue;
+
 			float flDelta = flCorrect - TICKS_TO_TIME(iServerTick - TIME_TO_TICKS(pRecord->m_flSimTime));
 			if (fabsf(flDelta) > GetWindow())
 				continue;
@@ -179,15 +178,18 @@ std::vector<TickRecord*> CBacktrack::GetValidRecords(std::vector<TickRecord*>& v
 	}
 
 	if (vReturn.empty())
-	{	// make sure there is at least 1 record
+	{
 		float flMinDelta = 0.2f;
 		for (auto pRecord : vRecords)
 		{
+			if (pRecord->m_bInvalid)
+				continue;
+
 			float flDelta = flCorrect - TICKS_TO_TIME(iServerTick - TIME_TO_TICKS(pRecord->m_flSimTime));
 			if (fabsf(flDelta) > flMinDelta)
 				continue;
 
-			flMinDelta = flDelta;
+			flMinDelta = fabsf(flDelta);
 			vReturn = { pRecord };
 		}
 	}
@@ -236,13 +238,26 @@ void CBacktrack::MakeRecords()
 			!H::Entities.GetDeltaTime(pPlayer->entindex()))
 			continue;
 
+		auto& vRecords = m_mRecords[pPlayer];
+		if (!vRecords.empty() && vRecords.front().m_flSimTime >= pPlayer->m_flSimulationTime())
+			continue;
+
+		const Vec3 vOldAbsOrigin = pPlayer->GetAbsOrigin();
+		const Vec3 vOldAbsAngles = pPlayer->GetAbsAngles();
+		pPlayer->SetAbsOrigin(pPlayer->m_vecOrigin());
+		pPlayer->SetAbsAngles(pPlayer->m_angRotation());
+		pPlayer->InvalidateBoneCache();
+
 		m_bSettingUpBones = true;
 		bool bSetup = pPlayer->SetupBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
 		m_bSettingUpBones = false;
+
+		pPlayer->SetAbsOrigin(vOldAbsOrigin);
+		pPlayer->SetAbsAngles(vOldAbsAngles);
+		pPlayer->InvalidateBoneCache();
+
 		if (!bSetup)
 			continue;
-
-		auto& vRecords = m_mRecords[pPlayer];
 		TickRecord tCurRecord = {
 			pPlayer->m_flSimulationTime(),
 			pPlayer->m_vecOrigin(),
@@ -304,8 +319,6 @@ void CBacktrack::CleanRecords()
 			continue;
 		}
 
-		//const int iOldSize = pRecords.size();
-
 		const float flDeadtime = I::GlobalVars->curtime + GetReal() - m_flMaxUnlag;
 		if (vRecords.size() > 1 && vRecords.back().m_flSimTime == std::numeric_limits<float>::max())
 			vRecords.pop_back();
@@ -317,13 +330,8 @@ void CBacktrack::CleanRecords()
 				break;
 		}
 
-		//const int iNewSize = pRecords.size();
-		//if (iOldSize != iNewSize)
-		//	SDK::Output("Clear", std::format("{} -> {}", iOldSize, iNewSize).c_str(), { 255, 0, 200 }, Vars::Debug::Logging.Value);
 	}
 }
-
-
 
 void CBacktrack::Store()
 {
@@ -340,12 +348,7 @@ void CBacktrack::Store()
 
 void CBacktrack::ResolverUpdate(CBaseEntity* pEntity)
 {
-	/*
-	if (!m_mRecords.contains(pEntity))
-		return;
 
-	m_mRecords[pEntity].clear();
-	*/
 }
 
 void CBacktrack::ReportShot(int iIndex)
@@ -396,7 +399,7 @@ void CBacktrack::AdjustPing(CNetChannel* pNetChan)
 			if (flLatency > flFake || m_nLastInSequenceNr >= cSequence.m_nSequenceNr || flLatency > m_flMaxUnlag - flStaticReal)
 				break;
 		}
-		if (flLatency > 1.f) // hacky failsafe
+		if (flLatency > 1.f)
 			return 0.f;
 
 		pNetChan->m_nInReliableState = nInReliableState;

@@ -156,7 +156,6 @@ public:
 #define NOBIND (1 << 29)
 #define DEBUGVAR (1 << 28)
 
-
 #define SLIDER_CLAMP (1 << 2)
 #define SLIDER_MIN (1 << 3)
 #define SLIDER_MAX (1 << 4)
@@ -309,6 +308,7 @@ NAMESPACE_BEGIN(Vars)
 				Linear, FastStart, FastEnd, SlowStart, SlowEnd);
 			CVar(SmoothCurveAmount, "Smooth curve amount", 100.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 200.f, 5.f, "%g%%");
 			CVar(TickTolerance, "Tick tolerance", 4, SLIDER_CLAMP, 0, 21);
+			CVar(MoveSimAccuracy, "MoveSim accuracy", 75.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(AutoShoot, "Auto shoot", true);
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
 			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
@@ -334,6 +334,12 @@ NAMESPACE_BEGIN(Vars)
 				Tapfire = 1 << 0, WaitForHeadshot = 1 << 1, WaitForCharge = 1 << 2, ScopedOnly = 1 << 3, AutoScope = 1 << 4, AutoRev = 1 << 5, ExtinguishTeam = 1 << 6, PreferMedics = 1 << 7);
 			CVar(MultipointScale, "Multipoint scale", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(TapfireDistance, "Tapfire distance", 1000.f, SLIDER_MIN | SLIDER_PRECISION, 250.f, 1000.f, 50.f);
+
+			CVarEnum(ForwardTrack, "Forward tracking", 0, NONE, nullptr,
+				VA_LIST("Off", "Broken lagcomp", "Choked only", "Always"),
+				Off, BrokenLagComp, ChokedOnly, Always);
+			CVar(ForwardTrackTicks, "Forward track ticks", 2, SLIDER_CLAMP, 1, 6);
+			CVar(ForwardTrackAirOnly, "Forward track air only", false);
 
 			CVarEnum(PeekCheck, "Peek check", 1, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("Off", "Doubletap only", "Always"),
@@ -825,9 +831,6 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_END(Visuals)
 
 	NAMESPACE_BEGIN(Misc)
-
-
-
 
 		NAMESPACE_BEGIN(Movement)
 			CVarEnum(AutoStrafe, "Auto strafe", 0, NONE, nullptr,

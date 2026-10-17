@@ -89,7 +89,7 @@ static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 			if (SymGetSymFromAddr64(hProcess, tStackFrame.AddrPC.Offset, &dwOffset, symbol))
 				tFrame.m_sName = symbol->Name;
 		}
-		
+
 		{
 			auto sPattern = U::Memory.GenerateSignatureAtAddress(tStackFrame.AddrPC.Offset);
 			tFrame.m_sPattern = sPattern.empty() ? "No signature" : sPattern;
@@ -125,7 +125,7 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	ssErrorStream << std::format("Time @ {}, {}\n", SDK::GetDate(), SDK::GetTime());
 
 	ssErrorStream << "\n";
-	if (U::Memory.GetOffsetFromBase(s_lpParam))
+	if (s_lpParam)
 		ssErrorStream << std::format("This: {}\n", U::Memory.GetModuleOffset(s_lpParam));
 	ssErrorStream << std::format("RIP: {:#x}\n", ExceptionInfo->ContextRecord->Rip);
 	ssErrorStream << std::format("RAX: {:#x}\n", ExceptionInfo->ContextRecord->Rax);
@@ -177,7 +177,7 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 		ssErrorStream << "Logged to unibox\\crash_log.txt. ";
 	}
 	catch (...) {}
-	
+
 #ifndef TEXTMODE
 	switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
 	{

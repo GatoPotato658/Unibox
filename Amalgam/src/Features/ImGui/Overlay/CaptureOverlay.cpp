@@ -29,8 +29,9 @@ static LRESULT WINAPI OverlayWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
 static HMODULE GetOwnModule()
 {
 	HMODULE hModule = nullptr;
-	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		reinterpret_cast<LPCWSTR>(&OverlayWndProc), &hModule);
+	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<LPCWSTR>(&OverlayWndProc), &hModule) || !hModule)
+		hModule = GetModuleHandleW(nullptr);
 	return hModule;
 }
 

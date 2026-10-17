@@ -83,13 +83,13 @@ public:
 	void AdjustPing(CNetChannel* netChannel);
 	void RestorePing(CNetChannel* netChannel);
 
-
 	bool IsSettingUpBones() { return m_bSettingUpBones; }
+	void SetSettingUpBones(bool bSettingUpBones) { m_bSettingUpBones = bSettingUpBones; }
 
 	int m_iTickCount = 0;
 	float m_flSentInterp = -1.f;
 
-	TickRecord m_tRecord = {}; // for temporary use
+	TickRecord m_tRecord = {};
 };
 
 ADD_FEATURE(CBacktrack, Backtrack);

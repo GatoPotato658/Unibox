@@ -7,7 +7,7 @@
 
 #ifndef TEXTMODE
 
-MAKE_SIGNATURE(CEconItemSchema_GetAttributeDefinition, "client.dll", "89 54 24 ? 53 48 83 EC ? 48 8B D9 48 8D 54 24 ? 48 81 C1 ? ? ? ? E8 ? ? ? ? 8B D0 3B 83 ? ? ? ? 73 ? 8B 83 ? ? ? ? 83 F8 ? 74 ? 3B D0 7F ? 48 81 C3 ? ? ? ? 44 8B C2 83 FA ? 74 ? 48 8B 03", 0x0);
+MAKE_SIGNATURE(CEconItemSchema_GetAttributeDefinition, "client.dll", "85 D2 78 ? 3B 91 ? ? ? ? 7D ? 48 8B 81 ? ? ? ? 8B D2 48 8B 04 D0 C3 33 C0 C3", 0x0);
 MAKE_SIGNATURE(CAttributeList_SetRuntimeAttributeValue, "client.dll", "48 89 5C 24 10 55 56 57 48 8B EC 48 83 EC 50 44", 0x0);
 
 #endif
@@ -190,6 +190,8 @@ namespace
 
 	CAttributeList* AttributeList(CTFWeaponBase* pWeapon)
 	{
+		if (!pWeapon)
+			return nullptr;
 		static int nOffset = U::NetVars.GetNetVar("CEconEntity", "m_AttributeList");
 		if (nOffset <= 0)
 			return nullptr;
@@ -198,6 +200,8 @@ namespace
 
 	uint16_t* DefIndex(CBaseEntity* pWeapon)
 	{
+		if (!pWeapon)
+			return nullptr;
 		static int nOffset = U::NetVars.GetNetVar("CEconEntity", "m_iItemDefinitionIndex");
 		if (nOffset <= 0)
 			return nullptr;
