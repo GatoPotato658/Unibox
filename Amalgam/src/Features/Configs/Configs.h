@@ -18,6 +18,10 @@ public:
 	bool LoadVisual(const std::string& sConfigName, bool bNotify = true);
 	void DeleteVisual(const std::string& sConfigName, bool bNotify = true);
 	void ResetVisual(const std::string& sConfigName, bool bNotify = true);
+	bool SaveSkins(const std::string& sConfigName, bool bNotify = true);
+	bool LoadSkins(const std::string& sConfigName, bool bNotify = true);
+	void DeleteSkins(const std::string& sConfigName, bool bNotify = true);
+	void ResetSkins(const std::string& sConfigName, bool bNotify = true);
 
 	template <class T> void SaveJson(boost::property_tree::ptree& t, const std::string& s, const T& v);
 	template <class T> void LoadJson(const boost::property_tree::ptree& t, const std::string& s, T& v);
@@ -25,8 +29,10 @@ public:
 
 	std::string m_sCurrentConfig = "default";
 	std::string m_sCurrentVisuals = "default";
+	std::string m_sCurrentSkins = "default";
 	std::string m_sConfigPath;
 	std::string m_sVisualsPath;
+	std::string m_sSkinsPath;
 	std::string m_sCorePath;
 	std::string m_sMaterialsPath;
 	std::string m_sStatePath;

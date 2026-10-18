@@ -8,9 +8,14 @@
 
 struct Skin_t
 {
-	int iPaintKit = 0;
+	int iPaintKit = -1;
 	int iWear = 0;
+	int iSeed = 0;
 	int iQuality = -1;
+	int iStatTrak = -1;
+	int iKillEffect = -1;
+	int iPaintColor = -1;
+	int iBotkiller = 0;
 	bool bAustralium = false;
 	bool bFestive = false;
 	int iKillstreak = 0;
@@ -19,10 +24,19 @@ struct Skin_t
 
 	bool Empty() const
 	{
-		return !iPaintKit && iQuality < 0 && !bAustralium && !bFestive && !iKillstreak && !iSheen && !iUnusual;
+		return iPaintKit < 0 && iQuality < 0 && !bAustralium && !bFestive && iKillstreak <= 0 && iSheen <= 0 && iUnusual <= 0 && iBotkiller <= 0 && iStatTrak < 0 && iKillEffect <= 0 && iPaintColor < 0;
 	}
 
 	bool operator==(const Skin_t&) const = default;
+};
+
+enum EWeaponUnusual
+{
+	WeaponUnusualOff = 0,
+	WeaponUnusualHot,
+	WeaponUnusualIsotope,
+	WeaponUnusualCool,
+	WeaponUnusualEnergyOrb
 };
 
 struct HeldWeapon_t
@@ -53,6 +67,7 @@ class CSkinChanger
 
 	void ScheduleRefresh();
 	int OriginalDef(CBaseEntity* pWeapon, int iHandle, int iCurrent) const;
+	void RunFrame();
 
 public:
 	void Apply();
@@ -62,6 +77,7 @@ public:
 	HeldWeapon_t GetHeldWeapon();
 	Skin_t Get(int iKey);
 	void Set(int iKey, const Skin_t& tSkin);
+	void Clear();
 	std::unordered_map<int, Skin_t> GetSkins();
 	void SetSkins(std::unordered_map<int, Skin_t> mSkins);
 
@@ -71,6 +87,8 @@ public:
 	static bool IsGoldenPan(int iKey);
 	static bool CanFestive(int iKey);
 	static bool CanPaint(int iKey, bool bAllowUnsupported);
+	static bool CanBotkiller(int iKey);
+	static int BotkillerDef(int iKey, int iHead);
 	static void GetKits(int iKey, bool bAllowUnsupported, int iCurrent, std::vector<std::string>& vNames, std::vector<int>& vIds);
 };
 

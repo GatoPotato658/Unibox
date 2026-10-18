@@ -393,7 +393,7 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackEnum::ChokedOnly && iChoke <= 0 && !bBrokenLagComp)
 		return;
 
-	int iMaxTicks = Vars::Aimbot::Hitscan::ForwardTrackTicks.Value;
+	int iMaxTicks = std::clamp(TIME_TO_TICKS(F::Backtrack.GetReal(FLOW_OUTGOING) + F::Backtrack.GetFakeInterp()), 1, 6);
 	if (pTarget->IsOnGround())
 		iMaxTicks = std::min(iMaxTicks, 2);
 

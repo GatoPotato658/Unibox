@@ -170,12 +170,20 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 {
 	m_iBuildAttempts = 0;
 	if (!pLocal->m_iMetalCount())
+	{
+		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer)
+			F::NavEngine.CancelPath();
 		return F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
+	}
 
 	m_eTaskStage = pBuilding->GetClassID() == ETFClassID::CObjectDispenser ? EngineerTaskStageEnum::SmackDispenser : EngineerTaskStageEnum::SmackSentry;
 
 	if (pBuilding->GetAbsOrigin().DistTo(pLocal->GetAbsOrigin()) <= 100.f && F::BotUtils.m_iCurrentSlot == SLOT_MELEE)
 	{
+		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer)
+			F::NavEngine.CancelPath();
+		F::NavEngine.m_eCurrentPriority = PriorityListEnum::Engineer;
+
 		if (G::Attacking == 1)
 		{
 			pCmd->viewangles = Math::CalcAngle(pLocal->GetEyePosition(), pBuilding->GetCenter());

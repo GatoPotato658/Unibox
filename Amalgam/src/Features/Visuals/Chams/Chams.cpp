@@ -227,7 +227,10 @@ void CChams::RenderMain()
 	{
 		m_flCurrentDistance = tInfo.m_flDistance;
 		if (!tInfo.m_iFlags)
+		{
 			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Visible, true);
+			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Occluded, true);
+		}
 		else
 		{
 			m_iFlags = tInfo.m_iFlags;
@@ -236,27 +239,12 @@ void CChams::RenderMain()
 			const float flOldInvisibility = pPlayer->m_flInvisibility();
 			pPlayer->m_flInvisibility() = 0.f;
 			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Visible, true);
-			pPlayer->m_flInvisibility() = flOldInvisibility;
-
-			m_iFlags = false;
-		}
-	}
-	for (auto& tInfo : m_vEntities)
-	{
-		if (!tInfo.m_iFlags)
-			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Occluded, true);
-		else
-		{
-			m_iFlags = tInfo.m_iFlags;
-
-			auto pPlayer = tInfo.m_pEntity->As<CTFPlayer>();
-			const float flOldInvisibility = pPlayer->m_flInvisibility();
-			pPlayer->m_flInvisibility() = 0.f;
 			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Occluded, true);
 			pPlayer->m_flInvisibility() = flOldInvisibility;
 
 			m_iFlags = false;
 		}
+		pRenderContext->ClearBuffers(false, false, true);
 	}
 
 	pRenderContext->ClearBuffers(false, false, true);

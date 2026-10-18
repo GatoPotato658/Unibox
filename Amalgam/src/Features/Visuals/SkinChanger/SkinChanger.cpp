@@ -7,7 +7,7 @@
 
 #ifndef TEXTMODE
 
-MAKE_SIGNATURE(CEconItemSchema_GetAttributeDefinition, "client.dll", "85 D2 78 ? 3B 91 ? ? ? ? 7D ? 48 8B 81 ? ? ? ? 8B D2 48 8B 04 D0 C3 33 C0 C3", 0x0);
+MAKE_SIGNATURE(CEconItemSchema_GetAttributeDefinition, "client.dll", "85 D2 78 ? 3B 91 E8 02 00 00 7D ? 48 8B 81 D8 02 00 00 8B D2 48 8B 04 D0 C3 33 C0 C3", 0x0);
 MAKE_SIGNATURE(CAttributeList_SetRuntimeAttributeValue, "client.dll", "48 89 5C 24 10 55 56 57 48 8B EC 48 83 EC 50 44", 0x0);
 
 #endif
@@ -50,6 +50,36 @@ namespace
 		case Sniper_t_Kukri: return Sniper_t_KukriR;
 		default: return nWeaponIndex;
 		}
+	}
+
+	int BotkillerOffset(int iKey)
+	{
+		switch (iKey)
+		{
+		case Sniper_m_SniperRifle: return 0;
+		case Heavy_m_Minigun: return 1;
+		case Spy_t_Knife: return 2;
+		case Engi_t_Wrench: return 3;
+		case Medic_s_MediGun: return 4;
+		case Demoman_s_StickybombLauncher: return 5;
+		case Pyro_m_FlameThrower: return 6;
+		case Scout_m_Scattergun: return 7;
+		case Soldier_m_RocketLauncher: return 8;
+		default: return -1;
+		}
+	}
+
+	int BotkillerTargetDef(int iKey, int iHead)
+	{
+		static constexpr int aBases[] = { 792, 801, 881, 890, 899, 908, 957, 966 };
+		if (iHead < 1 || iHead > int(std::size(aBases)))
+			return 0;
+
+		const int iOffset = BotkillerOffset(iKey);
+		if (iOffset < 0)
+			return 0;
+
+		return aBases[iHead - 1] + iOffset;
 	}
 
 	const SkinData::Kit_t* FindKit(int iKit)
@@ -113,7 +143,7 @@ namespace
 
 	unsigned HashSkin(int iKey, const Skin_t& tSkin)
 	{
-		const int aFields[] = { iKey, tSkin.iPaintKit, tSkin.iWear, tSkin.iQuality, tSkin.bAustralium, tSkin.bFestive, tSkin.iKillstreak, tSkin.iSheen, tSkin.iUnusual };
+		const int aFields[] = { iKey, tSkin.iPaintKit, tSkin.iWear, tSkin.iSeed, tSkin.iQuality, tSkin.iStatTrak, tSkin.iBotkiller, tSkin.bAustralium, tSkin.bFestive, tSkin.iKillstreak, tSkin.iSheen, tSkin.iUnusual, tSkin.iKillEffect, tSkin.iPaintColor };
 		unsigned uHash = 2166136261u;
 		for (int iField : aFields)
 		{
@@ -147,6 +177,8 @@ namespace
 	constexpr int kAttrStyleOverride = 542;
 	constexpr int kAttrKillstreakTier = 2025;
 	constexpr int kAttrKillstreakSheen = 2014;
+	constexpr int kAttrKillEffect = 2013;
+	constexpr int kAttrItemTint = 142;
 	constexpr int kAttrKillEater = 214;
 	constexpr int kAttrKillEaterType = 292;
 
@@ -158,12 +190,33 @@ namespace
 	{
 		switch (iUnusual)
 		{
-		case Vars::Visuals::SkinChanger::UnusualEnum::Hot: return 701;
-		case Vars::Visuals::SkinChanger::UnusualEnum::Isotope: return 702;
-		case Vars::Visuals::SkinChanger::UnusualEnum::Cool: return 703;
-		case Vars::Visuals::SkinChanger::UnusualEnum::EnergyOrb: return 704;
+		case WeaponUnusualHot: return 701;
+		case WeaponUnusualIsotope: return 702;
+		case WeaponUnusualCool: return 703;
+		case WeaponUnusualEnergyOrb: return 704;
 		default: return 0;
 		}
+	}
+
+	std::unordered_map<int, void*> s_mAttrDefs;
+
+	void* ResolveAttrDef(int iIndex)
+	{
+		if (const auto it = s_mAttrDefs.find(iIndex); it != s_mAttrDefs.end())
+			return it->second;
+		void* pDef = nullptr;
+		__try
+		{
+			if (auto pSchema = CEconItemSchema::GetInstance())
+				pDef = S::CEconItemSchema_GetAttributeDefinition.Call<void*>(pSchema, iIndex);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			pDef = nullptr;
+		}
+		if (pDef)
+			s_mAttrDefs[iIndex] = pDef;
+		return pDef;
 	}
 
 	class CAttributeList
@@ -171,11 +224,7 @@ namespace
 	public:
 		void SetAttribute(int iIndex, float flValue)
 		{
-			auto pSchema = CEconItemSchema::GetInstance();
-			if (!pSchema)
-				return;
-
-			auto pDef = S::CEconItemSchema_GetAttributeDefinition.Call<void*>(pSchema, iIndex);
+			const auto pDef = ResolveAttrDef(iIndex);
 			if (!pDef)
 				return;
 
@@ -188,11 +237,22 @@ namespace
 		}
 	};
 
+	int ResolveEconOffset(const char* sProp)
+	{
+		const char* aTables[] = { "CTFWeaponBase", "CBaseCombatWeapon", "CEconEntity" };
+		for (const char* sTable : aTables)
+		{
+			if (const int nOffset = U::NetVars.GetNetVar(sTable, sProp))
+				return nOffset;
+		}
+		return 0;
+	}
+
 	CAttributeList* AttributeList(CTFWeaponBase* pWeapon)
 	{
 		if (!pWeapon)
 			return nullptr;
-		static int nOffset = U::NetVars.GetNetVar("CEconEntity", "m_AttributeList");
+		static int nOffset = ResolveEconOffset("m_AttributeList");
 		if (nOffset <= 0)
 			return nullptr;
 		return reinterpret_cast<CAttributeList*>(uintptr_t(pWeapon) + nOffset);
@@ -202,10 +262,20 @@ namespace
 	{
 		if (!pWeapon)
 			return nullptr;
-		static int nOffset = U::NetVars.GetNetVar("CEconEntity", "m_iItemDefinitionIndex");
+		static int nOffset = ResolveEconOffset("m_iItemDefinitionIndex");
 		if (nOffset <= 0)
 			return nullptr;
 		return reinterpret_cast<uint16_t*>(uintptr_t(pWeapon) + nOffset);
+	}
+
+	int* EntityQuality(CBaseEntity* pWeapon)
+	{
+		if (!pWeapon)
+			return nullptr;
+		static int nOffset = ResolveEconOffset("m_iEntityQuality");
+		if (nOffset <= 0)
+			return nullptr;
+		return reinterpret_cast<int*>(uintptr_t(pWeapon) + nOffset);
 	}
 
 	int ApplySkin(CTFWeaponBase* pWeapon, int iKey, const Skin_t& tSkin, bool bAllowUnsupported)
@@ -216,7 +286,7 @@ namespace
 		if (!pList)
 			return iTarget;
 
-		if (tSkin.iPaintKit)
+		if (tSkin.iPaintKit >= 0)
 		{
 			const auto tPlan = PlanPaint(iKey, tSkin.iPaintKit, bAllowUnsupported);
 			if (tPlan.bListed)
@@ -227,10 +297,13 @@ namespace
 				pList->SetInt(kAttrPaintkit, tSkin.iPaintKit);
 				pList->SetAttribute(kAttrWear, kWear[std::clamp(tSkin.iWear, 0, int(std::size(kWear)) - 1)]);
 				pList->SetAttribute(kAttrInspect, 1.f);
-				pList->SetInt(kAttrSeedLo, 0);
+				pList->SetInt(kAttrSeedLo, tSkin.iSeed);
 				pList->SetInt(kAttrSeedHi, 0);
 			}
 		}
+
+		if (const int iBotkiller = BotkillerTargetDef(iKey, tSkin.iBotkiller))
+			iTarget = iBotkiller;
 
 		if (tSkin.bAustralium)
 		{
@@ -258,13 +331,22 @@ namespace
 
 		if (const int iUnusual = UnusualParticle(tSkin.iUnusual))
 			pList->SetAttribute(kAttrUnusualStatic, float(iUnusual));
+		if (tSkin.iKillEffect > 0)
+			pList->SetAttribute(kAttrKillEffect, (float)tSkin.iKillEffect);
+		if (tSkin.iPaintColor >= 0)
+			pList->SetAttribute(kAttrItemTint, (float)tSkin.iPaintColor);
 
-		if (tSkin.iQuality >= 0)
+		if (tSkin.iStatTrak >= 0 || tSkin.iQuality >= 0)
 		{
-			pWeapon->m_iEntityQuality() = tSkin.iQuality;
-			if (tSkin.iQuality == kQualityStrange)
+			const int iQuality = tSkin.iStatTrak >= 0 ? kQualityStrange : tSkin.iQuality;
+			if (auto pQuality = EntityQuality(pWeapon))
 			{
-				pList->SetInt(kAttrKillEater, 0);
+				if (*pQuality != iQuality)
+					*pQuality = iQuality;
+			}
+			if (iQuality == kQualityStrange)
+			{
+				pList->SetInt(kAttrKillEater, std::max(tSkin.iStatTrak, 0));
 				pList->SetAttribute(kAttrKillEaterType, 0.f);
 			}
 		}
@@ -312,10 +394,20 @@ bool CSkinChanger::CanPaint(int iKey, bool bAllowUnsupported)
 	return pBase && pBase->iKind == SkinData::BasePlain;
 }
 
+bool CSkinChanger::CanBotkiller(int iKey)
+{
+	return BotkillerOffset(iKey) >= 0;
+}
+
+int CSkinChanger::BotkillerDef(int iKey, int iHead)
+{
+	return BotkillerTargetDef(iKey, iHead);
+}
+
 void CSkinChanger::GetKits(int iKey, bool bAllowUnsupported, int iCurrent, std::vector<std::string>& vNames, std::vector<int>& vIds)
 {
 	vNames = { "None" };
-	vIds = { 0 };
+	vIds = { -1 };
 	if (iKey < 0)
 		return;
 
@@ -366,6 +458,12 @@ void CSkinChanger::Set(int iKey, const Skin_t& tSkin)
 		m_mSkins[iKey] = tSkin;
 }
 
+void CSkinChanger::Clear()
+{
+	std::lock_guard tLock(m_tMutex);
+	m_mSkins.clear();
+}
+
 std::unordered_map<int, Skin_t> CSkinChanger::GetSkins()
 {
 	std::lock_guard tLock(m_tMutex);
@@ -394,12 +492,8 @@ int CSkinChanger::OriginalDef(CBaseEntity* pWeapon, int iHandle, int iCurrent) c
 	return iCurrent;
 }
 
-void CSkinChanger::Apply()
+void CSkinChanger::RunFrame()
 {
-	const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
-	if (bFullPacket)
-		m_bRefreshPending = false;
-
 	if (!Vars::Visuals::SkinChanger::Enabled.Value)
 	{
 		if (m_bWasEnabled)
@@ -407,12 +501,13 @@ void CSkinChanger::Apply()
 			m_bWasEnabled = false;
 			m_uLastHash = 0;
 			m_mTracked.clear();
-			if (!bFullPacket)
-				ScheduleRefresh();
+			ScheduleRefresh();
 		}
 		return;
 	}
 	m_bWasEnabled = true;
+
+	const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
 
 	const auto mSkins = GetSkins();
 	const bool bAllowUnsupported = Vars::Visuals::SkinChanger::AllowUnsupported.Value;
@@ -465,28 +560,37 @@ void CSkinChanger::Apply()
 	m_mTracked = std::move(mTracked);
 }
 
+void CSkinChanger::Apply()
+{
+	const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
+	if (bFullPacket)
+		m_bRefreshPending = false;
+
+	RunFrame();
+}
+
 void CSkinChanger::Service()
 {
-	if (!m_bRefreshPending)
-		return;
-
 	if (!I::EngineClient || !I::ClientState || !I::GlobalVars
 		|| !I::EngineClient->IsInGame() || I::EngineClient->IsPlayingDemo())
 	{
 		m_bRefreshPending = false;
-		return;
+	}
+	else
+	{
+		const float flNow = I::GlobalVars->realtime;
+		if (m_bRefreshPending && flNow - m_flDirtyTime >= 0.35f && flNow - m_flLastRefresh >= 1.f)
+		{
+			m_bRefreshPending = false;
+			if (I::ClientState->m_nDeltaTick != -1)
+			{
+				m_flLastRefresh = flNow;
+				I::ClientState->ForceFullUpdate();
+			}
+		}
 	}
 
-	const float flNow = I::GlobalVars->realtime;
-	if (flNow - m_flDirtyTime < 0.35f || flNow - m_flLastRefresh < 1.f)
-		return;
-
-	m_bRefreshPending = false;
-	if (I::ClientState->m_nDeltaTick == -1)
-		return;
-
-	m_flLastRefresh = flNow;
-	I::ClientState->ForceFullUpdate();
+	RunFrame();
 }
 
 void CSkinChanger::CacheMenuInfo(CTFWeaponBase* pWeapon)
@@ -517,6 +621,7 @@ void CSkinChanger::CacheMenuInfo(CTFWeaponBase* pWeapon)
 
 void CSkinChanger::ScheduleRefresh() {}
 int CSkinChanger::OriginalDef(CBaseEntity*, int, int iCurrent) const { return iCurrent; }
+void CSkinChanger::RunFrame() {}
 void CSkinChanger::Apply() {}
 void CSkinChanger::Service() {}
 void CSkinChanger::CacheMenuInfo(CTFWeaponBase*) {}

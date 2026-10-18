@@ -338,7 +338,6 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(ForwardTrack, "Forward tracking", 0, NONE, nullptr,
 				VA_LIST("Off", "Broken lagcomp", "Choked only", "Always"),
 				Off, BrokenLagComp, ChokedOnly, Always);
-			CVar(ForwardTrackTicks, "Forward track ticks", 2, SLIDER_CLAMP, 1, 6);
 			CVar(ForwardTrackAirOnly, "Forward track air only", false);
 
 			CVarEnum(PeekCheck, "Peek check", 1, NOSAVE | DEBUGVAR, nullptr,
@@ -635,16 +634,6 @@ NAMESPACE_BEGIN(Vars)
 		NAMESPACE_BEGIN(SkinChanger)
 			CVar(Enabled, "Skin changer", false, VISUAL);
 			CVar(AllowUnsupported, "Enable applying not supported warpaints", false, VISUAL);
-			CVar(PaintKit, "Paint kit", 0, VISUAL | SLIDER_MIN, 0, 1600, 1);
-			CVar(Australium, "Australium", false, VISUAL);
-			CVar(Festive, "Festive", false, VISUAL);
-			CVar(Killstreak, "Killstreak", 0, VISUAL | SLIDER_CLAMP, 0, 3, 1);
-			CVarEnum(Sheen, "Sheen", 0, VISUAL, nullptr,
-				VA_LIST("Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod"),
-				Off, TeamShine, DeadlyDaffodil, Manndarin, MeanGreen, AgonizingEmerald, VillainousViolet, HotRod);
-			CVarEnum(Unusual, "Weapon unusual", 0, VISUAL, nullptr,
-				VA_LIST("Off", "Hot", "Isotope", "Cool", "Energy orb"),
-				Off, Hot, Isotope, Cool, EnergyOrb);
 		NAMESPACE_END(SkinChanger)
 
 		NAMESPACE_BEGIN(Thirdperson)

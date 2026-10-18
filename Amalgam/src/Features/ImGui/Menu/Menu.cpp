@@ -611,7 +611,6 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::Hitscan::ForwardTrack);
 					PushTransparent(!Vars::Aimbot::Hitscan::ForwardTrack.Value);
 					{
-						FSlider(Vars::Aimbot::Hitscan::ForwardTrackTicks);
 						FToggle(Vars::Aimbot::Hitscan::ForwardTrackAirOnly);
 					}
 					PopTransparent();
@@ -639,6 +638,7 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::Projectile::Hitboxes, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::Projectile::SplashMode, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::Projectile::Modifiers);
+					FToggle(Vars::Aimbot::Projectile::AccountPing);
 					FSlider(Vars::Aimbot::Projectile::MaxSimulationTime, FSliderEnum::Left); FTooltip("Longer = less accuracy, shorter = less shoot candidates");
 					PushTransparent(!Vars::Aimbot::Projectile::StrafePrediction.Value);
 					{
@@ -1438,9 +1438,14 @@ void CMenu::MenuVisuals(int iTab)
 						FText(bAllowUnsupported ? "Warpaints are not supported on this weapon" : "No warpaints for this weapon (see option above)");
 
 					static const std::vector<const char*> vWear = { "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle Scarred" };
-					PushTransparent(!tSkin.iPaintKit);
+					PushTransparent(tSkin.iPaintKit < 0);
 					{
 						FDropdown("Wear", &tSkin.iWear, vWear, {}, FDropdownEnum::Left);
+					}
+					PopTransparent();
+					PushTransparent(tSkin.iPaintKit < 0);
+					{
+						FSlider("Seed", &tSkin.iSeed, 0, 255, 1, "%i", FSliderEnum::Clamp);
 					}
 					PopTransparent();
 					static const std::vector<const char*> vQualityNames = { "Default", "Normal", "Unique", "Vintage", "Genuine", "Strange", "Unusual", "Haunted", "Collector's", "Decorated", "Community", "Self-Made", "Valve" };
@@ -1457,14 +1462,43 @@ void CMenu::MenuVisuals(int iTab)
 						FToggle("Festive", &tSkin.bFestive, FToggleEnum::Right);
 					}
 					PopDisabled();
+					PushDisabled(!tHeld.bValid || !CSkinChanger::CanBotkiller(iKey));
+					{
+						static const std::vector<const char*> vBotkiller = { "Off", "Silver Mk.I", "Gold Mk.I", "Rust Mk.I", "Blood Mk.I", "Carbonado Mk.I", "Diamond Mk.I", "Silver Mk.II", "Gold Mk.II" };
+						FDropdown("Botkiller", &tSkin.iBotkiller, vBotkiller, {});
+					}
+					PopDisabled();
 					FSlider("Killstreak", &tSkin.iKillstreak, 0, 3, 1, "%i", FSliderEnum::Clamp);
 					static const std::vector<const char*> vSheen = { "Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod" };
 					static const std::vector<const char*> vUnusual = { "Off", "Hot", "Isotope", "Cool", "Energy orb" };
 					FDropdown("Sheen", &tSkin.iSheen, vSheen, {}, FDropdownEnum::Left);
 					FDropdown("Weapon unusual", &tSkin.iUnusual, vUnusual, {}, FDropdownEnum::Right);
+					static const std::vector<const char*> vKillFx = { "Off", "Cerebral Discharge", "Fire Horns", "Flames", "Hypno-Beam", "Incinerator", "Singularity", "Tornado" };
+					static const std::vector<int> vKillFxIds = { -1, 2002, 2003, 2004, 2005, 2006, 2007, 2008 };
+					FDropdown("Kill effect", &tSkin.iKillEffect, vKillFx, vKillFxIds);
+					bool bPaintColor = tSkin.iPaintColor >= 0;
+					const bool bOldPaintColor = bPaintColor;
+					Color_t tPaintColor = bPaintColor ? Color_t{ byte(tSkin.iPaintColor & 255), byte((tSkin.iPaintColor >> 8) & 255), byte((tSkin.iPaintColor >> 16) & 255) } : Color_t{ 255, 255, 255 };
+					FToggle("Paint color", &bPaintColor, FToggleEnum::Left);
+					if (bPaintColor)
+					{
+						if (!bOldPaintColor)
+							tSkin.iPaintColor = int(tPaintColor.r) | (int(tPaintColor.g) << 8) | (int(tPaintColor.b) << 16);
+						if (FColorPicker("Paint color", &tPaintColor))
+							tSkin.iPaintColor = int(tPaintColor.r) | (int(tPaintColor.g) << 8) | (int(tPaintColor.b) << 16);
+					}
+					else
+						tSkin.iPaintColor = -1;
+					FSlider("StatTrak kills", &tSkin.iStatTrak, -1, 100000, 1, "%i", FSliderEnum::Clamp);
+					if (tSkin.iStatTrak >= 0)
+						FText("StatTrak applies Strange quality");
 					if (tHeld.bValid && !(tSkin == F::SkinChanger.Get(iKey)))
 						F::SkinChanger.Set(iKey, tSkin);
+					if (tHeld.bValid && FButton("Remove skin"))
+						F::SkinChanger.Set(iKey, Skin_t{});
 					PopDisabled();
+					if (FButton("Remove all skins"))
+						F::SkinChanger.Clear();
 				} EndSection();
 				if (Section("Thirdperson", 8))
 				{
@@ -3991,7 +4025,7 @@ void CMenu::MenuLogs(int iTab)
 
 	case 1:
 	{
-		if (BeginTable("ConfigSettingsTable", 2))
+		if (BeginTable("ConfigSettingsTable", 3))
 		{
 
 			TableNextColumn();
@@ -4144,11 +4178,12 @@ void CMenu::MenuSettings(int iTab)
 		if (BeginTable("ConfigSettingsTable", 2))
 		{
 
-			auto fDrawConfigs = [](std::string& sStaticName, bool bVisual = false)
+			auto fDrawConfigs = [](std::string& sStaticName, int iMode = 0)
 			{
-				auto& sPath = !bVisual ? F::Configs.m_sConfigPath : F::Configs.m_sVisualsPath;
-				auto& sConfig = !bVisual ? F::Configs.m_sCurrentConfig : F::Configs.m_sCurrentVisuals;
-				auto sType = !bVisual ? "Config" : "Visual";
+				const bool bVisual = iMode == 1, bSkins = iMode == 2;
+				auto& sPath = bSkins ? F::Configs.m_sSkinsPath : (!bVisual ? F::Configs.m_sConfigPath : F::Configs.m_sVisualsPath);
+				auto& sConfig = bSkins ? F::Configs.m_sCurrentSkins : (!bVisual ? F::Configs.m_sCurrentConfig : F::Configs.m_sCurrentVisuals);
+				auto sType = bSkins ? "Skins" : (!bVisual ? "Config" : "Visual");
 				bool bNoSave = GetAsyncKeyState(VK_SHIFT) & 0x8000;
 
 				FSDropdown("Name", &sStaticName, {}, FSDropdownEnum::AutoUpdate, -H::Draw.Unscale(FCalcTextSize("CREATE").x + H::Draw.Scale(40)) - 44);
@@ -4160,7 +4195,9 @@ void CMenu::MenuSettings(int iTab)
 						const auto tConfigPath = std::filesystem::path(sPath) / (sStaticName + F::Configs.m_sConfigExtension);
 						if (!std::filesystem::exists(tConfigPath, tError) && !tError)
 						{
-							if (!bVisual)
+							if (bSkins)
+								F::Configs.SaveSkins(sStaticName);
+							else if (!bVisual)
 								F::Configs.SaveConfig(sStaticName);
 							else
 								F::Configs.SaveVisual(sStaticName);
@@ -4192,7 +4229,7 @@ void CMenu::MenuSettings(int iTab)
 
 					vConfigs.emplace_back(tEntry, sName);
 				}
-				if (!bVisual)
+				if (!bVisual && !bSkins)
 				{
 					if (!bDefaultFound)
 						F::Configs.SaveConfig("default");
@@ -4230,15 +4267,19 @@ void CMenu::MenuSettings(int iTab)
 
 					if (bLoad)
 					{
-						if (!bVisual)
+						if (bSkins)
+							F::Configs.LoadSkins(sConfigName);
+						else if (!bVisual)
 							F::Configs.LoadConfig(sConfigName);
 						else
 							F::Configs.LoadVisual(sConfigName);
 					}
 					else if (bSave)
 					{
-						if (!bCurrentConfig || !bVisual && !F::Configs.m_sCurrentVisuals.empty())
+						if (!bCurrentConfig || !bVisual && !bSkins && !F::Configs.m_sCurrentVisuals.empty())
 							OpenPopup(std::format("Save{}{}", sType, sConfigName).c_str());
+						else if (bSkins)
+							F::Configs.SaveSkins(sConfigName);
 						else if (!bVisual)
 							F::Configs.SaveConfig(sConfigName);
 						else
@@ -4253,7 +4294,9 @@ void CMenu::MenuSettings(int iTab)
 
 						if (FButton("Yes, override", FButtonEnum::Left))
 						{
-							if (!bVisual)
+							if (bSkins)
+								F::Configs.SaveSkins(sConfigName);
+							else if (!bVisual)
 								F::Configs.SaveConfig(sConfigName);
 							else
 								F::Configs.SaveVisual(sConfigName);
@@ -4268,11 +4311,13 @@ void CMenu::MenuSettings(int iTab)
 					{
 						FText(std::format("Do you really want to remove '{}'?", sConfigName).c_str());
 
-						PushDisabled(!bVisual && FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32Const("default"));
+						PushDisabled(!bVisual && !bSkins && FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32Const("default"));
 						{
 							if (FButton("Yes, delete", FButtonEnum::Fit))
 							{
-								if (!bVisual)
+								if (bSkins)
+									F::Configs.DeleteSkins(sConfigName);
+								else if (!bVisual)
 									F::Configs.DeleteConfig(sConfigName);
 								else
 									F::Configs.DeleteVisual(sConfigName);
@@ -4282,7 +4327,9 @@ void CMenu::MenuSettings(int iTab)
 						PopDisabled();
 						if (FButton("Yes, reset", FButtonEnum::Fit | FButtonEnum::SameLine))
 						{
-							if (!bVisual)
+							if (bSkins)
+								F::Configs.ResetSkins(sConfigName);
+							else if (!bVisual)
 								F::Configs.ResetConfig(sConfigName);
 							else
 								F::Configs.ResetVisual(sConfigName);
@@ -4318,6 +4365,14 @@ void CMenu::MenuSettings(int iTab)
 				static std::string sStaticName;
 
 				fDrawConfigs(sStaticName, true);
+			} EndSection();
+
+			TableNextColumn();
+			if (Section("Skins"))
+			{
+				static std::string sStaticName;
+
+				fDrawConfigs(sStaticName, 2);
 			} EndSection();
 
 			EndTable();
@@ -5900,8 +5955,11 @@ void CMenu::Render()
 		m_bWindowHovered = false;
 	}
 
-	DrawBinds();
-	F::Notifications.Draw();
+	if (!SDK::TakingScreenshot())
+	{
+		DrawBinds();
+		F::Notifications.Draw();
+	}
 	PopFont();
 }
 

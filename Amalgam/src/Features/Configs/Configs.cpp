@@ -87,6 +87,11 @@ static void SaveSkinChanger(boost::property_tree::ptree& tWrite)
 		F::Configs.SaveJson(tChild, "Killstreak", tSkin.iKillstreak);
 		F::Configs.SaveJson(tChild, "Sheen", tSkin.iSheen);
 		F::Configs.SaveJson(tChild, "Unusual", tSkin.iUnusual);
+		F::Configs.SaveJson(tChild, "KillEffect", tSkin.iKillEffect);
+		F::Configs.SaveJson(tChild, "PaintColor", tSkin.iPaintColor);
+		F::Configs.SaveJson(tChild, "Seed", tSkin.iSeed);
+		F::Configs.SaveJson(tChild, "Botkiller", tSkin.iBotkiller);
+		F::Configs.SaveJson(tChild, "StatTrak", tSkin.iStatTrak);
 		tSub.put_child(std::to_string(iDef), tChild);
 	}
 	tWrite.put_child("SkinChanger", tSub);
@@ -105,7 +110,7 @@ static void LoadSkinChanger(const boost::property_tree::ptree& tRead)
 			if (iDef < 0)
 				continue;
 
-			Skin_t tSkin = {};
+			Skin_t tSkin;
 			F::Configs.LoadJson(tPair.second, "PaintKit", tSkin.iPaintKit);
 			F::Configs.LoadJson(tPair.second, "Wear", tSkin.iWear);
 			F::Configs.LoadJson(tPair.second, "Quality", tSkin.iQuality);
@@ -114,6 +119,11 @@ static void LoadSkinChanger(const boost::property_tree::ptree& tRead)
 			F::Configs.LoadJson(tPair.second, "Killstreak", tSkin.iKillstreak);
 			F::Configs.LoadJson(tPair.second, "Sheen", tSkin.iSheen);
 			F::Configs.LoadJson(tPair.second, "Unusual", tSkin.iUnusual);
+			F::Configs.LoadJson(tPair.second, "KillEffect", tSkin.iKillEffect);
+			F::Configs.LoadJson(tPair.second, "PaintColor", tSkin.iPaintColor);
+			F::Configs.LoadJson(tPair.second, "Seed", tSkin.iSeed);
+			F::Configs.LoadJson(tPair.second, "Botkiller", tSkin.iBotkiller);
+			F::Configs.LoadJson(tPair.second, "StatTrak", tSkin.iStatTrak);
 			if (!tSkin.Empty())
 				mSkins[CSkinChanger::Key(iDef)] = tSkin;
 		}
@@ -525,6 +535,7 @@ CConfigs::CConfigs()
 {
 	m_sConfigPath = std::filesystem::current_path().string() + "\\unibox\\";
 	m_sVisualsPath = m_sConfigPath + "Visuals\\";
+	m_sSkinsPath = m_sConfigPath + "Skins\\";
 	m_sCorePath = m_sConfigPath + "Core\\";
 	m_sMaterialsPath = m_sConfigPath + "Materials\\";
 	m_sStatePath = m_sConfigPath + "active.cfg";
@@ -534,6 +545,9 @@ CConfigs::CConfigs()
 
 	if (!std::filesystem::exists(m_sVisualsPath))
 		std::filesystem::create_directory(m_sVisualsPath);
+
+		if (!std::filesystem::exists(m_sSkinsPath))
+			std::filesystem::create_directory(m_sSkinsPath);
 
 	if (!std::filesystem::exists(m_sCorePath))
 		std::filesystem::create_directory(m_sCorePath);
@@ -555,10 +569,13 @@ void CConfigs::LoadState()
 		read_json(m_sStatePath, tRead);
 		const std::string sConfig = tRead.get("Config", m_sCurrentConfig);
 		const std::string sVisuals = tRead.get("Visuals", m_sCurrentVisuals);
+		const std::string sSkins = tRead.get("Skins", m_sCurrentSkins);
 		if (IsSafeConfigName(sConfig))
 			m_sCurrentConfig = sConfig;
 		if (IsSafeConfigName(sVisuals))
 			m_sCurrentVisuals = sVisuals;
+			if (IsSafeConfigName(sSkins))
+				m_sCurrentSkins = sSkins;
 	}
 	catch (...) {}
 }
@@ -569,6 +586,7 @@ void CConfigs::SaveState() const
 	{
 		boost::property_tree::ptree tWrite;
 		tWrite.put("Config", m_sCurrentConfig);
+		tWrite.put("Skins", m_sCurrentSkins);
 		tWrite.put("Visuals", m_sCurrentVisuals);
 		write_json(m_sStatePath, tWrite);
 	}
@@ -702,7 +720,6 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 			tWrite.put_child("Groups", tSub);
 		}
 
-		SaveSkinChanger(tWrite);
 
 		write_json(tPath.string(), tWrite);
 
@@ -729,7 +746,6 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 
 	std::vector<Bind_t> vOldBinds;
 	std::vector<Group_t> vOldGroups;
-	auto mOldSkins = F::SkinChanger.GetSkins();
 	ConfigMapRestore vRestore;
 	const std::string sOldCurrentConfig = m_sCurrentConfig;
 	const std::string sOldCurrentVisuals = m_sCurrentVisuals;
@@ -864,7 +880,6 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 		else
 			SDK::Output("unibox", "Config groups not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
-		LoadSkinChanger(tRead);
 
 		F::Binds.SetVars(nullptr, nullptr, false);
 		H::Fonts.Reload();
@@ -882,7 +897,6 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 			std::scoped_lock lock(F::Binds.m_mMutex);
 			F::Binds.m_vBinds = std::move(vOldBinds);
 			F::Groups.m_vGroups = std::move(vOldGroups);
-			F::SkinChanger.SetSkins(std::move(mOldSkins));
 			for (auto& fRestore : vRestore)
 				fRestore();
 			m_sCurrentConfig = sOldCurrentConfig;
@@ -978,7 +992,6 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 			tWrite.put_child("Groups", tSub);
 		}
 
-		SaveSkinChanger(tWrite);
 
 		write_json(tPath.string(), tWrite);
 		m_sCurrentVisuals = sConfigName;
@@ -1002,7 +1015,6 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		return false;
 
 	std::vector<Group_t> vOldGroups;
-	auto mOldSkins = F::SkinChanger.GetSkins();
 	ConfigMapRestore vRestore;
 	const std::string sOldCurrentVisuals = m_sCurrentVisuals;
 	bool bTransaction = false;
@@ -1081,7 +1093,6 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		else
 			SDK::Output("unibox", "Config groups not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
-		LoadSkinChanger(tRead);
 
 		F::Binds.SetVars(nullptr, nullptr, false);
 
@@ -1097,7 +1108,6 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 		{
 			std::scoped_lock lock(F::Binds.m_mMutex);
 			F::Groups.m_vGroups = std::move(vOldGroups);
-			F::SkinChanger.SetSkins(std::move(mOldSkins));
 			for (auto& fRestore : vRestore)
 				fRestore();
 			m_sCurrentVisuals = sOldCurrentVisuals;
@@ -1154,7 +1164,6 @@ void CConfigs::ResetConfig(const std::string& sConfigName, bool bNotify)
 	{
 		F::Binds.m_vBinds.clear();
 		F::Groups.m_vGroups.clear();
-		F::SkinChanger.SetSkins({});
 
 		bool bNoSave = !Vars::Config::LoadDebugSettings.Value && !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
 		for (auto& pBase : G::Vars)
@@ -1215,7 +1224,6 @@ void CConfigs::ResetVisual(const std::string& sConfigName, bool bNotify)
 	try
 	{
 		F::Groups.m_vGroups.clear();
-		F::SkinChanger.SetSkins({});
 
 		bool bNoSave = !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
 		for (auto& pBase : G::Vars)
@@ -1245,5 +1253,107 @@ void CConfigs::ResetVisual(const std::string& sConfigName, bool bNotify)
 	catch (...)
 	{
 		SDK::Output("unibox", "Reset visuals failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+	}
+}
+
+bool CConfigs::SaveSkins(const std::string& sConfigName, bool bNotify)
+{
+	const std::filesystem::path tPath = GetConfigFilePath(m_sSkinsPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return false;
+
+	try
+	{
+		boost::property_tree::ptree tWrite;
+		SaveSkinChanger(tWrite);
+		write_json(tPath.string(), tWrite);
+		m_sCurrentSkins = sConfigName;
+		SaveState();
+	if (bNotify)
+		SDK::Output("unibox", std::format("Skin config {} saved", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+	}
+	catch (...)
+	{
+		SDK::Output("unibox", "Save skins failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+		return false;
+	}
+	return true;
+}
+
+bool CConfigs::LoadSkins(const std::string& sConfigName, bool bNotify)
+{
+	const std::filesystem::path tPath = GetConfigFilePath(m_sSkinsPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return false;
+
+	auto mOldSkins = F::SkinChanger.GetSkins();
+	const std::string sOldCurrentSkins = m_sCurrentSkins;
+	bool bTransaction = false;
+	try
+	{
+		if (!std::filesystem::exists(tPath))
+			return false;
+
+		boost::property_tree::ptree tRead;
+		read_json(tPath.string(), tRead);
+		bTransaction = true;
+
+		LoadSkinChanger(tRead);
+
+		m_sCurrentSkins = sConfigName;
+		SaveState();
+		if (bNotify)
+			SDK::Output("unibox", std::format("Skin config {} loaded", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+		bTransaction = false;
+	}
+	catch (...)
+	{
+		if (bTransaction)
+		{
+			F::SkinChanger.SetSkins(std::move(mOldSkins));
+			m_sCurrentSkins = sOldCurrentSkins;
+		}
+		SDK::Output("unibox", "Load skins failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+		return false;
+	}
+	return true;
+}
+
+void CConfigs::DeleteSkins(const std::string& sConfigName, bool bNotify)
+{
+	const std::filesystem::path tPath = GetConfigFilePath(m_sSkinsPath, sConfigName, m_sConfigExtension);
+	if (tPath.empty())
+		return;
+
+	try
+	{
+		std::filesystem::remove(tPath);
+
+		if (bNotify)
+			SDK::Output("unibox", std::format("Skin config {} deleted", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+	}
+	catch (...)
+	{
+		SDK::Output("unibox", "Remove skins failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+	}
+}
+
+void CConfigs::ResetSkins(const std::string& sConfigName, bool bNotify)
+{
+	if (GetConfigFilePath(m_sSkinsPath, sConfigName, m_sConfigExtension).empty())
+		return;
+
+	try
+	{
+		F::SkinChanger.SetSkins({});
+
+		SaveSkins(sConfigName, false);
+
+		if (bNotify)
+			SDK::Output("unibox", std::format("Skin config {} reset", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+	}
+	catch (...)
+	{
+		SDK::Output("unibox", "Reset skins failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 	}
 }
