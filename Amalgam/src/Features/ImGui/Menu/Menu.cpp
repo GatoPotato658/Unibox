@@ -1406,6 +1406,7 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::UI::CleanScreenshots, FToggleEnum::Right);
 					FToggle(Vars::Visuals::AntiObs::Enabled, FToggleEnum::Left);
 				} EndSection();
+				/*
 				if (Section("Skins"))
 				{
 					FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
@@ -1500,6 +1501,7 @@ void CMenu::MenuVisuals(int iTab)
 					if (FButton("Remove all skins"))
 						F::SkinChanger.Clear();
 				} EndSection();
+				*/
 				if (Section("Thirdperson", 8))
 				{
 					FToggle(Vars::Visuals::Thirdperson::Enabled, FToggleEnum::Left);

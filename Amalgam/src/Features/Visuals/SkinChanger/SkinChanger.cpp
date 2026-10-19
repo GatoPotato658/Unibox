@@ -494,17 +494,15 @@ int CSkinChanger::OriginalDef(CBaseEntity* pWeapon, int iHandle, int iCurrent) c
 
 void CSkinChanger::RunFrame()
 {
-	if (!Vars::Visuals::SkinChanger::Enabled.Value)
+	Vars::Visuals::SkinChanger::Enabled.Value = false;
+	if (m_bWasEnabled)
 	{
-		if (m_bWasEnabled)
-		{
-			m_bWasEnabled = false;
-			m_uLastHash = 0;
-			m_mTracked.clear();
-			ScheduleRefresh();
-		}
-		return;
+		m_bWasEnabled = false;
+		m_uLastHash = 0;
+		m_mTracked.clear();
+		ScheduleRefresh();
 	}
+	return;
 	m_bWasEnabled = true;
 
 	const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
