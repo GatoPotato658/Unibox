@@ -249,7 +249,7 @@ std::string CMemory::GenerateSignatureAtAddress(uintptr_t uAddress, size_t maxLe
 			uMaxAddr = uMinAddr + lpModuleInfo.SizeOfImage;
 	}
 
-	if (!uMaxAddr)
+	if (!uMaxAddr || uAddress < uMinAddr || uAddress >= uMaxAddr)
 		return {};
 
 	// This is stupid but works
@@ -271,7 +271,7 @@ std::string CMemory::GenerateSignatureAtAddress(uintptr_t uAddress, size_t maxLe
 
 	uintptr_t uLastFound = uMinAddr;
 	uintptr_t uCurrentAddr = uAddress;
-	while (uCurrentAddr - uAddress < maxLength && uCurrentAddr < uMaxAddr)
+	while (uCurrentAddr - uAddress < maxLength && uCurrentAddr + 15 <= uMaxAddr)
 	{
 		hde64s tDecoded;
 		byte uLen = hde64_disasm((LPVOID)(uCurrentAddr), &tDecoded);
@@ -314,7 +314,9 @@ std::string CMemory::GenerateSignatureAtAddress(uintptr_t uAddress, size_t maxLe
 			uintptr_t uFound = FindSignatureAtAddress(uLastFound, vTempPattern, uAddress);
 			if (bFoundAtCurrent && !uFound)
 			{
-				sTempPattern.erase(sTempPattern.length() - uDispSize*2); // Erase last wildcard bytes
+				const size_t uErase = size_t(uDispSize) * 2;
+				if (uErase <= sTempPattern.length())
+					sTempPattern.erase(sTempPattern.length() - uErase); // Erase last wildcard bytes
 				sPattern = sTempPattern;
 				break;
 			}

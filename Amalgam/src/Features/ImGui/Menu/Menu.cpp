@@ -1332,7 +1332,10 @@ void CMenu::MenuVisuals(int iTab)
 										case FNV1A::Hash32Const("models/weapons/w_models/w_repair_claw.mdl"):
 											flForwardRedirect = 2000.f, flForwardCutoff = 0.1f; break;
 										case FNV1A::Hash32Const("models/weapons/c_models/c_flameball/c_flameball.mdl"):
-											flForwardRedirect = H::ConVars.FindVar("tf_fireball_distance")->GetFloat(), flForwardCutoff = 1.f;
+										{
+											static auto tf_fireball_distance = H::ConVars.FindVar("tf_fireball_distance");
+											flForwardRedirect = tf_fireball_distance ? tf_fireball_distance->GetFloat() : 0.f, flForwardCutoff = 1.f;
+										}
 										}
 										physics_performanceparams_t params = {}; F::ProjSim.m_pEnv->GetPerformanceSettings(&params);
 										Vec3 vVelocity, vAngVelocity; F::ProjSim.m_pObj->GetVelocity(&vVelocity, &vAngVelocity);
@@ -1406,7 +1409,6 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::UI::CleanScreenshots, FToggleEnum::Right);
 					FToggle(Vars::Visuals::AntiObs::Enabled, FToggleEnum::Left);
 				} EndSection();
-				/*
 				if (Section("Skins"))
 				{
 					FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
@@ -1501,7 +1503,6 @@ void CMenu::MenuVisuals(int iTab)
 					if (FButton("Remove all skins"))
 						F::SkinChanger.Clear();
 				} EndSection();
-				*/
 				if (Section("Thirdperson", 8))
 				{
 					FToggle(Vars::Visuals::Thirdperson::Enabled, FToggleEnum::Left);

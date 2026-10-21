@@ -12,6 +12,9 @@ MAKE_HOOK(R_DrawSkyBox, S::R_DrawSkyBox(), void,
 		return CALL_ORIGINAL(zFar, nDrawFlags);
 
 	static auto sv_skyname = H::ConVars.FindVar("sv_skyname");
+	if (!sv_skyname)
+		return CALL_ORIGINAL(zFar, nDrawFlags);
+
 	std::string sOriginal = sv_skyname->GetString();
 	sv_skyname->SetValue(Vars::Visuals::World::SkyboxChanger.Value.c_str());
 	CALL_ORIGINAL(zFar, nDrawFlags);

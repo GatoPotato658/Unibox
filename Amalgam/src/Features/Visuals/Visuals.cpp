@@ -834,6 +834,9 @@ void CVisuals::FOV(CTFPlayer* pLocal, CViewSetup* pView)
 {
 	static auto fov_desired = H::ConVars.FindVar("fov_desired");
 	static auto default_fov = H::ConVars.FindVar("default_fov");
+	if (!fov_desired || !default_fov)
+		return;
+
 	bool bZoomed = pLocal->InCond(TF_COND_ZOOMED);
 
 	float flRegularFOV = fov_desired->GetFloat();
@@ -888,7 +891,8 @@ void CVisuals::ThirdPerson(CTFPlayer* pLocal, CViewSetup* pView)
 	pLocal->ThirdPersonSwitch();
 
 	static auto cam_ideallag = H::ConVars.FindVar("cam_ideallag");
-	cam_ideallag->SetValue(0.f);
+	if (cam_ideallag)
+		cam_ideallag->SetValue(0.f);
 
 	if (I::Input->CAM_IsThirdPerson())
 	{	// thirdperson offset

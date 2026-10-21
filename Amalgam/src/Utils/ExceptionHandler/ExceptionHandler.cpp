@@ -101,24 +101,8 @@ static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 	return vTrace;
 }
 
-static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
+static void WriteCrashLog(PEXCEPTION_POINTERS ExceptionInfo, const char* sError, bool bSafeToWalk)
 {
-	const char* sError = "UNKNOWN";
-	switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
-	{
-	case STATUS_ACCESS_VIOLATION: sError = "ACCESS VIOLATION"; break;
-	case STATUS_STACK_OVERFLOW: sError = "STACK OVERFLOW"; break;
-	case STATUS_HEAP_CORRUPTION: sError = "HEAP CORRUPTION"; break;
-	case STATUS_RUNTIME_ERROR:
-	case EXCEPTION_BREAKPOINT:
-	case DBG_PRINTEXCEPTION_C:
-	case DBG_PRINTEXCEPTION_WIDE_C:
-	case DBG_THREAD_NAMING: return EXCEPTION_CONTINUE_SEARCH;
-	}
-
-	if (!Vars::Debug::CrashLogging.Value)
-		return EXCEPTION_CONTINUE_SEARCH;
-
 	std::stringstream ssErrorStream;
 	ssErrorStream << std::format("Error: {} (0x{:X}) ({})\n", sError, ExceptionInfo->ExceptionRecord->ExceptionCode, ++s_iExceptions);
 	ssErrorStream << "Built @ " __DATE__ ", " __TIME__ ", " __CONFIGURATION__ "\n";
@@ -138,31 +122,34 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	ssErrorStream << std::format("RDI: {:#x}\n", ExceptionInfo->ContextRecord->Rdi);
 
 	ssErrorStream << "\n";
-	if (auto vTrace = StackTrace(ExceptionInfo->ContextRecord);
-		!vTrace.empty())
+	if (bSafeToWalk)
 	{
-		for (int i = 0; i < vTrace.size(); i++)
+		if (auto vTrace = StackTrace(ExceptionInfo->ContextRecord);
+			!vTrace.empty())
 		{
-			Frame_t& tFrame = vTrace[i];
+			for (int i = 0; i < vTrace.size(); i++)
+			{
+				Frame_t& tFrame = vTrace[i];
 
-			ssErrorStream << std::format("{}: ", i + 1);
-			if (tFrame.m_uBase)
-				ssErrorStream << std::format("{}+{:#x}", tFrame.m_sModule, tFrame.m_uAddress - tFrame.m_uBase);
-			else
-				ssErrorStream << std::format("{:#x}", tFrame.m_uAddress);
-			if (!tFrame.m_sFile.empty())
-				ssErrorStream << std::format(" ({} L{})", tFrame.m_sFile, tFrame.m_uLine);
-			if (!tFrame.m_sName.empty())
-				ssErrorStream << std::format(" ({})", tFrame.m_sName);
-			if (!tFrame.m_sPattern.empty())
-				ssErrorStream << std::format("\n({})", tFrame.m_sPattern);
+				ssErrorStream << std::format("{}: ", i + 1);
+				if (tFrame.m_uBase)
+					ssErrorStream << std::format("{}+{:#x}", tFrame.m_sModule, tFrame.m_uAddress - tFrame.m_uBase);
+				else
+					ssErrorStream << std::format("{:#x}", tFrame.m_uAddress);
+				if (!tFrame.m_sFile.empty())
+					ssErrorStream << std::format(" ({} L{})", tFrame.m_sFile, tFrame.m_uLine);
+				if (!tFrame.m_sName.empty())
+					ssErrorStream << std::format(" ({})", tFrame.m_sName);
+				if (!tFrame.m_sPattern.empty())
+					ssErrorStream << std::format("\n({})", tFrame.m_sPattern);
+				ssErrorStream << "\n";
+			}
+		}
+		else
+		{
+			ssErrorStream << U::Memory.GetModuleOffset(ExceptionInfo->ExceptionRecord->ExceptionAddress);
 			ssErrorStream << "\n";
 		}
-	}
-	else
-	{
-		ssErrorStream << U::Memory.GetModuleOffset(ExceptionInfo->ExceptionRecord->ExceptionAddress);
-		ssErrorStream << "\n";
 	}
 
 	try
@@ -187,6 +174,31 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 		SDK::Output("Unhandled exception", ssErrorStream.str().c_str(), {}, OUTPUT_DEBUG, nullptr, MB_OK | MB_ICONERROR);
 	}
 #endif
+}
+
+static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
+{
+	const char* sError = "UNKNOWN";
+	switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
+	{
+	case STATUS_ACCESS_VIOLATION: sError = "ACCESS VIOLATION"; break;
+	case STATUS_STACK_OVERFLOW: sError = "STACK OVERFLOW"; break;
+	case STATUS_HEAP_CORRUPTION: sError = "HEAP CORRUPTION"; break;
+	case STATUS_RUNTIME_ERROR:
+	case EXCEPTION_BREAKPOINT:
+	case DBG_PRINTEXCEPTION_C:
+	case DBG_PRINTEXCEPTION_WIDE_C:
+	case DBG_THREAD_NAMING: return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	if (!Vars::Debug::CrashLogging.Value)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	__try
+	{
+		WriteCrashLog(ExceptionInfo, sError, ExceptionInfo->ExceptionRecord->ExceptionCode != STATUS_STACK_OVERFLOW);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
 
 	return EXCEPTION_CONTINUE_SEARCH;
 }

@@ -102,20 +102,16 @@ namespace
 		return nullptr;
 	}
 
-	int TemplateDef(int iKit, int iBaseDef)
+	int TemplateDef(const SkinData::Kit_t& tKit, int iBaseDef)
 	{
-		const auto pKit = FindKit(iKit);
-		if (!pKit)
-			return 0;
-
-		switch (pKit->iGroup)
+		switch (tKit.iGroup)
 		{
 		case SkinData::KitGeneric: return Contains(SkinData::kGenericDefs, iBaseDef) ? iBaseDef : 0;
 		case SkinData::KitDragonSlayer: return Contains(SkinData::kDragonSlayerDefs, iBaseDef) ? iBaseDef : 0;
 		case SkinData::KitMk1:
 			for (const auto& tWeapon : SkinData::kMk1Weapons)
 			{
-				if (tWeapon.iKit == iKit && tWeapon.iBaseDef == iBaseDef)
+				if (tWeapon.iKit == tKit.iId && tWeapon.iBaseDef == iBaseDef)
 					return tWeapon.iPaintDef;
 			}
 			return 0;
@@ -130,15 +126,20 @@ namespace
 		int iTargetDef = 0;
 	};
 
-	PaintPlan_t PlanPaint(int iKey, int iKit, bool bAllowUnsupported)
+	PaintPlan_t PlanPaint(int iKey, const SkinData::Kit_t& tKit, bool bAllowUnsupported)
 	{
 		PaintPlan_t tPlan = {};
 		const auto pBase = FindPaintBase(iKey);
-		const int iTemplate = pBase ? TemplateDef(iKit, pBase->iBaseDef) : 0;
-		tPlan.bSupported = iTemplate && pBase->iKind == SkinData::BasePlain;
+		tPlan.iTargetDef = pBase ? TemplateDef(tKit, pBase->iBaseDef) : 0;
+		tPlan.bSupported = tPlan.iTargetDef && pBase->iKind == SkinData::BasePlain;
 		tPlan.bListed = tPlan.bSupported || bAllowUnsupported;
-		tPlan.iTargetDef = iTemplate;
 		return tPlan;
+	}
+
+	PaintPlan_t PlanPaint(int iKey, int iKit, bool bAllowUnsupported)
+	{
+		const auto pKit = FindKit(iKit);
+		return pKit ? PlanPaint(iKey, *pKit, bAllowUnsupported) : PaintPlan_t{};
 	}
 
 	unsigned HashSkin(int iKey, const Skin_t& tSkin)
@@ -248,12 +249,19 @@ namespace
 		return 0;
 	}
 
+	int CachedEconOffset(int& iOffset, const char* sProp)
+	{
+		if (!iOffset)
+			iOffset = ResolveEconOffset(sProp);
+		return iOffset;
+	}
+
 	CAttributeList* AttributeList(CTFWeaponBase* pWeapon)
 	{
 		if (!pWeapon)
 			return nullptr;
-		static int nOffset = ResolveEconOffset("m_AttributeList");
-		if (nOffset <= 0)
+		static int nOffset = 0;
+		if (!CachedEconOffset(nOffset, "m_AttributeList"))
 			return nullptr;
 		return reinterpret_cast<CAttributeList*>(uintptr_t(pWeapon) + nOffset);
 	}
@@ -262,8 +270,8 @@ namespace
 	{
 		if (!pWeapon)
 			return nullptr;
-		static int nOffset = ResolveEconOffset("m_iItemDefinitionIndex");
-		if (nOffset <= 0)
+		static int nOffset = 0;
+		if (!CachedEconOffset(nOffset, "m_iItemDefinitionIndex"))
 			return nullptr;
 		return reinterpret_cast<uint16_t*>(uintptr_t(pWeapon) + nOffset);
 	}
@@ -272,8 +280,8 @@ namespace
 	{
 		if (!pWeapon)
 			return nullptr;
-		static int nOffset = ResolveEconOffset("m_iEntityQuality");
-		if (nOffset <= 0)
+		static int nOffset = 0;
+		if (!CachedEconOffset(nOffset, "m_iEntityQuality"))
 			return nullptr;
 		return reinterpret_cast<int*>(uintptr_t(pWeapon) + nOffset);
 	}
@@ -418,7 +426,7 @@ void CSkinChanger::GetKits(int iKey, bool bAllowUnsupported, int iCurrent, std::
 			if ((tKit.iGroup == SkinData::KitMk1) != (iPass == 1))
 				continue;
 
-			const auto tPlan = PlanPaint(iKey, tKit.iId, bAllowUnsupported);
+			const auto tPlan = PlanPaint(iKey, tKit, bAllowUnsupported);
 			if (!tPlan.bListed && tKit.iId != iCurrent)
 				continue;
 
@@ -494,20 +502,26 @@ int CSkinChanger::OriginalDef(CBaseEntity* pWeapon, int iHandle, int iCurrent) c
 
 void CSkinChanger::RunFrame()
 {
-	Vars::Visuals::SkinChanger::Enabled.Value = false;
-	if (m_bWasEnabled)
+	if (!Vars::Visuals::SkinChanger::Enabled.Value)
 	{
-		m_bWasEnabled = false;
-		m_uLastHash = 0;
-		m_mTracked.clear();
-		ScheduleRefresh();
+		std::lock_guard tLock(m_tMutex);
+		if (m_bWasEnabled)
+		{
+			m_bWasEnabled = false;
+			m_uLastHash = 0;
+			m_mTracked.clear();
+			ScheduleRefresh();
+		}
+		return;
 	}
-	return;
+
+	const auto mSkins = GetSkins();
+
+	std::lock_guard tLock(m_tMutex);
 	m_bWasEnabled = true;
 
 	const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
 
-	const auto mSkins = GetSkins();
 	const bool bAllowUnsupported = Vars::Visuals::SkinChanger::AllowUnsupported.Value;
 	if (const unsigned uHash = ConfigHash(mSkins, bAllowUnsupported); uHash != m_uLastHash)
 	{
@@ -560,30 +574,36 @@ void CSkinChanger::RunFrame()
 
 void CSkinChanger::Apply()
 {
-	const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
-	if (bFullPacket)
-		m_bRefreshPending = false;
+	{
+		std::lock_guard tLock(m_tMutex);
+		const bool bFullPacket = I::ClientState && I::ClientState->m_nDeltaTick == -1;
+		if (bFullPacket)
+			m_bRefreshPending = false;
+	}
 
 	RunFrame();
 }
 
 void CSkinChanger::Service()
 {
-	if (!I::EngineClient || !I::ClientState || !I::GlobalVars
-		|| !I::EngineClient->IsInGame() || I::EngineClient->IsPlayingDemo())
 	{
-		m_bRefreshPending = false;
-	}
-	else
-	{
-		const float flNow = I::GlobalVars->realtime;
-		if (m_bRefreshPending && flNow - m_flDirtyTime >= 0.35f && flNow - m_flLastRefresh >= 1.f)
+		std::lock_guard tLock(m_tMutex);
+		if (!I::EngineClient || !I::ClientState || !I::GlobalVars
+			|| !I::EngineClient->IsInGame() || I::EngineClient->IsPlayingDemo())
 		{
 			m_bRefreshPending = false;
-			if (I::ClientState->m_nDeltaTick != -1)
+		}
+		else
+		{
+			const float flNow = I::GlobalVars->realtime;
+			if (m_bRefreshPending && flNow - m_flDirtyTime >= 0.35f && flNow - m_flLastRefresh >= 1.f)
 			{
-				m_flLastRefresh = flNow;
-				I::ClientState->ForceFullUpdate();
+				m_bRefreshPending = false;
+				if (I::ClientState->m_nDeltaTick != -1)
+				{
+					m_flLastRefresh = flNow;
+					I::ClientState->ForceFullUpdate();
+				}
 			}
 		}
 	}
@@ -593,6 +613,8 @@ void CSkinChanger::Service()
 
 void CSkinChanger::CacheMenuInfo(CTFWeaponBase* pWeapon)
 {
+	std::lock_guard tLock(m_tMutex);
+
 	HeldWeapon_t tHeld = {};
 	if (pWeapon)
 	{
@@ -611,7 +633,6 @@ void CSkinChanger::CacheMenuInfo(CTFWeaponBase* pWeapon)
 		}
 	}
 
-	std::lock_guard tLock(m_tMutex);
 	m_tHeld = tHeld;
 }
 

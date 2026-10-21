@@ -881,6 +881,8 @@ void CMisc::WeaponSway()
 {
 	static auto cl_wpn_sway_interp = H::ConVars.FindVar("cl_wpn_sway_interp");
 	static auto cl_wpn_sway_scale = H::ConVars.FindVar("cl_wpn_sway_scale");
+	if (!cl_wpn_sway_interp || !cl_wpn_sway_scale)
+		return;
 
 	bool bSway = Vars::Visuals::Viewmodel::SwayInterp.Value || Vars::Visuals::Viewmodel::SwayScale.Value;
 	cl_wpn_sway_interp->SetValue(bSway ? Vars::Visuals::Viewmodel::SwayInterp.Value : 0.f);
@@ -1345,7 +1347,10 @@ void CMisc::UnlockAchievements()
 	{
 		I::SteamUserStats->RequestCurrentStats();
 		for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
-			pAchievementMgr->AwardAchievement(pAchievementMgr->GetAchievementByIndex(i)->GetAchievementID());
+		{
+			if (const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i))
+				pAchievementMgr->AwardAchievement(pAchievement->GetAchievementID());
+		}
 		I::SteamUserStats->StoreStats();
 		I::SteamUserStats->RequestCurrentStats();
 	}
@@ -1382,7 +1387,10 @@ void CMisc::LockAchievements()
 	{
 		I::SteamUserStats->RequestCurrentStats();
 		for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
-			I::SteamUserStats->ClearAchievement(pAchievementMgr->GetAchievementByIndex(i)->GetName());
+		{
+			if (const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i))
+				I::SteamUserStats->ClearAchievement(pAchievement->GetName());
+		}
 		I::SteamUserStats->StoreStats();
 		I::SteamUserStats->RequestCurrentStats();
 	}

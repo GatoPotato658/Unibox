@@ -263,8 +263,10 @@ void CCore::Unload()
 
 	if (F::Menu.m_bIsOpen)
 		I::MatSystemSurface->SetCursorAlwaysVisible(false);
-	H::ConVars.FindVar("cl_wpn_sway_interp")->SetValue(0.f);
-	H::ConVars.FindVar("cl_wpn_sway_scale")->SetValue(0.f);
+	if (auto pSwayInterp = H::ConVars.FindVar("cl_wpn_sway_interp"))
+		pSwayInterp->SetValue(0.f);
+	if (auto pSwayScale = H::ConVars.FindVar("cl_wpn_sway_scale"))
+		pSwayScale->SetValue(0.f);
 	F::Visuals.RestoreWorldModulation();
 	if (auto pLocal = H::Entities.GetLocal())
 	{
