@@ -16,8 +16,6 @@ static bool TryNavToHiddenSpot(const Vector& vVischeckPoint, PriorityListEnum::P
 
 bool CNavBotReload::Run()
 {
-	static Timer tReloadRunCooldown{};
-
 	if (!HasTask() || !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
 	{
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload)
@@ -28,7 +26,7 @@ bool CNavBotReload::Run()
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::RunReload)
 		return false;
 
-	if (!tReloadRunCooldown.Run(1.f))
+	if (!m_tRunReloadCooldown.Run(1.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload;
 
 	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload && F::NavEngine.IsPathing())
@@ -46,8 +44,6 @@ bool CNavBotReload::Run()
 
 bool CNavBotReload::RunSafe()
 {
-	static Timer tReloadRunCooldown{};
-
 	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) || !HasTask())
 	{
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload)
@@ -55,7 +51,7 @@ bool CNavBotReload::RunSafe()
 		return false;
 	}
 
-	if (!tReloadRunCooldown.Run(1.f))
+	if (!m_tSafeReloadCooldown.Run(1.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload;
 
 	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload && F::NavEngine.IsPathing())
@@ -72,6 +68,13 @@ bool CNavBotReload::RunSafe()
 
 	vHideFrom.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 	return TryNavToHiddenSpot(vHideFrom, PriorityListEnum::RunSafeReload);
+}
+
+void CNavBotReload::Reset()
+{
+	m_tRunReloadCooldown = Timer();
+	m_tSafeReloadCooldown = Timer();
+	m_iLastReloadSlot = -1;
 }
 
 int CNavBotReload::GetReloadWeaponSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy)

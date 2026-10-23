@@ -537,8 +537,8 @@ void CNavBotJobSystem::Reset()
 {
 	m_bDangerLatch = false;
 	F::NavBotStayNear.Reset();
-	F::NavBotReload.m_iLastReloadSlot = -1;
-	F::NavBotSnipe.m_iTargetIdx = -1;
+	F::NavBotReload.Reset();
+	F::NavBotSnipe.Reset();
 	F::NavBotSupplies.Reset();
 	F::NavBotEngineer.Reset();
 	F::NavBotCapture.Reset();

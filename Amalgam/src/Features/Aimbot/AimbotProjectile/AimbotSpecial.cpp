@@ -121,6 +121,12 @@ bool CAimbotProjectile::SolveAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 	m_bBlockAimAnglesDraw = false;
 
 	auto vTargets = GetAbilityTargets(pLocal, pWeapon);
+	if (iSpecial == ProjSpecialEnum::SpyEmp)
+		std::erase_if(vTargets, [](const Target_t& tTarget)
+			{
+				return tTarget.m_iTargetType != TargetEnum::Sentry && tTarget.m_iTargetType != TargetEnum::Dispenser
+					&& tTarget.m_iTargetType != TargetEnum::Teleporter;
+			});
 	if (m_tZombie.m_iTargetEnt)
 	{
 		std::stable_partition(vTargets.begin(), vTargets.end(), [&](const Target_t& tTarget)
@@ -272,12 +278,36 @@ bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		}
 		break;
 	}
-	case ZombiePhaseEnum::Windup:
 	case ZombiePhaseEnum::Burst:
 	{
-		iDelay = tState.m_iPhase == ZombiePhaseEnum::Windup ? std::max(tState.m_iEndTick - iTick, 0) : 0;
+		const int iBlobInterval = GetEventTicks(kSpewInterval);
+		const int iBlob = iElapsed / iBlobInterval;
+		iDelay = iElapsed - iBlob * iBlobInterval;
 
-		if (iTick - tState.m_iLastSolveTick >= GetSolveInterval(iDelay, tState.m_iPhase == ZombiePhaseEnum::Windup))
+		if (iTick - tState.m_iLastSolveTick >= GetSolveInterval(0, false))
+		{
+			tState.m_iLastSolveTick = iTick;
+			Target_t tTarget;
+			if (SolveAbility(pLocal, pWeapon, tState.m_iSpecial, iDelay, tTarget))
+			{
+				tState.m_iTargetEnt = tTarget.m_pEntity->entindex();
+				tState.m_vAngle = tTarget.m_vAngleTo;
+				ShowTarget(1, tTarget);
+			}
+		}
+
+		if (iTick >= tState.m_iEndTick)
+		{
+			tState.m_iPhase = ZombiePhaseEnum::Tail;
+			tState.m_iEndTick = iTick + kTailTicks;
+		}
+		break;
+	}
+	case ZombiePhaseEnum::Windup:
+	{
+		iDelay = std::max(tState.m_iEndTick - iTick, 0);
+
+		if (iTick - tState.m_iLastSolveTick >= GetSolveInterval(iDelay, true))
 		{
 			tState.m_iLastSolveTick = iTick;
 			Target_t tTarget;

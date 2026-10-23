@@ -26,8 +26,6 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 	if (!F::BotUtils.GetDormantOrigin(iEntIdx, &vOrigin))
 		return false;
 
-	vOrigin.z += 40.f;
-
 	auto pNavFile = F::NavEngine.GetNavFile();
 	if (!pNavFile)
 		return false;
@@ -36,15 +34,22 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 		return false;
 
 	const float flMinDist = GetSnipeMinDistance(bShortRangeClass);
+	const float flMaxDist = std::max(flMinDist + 512.f, static_cast<float>(F::NavBotCore.m_tSelectedConfig.m_flMax));
 
 	std::vector<NavAreaScore_t> vCandidates;
-	for (auto& tArea : pNavFile->m_vAreas)
+	std::vector<CNavArea*> vAreas;
+	pNavFile->QueryOverlapping(vOrigin, flMaxDist, vAreas);
+	vCandidates.reserve(vAreas.size());
+	for (CNavArea* pArea : vAreas)
 	{
-		Vector vAreaOrigin = tArea.m_vCenter;
+		if (!pArea)
+			continue;
+
+		Vector vAreaOrigin = pArea->m_vCenter;
 		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 		if (vOrigin.DistTo(vAreaOrigin) <= flMinDist)
 			continue;
-		vCandidates.push_back({ &tArea, tArea.m_vCenter.DistTo(vOrigin) });
+		vCandidates.push_back({ pArea, pArea->m_vCenter.DistTo(vOrigin) });
 	}
 
 	const bool bLowestFirst = !F::NavBotCore.m_tSelectedConfig.m_bPreferFar;
@@ -53,8 +58,10 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 			return bLowestFirst ? a.m_flScore < b.m_flScore : a.m_flScore > b.m_flScore;
 		});
 
-	for (const auto& tCandidate : vCandidates)
+	const size_t nTraceCandidates = std::min<size_t>(vCandidates.size(), 64);
+	for (size_t i = 0; i < nTraceCandidates; ++i)
 	{
+		const auto& tCandidate = vCandidates[i];
 		Vector vAreaOrigin = tCandidate.m_pArea->m_vCenter;
 		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
 		if (!F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vOrigin, MASK_SHOT | CONTENTS_GRATE))
@@ -68,9 +75,6 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 
 bool CNavBotSnipe::Run(CTFPlayer* pLocal)
 {
-	static Timer tSentrySnipeCooldown{};
-	static Timer tInvalidTargetTimer{};
-
 	const auto Release = [this]() -> bool
 		{
 			m_iTargetIdx = -1;
@@ -86,27 +90,28 @@ bool CNavBotSnipe::Run(CTFPlayer* pLocal)
 	if (bShortRangeClass && !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange))
 		return Release();
 
-	if (!tSentrySnipeCooldown.Run(2.f))
+	if (!m_tSnipeCooldown.Run(2.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::SnipeSentry;
 
 	const auto eTargetState = F::BotUtils.ShouldTargetBuilding(pLocal, m_iTargetIdx);
 	if (eTargetState == ShouldTargetEnum::Target)
 	{
-		tInvalidTargetTimer.Update();
+		m_tInvalidTargetTimer.Update();
 
 		Vector vOrigin;
 		if (F::BotUtils.GetDormantOrigin(m_iTargetIdx, &vOrigin))
 		{
-			if (F::NavEngine.m_tLastCrumb.m_pNavArea && IsAreaValidForSnipe(vOrigin, F::NavEngine.m_tLastCrumb.m_pNavArea->m_vCenter, bShortRangeClass))
+			auto pLocalArea = F::NavEngine.GetLocalNavArea();
+			if (pLocalArea && IsAreaValidForSnipe(vOrigin, pLocalArea->m_vCenter, bShortRangeClass))
 				return true;
 			if (TryToSnipe(m_iTargetIdx, bShortRangeClass))
 				return true;
 		}
 	}
-	else if (eTargetState == ShouldTargetEnum::Invalid && !tInvalidTargetTimer.Check(0.1f))
+	else if (eTargetState == ShouldTargetEnum::Invalid && !m_tInvalidTargetTimer.Check(0.1f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::SnipeSentry;
 
-	tInvalidTargetTimer.Update();
+	m_tInvalidTargetTimer.Update();
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingEnemy))
 	{
@@ -125,4 +130,11 @@ bool CNavBotSnipe::Run(CTFPlayer* pLocal)
 	}
 
 	return Release();
+}
+
+void CNavBotSnipe::Reset()
+{
+	m_iTargetIdx = -1;
+	m_tSnipeCooldown = Timer();
+	m_tInvalidTargetTimer = Timer();
 }

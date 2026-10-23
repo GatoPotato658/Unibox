@@ -79,6 +79,8 @@ private:
 
 	int m_iNeedsCache = FaceTypeEnum::Cache;
 	std::unordered_map<void*, std::vector<Face_t>> m_mFaceCache = {};
+	std::vector<int> m_vBrushStorage = {};
+	std::vector<Vec3> m_vDispVertices = std::vector<Vec3>(3);
 
 public:
 	void Cache();

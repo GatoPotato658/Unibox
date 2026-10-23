@@ -77,6 +77,11 @@ int CBacktrack::GetAnticipatedChoke(int iMethod)
 	return iAnticipatedChoke;
 }
 
+int CBacktrack::GetServerTick()
+{
+	return m_iTickCount + TIME_TO_TICKS(GetReal(FLOW_OUTGOING)) + GetAnticipatedChoke();
+}
+
 void CBacktrack::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	if (F::AntiCheatCompatibility.Active())
@@ -160,7 +165,7 @@ std::vector<TickRecord*> CBacktrack::GetValidRecords(std::vector<TickRecord*>& v
 
 	std::vector<TickRecord*> vReturn = {};
 	float flCorrect = std::clamp(GetReal(MAX_FLOWS, false) + ROUND_TO_TICKS(GetFakeInterp()), 0.f, m_flMaxUnlag) + flTimeMod;
-	int iServerTick = m_iTickCount + TIME_TO_TICKS(GetReal(FLOW_OUTGOING)) + GetAnticipatedChoke() + Vars::Backtrack::Offset.Value;
+	int iServerTick = GetServerTick() + Vars::Backtrack::Offset.Value;
 
 	if (!F::AntiCheatCompatibility.Active() && GetWindow())
 	{

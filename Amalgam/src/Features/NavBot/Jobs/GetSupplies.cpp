@@ -18,15 +18,15 @@ static PriorityListEnum::PriorityListEnum GetSupplyPriority(int iFlags)
 	return PriorityListEnum::GetAmmo;
 }
 
-static SupplyData_t BuildRememberedDispenser(const Vector& vOrigin)
+static bool HasSupplyAt(const std::vector<SupplyData_t>& vSupplies, const Vector& vOrigin, float flRadius = 32.f)
 {
-	SupplyData_t tRemembered{};
-	tRemembered.m_bDispenser = true;
-	tRemembered.m_vOrigin = vOrigin;
-	return tRemembered;
+	for (const auto& tSupply : vSupplies)
+		if (tSupply.m_vOrigin.DistToSqr(vOrigin) <= flRadius * flRadius)
+			return true;
+	return false;
 }
 
-bool CNavBotSupplies::GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bool bAmmo)
+bool CNavBotSupplies::GetSuppliesData(CTFPlayer* pLocal, bool bAmmo)
 {
 	if (bAmmo)
 	{
@@ -35,8 +35,12 @@ bool CNavBotSupplies::GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bo
 			if (pEntity->IsDormant())
 				continue;
 
+			const Vector vOrigin = pEntity->GetAbsOrigin();
+			if (HasSupplyAt(m_vCachedAmmoOrigins, vOrigin))
+				continue;
+
 			SupplyData_t tData;
-			tData.m_vOrigin = pEntity->GetAbsOrigin();
+			tData.m_vOrigin = vOrigin;
 			m_vTempMain.emplace_back(tData);
 		}
 		m_vTempMain.insert(m_vTempMain.end(), m_vCachedAmmoOrigins.begin(), m_vCachedAmmoOrigins.end());
@@ -48,7 +52,6 @@ bool CNavBotSupplies::GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bo
 		return false;
 
 	SortSuppliesByDistance(m_vTempMain, pLocal->GetAbsOrigin());
-	bClosestTaken = m_vTempMain.front().m_flRespawnTime != 0.f;
 	return true;
 }
 
@@ -67,7 +70,7 @@ bool CNavBotSupplies::GetDispensersData(CTFPlayer* pLocal)
 		if (!F::BotUtils.GetDormantOrigin(pDispenser->entindex(), &vOrigin))
 			continue;
 
-		auto pClosestArea = F::NavEngine.FindClosestNavArea(vOrigin);
+		auto pClosestArea = F::NavEngine.FindClosestNavArea(vOrigin, false);
 		if (!pClosestArea)
 			continue;
 
@@ -79,6 +82,7 @@ bool CNavBotSupplies::GetDispensersData(CTFPlayer* pLocal)
 		SupplyData_t tData;
 		tData.m_bDispenser = true;
 		tData.m_vOrigin = vOrigin;
+		tData.m_iDispenserIdx = pDispenser->entindex();
 		m_vTempDispensers.emplace_back(tData);
 	}
 
@@ -86,6 +90,31 @@ bool CNavBotSupplies::GetDispensersData(CTFPlayer* pLocal)
 		return false;
 
 	SortSuppliesByDistance(m_vTempDispensers, pLocal->GetAbsOrigin());
+	return true;
+}
+
+bool CNavBotSupplies::GetRememberedDispenser(CTFPlayer* pLocal, SupplyData_t& tOut) const
+{
+	if (!m_bHasRememberedDispenser || m_iRememberedDispenserIdx <= 0)
+		return false;
+
+	auto pEntity = I::ClientEntityList->GetClientEntity(m_iRememberedDispenserIdx);
+	if (!pEntity || pEntity->IsDormant() || pEntity->GetClassID() != ETFClassID::CObjectDispenser)
+		return false;
+
+	auto pDispenser = pEntity->As<CObjectDispenser>();
+	if (pDispenser->m_iTeamNum() != pLocal->m_iTeamNum()
+		|| pDispenser->m_bCarried() || pDispenser->m_bBuilding() || pDispenser->m_bHasSapper())
+		return false;
+
+	const Vector vOrigin = pDispenser->GetAbsOrigin();
+	if (vOrigin.DistTo(m_vRememberedDispenser) > 64.f)
+		return false;
+
+	tOut = {};
+	tOut.m_bDispenser = true;
+	tOut.m_iDispenserIdx = m_iRememberedDispenserIdx;
+	tOut.m_vOrigin = vOrigin;
 	return true;
 }
 
@@ -183,7 +212,6 @@ bool CNavBotSupplies::GetSupply(CUserCmd* pCmd, CTFPlayer* pLocal, Vector vLocal
 				return false;
 
 			Vector vPathPoint = pLocalArea->GetNearestPoint(Vec2(pSupplyData->m_vOrigin.x, pSupplyData->m_vOrigin.y));
-			vPathPoint.z = pSupplyData->m_vOrigin.z;
 
 			if (!pSupplyData->m_flRespawnTime && flDist <= 20.f)
 			{
@@ -244,9 +272,10 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 	{
 		if (!bIsAmmo && m_bHasRememberedDispenser && bNeedsHealthStill && !m_tRememberedDispenser.Check(2.f))
 		{
-			auto tRemembered = BuildRememberedDispenser(m_vRememberedDispenser);
-			if (GetSupply(pCmd, pLocal, pLocal->GetAbsOrigin(), &tRemembered, ePriority))
+			SupplyData_t tRemembered;
+			if (GetRememberedDispenser(pLocal, tRemembered) && GetSupply(pCmd, pLocal, pLocal->GetAbsOrigin(), &tRemembered, ePriority))
 				return true;
+			m_bHasRememberedDispenser = false;
 		}
 
 		if (bActiveSupplyJob && bCanKeepStickyLock && !m_tStickyLock.Check(1.25f))
@@ -266,8 +295,7 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 
 	UpdateTakenState();
 	m_bWasForce = false;
-	bool bClosestSupplyWasTaken = false;
-	const bool bGotSupplies = GetSuppliesData(pLocal, bClosestSupplyWasTaken, bIsAmmo);
+	const bool bGotSupplies = GetSuppliesData(pLocal, bIsAmmo);
 	const bool bGotDispensers = GetDispensersData(pLocal);
 	if (!bIsAmmo)
 	{
@@ -275,13 +303,15 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 		{
 			m_bHasRememberedDispenser = true;
 			m_vRememberedDispenser = m_vTempDispensers.front().m_vOrigin;
+			m_iRememberedDispenserIdx = m_vTempDispensers.front().m_iDispenserIdx;
 			m_tRememberedDispenser.Update();
 		}
 		else if (m_bHasRememberedDispenser && bNeedsHealthStill && !m_tRememberedDispenser.Check(2.f))
 		{
-			auto tRemembered = BuildRememberedDispenser(m_vRememberedDispenser);
-			if (GetSupply(pCmd, pLocal, pLocal->GetAbsOrigin(), &tRemembered, ePriority))
+			SupplyData_t tRemembered;
+			if (GetRememberedDispenser(pLocal, tRemembered) && GetSupply(pCmd, pLocal, pLocal->GetAbsOrigin(), &tRemembered, ePriority))
 				return true;
+			m_bHasRememberedDispenser = false;
 		}
 		else if (m_bHasRememberedDispenser && (m_tRememberedDispenser.Check(2.f) || !bNeedsHealthStill))
 			m_bHasRememberedDispenser = false;
@@ -302,41 +332,22 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 		SortSuppliesByDistance(m_vTempMain, vLocalOrigin);
 	}
 
-	SupplyData_t* pBest = nullptr, * pSecondBest = nullptr;
-	if (bClosestSupplyWasTaken)
+	SupplyData_t* pBest = nullptr;
+	for (auto& tSupplyData : m_vTempMain)
 	{
-		for (auto& tSupplyData : m_vTempMain)
+		if (!tSupplyData.m_flRespawnTime)
 		{
-			if (tSupplyData.m_flRespawnTime)
-				continue;
-
-			if (pBest)
-			{
-				pSecondBest = &tSupplyData;
-				break;
-			}
 			pBest = &tSupplyData;
+			break;
 		}
 	}
 
+	if (!pBest && bGotDispensers)
+		pBest = &m_vTempDispensers.front();
 	if (!pBest)
 	{
-		pBest = &m_vTempMain.front();
-		if (bGotDispensers)
-		{
-			if (bClosestSupplyWasTaken)
-				pBest = &m_vTempDispensers.front();
-		}
-		else if (m_vTempMain.size() > 1)
-			pSecondBest = &m_vTempMain.at(1);
-	}
-
-	if (pSecondBest)
-	{
-		const float flFirstTargetCost = F::NavEngine.GetPathCost(vLocalOrigin, pBest->m_vOrigin);
-		const float flSecondTargetCost = F::NavEngine.GetPathCost(vLocalOrigin, pSecondBest->m_vOrigin);
-		if (flSecondTargetCost < flFirstTargetCost)
-			pBest = pSecondBest;
+		m_tCooldown.Update();
+		return false;
 	}
 
 	if (GetSupply(pCmd, pLocal, vLocalOrigin, pBest, ePriority))
@@ -353,6 +364,8 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 void CNavBotSupplies::AddCachedSupplyOrigin(Vector vOrigin, bool bHealth)
 {
 	auto& vCache = bHealth ? m_vCachedHealthOrigins : m_vCachedAmmoOrigins;
+	if (HasSupplyAt(vCache, vOrigin, 8.f))
+		return;
 
 	SupplyData_t tData;
 	tData.m_vOrigin = vOrigin;
@@ -373,6 +386,7 @@ void CNavBotSupplies::Reset()
 	m_vTempDispensers.clear();
 	m_bWasForce = false;
 	m_bHasRememberedDispenser = false;
+	m_iRememberedDispenserIdx = -1;
 	m_tRememberedDispenser = Timer();
 	m_tStickyLock = Timer();
 	m_tCooldown = Timer();

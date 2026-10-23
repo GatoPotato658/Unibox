@@ -8,6 +8,9 @@
 #include "../Features/NavBot/Hazards.h"
 #include "../Features/NavBot/Jobs/NavBotJobs.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
+#ifndef TEXTMODE
+#include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#endif
 
 MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	void* rcx)
@@ -27,6 +30,9 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	F::Hazards.Reset();
 	F::NavBotSupplies.ResetCachedOrigins();
 	F::AutoVote.Reset();
+#ifndef TEXTMODE
+	F::SkinChanger.OnLevelShutdown();
+#endif
 
 	CALL_ORIGINAL(rcx);
 }

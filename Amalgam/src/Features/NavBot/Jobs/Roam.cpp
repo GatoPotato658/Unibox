@@ -59,7 +59,9 @@ bool CNavBotRoam::RunDefend(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const Vec
 		return false;
 
 	if (m_pDefendSpotArea && F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol
-		&& F::NavEngine.IsPathing() && m_pDefendSpotArea->m_vCenter.DistTo(vLocalOrigin) > 250.f)
+		&& F::NavEngine.IsPathing()
+		&& F::NavEngine.m_vLastDestination.DistToSqr(m_pDefendSpotArea->m_vCenter) <= 128.f * 128.f
+		&& m_pDefendSpotArea->m_vCenter.DistTo(vLocalOrigin) > 250.f)
 	{
 		m_bDefending = true;
 		return true;
@@ -82,6 +84,7 @@ bool CNavBotRoam::RunDefend(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const Vec
 	if (tHidingSpot.first->m_vCenter.DistTo(vLocalOrigin) <= 250.f)
 	{
 		F::NavEngine.CancelPath();
+		m_pDefendSpotArea = nullptr;
 		m_bDefending = true;
 		return true;
 	}
@@ -111,7 +114,6 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		m_pLastMap = pMap;
 		m_pLastAreaData = pAreaData;
 		m_nLastAreaCount = nAreaCount;
-		m_tConnectedAreasRefresh.Update();
 	}
 
 	if (m_tVisitedAreasClear.Run(60.f) || m_vVisitedAreas.size() > 40)
@@ -153,6 +155,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	}
 
 	m_bDefending = false;
+	m_pDefendSpotArea = nullptr;
 	if (m_pCurrentTargetArea && F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol)
 	{
 		bool bBlacklisted = false;
@@ -161,7 +164,8 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			bBlacklisted = pMap->GetAreaBlock(m_pCurrentTargetArea, I::GlobalVars->tickcount) == CMap::AreaBlock::Stuck;
 		}
 		const bool bReached = F::NavEngine.GetLocalNavArea() == m_pCurrentTargetArea;
-		if (!bBlacklisted && (F::NavEngine.IsPathing()
+		const bool bPathTargetsArea = F::NavEngine.m_vLastDestination.DistToSqr(m_pCurrentTargetArea->m_vCenter) <= 128.f * 128.f;
+		if (!bBlacklisted && ((F::NavEngine.IsPathing() && bPathTargetsArea)
 			|| (!bReached && F::NavEngine.NavTo(m_pCurrentTargetArea->m_vCenter, PriorityListEnum::Patrol))))
 			return true;
 	}
@@ -171,22 +175,10 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	if (!pLocalArea)
 		return false;
 
-	if (m_pLastConnectedSeed != pLocalArea || m_sConnectedAreas.empty() || m_tConnectedAreasRefresh.Run(2.f))
-	{
-		std::vector<CNavArea*> vConnectedAreas;
-		pMap->CollectAreasAround(vLocalOrigin, 100000.f, vConnectedAreas);
-
-		m_sConnectedAreas.clear();
-		for (auto pArea : vConnectedAreas)
-		{
-			if (pArea)
-				m_sConnectedAreas.insert(pArea);
-		}
-		if (m_sConnectedAreas.empty())
-			m_sConnectedAreas.insert(pLocalArea);
-
-		m_pLastConnectedSeed = pLocalArea;
-	}
+	constexpr float flPreferredPatrolDistance = 2200.f;
+	constexpr float flNearPenaltyStart = 800.f;
+	constexpr float flLongPenaltyStart = 4200.f;
+	constexpr float flLongPenaltyCap = 5600.f;
 
 	struct RoamCandidate_t
 	{
@@ -201,7 +193,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		std::lock_guard lock(pMap->m_mutex);
 		for (auto& tArea : pMap->m_navfile.m_vAreas)
 		{
-			if (!m_sConnectedAreas.contains(&tArea) || NavJobUtils::IsSpawnArea(&tArea))
+			if (NavJobUtils::IsSpawnArea(&tArea))
 				continue;
 
 			const auto eBlock = pMap->GetAreaBlock(&tArea, iNowTick);
@@ -220,11 +212,6 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	std::vector<NavAreaScore_t> vScoredAreas;
 	vScoredAreas.reserve(vCandidates.size());
 	const float flLocalToObjective = bHasObjectiveAnchor ? vLocalOrigin.DistTo(vObjectiveAnchor) : 0.f;
-
-	constexpr float flPreferredPatrolDistance = 2200.f;
-	constexpr float flNearPenaltyStart = 800.f;
-	constexpr float flLongPenaltyStart = 4200.f;
-	constexpr float flLongPenaltyCap = 5600.f;
 
 	for (const auto& tCandidate : vCandidates)
 	{
@@ -274,10 +261,10 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	const size_t uPathCostCandidates = std::min<size_t>(vScoredAreas.size(), 16);
 	std::vector<CNavArea*> vCostTargets(uPathCostCandidates, nullptr);
 	for (size_t i = 0; i < uPathCostCandidates; i++)
-		vCostTargets[i] = F::NavEngine.FindClosestNavArea(vScoredAreas[i].m_pArea->m_vCenter, false);
+		vCostTargets[i] = vScoredAreas[i].m_pArea;
 
 	std::vector<float> vPathCost;
-	F::NavEngine.GetPathCostField(pLocalArea, vPathCost, FLT_MAX, &vCostTargets);
+	F::NavEngine.GetPathCostField(pLocalArea, vPathCost, 12000.f, &vCostTargets);
 
 	for (size_t i = 0; i < uPathCostCandidates; i++)
 	{
@@ -319,12 +306,10 @@ void CNavBotRoam::Reset()
 {
 	m_pCurrentTargetArea = nullptr;
 	m_pDefendSpotArea = nullptr;
-	m_pLastConnectedSeed = nullptr;
 	m_pLastMap = nullptr;
 	m_pLastAreaData = nullptr;
 	m_nLastAreaCount = 0;
 	m_iConsecutiveFails = 0;
 	m_bDefending = false;
 	m_vVisitedAreas.clear();
-	m_sConnectedAreas.clear();
 }

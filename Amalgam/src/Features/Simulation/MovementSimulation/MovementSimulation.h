@@ -6,6 +6,17 @@ Enum(Move, Ground, Air, Swim)
 
 using RunTickCallback = const std::function<void(CMoveData&)>;
 
+struct InputEstimate
+{
+	float m_flAlpha = 0.f;
+	float m_flWishSpeed = 0.f;
+	float m_flEyeYaw = 0.f;
+	float m_flViewRate = 0.f;
+	float m_flKeyOffset = 0.f;
+	bool m_bKeyInput = false;
+	bool m_bValid = false;
+};
+
 struct MoveStorage
 {
 	CTFPlayer* m_pPlayer = nullptr;
@@ -13,6 +24,9 @@ struct MoveStorage
 	byte* m_pData = nullptr;
 
 	float m_flAverageYaw = 0.f;
+	InputEstimate m_tGroundInput = {};
+	InputEstimate m_tAirInput = {};
+	float m_flViewYaw = 0.f;
 	bool m_bBunnyHop = false;
 
 	float m_flSimTime = 0.f;
@@ -41,6 +55,7 @@ struct MoveData
 	Vec3 m_vVelocity = {};
 	Vec3 m_vOrigin = {};
 	bool m_bInputDirection = false;
+	float m_flEyeYaw = 0.f;
 };
 
 struct SimTickRecord
@@ -57,10 +72,15 @@ struct TrajectoryCache
 {
 	int m_iTickCount = -1;
 	float m_flSimulationTime = -1.f;
+	Vec3 m_vRequestedOrigin = {};
+	bool m_bRequestedOrigin = false;
+	bool m_bPredict = true;
 	Vec3 m_vInitialOrigin = {};
 	Vec3 m_vInitialVelocity = {};
 	bool m_bFailed = false;
 	float m_flAverageYaw = 0.f;
+	InputEstimate m_tGroundInput = {};
+	InputEstimate m_tAirInput = {};
 	float m_flPredictedDelta = 0.f;
 	float m_flPredictedSimTime = 0.f;
 	bool m_bDirectMove = true;
@@ -73,9 +93,10 @@ private:
 	void Store(MoveStorage& tMoveStorage);
 	void Reset(MoveStorage& tMoveStorage);
 
-	void SetupMoveData(MoveStorage& tMoveStorage);
+	void SetupMoveData(MoveStorage& tMoveStorage, const Vec3* pvOrigin = nullptr);
 	bool CheckStuck(MoveStorage& tMoveStorage);
 	void GetAverageYaw(MoveStorage& tMoveStorage, int iSamples);
+	InputEstimate GetInputEstimate(MoveStorage& tMoveStorage, int iMode, int iSamples);
 	bool StrafePrediction(MoveStorage& tMoveStorage, bool bStrafe = true, bool bHitchance = false);
 
 	void SetBounds(CTFPlayer* pPlayer);
@@ -93,7 +114,7 @@ public:
 	void Store();
 	void StorePlayer(CTFPlayer* pPlayer, CMoveData& tMoveData, float flTime);
 
-	bool Initialize(CBaseEntity* pEntity, MoveStorage& tMoveStorage, bool bHitchance = true, bool bStrafe = true, bool bPredict = true);
+	bool Initialize(CBaseEntity* pEntity, MoveStorage& tMoveStorage, bool bHitchance = true, bool bStrafe = true, bool bPredict = true, const Vec3* pvOrigin = nullptr);
 	bool SetDuck(MoveStorage& tMoveStorage, bool bDuck);
 	void RunTick(MoveStorage& tMoveStorage, bool bPath = true, RunTickCallback* pCallback = nullptr);
 	void RunTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback fCallback);

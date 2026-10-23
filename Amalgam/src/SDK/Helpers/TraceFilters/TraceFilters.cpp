@@ -6,16 +6,24 @@
 
 namespace
 {
-	void CacheSkipWeapon(CBaseEntity* pSkip, std::vector<int>& vWeapons, bool& bWeapon)
+	static constexpr int s_aHitscanWeapons[] = {
+		TF_WEAPON_SNIPERRIFLE, TF_WEAPON_SNIPERRIFLE_CLASSIC, TF_WEAPON_SNIPERRIFLE_DECAP,
+		TF_WEAPON_COMPOUND_BOW, TF_WEAPON_REVOLVER
+	};
+	static constexpr int s_aCollideableWeapons[] = { TF_WEAPON_CROSSBOW, TF_WEAPON_LUNCHBOX, TF_WEAPON_FLAREGUN };
+
+	template <size_t N>
+	void CacheSkipWeapon(CBaseEntity* pSkip, const int (&aWeapons)[N], bool& bWeapon, bool& bCached)
 	{
+		bCached = true;
+		bWeapon = false;
 		if (pSkip && pSkip->IsPlayer())
 		{
 			auto pPlayer = pSkip->As<CTFPlayer>();
 			auto pActiveWeapon = pPlayer->m_hActiveWeapon().Get();
 			if (auto pWeapon = pActiveWeapon ? pActiveWeapon->As<CTFWeaponBase>() : nullptr)
-				bWeapon = std::ranges::contains(vWeapons, pWeapon->GetWeaponID());
+				bWeapon = std::ranges::contains(aWeapons, pWeapon->GetWeaponID());
 		}
-		vWeapons.clear();
 	}
 }
 
@@ -51,8 +59,8 @@ bool CTraceFilterHitscan::ShouldHitEntity(IHandleEntity* pHandleEntity, int nCon
 		nClassID == ETFClassID::CObjectDispenser)
 	{
 		if (!(nContentsMask & CONTENTS_MOVEABLE)) return false;
-		if (m_iType != SKIP_CHECK && !m_vWeapons.empty())
-			CacheSkipWeapon(m_pSkip, m_vWeapons, m_bWeapon);
+		if (m_iType != SKIP_CHECK && !m_bWeaponCached)
+			CacheSkipWeapon(m_pSkip, s_aHitscanWeapons, m_bWeapon, m_bWeaponCached);
 
 		if (m_iType != SKIP_CHECK && (m_iWeapon == WEAPON_INCLUDE ? m_bWeapon : !m_bWeapon))
 			return m_iType == FORCE_HIT;
@@ -106,8 +114,8 @@ bool CTraceFilterCollideable::ShouldHitEntity(IHandleEntity* pHandleEntity, int 
 		if (m_iPlayer == PLAYER_ALL) return true;
 		if (m_iPlayer == PLAYER_NONE) return false;
 
-		if (m_iType != SKIP_CHECK && !m_vWeapons.empty())
-			CacheSkipWeapon(m_pSkip, m_vWeapons, m_bWeapon);
+		if (m_iType != SKIP_CHECK && !m_bWeaponCached)
+			CacheSkipWeapon(m_pSkip, s_aCollideableWeapons, m_bWeapon, m_bWeaponCached);
 
 		if (m_iType != SKIP_CHECK && (m_iWeapon == WEAPON_INCLUDE ? m_bWeapon : !m_bWeapon))
 			return m_iType == FORCE_HIT;

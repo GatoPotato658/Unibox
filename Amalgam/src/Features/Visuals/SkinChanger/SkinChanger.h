@@ -2,9 +2,29 @@
 #include "../../../SDK/SDK.h"
 
 #include <mutex>
+#include <array>
+#include <map>
 #include <string>
+#include <unordered_set>
 #include <unordered_map>
 #include <vector>
+
+class CEconItem;
+
+struct ItemInfo_t
+{
+	uint16_t iDef = 0;
+	std::string sName;
+	std::string sClass;
+	std::string sImage;
+};
+
+struct BackpackItem_t
+{
+	uint32_t uSerial = 0;
+	uint16_t iDef = 0;
+	int iUnusual = 0;
+};
 
 struct Skin_t
 {
@@ -56,7 +76,42 @@ class CSkinChanger
 
 	std::mutex m_tMutex;
 	std::unordered_map<int, Skin_t> m_mSkins;
+	std::vector<BackpackItem_t> m_vBackpack = {};
+	uint32_t m_uNextSerial = 1;
+	std::unordered_map<uint64_t, void*> m_mClientItemsByID = {};
+	std::unordered_set<uint64_t> m_tFailedItems = {};
+	std::unordered_map<uint64_t, int> m_mAppliedUnusual = {};
+	std::vector<void*> m_vGraveyard = {};
+	std::map<int, uint64_t> m_mLoadout = {};
+	std::unordered_map<uint16_t, int> m_mInventoryCounts = {};
+	uint64_t m_uLastSync = 0;
+	struct PendingCrate_t
+	{
+		uint64_t uKey = 0;
+		uint64_t uCrate = 0;
+		uint64_t uTick = 0;
+	};
+	std::vector<PendingCrate_t> m_vPendingCrates = {};
+	std::unordered_map<uint64_t, uint64_t> m_mAwaitingPosition = {};
 	HeldWeapon_t m_tHeld;
+
+	struct Wearable_t
+	{
+		CHandle<CEconWearable> hEntity = {};
+		int iDef = -1;
+		int iClass = -1;
+		int iTeam = -1;
+		int iUnusual = -1;
+	};
+	struct LoadoutView_t
+	{
+		alignas(16) uint8_t aData[SIZE_OF_ITEMVIEW] = {};
+	};
+	std::array<Wearable_t, 19> m_aWearables = {};
+	std::array<LoadoutView_t, 19> m_aWearableViews = {};
+	uint64_t m_aWearableViewKey[19] = {};
+	bool m_aWearableViewBuilt[19] = {};
+	CHandle<CTFPlayer> m_hWearableOwner = {};
 
 	std::unordered_map<int, Tracked_t> m_mTracked;
 	bool m_bWasEnabled = false;
@@ -68,11 +123,39 @@ class CSkinChanger
 	void ScheduleRefresh();
 	int OriginalDef(CBaseEntity* pWeapon, int iHandle, int iCurrent) const;
 	void RunFrame();
+	CTFPlayerInventory* GetLocalInventory() const;
+	void SyncInventory();
+	void ClearClientItems();
+	void RemoveClientItem(CTFPlayerInventory* pInventory, uint64_t uItemID);
+	void ReapplyLoadout(CTFPlayerInventory* pInventory);
+	uint32_t NextSerial();
+	int GetItemUnusual(uint64_t uItemID);
+	void ProcessCrates(CTFPlayerInventory* pInventory);
+	bool OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_t& tCrate);
+	void UpdateWearables(CTFPlayer* pLocal);
+	void ResetWearables(CTFPlayer* pLocal);
+	void RemoveWearable(CTFPlayer* pLocal, Wearable_t& tWearable);
+	CEconItemView* GetWearableView(int iClass, int iSlot, int iTeam, int iDef, int iUnusual);
+	CEconWearable* CreateWearable(CTFPlayer* pLocal, CEconItemView* pView, int iClass, int iTeam);
+	bool AppendWearable(CTFPlayer* pLocal, CEconWearable* pWearable);
 
 public:
 	void Apply();
 	void Service();
 	void CacheMenuInfo(CTFWeaponBase* pWeapon);
+	void OnLevelShutdown();
+	void Unload();
+	void ClearWearables();
+
+	bool ClientInventoryActive();
+	bool IsClientItem(uint64_t uItemID);
+	void* GetClientSOCData(uint64_t uItemID);
+	bool OnSendMessage(void* pMessage);
+	void ApplyLocalLoadout(uint64_t uItemID, int iClass, int iSlot);
+	std::map<int, uint64_t> GetLoadout();
+	void SetLoadout(std::map<int, uint64_t> mLoadout);
+	void ApplyLocalPosition(uint64_t uItemID, uint32_t uPosition);
+	void ApplyLocalDelete(uint64_t uItemID);
 
 	HeldWeapon_t GetHeldWeapon();
 	Skin_t Get(int iKey);
@@ -80,6 +163,19 @@ public:
 	void Clear();
 	std::unordered_map<int, Skin_t> GetSkins();
 	void SetSkins(std::unordered_map<int, Skin_t> mSkins);
+
+	void RequestFullUpdate();
+
+	bool InBackpack(uint16_t iDef);
+	void AddToBackpack(uint16_t iDef, int iUnusual = 0);
+	void RemoveFromBackpack(uint16_t iDef);
+	void ClearBackpack();
+	std::vector<BackpackItem_t> GetBackpack();
+	void SetBackpack(std::vector<BackpackItem_t> vBackpack);
+	std::vector<const ItemInfo_t*> GetInventoryItems();
+	int GetInventoryCount(uint16_t iDef);
+
+	static const std::vector<ItemInfo_t>& GetItems();
 
 	static int Key(int iDefIndex);
 	static const char* WeaponName(int iKey);

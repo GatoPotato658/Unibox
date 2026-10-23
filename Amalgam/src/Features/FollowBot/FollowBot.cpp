@@ -130,7 +130,6 @@ void CFollowBot::UpdateTargets(CTFPlayer* pLocal)
 						true,
 						bDormant,
 						vOrigin,
-						FNV1A::Hash32(F::PlayerUtils.GetPlayerName(iEntIndex, pResource->GetName(iEntIndex))),
 						pPlayer
 					);
 				}
@@ -348,20 +347,19 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 	{
 		if (ShouldStartFollowNav(m_tLockedTarget, m_vCurrentPath.size()))
 		{
-			const bool bNav = CanUseNavToTarget(m_tLockedTarget) && F::NavEngine.GetLocalNavArea(vLocalOrigin) &&
-				F::NavEngine.NavTo(m_tLockedTarget.m_vLastKnownPos, PriorityListEnum::Followbot);
-
-			// We couldn't find a path to the target
-			if (!bNav)
-				Reset(FB_RESET_NONE);
-			else
+			if (m_tNavRetry.Check(0.75f))
 			{
-				m_bActive = false;
-				m_vCurrentPath.clear();
-				m_vTempAngles.clear();
+				const bool bNav = CanUseNavToTarget(m_tLockedTarget) && F::NavEngine.GetLocalNavArea(vLocalOrigin) &&
+					F::NavEngine.NavTo(m_tLockedTarget.m_vLastKnownPos, PriorityListEnum::Followbot);
+				if (bNav)
+				{
+					m_bActive = false;
+					m_vCurrentPath.clear();
+					m_vTempAngles.clear();
+					return;
+				}
+				m_tNavRetry.Update();
 			}
-
-			return;
 		}
 	}
 	else
@@ -400,6 +398,9 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 			{
 				if (m_vCurrentPath.back().m_vOrigin.DistTo2D(vCurrentOrigin) >= 20.f)
 				{
+					const size_t nMaxTrail = std::max<size_t>(64, Vars::Misc::Movement::FollowBot::MaxNodes.Value);
+					if (m_vCurrentPath.size() >= nMaxTrail)
+						m_vCurrentPath.pop_front();
 					m_vCurrentPath.push_back({ vCurrentOrigin, m_vTempAngles });
 					m_vTempAngles.clear();
 				}
@@ -409,6 +410,13 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 				m_vCurrentPath.push_back({ vCurrentOrigin, m_vTempAngles });
 				m_vTempAngles.clear();
 			}
+		}
+
+		if (!m_vCurrentPath.empty() && vLocalOrigin.DistTo2D(m_vCurrentPath.back().m_vOrigin) <= 20.f)
+		{
+			m_vCurrentPath.clear();
+			m_vCurrentPath.push_back({ vCurrentOrigin, m_vTempAngles });
+			m_vTempAngles.clear();
 		}
 	}
 
@@ -464,17 +472,23 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 		if (!pCurrentAngles || Vars::Misc::Movement::FollowBot::LookAtPathMode.Value >= Vars::Misc::Movement::FollowBot::LookAtPathModeEnum::CopyImmediate)
 		{
 			Vector vAngles = m_vLastTargetAngles;
+			bool bHaveAngles = !vAngles.IsZero();
 			if (m_tLockedTarget.m_pPlayer)
 			{
 				if (Vars::Misc::Movement::FollowBot::LookAtPathMode.Value == Vars::Misc::Movement::FollowBot::LookAtPathModeEnum::AtTarget)
 					vAngles = m_vLastTargetAngles = Math::CalcAngle(pLocal->GetEyePosition(), m_tLockedTarget.m_pPlayer->m_vecOrigin() + m_tLockedTarget.m_pPlayer->GetViewOffset());
 				else
 					vAngles = m_vLastTargetAngles = m_tLockedTarget.m_pPlayer->GetEyeAngles();
+				bHaveAngles = true;
 			}
 			else if (m_tLockedTarget.m_iEntIndex == -1)
+			{
 				vAngles = I::EngineClient->GetViewAngles();
+				bHaveAngles = true;
+			}
 
-			vCurrentAngles.push_back(vAngles);
+			if (bHaveAngles)
+				vCurrentAngles.push_back(vAngles);
 		}
 		else if (Vars::Misc::Movement::FollowBot::LookAtPathMode.Value == Vars::Misc::Movement::FollowBot::LookAtPathModeEnum::Path)
 			vCurrentAngles.push_back(vDest);
@@ -486,8 +500,30 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 	SyncBestSlot(pLocal);
 
-	if (bShouldWalk)
-		SDK::WalkTo(pCmd, pLocal, vDest);
+	if (!bShouldWalk)
+	{
+		m_tStuckTimer.Update();
+		m_vLastStuckPos = vLocalOrigin;
+		return;
+	}
+
+	const float flRise = vDest.z - vLocalOrigin.z;
+	if (flRise > PLAYER_STEP_HEIGHT && flRise <= PLAYER_CROUCHED_JUMP_HEIGHT + 4.f
+		&& vLocalOrigin.DistTo2D(vDest) <= 96.f && pLocal->OnSolid())
+	{
+		pCmd->buttons |= IN_JUMP;
+		if (flRise > TFGame::JUMP_APEX)
+			pCmd->buttons |= IN_DUCK;
+	}
+
+	if (m_tStuckTimer.Run(1.25f))
+	{
+		if (m_vLastStuckPos.DistTo2D(vLocalOrigin) < 16.f && pLocal->OnSolid())
+			pCmd->buttons |= IN_JUMP;
+		m_vLastStuckPos = vLocalOrigin;
+	}
+
+	SDK::WalkTo(pCmd, pLocal, vDest);
 }
 
 void CFollowBot::Reset(int iFlags)
@@ -499,8 +535,12 @@ void CFollowBot::Reset(int iFlags)
 
 	m_vCurrentPath.clear();
 	m_vTempAngles.clear();
+	m_vLastTargetAngles = {};
 	m_tLockedTarget = FollowTarget_t{};
 	m_bActive = false;
+	m_tNavRetry.Update();
+	m_tStuckTimer.Update();
+	m_vLastStuckPos = {};
 	if (iFlags & FB_RESET_TARGETS)
 	{
 		m_aLastActiveTimes = {};

@@ -66,6 +66,7 @@ public:
 	NETVAR(m_flElasticity, float, "CBaseEntity", "m_flElasticity");
 	NETVAR(m_flShadowCastDistance, float, "CBaseEntity", "m_flShadowCastDistance");
 	NETVAR(m_hOwnerEntity, EHANDLE, "CBaseEntity", "m_hOwnerEntity");
+	inline CBaseEntity* GetOwnerEntity() { return m_hOwnerEntity().Get(); }
 	NETVAR(m_hEffectEntity, EHANDLE, "CBaseEntity", "m_hEffectEntity");
 	NETVAR(moveparent, int, "CBaseEntity", "moveparent");
 	NETVAR(m_iParentAttachment, int, "CBaseEntity", "m_iParentAttachment");
@@ -296,6 +297,7 @@ public:
 	VIRTUAL(EyePosition, Vec3, 142, this);
 	VIRTUAL(EyeAngles, Vec3&, 143, this);
 	VIRTUAL(UpdateVisibility, void, 91, this);
+	VIRTUAL_ARGS(SetNextClientThink, void, 104, (float flNextThink), this, flNextThink);
 	VIRTUAL_ARGS(ShouldCollide, bool, 146, (int collisionGroup, int contentsMask), this, collisionGroup, contentsMask);
 
 	SIGNATURE_ARGS(SetAbsOrigin, void, CBaseEntity, (const Vec3& vOrigin), this, std::ref(vOrigin));

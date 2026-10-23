@@ -533,6 +533,13 @@ void CVisuals::DrawEffects()
 			&& fabsf(vSize.z) <= 16384.0f;
 	};
 
+	std::erase_if(G::LineStorage, [](const auto& tLine) { return tLine.m_flTime < I::GlobalVars->curtime; });
+	std::erase_if(G::PathStorage, [](const auto& tPath) { return tPath.m_flTime >= 0.f && tPath.m_flTime < I::GlobalVars->curtime; });
+	std::erase_if(G::BoxStorage, [](const auto& tBox) { return tBox.m_flTime < I::GlobalVars->curtime; });
+	std::erase_if(G::SphereStorage, [](const auto& tSphere) { return tSphere.m_flTime < I::GlobalVars->curtime; });
+	std::erase_if(G::SweptStorage, [](const auto& tSwept) { return tSwept.m_flTime < I::GlobalVars->curtime; });
+	std::erase_if(G::TriangleStorage, [](const auto& tTriangle) { return tTriangle.m_flTime < I::GlobalVars->curtime; });
+
 	for (auto& tLine : G::LineStorage)
 	{
 		if (tLine.m_flTime < I::GlobalVars->curtime)

@@ -13,8 +13,7 @@
 
 void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy)
 {
-	static Timer tSlotTimer{};
-	if (!tSlotTimer.Run(0.2f))
+	if (!m_tSlotTimer.Run(0.2f))
 		return;
 
 	const int iReloadSlot = F::NavBotReload.m_iLastReloadSlot = F::NavBotReload.GetReloadWeaponSlot(pLocal, tClosestEnemy);
@@ -120,7 +119,17 @@ static bool IsIdleNudgeAllowed()
 
 void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
-	if (!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value ||
+	const bool bEnabled = Vars::Misc::Movement::NavBot::Enabled.Value && Vars::Misc::Movement::NavEngine::Enabled.Value;
+	if (bEnabled && I::EngineClient->IsInGame())
+	{
+		if (!m_bWasEnabled)
+			Reset();
+		m_bWasEnabled = true;
+	}
+	else
+		m_bWasEnabled = false;
+
+	if (!bEnabled ||
 		!pLocal || !pCmd || !pLocal->IsAlive() || F::NavEngine.m_eCurrentPriority == PriorityListEnum::Followbot || F::FollowBot.m_bActive || !F::NavEngine.IsReady())
 	{
 		ResetRuntimeState(pCmd);
@@ -165,8 +174,7 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		if (F::NavEngine.IsPathing())
 			F::NavEngine.CancelPath();
 
-		static Timer tDropCarriedObjectTimer{};
-		if (tDropCarriedObjectTimer.Run(0.5f))
+		if (m_tDropCarriedObjectTimer.Run(0.5f))
 		{
 			I::EngineClient->ClientCmd_Unrestricted("destroy 0");
 			I::EngineClient->ClientCmd_Unrestricted("destroy 1");
@@ -202,16 +210,15 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		}
 	}
 
-	static Timer tDoubletapRecharge{};
 	if (Vars::Misc::Movement::NavBot::RechargeDT.Value && IsWeaponValidForDT(pWeapon))
 	{
 		if (!F::Ticks.m_bRechargeQueue &&
 			(Vars::Misc::Movement::NavBot::RechargeDT.Value != Vars::Misc::Movement::NavBot::RechargeDTEnum::WaitForFL || !Vars::Fakelag::Fakelag.Value || !F::FakeLag.m_iGoal) &&
 			G::Attacking != 1 &&
-			(F::Ticks.m_iShiftedTicks < F::Ticks.m_iShiftedGoal) && tDoubletapRecharge.Check(Vars::Misc::Movement::NavBot::RechargeDTDelay.Value))
+			(F::Ticks.m_iShiftedTicks < F::Ticks.m_iShiftedGoal) && m_tDoubletapRecharge.Check(Vars::Misc::Movement::NavBot::RechargeDTDelay.Value))
 			F::Ticks.m_bRechargeQueue = true;
 		else if (F::Ticks.m_iShiftedTicks >= F::Ticks.m_iShiftedGoal)
-			tDoubletapRecharge.Update();
+			m_tDoubletapRecharge.Update();
 	}
 
 	m_tJobSystem.RefreshSharedState(pLocal);
@@ -304,6 +311,9 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 void CNavBotCore::Reset()
 {
 	m_tJobSystem.Reset();
+	m_tSlotTimer = Timer();
+	m_tDropCarriedObjectTimer = Timer();
+	m_tDoubletapRecharge = Timer();
 	m_bHoldingRunReload = false;
 	m_flNextIdleTime = SDK::RandomFloat(4.f, 10.f);
 }

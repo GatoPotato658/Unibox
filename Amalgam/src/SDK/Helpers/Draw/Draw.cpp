@@ -556,9 +556,39 @@ void CDraw::ClearAvatarCache()
 	m_mAvatars.clear();
 }
 
+// Every engine mesh primitive queues functors into materialsystem's fixed 16MB per-frame call queue pool and
+// vertex data into a fixed 4.3MB pool; CMatQueuedMesh::Draw dereferences the allocation unchecked, so overflowing either one crashes
+constexpr int MAX_RENDER_DRAWS = 4096;
+constexpr int MAX_RENDER_VERTICES = 32768;
+constexpr int MAX_RENDER_PRIMITIVE_VERTICES = 8192;
+constexpr int MAX_RENDER_PRIMITIVE_INDICES = 16384;
+
+bool CDraw::HasRenderBudget()
+{
+	const int iFrame = I::GlobalVars ? I::GlobalVars->framecount : 0;
+	if (iFrame != m_iRenderFrame)
+	{
+		m_iRenderFrame = iFrame;
+		m_iRenderDraws = 0;
+		m_iRenderVertices = 0;
+	}
+
+	return m_iRenderDraws < MAX_RENDER_DRAWS && m_iRenderVertices < MAX_RENDER_VERTICES;
+}
+
+bool CDraw::ConsumeRenderBudget(int iVertices)
+{
+	if (!HasRenderBudget() || iVertices > MAX_RENDER_VERTICES - m_iRenderVertices)
+		return false;
+
+	m_iRenderDraws++;
+	m_iRenderVertices += iVertices;
+	return true;
+}
+
 void CDraw::RenderLine(const Vec3& vStart, const Vec3& vEnd, Color_t tColor, bool bZBuffer)
 {
-	if (!tColor.a)
+	if (!tColor.a || !ConsumeRenderBudget(2))
 		return;
 
 	S::RenderLine.Call<void>(std::ref(vStart), std::ref(vEnd), tColor, bZBuffer);
@@ -572,6 +602,8 @@ void CDraw::RenderPath(const std::vector<Vec3>& vPath, Color_t tColor, bool bZBu
 	bool bTimed = flTime < 0.f;
 	for (size_t i = 1; i < vPath.size(); i++)
 	{
+		if (!HasRenderBudget())
+			return;
 		if (bTimed && vPath.size() - i > -flTime)
 			continue;
 
@@ -632,7 +664,7 @@ void CDraw::RenderPath(const std::vector<Vec3>& vPath, Color_t tColor, bool bZBu
 
 void CDraw::RenderBox(const Vec3& vOrigin, const Vec3& vMins, const Vec3& vMaxs, const Vec3& vAngles, Color_t tColor, bool bZBuffer, bool bInsideOut)
 {
-	if (!tColor.a)
+	if (!tColor.a || !ConsumeRenderBudget(24))
 		return;
 
 	S::RenderBox.Call<void>(std::ref(vOrigin), std::ref(vAngles), std::ref(vMins), std::ref(vMaxs), tColor, bZBuffer, bInsideOut);
@@ -640,7 +672,7 @@ void CDraw::RenderBox(const Vec3& vOrigin, const Vec3& vMins, const Vec3& vMaxs,
 
 void CDraw::RenderWireframeBox(const Vec3& vOrigin, const Vec3& vMins, const Vec3& vMaxs, const Vec3& vAngles, Color_t tColor, bool bZBuffer)
 {
-	if (!tColor.a)
+	if (!tColor.a || !ConsumeRenderBudget(24))
 		return;
 
 	S::RenderWireframeBox.Call<void>(std::ref(vOrigin), std::ref(vAngles), std::ref(vMins), std::ref(vMaxs), tColor, bZBuffer);
@@ -648,7 +680,7 @@ void CDraw::RenderWireframeBox(const Vec3& vOrigin, const Vec3& vMins, const Vec
 
 void CDraw::RenderWireframeSweptBox(const Vector& vStart, const Vector& vEnd, const Vec3& vMins, const Vec3& vMaxs, const Vec3& vAngles, Color_t tColor, bool bZBuffer)
 {
-	if (!tColor.a)
+	if (!tColor.a || !ConsumeRenderBudget(56))
 		return;
 
 	S::RenderWireframeSweptBox.Call<void>(std::ref(vStart), std::ref(vEnd), std::ref(vAngles), std::ref(vMins), std::ref(vMaxs), tColor, bZBuffer);
@@ -656,7 +688,7 @@ void CDraw::RenderWireframeSweptBox(const Vector& vStart, const Vector& vEnd, co
 
 void CDraw::RenderTriangle(const Vector& vPoint1, const Vector& vPoint2, const Vector& vPoint3, Color_t tColor, bool bZBuffer)
 {
-	if (!tColor.a)
+	if (!tColor.a || !ConsumeRenderBudget(3))
 		return;
 
 	S::RenderTriangle.Call<void>(std::ref(vPoint1), std::ref(vPoint2), std::ref(vPoint3), tColor, bZBuffer);
@@ -664,7 +696,12 @@ void CDraw::RenderTriangle(const Vector& vPoint1, const Vector& vPoint2, const V
 
 void CDraw::RenderSphere(const Vector& vCenter, float flRadius, int nTheta, int nPhi, Color_t tColor, IMaterial* pMaterial)
 {
-	if (!tColor.a || !pMaterial)
+	if (!tColor.a || !pMaterial || nTheta < 1 || nPhi < 2)
+		return;
+
+	const long long llVertices = 2ll * nTheta * (nPhi - 1);
+	const long long llIndices = (nTheta + 1ll) * (2ll * nPhi - 2ll);
+	if (llVertices > MAX_RENDER_PRIMITIVE_VERTICES || llIndices > MAX_RENDER_PRIMITIVE_INDICES || !ConsumeRenderBudget(int(llVertices)))
 		return;
 
 	S::RenderSphere.Call<void>(std::ref(vCenter), flRadius, nTheta, nPhi, tColor, pMaterial);

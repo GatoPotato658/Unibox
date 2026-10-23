@@ -44,14 +44,10 @@ public:
 	CBaseEntity* m_pSkip = nullptr;
 	int m_iTeam = -1;
 
-	std::vector<int> m_vWeapons = {
-		TF_WEAPON_SNIPERRIFLE, TF_WEAPON_SNIPERRIFLE_CLASSIC, TF_WEAPON_SNIPERRIFLE_DECAP,
-		TF_WEAPON_COMPOUND_BOW, TF_WEAPON_REVOLVER
-	};
-
 	int m_iType = FORCE_HIT;
 	int m_iWeapon = WEAPON_EXCLUDE;
 	bool m_bWeapon = false;
+	bool m_bWeaponCached = false;
 	bool m_bIgnoreCart = false;
 	bool m_bIgnoreDoors = false;
 };
@@ -71,11 +67,10 @@ public:
 	CBaseEntity* m_pSkip = nullptr;
 	int m_iTeam = -1;
 
-	std::vector<int> m_vWeapons = { TF_WEAPON_CROSSBOW, TF_WEAPON_LUNCHBOX, TF_WEAPON_FLAREGUN };
-
 	int m_iType = FORCE_HIT;
 	int m_iWeapon = WEAPON_INCLUDE;
 	bool m_bWeapon = false;
+	bool m_bWeaponCached = false;
 	int m_iPlayer = PLAYER_DEFAULT;
 	int m_iObject = OBJECT_ALL;
 	bool m_bMisc = false;

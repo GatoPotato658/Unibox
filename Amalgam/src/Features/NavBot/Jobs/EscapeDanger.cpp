@@ -125,8 +125,7 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 	if (pEffectiveHazard)
 	{
 		const bool bActiveEscapeJob = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger;
-		static Timer tRepathCooldown{};
-		if (bActiveEscapeJob && F::NavEngine.IsPathing() && !tRepathCooldown.Run(0.35f))
+		if (bActiveEscapeJob && F::NavEngine.IsPathing() && !m_tEscapeRepath.Run(0.35f))
 			return true;
 
 		bInHighDanger = IsHighDanger(*pEffectiveHazard);
@@ -191,73 +190,83 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 				return a.m_flScore < b.m_flScore;
 			});
 
-		int iCalls = 0;
-
 		auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
-		for (const auto& tPair : vSafeAreas)
-		{
-			if (!pWeaponEntity)
-				break;
-
-			CNavArea* pArea = tPair.m_pArea;
-			iCalls++;
-			if (iCalls > 10)
-				break;
-
-			bool bIsSafe = true;
-			for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
+		int iPathChecks = 0;
+		int iNavAttempts = 0;
+		auto TryArea = [&](CNavArea* pArea) -> bool
 			{
-				if (F::BotUtils.ShouldTarget(pLocal, pWeaponEntity->As<CTFWeaponBase>(), pEntity->entindex()) != ShouldTargetEnum::Target)
-					continue;
+				if (!pArea || !pWeaponEntity || iNavAttempts >= 8)
+					return false;
 
-				float flDist = pEntity->GetAbsOrigin().DistTo(pArea->m_vCenter);
-				if (flDist < F::NavBotCore.m_tSelectedConfig.m_flMinFullDanger * 1.2f)
+				for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 				{
-					bIsSafe = false;
-					break;
+					if (F::BotUtils.ShouldTarget(pLocal, pWeaponEntity->As<CTFWeaponBase>(), pEntity->entindex()) != ShouldTargetEnum::Target)
+						continue;
+
+					if (pEntity->GetAbsOrigin().DistTo(pArea->m_vCenter) < F::NavBotCore.m_tSelectedConfig.m_flMinFullDanger * 1.2f)
+						return false;
 				}
-			}
 
-			if (!bIsSafe)
-				continue;
+				if (iPathChecks < 4)
+				{
+					iPathChecks++;
+					if (!IsEscapePathSafe(pLocalArea, pArea, bHasTarget, bLowHealth))
+						return false;
+				}
 
-			if (!IsEscapePathSafe(pLocalArea, pArea, bHasTarget, bLowHealth))
-				continue;
+				iNavAttempts++;
+				if (!F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
+					return false;
 
-			if (F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
-			{
 				m_pEscapeTargetArea = pArea;
 				m_tEscapeRefresh.Update();
 				m_sDangerStatus = L"Retreat";
 				return true;
-			}
+			};
+
+		const size_t nCostCandidates = std::min<size_t>(vSafeAreas.size(), 12);
+		std::vector<CNavArea*> vTargets;
+		vTargets.reserve(nCostCandidates);
+		for (size_t i = 0; i < nCostCandidates; ++i)
+			vTargets.push_back(vSafeAreas[i].m_pArea);
+
+		std::vector<float> vCosts;
+		const bool bHasCosts = !vTargets.empty() && F::NavEngine.GetPathCostField(pLocalArea, vCosts, 5000.f, &vTargets);
+
+		std::vector<NavAreaScore_t> vRanked;
+		vRanked.reserve(nCostCandidates);
+		for (size_t i = 0; i < nCostCandidates; ++i)
+		{
+			const float flPathCost = bHasCosts ? F::NavEngine.GetFieldCost(vCosts, vSafeAreas[i].m_pArea) : 0.f;
+			if (bHasCosts && (!std::isfinite(flPathCost) || flPathCost >= FLT_MAX))
+				continue;
+			vRanked.push_back({ vSafeAreas[i].m_pArea, flPathCost + vSafeAreas[i].m_flScore * 0.05f });
 		}
 
-		if (iCalls <= 0 || (bInHighDanger && iCalls < 10))
+		std::sort(vRanked.begin(), vRanked.end(), [](const NavAreaScore_t& a, const NavAreaScore_t& b) -> bool
+			{
+				return a.m_flScore < b.m_flScore;
+			});
+
+		for (const auto& tAreaScore : vRanked)
+		{
+			if (TryArea(tAreaScore.m_pArea))
+				return true;
+		}
+
+		if (iNavAttempts == 0)
 		{
 			std::sort(vAreaPointers.begin(), vAreaPointers.end(), [&](CNavArea* a, CNavArea* b) -> bool
 				{
 					return a->m_vCenter.DistTo(pLocal->GetAbsOrigin()) < b->m_vCenter.DistTo(pLocal->GetAbsOrigin());
 				});
 
-			for (auto& pArea : vAreaPointers)
+			for (CNavArea* pArea : vAreaPointers)
 			{
-				const Hazard_t* pHazard = F::Hazards.GetHazard(pArea);
-				if (!pHazard || (bInHighDanger && !IsHighDanger(*pHazard) && !IsMediumDanger(*pHazard)))
-				{
-					iCalls++;
-					if (iCalls > 5)
-						break;
-					if (!IsEscapePathSafe(pLocalArea, pArea, bHasTarget, bLowHealth))
-						continue;
-					if (F::NavEngine.NavTo(pArea->m_vCenter, PriorityListEnum::EscapeDanger))
-					{
-						m_pEscapeTargetArea = pArea;
-						m_tEscapeRefresh.Update();
-						m_sDangerStatus = L"Retreat";
-						return true;
-					}
-				}
+				if (F::Hazards.HasHazard(pArea))
+					continue;
+				if (TryArea(pArea))
+					return true;
 			}
 		}
 
@@ -356,8 +365,7 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 	}
 
 	const bool bActiveEscapeJob = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger;
-	static Timer tProjectileRepathCooldown{};
-	if (bActiveEscapeJob && F::NavEngine.IsPathing() && !tProjectileRepathCooldown.Run(0.35f))
+	if (bActiveEscapeJob && F::NavEngine.IsPathing() && !m_tProjectileRepath.Run(0.35f))
 		return true;
 
 	if (bActiveEscapeJob && m_pProjectileTargetArea &&
@@ -402,8 +410,11 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 			return a.m_flScore < b.m_flScore;
 		});
 
+	int iAttempts = 0;
 	for (const auto& tAreaScore : vSafeAreas)
 	{
+		if (iAttempts++ >= 12)
+			break;
 		if (F::NavEngine.NavTo(tAreaScore.m_pArea->m_vCenter, PriorityListEnum::EscapeDanger))
 		{
 			m_pProjectileTargetArea = tAreaScore.m_pArea;
@@ -429,9 +440,8 @@ bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 		return false;
 	}
 
-	static Timer tSpawnEscapeCooldown{};
 	const bool bActive = F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeSpawn;
-	if (bActive || !tSpawnEscapeCooldown.Run(2.f))
+	if (bActive || !m_tSpawnEscape.Run(2.f))
 		return bActive;
 
 	auto vExitAreas = *F::NavEngine.GetRespawnRoomExitAreas();
@@ -452,5 +462,8 @@ void CNavBotDanger::ResetSpawn()
 	m_iSpawnExitAttempt = 0;
 	m_pEscapeTargetArea = nullptr;
 	m_pProjectileTargetArea = nullptr;
+	m_tEscapeRepath = Timer();
+	m_tProjectileRepath = Timer();
+	m_tSpawnEscape = Timer();
 	m_sDangerStatus.clear();
 }

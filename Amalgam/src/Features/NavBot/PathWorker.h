@@ -28,6 +28,7 @@ namespace PathWorker
 	{
 		uint64_t m_uRequestId = 0;
 		uint64_t m_uWorldGeneration = 0;
+		uint64_t m_uGeneration = 0;
 		CNavArea* m_pStartArea = nullptr;
 		CNavArea* m_pDestArea = nullptr;
 		Vector m_vStart{};
@@ -41,6 +42,7 @@ namespace PathWorker
 	{
 		uint64_t m_uRequestId = 0;
 		uint64_t m_uWorldGeneration = 0;
+		uint64_t m_uGeneration = 0;
 		PriorityListEnum::PriorityListEnum m_ePriority = PriorityListEnum::None;
 		int m_iSolveResult = -1;
 		bool m_bCancelled = false;
@@ -71,6 +73,8 @@ namespace PathWorker
 		std::condition_variable m_cvPending;
 		std::optional<PathRequest> m_oPending;
 		std::shared_ptr<std::atomic_bool> m_pActiveCancellation;
+		uint64_t m_uActiveGeneration = 0;
+		uint64_t m_uNextGeneration = 1;
 
 		std::mutex m_mCompleted;
 		std::vector<PathResult> m_vCompleted;

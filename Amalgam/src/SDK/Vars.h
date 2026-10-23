@@ -308,7 +308,7 @@ NAMESPACE_BEGIN(Vars)
 				Linear, FastStart, FastEnd, SlowStart, SlowEnd);
 			CVar(SmoothCurveAmount, "Smooth curve amount", 100.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 200.f, 5.f, "%g%%");
 			CVar(TickTolerance, "Tick tolerance", 4, SLIDER_CLAMP, 0, 21);
-			CVar(MoveSimAccuracy, "MoveSim accuracy", 75.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
+			CVar(MoveSimAccuracy, "MoveSim accuracy", 100.f, NOSAVE | DEBUGVAR | SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(AutoShoot, "Auto shoot", true);
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
 			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
@@ -335,10 +335,11 @@ NAMESPACE_BEGIN(Vars)
 			CVar(MultipointScale, "Multipoint scale", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(TapfireDistance, "Tapfire distance", 1000.f, SLIDER_MIN | SLIDER_PRECISION, 250.f, 1000.f, 50.f);
 
-			CVarEnum(ForwardTrack, "Forward tracking", 0, NONE, nullptr,
-				VA_LIST("Off", "Broken lagcomp", "Choked only", "Always"),
-				Off, BrokenLagComp, ChokedOnly, Always);
-			CVar(ForwardTrackAirOnly, "Forward track air only", false);
+			CVar(ForwardTrack, "Forward tracking", false);
+			CVarEnum(ForwardTrackMode, "Forward track mode", 0, NOSAVE | DEBUGVAR, nullptr,
+				VA_LIST("Auto", "Broken lagcomp", "Choked only", "Always"),
+				Auto, BrokenLagComp, ChokedOnly, Always);
+			CVar(ForwardTrackAirOnly, "Forward track air only", false, NOSAVE | DEBUGVAR);
 
 			CVarEnum(PeekCheck, "Peek check", 1, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("Off", "Doubletap only", "Always"),
@@ -856,10 +857,10 @@ NAMESPACE_BEGIN(Vars)
 					Off, Plain, Silent, Legit, LegitSilent);
 
 				CVar(StickyIgnoreTime, "Sticky ignore time", 15, SLIDER_MIN, 15, 100, 5, "%is");
-				CVar(StuckDetectTime, "Stuck detect time", 1, SLIDER_MIN, 1, 26, 1, "%is");
+				CVar(StuckDetectTime, "Stuck detect time", 0.6f, SLIDER_MIN, 0.1f, 5.f, 0.05f, "%gs");
 				CVar(StuckBlacklistTime, "Stuck blacklist time", 6, SLIDER_MIN, 1, 60, 1, "%is");
-				CVar(StuckExpireTime, "Stuck expire time", 100, SLIDER_MIN, 5, 300, 5, "%is");
-				CVar(StuckTime, "Stuck time", 0.25f, SLIDER_MIN, 0.25f, 0.9f, 0.05f, "%gs");
+				CVar(StuckExpireTime, "Stuck expire time", 20, SLIDER_MIN, 1, 300, 1, "%is");
+				CVar(StuckTime, "Stuck time", 0.2f, SLIDER_MIN, 0.1f, 0.9f, 0.05f, "%gs");
 				CVar(OffPathRepath, "Off-path repath", false, NOSAVE | DEBUGVAR);
 
 				CVar(VischeckEnabled, "Vischeck enabled", true);

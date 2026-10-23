@@ -15,7 +15,6 @@ struct FollowTarget_t
 	bool m_bDormant = false;
 	Vec3 m_vLastKnownPos = {};
 
-	uint32_t m_uNameHash = 0;
 	CTFPlayer* m_pPlayer = nullptr;
 };
 
@@ -48,6 +47,9 @@ private:
 	std::deque<FollowTargetPath_t> m_vCurrentPath = {};
 	std::deque<Vec3> m_vTempAngles = {};
 	Vec3 m_vLastTargetAngles = {};
+	Timer m_tNavRetry = {};
+	Timer m_tStuckTimer = {};
+	Vec3 m_vLastStuckPos = {};
 public:
 	void Run(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void Reset(int iFlags = FB_RESET_TARGETS);

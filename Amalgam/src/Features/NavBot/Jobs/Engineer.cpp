@@ -51,9 +51,7 @@ bool CNavBotEngineer::BuildingNeedsToBeSmacked(CBaseObject* pBuilding)
 
 bool CNavBotEngineer::NavToBuildingSpot()
 {
-	static Timer tWaitUntilPathTimer{};
-
-	if (!tWaitUntilPathTimer.Run(0.3f))
+	if (!m_tWaitUntilPath.Run(0.3f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer;
 
 	if (m_vBuildingSpots.empty())
@@ -121,22 +119,19 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 		if (tClosestEnemy.m_flDist < 500.f && tClosestEnemy.m_pPlayer && tClosestEnemy.m_pPlayer->IsAlive() && !pLocal->m_bCarryingObject())
 			return false;
 
-		static Timer tRotationTimer{};
 		pCmd->viewangles.x = 20.f;
 		pCmd->viewangles.y = m_flBuildYaw;
 		I::EngineClient->SetViewAngles(pCmd->viewangles);
 
-		if (tRotationTimer.Run(0.3f))
+		if (m_tBuildRotation.Run(0.3f))
 			m_flBuildYaw += 45.f;
 
-		static Timer tAttemptTimer{};
-		if (tAttemptTimer.Run(0.3f))
+		if (m_tBuildAttempt.Run(0.3f))
 			m_iBuildAttempts++;
 
 		if (!pLocal->m_bCarryingObject())
 		{
-			static Timer tBuildCommandTimer{};
-			if (tBuildCommandTimer.Run(0.5f))
+			if (m_tBuildCommand.Run(0.5f))
 				I::EngineClient->ClientCmd_Unrestricted(std::format("build {}", bDispenser ? 0 : 2).c_str());
 		}
 
@@ -277,6 +272,9 @@ bool CNavBotEngineer::GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestE
 				return a.second < b.second;
 			});
 
+		std::vector<float> vFocusCost;
+		const bool bHasFocusCost = F::NavEngine.GetPathCostField(tFocus.m_pArea, vFocusCost, 4000.f);
+
 		CNavArea* pNewFocusArea = nullptr;
 		Vector vFocus;
 		int iTeammatesOnFocusPoint = 0;
@@ -284,8 +282,8 @@ bool CNavBotEngineer::GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestE
 		{
 			Vector vNewFocus = vFocus + pTeammate->GetAbsOrigin();
 
-			auto pTempFocusArea = F::NavEngine.FindClosestNavArea(vNewFocus / static_cast<float>(iTeammatesOnFocusPoint + 1));
-			if (!pTempFocusArea || F::NavEngine.GetPathCost(tFocus.m_pArea, pTempFocusArea) > 4000.f)
+			auto pTempFocusArea = F::NavEngine.FindClosestNavArea(vNewFocus / static_cast<float>(iTeammatesOnFocusPoint + 1), false);
+			if (!pTempFocusArea || (bHasFocusCost && F::NavEngine.GetFieldCost(vFocusCost, pTempFocusArea) > 4000.f))
 				continue;
 
 			vFocus = vNewFocus;
@@ -309,8 +307,7 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 		return;
 
 	const bool bHasGunslinger = G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger;
-	static Timer tRefreshBuildingSpotsTimer{};
-	if (!bForce && !tRefreshBuildingSpotsTimer.Run(bHasGunslinger ? 1.f : 5.f))
+	if (!bForce && !m_tRefreshBuildingSpots.Run(bHasGunslinger ? 1.f : 5.f))
 		return;
 
 	m_vBuildingSpots.clear();
@@ -334,22 +331,34 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 		}
 	}
 
-	auto pNavFile = F::NavEngine.GetNavFile();
-	if (!pNavFile)
+	auto pNavMap = F::NavEngine.GetNavMap();
+	if (!pNavMap)
 		return;
 
 	std::vector<float> vFocusCost;
 	const bool bHasFocusCost = tFocus.m_pArea && F::NavEngine.GetPathCostField(tFocus.m_pArea, vFocusCost, 4000.f);
 
-	for (auto& tArea : pNavFile->m_vAreas)
+	struct BuildCandidate_t
 	{
-		if (tArea.m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_EXIT))
+		Vector m_vPos = {};
+		float m_flCost = 0.f;
+	};
+	std::vector<BuildCandidate_t> vCandidates;
+
+	std::vector<CNavArea*> vAreas;
+	pNavMap->CollectAreasAround(tFocus.m_vPos, 2000.f, vAreas);
+	for (CNavArea* pArea : vAreas)
+	{
+		if (!pArea)
 			continue;
 
-		if (tArea.m_vCenter.DistTo(tFocus.m_vPos) > 2000.f)
+		if (pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_EXIT))
 			continue;
 
-		if (tArea.IsBlocked(pLocal->m_iTeamNum()))
+		if (pArea->m_vCenter.DistTo(tFocus.m_vPos) > 2000.f)
+			continue;
+
+		if (pArea->IsBlocked(pLocal->m_iTeamNum()))
 			continue;
 
 		auto AddSpot = [&](const Vector& vPos, float flBonus = 0.f)
@@ -357,10 +366,7 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 				if (IsBuildSpotFailed(vPos))
 					return;
 
-				if (tFocus.m_pArea && (!bHasFocusCost || F::NavEngine.GetFieldCost(vFocusCost, &tArea) > 4000.f))
-					return;
-
-				if (!CanBuildAtPosition(pLocal, vPos))
+				if (tFocus.m_pArea && (!bHasFocusCost || F::NavEngine.GetFieldCost(vFocusCost, pArea) > 4000.f))
 					return;
 
 				const float flDistToFocus = vPos.DistTo(tFocus.m_vPos);
@@ -378,33 +384,39 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 					}
 				}
 
-				if (tArea.m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT)
+				if (pArea->m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT)
 					flCost -= 200.f;
-				if (tArea.m_iTFAttributeFlags & TF_NAV_CONTROL_POINT)
+				if (pArea->m_iTFAttributeFlags & TF_NAV_CONTROL_POINT)
 					flCost -= 150.f;
 
-				m_vBuildingSpots.emplace_back(flCost, vPos);
+				vCandidates.push_back({ vPos, flCost });
 			};
 
-		const bool bSentrySpot = (tArea.m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT) != 0;
-		const bool bNearObjective = tArea.m_vCenter.DistTo(tFocus.m_vPos) < 1400.f;
+		const bool bSentrySpot = (pArea->m_iTFAttributeFlags & TF_NAV_SENTRY_SPOT) != 0;
+		const bool bNearObjective = pArea->m_vCenter.DistTo(tFocus.m_vPos) < 1400.f;
 		if (bSentrySpot || bNearObjective)
-			AddSpot(tArea.m_vCenter, bSentrySpot ? 250.f : 0.f);
+			AddSpot(pArea->m_vCenter, bSentrySpot ? 250.f : 0.f);
 
-		for (auto& tHidingSpot : tArea.m_vHidingSpots)
+		for (auto& tHidingSpot : pArea->m_vHidingSpots)
 		{
 			if (tHidingSpot.HasGoodCover())
 				AddSpot(tHidingSpot.m_vPos, 80.f);
 		}
 	}
 
-	std::sort(m_vBuildingSpots.begin(), m_vBuildingSpots.end(),
-		[](const BuildingSpot_t& a, const BuildingSpot_t& b) -> bool
+	std::sort(vCandidates.begin(), vCandidates.end(),
+		[](const BuildCandidate_t& a, const BuildCandidate_t& b) -> bool
 		{
 			return a.m_flCost < b.m_flCost;
 		});
-	if (m_vBuildingSpots.size() > 48)
-		m_vBuildingSpots.resize(48);
+
+	const size_t nTraceCandidates = std::min<size_t>(vCandidates.size(), 96);
+	for (size_t i = 0; i < nTraceCandidates && m_vBuildingSpots.size() < 48; ++i)
+	{
+		const auto& tCandidate = vCandidates[i];
+		if (CanBuildAtPosition(pLocal, tCandidate.m_vPos))
+			m_vBuildingSpots.emplace_back(tCandidate.m_flCost, tCandidate.m_vPos);
+	}
 }
 
 void CNavBotEngineer::Render()
@@ -464,6 +476,12 @@ void CNavBotEngineer::Reset()
 	m_tCurrentBuildingSpot = {};
 	m_tCurrentFocusPoint = {};
 	m_eTaskStage = EngineerTaskStageEnum::None;
+	m_tWaitUntilPath = Timer();
+	m_tBuildRotation = Timer();
+	m_tBuildAttempt = Timer();
+	m_tBuildCommand = Timer();
+	m_tRefreshBuildingSpots = Timer();
+	m_tBuildingCheck = Timer();
 }
 
 bool CNavBotEngineer::IsEngieMode(CTFPlayer* pLocal)
@@ -481,8 +499,7 @@ bool CNavBotEngineer::Run(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEnemy_t& tCl
 	}
 
 	const bool bHasGunslinger = G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger;
-	static Timer tBuildingCheckTimer{};
-	if (tBuildingCheckTimer.Run(10.f))
+	if (m_tBuildingCheck.Run(10.f))
 	{
 		if (!m_pMySentryGun || !m_pMyDispenser || (m_tCurrentFocusPoint.m_flTime != FLT_MAX && m_tCurrentFocusPoint.m_flTime + 60.f < I::GlobalVars->curtime))
 		{

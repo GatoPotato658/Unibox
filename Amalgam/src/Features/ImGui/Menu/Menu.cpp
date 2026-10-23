@@ -13,6 +13,7 @@
 #include "../../Resolver/Resolver.h"
 #include "../../Visuals/Visuals.h"
 #include "../../Visuals/SkinChanger/SkinChanger.h"
+#include "../../Visuals/SkinChanger/SkinData.h"
 #include "../../Misc/Misc.h"
 #include "../../Misc/AutoQueue/MvmQueue.h"
 #if __has_include("../../Misc/ProfileStalker/ProfileStalker.h")
@@ -23,153 +24,15 @@
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 
+#include "../../../SDK/Definitions/Main/IMaterial.h"
+#include "../../../SDK/Definitions/Main/IMaterialVar.h"
+#include "../../../SDK/Definitions/Main/ITexture.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <unordered_set>
 #include <wrl/client.h>
-
-struct CachedAvatar_t
-{
-	Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
-	uint64_t uRevision = 0;
-	double dLastUsed = 0.0;
-	bool bLoggedCreateFailure = false;
-	bool bLoggedCreateSuccess = false;
-};
-
-static std::unordered_map<uint32_t, CachedAvatar_t> s_mAvatarTextures;
-
-static void PruneAvatarTextures()
-{
-	static int iLastPruneFrame = -1;
-	if (ImGui::GetFrameCount() == iLastPruneFrame)
-		return;
-	iLastPruneFrame = ImGui::GetFrameCount();
-
-	const double dNow = ImGui::GetTime();
-	for (auto it = s_mAvatarTextures.begin(); it != s_mAvatarTextures.end();)
-	{
-		if (dNow - it->second.dLastUsed > 10.0)
-			it = s_mAvatarTextures.erase(it);
-		else
-			++it;
-	}
-}
-
-static bool ConsumeAvatarUploadBudget()
-{
-	static int iBudgetFrame = -1, iUploads = 0;
-	if (ImGui::GetFrameCount() != iBudgetFrame)
-		iBudgetFrame = ImGui::GetFrameCount(), iUploads = 0;
-	return iUploads++ < 3;
-}
-
-static ImTextureID GetAvatarTexture(uint32_t uAccountID)
-{
-	if (!uAccountID)
-		return static_cast<ImTextureID>(0);
-
-	auto* pDevice = F::Render.GetDevice();
-	if (!pDevice)
-		return static_cast<ImTextureID>(0);
-
-	PruneAvatarTextures();
-	auto& tCache = s_mAvatarTextures[uAccountID];
-	tCache.dLastUsed = ImGui::GetTime();
-
-	const uint64_t uSteamID64 = CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64();
-	constexpr Color_t tLogColor = { 175, 150, 255, 255 };
-	constexpr Color_t tErrorColor = { 255, 150, 150, 255 };
-
-	auto CreateTexture = [&](const uint8_t* pData, uint32_t uWidth, uint32_t uHeight) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
-		{
-			if (!pData || !uWidth || !uHeight)
-				return {};
-
-			auto LogFailure = [&](const char* sStage, HRESULT hr, D3DPOOL pool)
-				{
-					if (tCache.bLoggedCreateFailure)
-						return;
-					tCache.bLoggedCreateFailure = true;
-					const std::string sMessage = std::format("Failed to {} D3D texture for avatar {} (pool={}, hr=0x{:08X}).",
-															 sStage,
-															 uSteamID64,
-															 pool == D3DPOOL_MANAGED ? "MANAGED" : "DEFAULT",
-															 static_cast<uint32_t>(hr));
-					SDK::Output("SteamProfileCache", sMessage.c_str(), tErrorColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-				};
-
-			auto TryCreate = [&](D3DPOOL pool, DWORD usage) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
-				{
-					Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
-					const HRESULT hrCreate = pDevice->CreateTexture(uWidth, uHeight, 1, usage, D3DFMT_A8R8G8B8, pool, &pTexture, nullptr);
-					if (FAILED(hrCreate))
-					{
-						LogFailure("create", hrCreate, pool);
-						return {};
-					}
-
-					D3DLOCKED_RECT tRect = {};
-					const DWORD lockFlags = (usage & D3DUSAGE_DYNAMIC) ? D3DLOCK_DISCARD : 0;
-					const HRESULT hrLock = pTexture->LockRect(0, &tRect, nullptr, lockFlags);
-					if (FAILED(hrLock))
-					{
-						LogFailure("lock", hrLock, pool);
-						return {};
-					}
-
-					uint8_t* pDst = static_cast<uint8_t*>(tRect.pBits);
-					for (uint32_t y = 0; y < uHeight; y++)
-					{
-						auto* pRowDst = pDst + y * static_cast<uint32_t>(tRect.Pitch);
-						std::memcpy(pRowDst, pData + y * uWidth * 4, uWidth * 4);
-					}
-					pTexture->UnlockRect(0);
-					return pTexture;
-				};
-
-			if (auto pManaged = TryCreate(D3DPOOL_MANAGED, 0))
-			{
-				tCache.bLoggedCreateFailure = false;
-				return pManaged;
-			}
-			if (auto pDefault = TryCreate(D3DPOOL_DEFAULT, D3DUSAGE_DYNAMIC))
-			{
-				tCache.bLoggedCreateFailure = false;
-				return pDefault;
-			}
-			return {};
-		};
-
-	auto StoreTexture = [&](const uint8_t* pData, uint32_t uWidth, uint32_t uHeight) -> ImTextureID
-		{
-			if (auto pTexture = CreateTexture(pData, uWidth, uHeight))
-			{
-				tCache.pTexture = pTexture;
-				if (!tCache.bLoggedCreateSuccess)
-				{
-					const std::string sMessage = std::format("ImGui now displaying avatar for {} ({}x{}).", uSteamID64, uWidth, uHeight);
-					SDK::Output("SteamProfileCache", sMessage.c_str(), tLogColor, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
-					tCache.bLoggedCreateSuccess = true;
-				}
-				return reinterpret_cast<ImTextureID>(tCache.pTexture.Get());
-			}
-			tCache.bLoggedCreateSuccess = false;
-			return static_cast<ImTextureID>(0);
-		};
-
-	CSteamProfileCache::AvatarImage_t tImage;
-	if (F::SteamProfileCache.TryGetAvatarImage(uAccountID, tImage) && tImage.HasData())
-	{
-		if ((!tCache.pTexture || tCache.uRevision != tImage.m_uRevision) && ConsumeAvatarUploadBudget())
-		{
-			if (ImTextureID pTexture = StoreTexture(tImage.m_pPixels->data(), tImage.m_uWidth, tImage.m_uHeight))
-			{
-				tCache.uRevision = tImage.m_uRevision;
-				return pTexture;
-			}
-		}
-		return reinterpret_cast<ImTextureID>(tCache.pTexture.Get());
-	}
-	return static_cast<ImTextureID>(0);
-}
 
 static bool RoleDropdown(const char* sLabel, std::vector<int>& vRoles)
 {
@@ -321,9 +184,10 @@ void CMenu::DrawMenu()
 			{ "MAIN", "BOT", "QUEUEING" },
 			{ "CHEATERS", "DETECTION" },
 			{ "PLAYERLIST", "SETTINGS##", "OUTPUT" },
+			{ "WEAPONS", "BACKPACK" },
 			{ "CONFIG", "BINDS", "MATERIALS", "MISC##" }
 		};
-		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSettingsTab = 0;
+		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSkinsTab = 0, iSettingsTab = 0;
 		iTab = std::clamp(iTab, 0, int(vSubTabs.size() - 1));
 		bool bHasSubTabs = !vSubTabs[iTab].empty();
 		float flHeaderHeight = flNavHeight + (bHasSubTabs ? flSubTabHeight : 0.f);
@@ -369,19 +233,20 @@ void CMenu::DrawMenu()
 				{ "MISC" },
 				{ "ANTICHEAT" },
 				{ "LOGS" },
+				{ "SKINS" },
 				{ "SETTINGS" }
 			},
 			{ &iTab },
 			{ H::Draw.Scale(28), H::Draw.Scale(34) },
 			{ flBrandWidth, H::Draw.Scale(4) },
 			FTabsEnum::Horizontal | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarBottom | FTabsEnum::Fit,
-			{ { ICON_MD_PERSON }, { ICON_MD_VISIBILITY }, { ICON_MD_SECURITY }, { ICON_MD_ARTICLE }, { ICON_MD_GPP_MAYBE }, { ICON_MD_IMPORT_CONTACTS }, { ICON_MD_SETTINGS } },
+			{ { ICON_MD_PERSON }, { ICON_MD_VISIBILITY }, { ICON_MD_SECURITY }, { ICON_MD_ARTICLE }, { ICON_MD_GPP_MAYBE }, { ICON_MD_IMPORT_CONTACTS }, { ICON_MD_CHECKROOM }, { ICON_MD_SETTINGS } },
 			{ H::Draw.Scale(10), 0 }, {},
 			{}, {}, H::Draw.Scale(8), 0.f
 		);
 		PopFont();
 
-		std::vector<int*> vSubVars = { &iAimbotTab, &iVisualsTab, &iHvHTab, &iMiscTab, &iAnticheatTab, &iLogsTab, &iSettingsTab };
+		std::vector<int*> vSubVars = { &iAimbotTab, &iVisualsTab, &iHvHTab, &iMiscTab, &iAnticheatTab, &iLogsTab, &iSkinsTab, &iSettingsTab };
 		if (bHasSubTabs)
 		{
 			PushFont(F::Render.FontBold);
@@ -433,7 +298,8 @@ void CMenu::DrawMenu()
 				case 3: MenuMisc(iMiscTab); break;
 				case 4: MenuAnticheat(iAnticheatTab); break;
 				case 5: MenuLogs(iLogsTab); break;
-				case 6: MenuSettings(iSettingsTab); break;
+				case 6: MenuSkins(iSkinsTab); break;
+				case 7: MenuSettings(iSettingsTab); break;
 				}
 			}
 			else
@@ -485,8 +351,6 @@ void CMenu::MenuAimbot(int iTab)
 						FSlider(Vars::Aimbot::General::TickTolerance, FSliderEnum::Right);
 					}
 					PopTransparent();
-					FSlider(Vars::Aimbot::General::MoveSimAccuracy);
-					FTooltip("high = cpu rape, low = misswaffen");
 					PushTransparent(!Vars::Aimbot::General::FOVCircle.Value);
 					{
 						FColorPicker(Vars::Colors::FOVCircle);
@@ -525,6 +389,8 @@ void CMenu::MenuAimbot(int iTab)
 						if (FPopupButton("Debug", { 0, -5 }, -8))
 						{
 							FDropdown(Vars::Aimbot::General::AimHoldsFire);
+							FSlider(Vars::Aimbot::General::MoveSimAccuracy);
+							FTooltip("high = cpu rape, low = misswaffen");
 							FSlider(Vars::Aimbot::General::NoSpreadOffset);
 							FSlider(Vars::Aimbot::General::NoSpreadAverage);
 							FSlider(Vars::Aimbot::General::NoSpreadInterval);
@@ -608,12 +474,8 @@ void CMenu::MenuAimbot(int iTab)
 						FSlider(Vars::Aimbot::Hitscan::TapfireDistance);
 					}
 					PopTransparent();
-					FDropdown(Vars::Aimbot::Hitscan::ForwardTrack);
-					PushTransparent(!Vars::Aimbot::Hitscan::ForwardTrack.Value);
-					{
-						FToggle(Vars::Aimbot::Hitscan::ForwardTrackAirOnly);
-					}
-					PopTransparent();
+					FToggle(Vars::Aimbot::Hitscan::ForwardTrack);
+					FTooltip("Simulates the target forward to where they will be by the time your shot lands. The mode adapts automatically. Likes to miss when your ping is >80.");
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -622,6 +484,8 @@ void CMenu::MenuAimbot(int iTab)
 						FText("Debug", { 5, 5 });
 						if (FPopupButton("Debug", { 0, -5 }, -8))
 						{
+							FDropdown(Vars::Aimbot::Hitscan::ForwardTrackMode);
+							FToggle(Vars::Aimbot::Hitscan::ForwardTrackAirOnly);
 							FDropdown(Vars::Aimbot::Hitscan::PeekCheck, FDropdownEnum::None, 0, &Hovered); FTooltip("This should stay as doubletap only or off if you want to be able to target hitboxes other than the highest priority one", Hovered);
 							FSlider(Vars::Aimbot::Hitscan::PeekAmount);
 							FSlider(Vars::Aimbot::Hitscan::BoneSizeSubtract);
@@ -638,7 +502,6 @@ void CMenu::MenuAimbot(int iTab)
 					FDropdown(Vars::Aimbot::Projectile::Hitboxes, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::Projectile::SplashMode, FDropdownEnum::Right);
 					FDropdown(Vars::Aimbot::Projectile::Modifiers);
-					FToggle(Vars::Aimbot::Projectile::AccountPing);
 					FSlider(Vars::Aimbot::Projectile::MaxSimulationTime, FSliderEnum::Left); FTooltip("Longer = less accuracy, shorter = less shoot candidates");
 					PushTransparent(!Vars::Aimbot::Projectile::StrafePrediction.Value);
 					{
@@ -783,23 +646,25 @@ void CMenu::MenuAimbot(int iTab)
 						}
 					} EndSection();
 				}
-				if (Section("Auto Engie", 8))
+				if (Section("Specialities", 8))
 				{
 					FDropdown(Vars::Aimbot::AutoEngie::AutoRepair);
 					FDropdown(Vars::Aimbot::AutoEngie::AutoUpgrade);
 					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeSentryLVL);
 					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeDispenserLVL);
 					FSlider(Vars::Aimbot::AutoEngie::AutoUpgradeTeleporterLVL);
-				} EndSection();
-				if (Section("Zombie Infection", 8))
-				{
+
+					Divider();
+					FText("Zombie Infection");
+					Divider();
 					FDropdown(Vars::Aimbot::Zombie::Abilities, FDropdownEnum::Left);
 					FToggle(Vars::Aimbot::Zombie::AutoCast, FToggleEnum::Right);
 					FSlider(Vars::Aimbot::Zombie::MaxDistance, FSliderEnum::None, Vars::Aimbot::Zombie::MaxDistance[DEFAULT_BIND] <= 0.f ? "Auto" : "%g");
 					FTooltip("Aims the Sniper spit, Spy EMP, Pyro spew and Heavy rock abilities on zi_ maps. Needs an aim type other than off. Auto = no distance limit besides what the projectile can reach.");
-				} EndSection();
-				if (Section("Passtime", 8))
-				{
+
+					Divider();
+					FText("Passtime");
+					Divider();
 					FDropdown(Vars::Aimbot::Passtime::Mode, FDropdownEnum::Left);
 					FDropdown(Vars::Aimbot::Passtime::PassPreference, FDropdownEnum::Right);
 					FToggle(Vars::Aimbot::Passtime::AutoThrow, FToggleEnum::Left);
@@ -1106,8 +971,7 @@ void CMenu::MenuVisuals(int iTab)
 
 					FSlider("Render start## Glow", &tGroup.m_tGlow.Start, 0.f, 2048.f, 128, "%.fHU", FSliderEnum::Left | FSliderEnum::Clamp);
 					FSlider("Render end## Glow", &tGroup.m_tGlow.End, 512.f, 8192.f, 128.f, "%.fHU", FSliderEnum::Right | FSliderEnum::Min);
-					FToggle("Distance to alpha## Glow", &tGroup.m_tGlow.SmoothAlpha);
-				} EndSection();
+					FToggle("Distance to alpha## Glow", &tGroup.m_tGlow.SmoothAlpha);				} EndSection();
 				if (Section("Misc", 8))
 				{
 					FToggle("Offscreen arrows", &tGroup.m_bOffscreenArrows, FToggleEnum::Left);
@@ -1143,8 +1007,7 @@ void CMenu::MenuVisuals(int iTab)
 
 						FSlider("Render start## Backtrack", &tGroup.m_tBacktrackGlow.Start, 0.f, 2048.f, 128, "%.fHU", FSliderEnum::Left | FSliderEnum::Min);
 						FSlider("Render end## Backtrack", &tGroup.m_tBacktrackGlow.End, 512.f, 8192.f, 128.f, "%.fHU", FSliderEnum::Right | FSliderEnum::Min);
-						FToggle("Distance to alpha## Backtrack", &tGroup.m_tBacktrackGlow.SmoothAlpha);
-						EndPopup();
+						FToggle("Distance to alpha## Backtrack", &tGroup.m_tBacktrackGlow.SmoothAlpha);						EndPopup();
 					}
 
 					FToggle("Trajectory", &tGroup.m_iTrajectory, TrajectoryEnum::Enabled, FToggleEnum::Left);
@@ -1409,100 +1272,6 @@ void CMenu::MenuVisuals(int iTab)
 					FToggle(Vars::Visuals::UI::CleanScreenshots, FToggleEnum::Right);
 					FToggle(Vars::Visuals::AntiObs::Enabled, FToggleEnum::Left);
 				} EndSection();
-				if (Section("Skins"))
-				{
-					FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
-					FToggle(Vars::Visuals::SkinChanger::AllowUnsupported);
-
-					const HeldWeapon_t tHeld = F::SkinChanger.GetHeldWeapon();
-					const int iKey = tHeld.bValid ? tHeld.iKey : -1;
-					const bool bAllowUnsupported = Vars::Visuals::SkinChanger::AllowUnsupported.Value;
-					static std::string sWeaponLabel;
-					if (!tHeld.bValid)
-						sWeaponLabel = "Hold a weapon to edit skins";
-					else if (const char* sName = CSkinChanger::WeaponName(iKey))
-						sWeaponLabel = std::format("Editing {}", sName);
-					else
-						sWeaponLabel = std::format("Editing item #{}", iKey);
-					FText(sWeaponLabel.c_str());
-
-					PushDisabled(!tHeld.bValid);
-					Skin_t tSkin = F::SkinChanger.Get(iKey);
-
-					static std::vector<std::string> vKitStrings;
-					static std::vector<int> vKitIds;
-					CSkinChanger::GetKits(iKey, bAllowUnsupported, tSkin.iPaintKit, vKitStrings, vKitIds);
-					std::vector<const char*> vKitNames;
-					vKitNames.reserve(vKitStrings.size());
-					for (auto& sKit : vKitStrings)
-						vKitNames.push_back(sKit.c_str());
-					FDropdown("Paint kit", &tSkin.iPaintKit, vKitNames, vKitIds);
-					if (tHeld.bValid && !CSkinChanger::CanPaint(iKey, false))
-						FText(bAllowUnsupported ? "Warpaints are not supported on this weapon" : "No warpaints for this weapon (see option above)");
-
-					static const std::vector<const char*> vWear = { "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle Scarred" };
-					PushTransparent(tSkin.iPaintKit < 0);
-					{
-						FDropdown("Wear", &tSkin.iWear, vWear, {}, FDropdownEnum::Left);
-					}
-					PopTransparent();
-					PushTransparent(tSkin.iPaintKit < 0);
-					{
-						FSlider("Seed", &tSkin.iSeed, 0, 255, 1, "%i", FSliderEnum::Clamp);
-					}
-					PopTransparent();
-					static const std::vector<const char*> vQualityNames = { "Default", "Normal", "Unique", "Vintage", "Genuine", "Strange", "Unusual", "Haunted", "Collector's", "Decorated", "Community", "Self-Made", "Valve" };
-					static const std::vector<int> vQualityValues = { -1, 0, 6, 3, 1, 11, 5, 13, 14, 15, 7, 9, 8 };
-					FDropdown("Quality", &tSkin.iQuality, vQualityNames, vQualityValues, FDropdownEnum::Right);
-
-					PushDisabled(!tHeld.bValid || !CSkinChanger::CanAustralium(iKey));
-					{
-						FToggle(CSkinChanger::IsGoldenPan(iKey) ? "Golden" : "Australium", &tSkin.bAustralium, FToggleEnum::Left);
-					}
-					PopDisabled();
-					PushDisabled(!tHeld.bValid || !CSkinChanger::CanFestive(iKey));
-					{
-						FToggle("Festive", &tSkin.bFestive, FToggleEnum::Right);
-					}
-					PopDisabled();
-					PushDisabled(!tHeld.bValid || !CSkinChanger::CanBotkiller(iKey));
-					{
-						static const std::vector<const char*> vBotkiller = { "Off", "Silver Mk.I", "Gold Mk.I", "Rust Mk.I", "Blood Mk.I", "Carbonado Mk.I", "Diamond Mk.I", "Silver Mk.II", "Gold Mk.II" };
-						FDropdown("Botkiller", &tSkin.iBotkiller, vBotkiller, {});
-					}
-					PopDisabled();
-					FSlider("Killstreak", &tSkin.iKillstreak, 0, 3, 1, "%i", FSliderEnum::Clamp);
-					static const std::vector<const char*> vSheen = { "Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod" };
-					static const std::vector<const char*> vUnusual = { "Off", "Hot", "Isotope", "Cool", "Energy orb" };
-					FDropdown("Sheen", &tSkin.iSheen, vSheen, {}, FDropdownEnum::Left);
-					FDropdown("Weapon unusual", &tSkin.iUnusual, vUnusual, {}, FDropdownEnum::Right);
-					static const std::vector<const char*> vKillFx = { "Off", "Cerebral Discharge", "Fire Horns", "Flames", "Hypno-Beam", "Incinerator", "Singularity", "Tornado" };
-					static const std::vector<int> vKillFxIds = { -1, 2002, 2003, 2004, 2005, 2006, 2007, 2008 };
-					FDropdown("Kill effect", &tSkin.iKillEffect, vKillFx, vKillFxIds);
-					bool bPaintColor = tSkin.iPaintColor >= 0;
-					const bool bOldPaintColor = bPaintColor;
-					Color_t tPaintColor = bPaintColor ? Color_t{ byte(tSkin.iPaintColor & 255), byte((tSkin.iPaintColor >> 8) & 255), byte((tSkin.iPaintColor >> 16) & 255) } : Color_t{ 255, 255, 255 };
-					FToggle("Paint color", &bPaintColor, FToggleEnum::Left);
-					if (bPaintColor)
-					{
-						if (!bOldPaintColor)
-							tSkin.iPaintColor = int(tPaintColor.r) | (int(tPaintColor.g) << 8) | (int(tPaintColor.b) << 16);
-						if (FColorPicker("Paint color", &tPaintColor))
-							tSkin.iPaintColor = int(tPaintColor.r) | (int(tPaintColor.g) << 8) | (int(tPaintColor.b) << 16);
-					}
-					else
-						tSkin.iPaintColor = -1;
-					FSlider("StatTrak kills", &tSkin.iStatTrak, -1, 100000, 1, "%i", FSliderEnum::Clamp);
-					if (tSkin.iStatTrak >= 0)
-						FText("StatTrak applies Strange quality");
-					if (tHeld.bValid && !(tSkin == F::SkinChanger.Get(iKey)))
-						F::SkinChanger.Set(iKey, tSkin);
-					if (tHeld.bValid && FButton("Remove skin"))
-						F::SkinChanger.Set(iKey, Skin_t{});
-					PopDisabled();
-					if (FButton("Remove all skins"))
-						F::SkinChanger.Clear();
-				} EndSection();
 				if (Section("Thirdperson", 8))
 				{
 					FToggle(Vars::Visuals::Thirdperson::Enabled, FToggleEnum::Left);
@@ -1733,6 +1502,7 @@ void CMenu::MenuVisuals(int iTab)
 		}
 		break;
 	}
+
 	}
 }
 
@@ -2556,7 +2326,7 @@ void CMenu::MenuAnticheat(int iTab)
 						pDrawList->AddRect(vDrawPos, { vDrawPos.x + flWidth, vDrawPos.y + flHeight }, uBorderColor, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 
 						ImVec2 vAvatarPos = { vOriginalPos.x + flPadding, vOriginalPos.y + (flHeight - flAvatarSize) / 2 };
-						if (ImTextureID pAvatar = GetAvatarTexture(tEntry.first))
+						if (ImTextureID pAvatar = reinterpret_cast<ImTextureID>(F::SteamProfileCache.GetAvatarTexture(tEntry.first)))
 						{
 							SetCursorPos(vAvatarPos);
 							Image(pAvatar, { flAvatarSize, flAvatarSize });
@@ -3608,7 +3378,7 @@ void CMenu::MenuLogs(int iTab)
 					pDrawList->AddRect(vDrawPos, { vDrawPos.x + flWidth, vDrawPos.y + flHeight }, uBorderColor, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 
 					ImVec2 vAvatarPos = { vOriginalPos.x + flPadding, vOriginalPos.y + (flHeight - flAvatarSize) / 2 };
-					if (ImTextureID pAvatar = GetAvatarTexture(tEntry.m_uAccountID))
+					if (ImTextureID pAvatar = reinterpret_cast<ImTextureID>(F::SteamProfileCache.GetAvatarTexture(tEntry.m_uAccountID)))
 					{
 						SetCursorPos(vAvatarPos);
 						Image(pAvatar, { flAvatarSize, flAvatarSize });
@@ -4028,7 +3798,7 @@ void CMenu::MenuLogs(int iTab)
 
 	case 1:
 	{
-		if (BeginTable("ConfigSettingsTable", 3))
+		if (BeginTable("LogsSettingsTable", 3))
 		{
 
 			TableNextColumn();
@@ -4169,6 +3939,764 @@ void CMenu::MenuLogs(int iTab)
 	}
 }
 
+namespace
+{
+	using namespace ImGui;
+
+	struct ItemIcon_t
+	{
+		Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
+		int iWidth = 0;
+		int iHeight = 0;
+		int iAttemptFrame = -1;
+		int iLastUsedFrame = -1;
+		bool bFailed = false;
+	};
+
+	std::unordered_map<uint16_t, ItemIcon_t> s_mItemIcons = {};
+
+	bool ConsumeItemIconBudget()
+	{
+		static int iFrame = -1, iUploads = 0;
+		if (ImGui::GetFrameCount() != iFrame)
+			iFrame = ImGui::GetFrameCount(), iUploads = 0;
+		return iUploads++ < 3;
+	}
+
+	void GetAlphaBounds(const uint8_t* pData, int iWidth, int iHeight, int& iLeft, int& iTop, int& iRight, int& iBottom)
+	{
+		iLeft = iWidth, iTop = iHeight, iRight = -1, iBottom = -1;
+		for (int y = 0; y < iHeight; y++)
+		{
+			const uint8_t* pRow = pData + size_t(y) * iWidth * 4;
+			for (int x = 0; x < iWidth; x++)
+			{
+				if (pRow[x * 4 + 3] <= 8)
+					continue;
+
+				iLeft = std::min(iLeft, x);
+				iRight = std::max(iRight, x);
+				iTop = std::min(iTop, y);
+				iBottom = std::max(iBottom, y);
+			}
+		}
+	}
+
+	std::vector<uint8_t> ResizeItemPixels(const uint8_t* pData, int iWidth, int iHeight, int iSourceX, int iSourceY, int iSourceWidth, int iSourceHeight, int iTargetWidth, int iTargetHeight)
+	{
+		std::vector<uint8_t> vPixels(size_t(iTargetWidth) * iTargetHeight * 4);
+		for (int y = 0; y < iTargetHeight; y++)
+		{
+			const int iSourceY0 = iSourceY + y * iSourceHeight / iTargetHeight;
+			const int iSourceY1 = std::max(iSourceY0 + 1, iSourceY + (y + 1) * iSourceHeight / iTargetHeight);
+			for (int x = 0; x < iTargetWidth; x++)
+			{
+				const int iSourceX0 = iSourceX + x * iSourceWidth / iTargetWidth;
+				const int iSourceX1 = std::max(iSourceX0 + 1, iSourceX + (x + 1) * iSourceWidth / iTargetWidth);
+				uint32_t uAlpha = 0, uCount = 0;
+				uint32_t aColor[3] = {};
+				for (int iSampleY = iSourceY0; iSampleY < iSourceY1; iSampleY++)
+				{
+					for (int iSampleX = iSourceX0; iSampleX < iSourceX1; iSampleX++)
+					{
+						const uint8_t* pSource = pData + (size_t(iSampleY) * iWidth + iSampleX) * 4;
+						const uint32_t uSourceAlpha = pSource[3];
+						aColor[0] += pSource[0] * uSourceAlpha;
+						aColor[1] += pSource[1] * uSourceAlpha;
+						aColor[2] += pSource[2] * uSourceAlpha;
+						uAlpha += uSourceAlpha;
+						uCount++;
+					}
+				}
+				uint8_t* pTarget = vPixels.data() + (size_t(y) * iTargetWidth + x) * 4;
+				if (uAlpha)
+				{
+					for (int i = 0; i < 3; i++)
+						pTarget[i] = uint8_t(aColor[i] / uAlpha);
+				}
+				pTarget[3] = uint8_t(uAlpha / uCount);
+				if (pTarget[3] < 2)
+					*reinterpret_cast<uint32_t*>(pTarget) = 0;
+			}
+		}
+		return vPixels;
+	}
+
+	Microsoft::WRL::ComPtr<IDirect3DTexture9> CreateItemTexture(const uint8_t* pData, uint32_t uWidth, uint32_t uHeight, bool bRGBA = false)
+	{
+		auto* pDevice = F::Render.GetDevice();
+		if (!pDevice || !pData || !uWidth || !uHeight)
+			return {};
+
+		auto TryCreate = [&](D3DPOOL ePool, DWORD uUsage) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
+		{
+			Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
+			if (FAILED(pDevice->CreateTexture(uWidth, uHeight, 1, uUsage, D3DFMT_A8R8G8B8, ePool, &pTexture, nullptr)))
+				return {};
+
+			D3DLOCKED_RECT tRect = {};
+			const DWORD uFlags = uUsage & D3DUSAGE_DYNAMIC ? D3DLOCK_DISCARD : 0;
+			if (FAILED(pTexture->LockRect(0, &tRect, nullptr, uFlags)))
+				return {};
+
+			for (uint32_t y = 0; y < uHeight; y++)
+			{
+				const uint8_t* pSrc = pData + y * uWidth * 4;
+				uint8_t* pDst = static_cast<uint8_t*>(tRect.pBits) + y * uint32_t(tRect.Pitch);
+				if (!bRGBA)
+				{
+					std::memcpy(pDst, pSrc, uWidth * 4);
+					continue;
+				}
+
+				for (uint32_t x = 0; x < uWidth; x++)
+				{
+					pDst[x * 4 + 0] = pSrc[x * 4 + 2];
+					pDst[x * 4 + 1] = pSrc[x * 4 + 1];
+					pDst[x * 4 + 2] = pSrc[x * 4 + 0];
+					pDst[x * 4 + 3] = pSrc[x * 4 + 3];
+				}
+			}
+			pTexture->UnlockRect(0);
+			return pTexture;
+		};
+
+		if (auto pManaged = TryCreate(D3DPOOL_MANAGED, 0))
+			return pManaged;
+		return TryCreate(D3DPOOL_DEFAULT, D3DUSAGE_DYNAMIC);
+	}
+
+	ImTextureID GetItemIcon(const ItemInfo_t& tItem, ImVec2* pSize = nullptr)
+	{
+		const int iFrame = ImGui::GetFrameCount();
+		{
+			static int iLastPruneFrame = -1;
+			if (iLastPruneFrame != iFrame)
+			{
+				iLastPruneFrame = iFrame;
+				if (s_mItemIcons.size() > 256)
+				{
+					for (auto it = s_mItemIcons.begin(); it != s_mItemIcons.end();)
+					{
+						if (iFrame - it->second.iLastUsedFrame > 120)
+							it = s_mItemIcons.erase(it);
+						else
+							++it;
+					}
+				}
+			}
+		}
+
+		auto& tIcon = s_mItemIcons[tItem.iDef];
+		tIcon.iLastUsedFrame = iFrame;
+		if (tIcon.pTexture)
+		{
+			if (pSize)
+				*pSize = { float(tIcon.iWidth), float(tIcon.iHeight) };
+			return reinterpret_cast<ImTextureID>(tIcon.pTexture.Get());
+		}
+		if (tIcon.bFailed && iFrame - tIcon.iAttemptFrame < 120)
+			return static_cast<ImTextureID>(0);
+		if (tItem.sImage.empty() || !I::MaterialSystem)
+		{
+			tIcon.bFailed = true;
+			tIcon.iAttemptFrame = iFrame;
+			return static_cast<ImTextureID>(0);
+		}
+		if (!ConsumeItemIconBudget())
+			return static_cast<ImTextureID>(0);
+
+		tIcon.iAttemptFrame = iFrame;
+		tIcon.bFailed = true;
+
+		auto CreateScaled = [&tIcon](const uint8_t* pData, int iWidth, int iHeight, bool bRGBA) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
+		{
+			constexpr int iIconWidth = 128, iIconHeight = 96;
+			if (!pData || iWidth <= 0 || iHeight <= 0)
+				return {};
+
+			int iLeft = 0, iTop = 0, iRight = iWidth - 1, iBottom = iHeight - 1;
+			GetAlphaBounds(pData, iWidth, iHeight, iLeft, iTop, iRight, iBottom);
+			if (iRight < iLeft || iBottom < iTop)
+				return {};
+
+			const int iSourceWidth = iRight - iLeft + 1, iSourceHeight = iBottom - iTop + 1;
+			float flAspect = float(iSourceWidth) / float(iSourceHeight);
+			int iTargetWidth = iSourceWidth, iTargetHeight = iSourceHeight;
+			if (flAspect > float(iIconWidth) / float(iIconHeight))
+				iTargetHeight = std::max(1, int(iIconWidth / flAspect));
+			else
+				iTargetWidth = std::max(1, int(iIconHeight * flAspect));
+
+			const auto vScaled = ResizeItemPixels(pData, iWidth, iHeight, iLeft, iTop, iSourceWidth, iSourceHeight, iTargetWidth, iTargetHeight);
+			auto pTexture = CreateItemTexture(vScaled.data(), uint32_t(iTargetWidth), uint32_t(iTargetHeight), bRGBA);
+			if (pTexture)
+			{
+				tIcon.iWidth = iTargetWidth;
+				tIcon.iHeight = iTargetHeight;
+			}
+			return pTexture;
+		};
+
+		std::string sPath = tItem.sImage;
+		if (sPath.starts_with("materials/"))
+			sPath.erase(0, 10);
+		if (!sPath.ends_with(".vmt"))
+			sPath += ".vmt";
+
+		IMaterial* pMaterial = I::MaterialSystem->FindMaterial(sPath.c_str(), TEXTURE_GROUP_VGUI, false);
+		if (!pMaterial)
+			pMaterial = I::MaterialSystem->FindMaterial(sPath.c_str(), TEXTURE_GROUP_OTHER, false);
+		if (!pMaterial)
+			return static_cast<ImTextureID>(0);
+
+		{
+			int iWidth = 0, iHeight = 0;
+			ImageFormat eFormat = IMAGE_FORMAT_UNKNOWN;
+			bool bTranslucent = false;
+			if (pMaterial->GetPreviewImageProperties(&iWidth, &iHeight, &eFormat, &bTranslucent) == MATERIAL_PREVIEW_IMAGE_OK
+				&& iWidth > 0 && iHeight > 0 && iWidth <= 512 && iHeight <= 512)
+			{
+				std::vector<uint8_t> vPixels(size_t(iWidth) * size_t(iHeight) * 4);
+				if (pMaterial->GetPreviewImage(vPixels.data(), iWidth, iHeight, IMAGE_FORMAT_BGRA8888) == MATERIAL_PREVIEW_IMAGE_OK)
+				{
+					if (auto pCreated = CreateScaled(vPixels.data(), iWidth, iHeight, false))
+					{
+						tIcon.pTexture = pCreated;
+						tIcon.bFailed = false;
+						return reinterpret_cast<ImTextureID>(tIcon.pTexture.Get());
+					}
+				}
+			}
+		}
+		return static_cast<ImTextureID>(0);
+	}
+
+	std::string Lowercase(const std::string& sText)
+	{
+		std::string sReturn = sText;
+		std::transform(sReturn.begin(), sReturn.end(), sReturn.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+		return sReturn;
+	}
+
+	struct ItemGrid_t
+	{
+		uint16_t uClicked = 0;
+		uint16_t uDoubleClicked = 0;
+	};
+
+	ItemGrid_t DrawItemGrid(const char* sID, const std::vector<const ItemInfo_t*>& vItems, const std::unordered_set<uint16_t>& tSelected, float flHeight, bool bCounts = false)
+	{
+		ItemGrid_t tResult = {};
+		const float flSpacing = H::Draw.Scale(6), flMinCellWidth = H::Draw.Scale(92);
+		const int iTotal = int(vItems.size());
+
+		if (BeginChild(sID, { 0, flHeight }, ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar))
+		{
+			if (iTotal == 0)
+			{
+				const char* sEmpty = "no items";
+				SetCursorPosX(GetCursorPosX() + (GetContentRegionAvail().x - CalcTextSize(sEmpty).x) * 0.5f);
+				TextColored(F::Render.Inactive, sEmpty);
+			}
+
+			const float flAvailWidth = GetContentRegionAvail().x - H::Draw.Scale(!GetCurrentWindow()->ScrollbarY ? 14 : 7);
+			const int iColumns = std::max(1, int((flAvailWidth + flSpacing) / (flMinCellWidth + flSpacing)));
+			const float flCellW = (flAvailWidth - flSpacing * (iColumns - 1)) / iColumns;
+			const float flIconH = std::clamp(flCellW * 0.7f, H::Draw.Scale(56), H::Draw.Scale(84));
+			const float flCellH = H::Draw.Scale(6) + flIconH + H::Draw.Scale(5) + H::Draw.Scale(16) + H::Draw.Scale(4);
+			const float flRowH = flCellH + flSpacing;
+			const int iTotalRows = (iTotal + iColumns - 1) / iColumns;
+			const int iFirstRow = std::clamp(int(GetScrollY() / flRowH) - 1, 0, std::max(0, iTotalRows - 1));
+			const int iLastRow = std::min(iTotalRows, iFirstRow + int(GetWindowHeight() / flRowH) + 2);
+			if (iFirstRow > 0)
+				Dummy({ 0, iFirstRow * flRowH });
+
+			ImDrawList* pDrawList = GetWindowDrawList();
+			for (int iRow = iFirstRow; iRow < iLastRow; iRow++)
+			{
+				for (int iColumn = 0; iColumn < iColumns; iColumn++)
+				{
+					const int iIndex = iRow * iColumns + iColumn;
+					if (iIndex >= iTotal)
+						break;
+
+					const ItemInfo_t* pItem = vItems[iIndex];
+					PushID(pItem->iDef);
+					const ImVec2 vPos = GetCursorScreenPos();
+					const bool bClicked = InvisibleButton("##Item", { flCellW, flCellH });
+					const bool bHovered = IsItemHovered();
+					const bool bSelected = tSelected.contains(pItem->iDef);
+					const ImVec2 vEnd = vPos + ImVec2(flCellW, flCellH);
+
+					ImVec4 tBackground = bHovered ? F::Render.Background1p5.Value : F::Render.Background0p5.Value;
+					if (bSelected)
+						tBackground = ImVec4(F::Render.Accent.Value.x, F::Render.Accent.Value.y, F::Render.Accent.Value.z, 0.35f);
+					tBackground.w *= GetStyle().Alpha;
+					const ImU32 uBackground = GetColorU32(tBackground);
+					const float flRounding = H::Draw.Scale(3);
+					pDrawList->AddRectFilled(vPos, vEnd, uBackground, flRounding);
+					pDrawList->AddRect(vPos, vEnd, GetColorU32(bSelected ? F::Render.Accent.Value : F::Render.Background1p5.Value), flRounding);
+
+					ImVec2 vSourceSize = { 1.f, 1.f };
+					const ImTextureID pIcon = GetItemIcon(*pItem, &vSourceSize);
+					const float flIconWidth = std::max(1.f, flCellW - H::Draw.Scale(14)), flIconHeight = flIconH;
+					const ImVec2 vIconMin = vPos + ImVec2((flCellW - flIconWidth) / 2, H::Draw.Scale(6));
+					if (pIcon)
+					{
+						const float flScale = std::min(flIconWidth / vSourceSize.x, flIconHeight / vSourceSize.y);
+						const ImVec2 vIconSize = vSourceSize * flScale;
+						const ImVec2 vIcon = vIconMin + ImVec2((flIconWidth - vIconSize.x) / 2, (flIconHeight - vIconSize.y) / 2);
+						pDrawList->AddImage(pIcon, vIcon, vIcon + vIconSize);
+					}
+					else
+						pDrawList->AddRectFilled(vIconMin, vIconMin + ImVec2(flIconWidth, flIconHeight), GetColorU32(F::Render.Background1p5.Value), H::Draw.Scale(2));
+
+					if (bCounts)
+					{
+						if (const int iCount = F::SkinChanger.GetInventoryCount(pItem->iDef); iCount > 1)
+						{
+							const std::string sCount = std::format("x{}", iCount);
+							const float flCountWidth = FCalcTextSize(sCount.c_str(), F::Render.FontSmall).x;
+							pDrawList->AddText(F::Render.FontSmall, F::Render.FontSmall->LegacySize, vEnd - ImVec2(flCountWidth + H::Draw.Scale(5), flCellH - H::Draw.Scale(4)), GetColorU32(F::Render.Active.Value), sCount.c_str());
+						}
+					}
+
+					const std::string sName = TruncateText(pItem->sName, int(flCellW - H::Draw.Scale(8)), F::Render.FontSmall);
+					const ImU32 uNameColor = GetColorU32(bSelected ? F::Render.Active.Value : F::Render.Inactive.Value);
+					const float flNameWidth = FCalcTextSize(sName.c_str(), F::Render.FontSmall).x;
+					const ImVec2 vNamePos = vPos + ImVec2((flCellW - flNameWidth) / 2, H::Draw.Scale(6) + flIconH + H::Draw.Scale(5));
+					pDrawList->AddText(F::Render.FontSmall, F::Render.FontSmall->LegacySize, vNamePos, uNameColor, sName.c_str());
+
+					if (bClicked)
+						tResult.uClicked = pItem->iDef;
+					if (bHovered && IsMouseDoubleClicked(ImGuiMouseButton_Left))
+						tResult.uDoubleClicked = pItem->iDef;
+					if (bHovered)
+						FTooltip(std::format("{}\nItem #{}", pItem->sName, pItem->iDef).c_str());
+
+					PopID();
+					if (iColumn != iColumns - 1 && iIndex != iTotal - 1)
+						SameLine(0, flSpacing);
+				}
+				Dummy({ 0, flSpacing });
+			}
+
+			if (iLastRow < iTotalRows)
+				Dummy({ 0, (iTotalRows - iLastRow) * flRowH });
+		} EndChild();
+
+		return tResult;
+	}
+
+	const ItemInfo_t* FindItemInfo(uint16_t iDef)
+	{
+		static std::unordered_map<uint16_t, const ItemInfo_t*> s_mLookup = {};
+		static size_t s_uSize = 0;
+		static const ItemInfo_t* s_pData = nullptr;
+		const auto& vItems = CSkinChanger::GetItems();
+		if (s_uSize != vItems.size() || s_pData != vItems.data())
+		{
+			s_mLookup.clear();
+			for (const auto& tItem : vItems)
+				s_mLookup[tItem.iDef] = &tItem;
+			s_uSize = vItems.size();
+			s_pData = vItems.data();
+		}
+
+		auto it = s_mLookup.find(iDef);
+		return it != s_mLookup.end() ? it->second : nullptr;
+	}
+
+	const std::vector<std::pair<int, std::string>>& GetUnusualEffects()
+	{
+		static std::vector<std::pair<int, std::string>> s_vEffects = {};
+		static bool s_bBuilt = false;
+		if (!s_bBuilt && I::Localize)
+		{
+			std::unordered_set<std::string> tSeen = {};
+			for (int i = 1; i <= 3242; i++)
+			{
+				const char* sName = I::Localize->FindAsUTF8(std::format("#Attrib_Particle{}", i).c_str());
+				if (!sName || !sName[0])
+					continue;
+
+				std::string sEffect = sName;
+				if (sEffect == "Invalid Particle" || sEffect.starts_with("Particle ") || sEffect.find("Attrib_Particle") != std::string::npos)
+					continue;
+				if (!tSeen.insert(sEffect).second)
+					continue;
+				s_vEffects.emplace_back(i, std::move(sEffect));
+			}
+			std::sort(s_vEffects.begin(), s_vEffects.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+			s_bBuilt = !s_vEffects.empty();
+		}
+		return s_vEffects;
+	}
+
+	const char* UnusualEffectName(int iEffect)
+	{
+		for (const auto& [iId, sName] : GetUnusualEffects())
+		{
+			if (iId == iEffect)
+				return sName.c_str();
+		}
+		return "None";
+	}
+
+	int UnusualEffectId(const std::string& sName)
+	{
+		for (const auto& [iId, sEffect] : GetUnusualEffects())
+		{
+			if (sEffect == sName)
+				return iId;
+		}
+		return -1;
+	}
+
+}
+
+void CMenu::MenuSkins(int iTab)
+{
+	using namespace ImGui;
+
+	static int iSelectedWeapon = -1;
+	static std::string sItemSearch;
+	static std::string sBackpackSearch;
+	static int iBackpackFilter = 0;
+	static uint16_t uBackpackSelected = 0;
+
+	static std::vector<const char*> vWeaponNames = { "Held weapon" };
+	static std::vector<int> vWeaponIds = { -1 };
+	static bool bWeaponListBuilt = false;
+	if (!bWeaponListBuilt)
+	{
+		std::unordered_set<int> tKeys = {};
+		for (const auto& tWeapon : SkinData::kWeaponNames)
+		{
+			const int iKey = CSkinChanger::Key(tWeapon.iDef);
+			if (!tKeys.insert(iKey).second)
+				continue;
+			vWeaponNames.push_back(tWeapon.sName);
+			vWeaponIds.push_back(iKey);
+		}
+		bWeaponListBuilt = true;
+	}
+
+	switch (iTab)
+	{
+	case 0:
+	{
+		const float flSectionHeight = H::Draw.Scale(4) + GetSectionMaxHeight({ "Weapon", "Weapon effects" }, H::Draw.Scale(440));
+		if (BeginTable("SkinsWeaponsTable", 2, ImGuiTableFlags_SizingStretchSame))
+		{
+			TableNextColumn();
+			if (Section("Weapon", 0, flSectionHeight, true))
+			{
+				FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
+				FToggle(Vars::Visuals::SkinChanger::AllowUnsupported, FToggleEnum::Right);
+
+				FDropdown("Weapon", &iSelectedWeapon, vWeaponNames, vWeaponIds);
+
+				const HeldWeapon_t tHeld = F::SkinChanger.GetHeldWeapon();
+				const int iKey = iSelectedWeapon >= 0 ? iSelectedWeapon : (tHeld.bValid ? tHeld.iKey : -1);
+				const bool bValid = iKey >= 0;
+				const bool bAllowUnsupported = Vars::Visuals::SkinChanger::AllowUnsupported.Value;
+
+				std::string sWeaponLabel;
+				if (!bValid)
+					sWeaponLabel = "Select a weapon or hold one";
+				else if (const char* sName = CSkinChanger::WeaponName(iKey))
+					sWeaponLabel = std::format("Editing {}", sName);
+				else
+					sWeaponLabel = std::format("Editing item #{}", iKey);
+				FText(sWeaponLabel.c_str());
+
+				PushDisabled(!bValid);
+				Skin_t tSkin = bValid ? F::SkinChanger.Get(iKey) : Skin_t{};
+
+				static int iCachedKitKey = -2;
+				static int iCachedKitCurrent = -2;
+				static bool bCachedAllowUnsupported = false;
+				static std::vector<std::string> vKitStrings = {};
+				static std::vector<int> vKitIds = {};
+				if (iCachedKitKey != iKey || iCachedKitCurrent != tSkin.iPaintKit || bCachedAllowUnsupported != bAllowUnsupported)
+				{
+					CSkinChanger::GetKits(iKey, bAllowUnsupported, tSkin.iPaintKit, vKitStrings, vKitIds);
+					iCachedKitKey = iKey;
+					iCachedKitCurrent = tSkin.iPaintKit;
+					bCachedAllowUnsupported = bAllowUnsupported;
+				}
+				std::vector<const char*> vKitNames = {};
+				vKitNames.reserve(vKitStrings.size());
+				for (auto& sKit : vKitStrings)
+					vKitNames.push_back(sKit.c_str());
+				FDropdown("Paint kit", &tSkin.iPaintKit, vKitNames, vKitIds);
+				if (bValid && !CSkinChanger::CanPaint(iKey, false))
+					FText(bAllowUnsupported ? "Not supported on this weapon" : "No warpaints for this weapon");
+
+				static const std::vector<const char*> vWear = { "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle Scarred" };
+				static const std::vector<const char*> vQualityNames = { "Default", "Normal", "Unique", "Vintage", "Genuine", "Strange", "Unusual", "Haunted", "Collector's", "Decorated", "Community", "Self-Made", "Valve" };
+				static const std::vector<int> vQualityValues = { -1, 0, 6, 3, 1, 11, 5, 13, 14, 15, 7, 9, 8 };
+				if (tSkin.iStatTrak >= 0)
+					tSkin.iQuality = 11;
+				PushTransparent(tSkin.iPaintKit < 0);
+				{
+					FDropdown("Wear", &tSkin.iWear, vWear, {}, FDropdownEnum::Left);
+					PushDisabled(tSkin.iStatTrak >= 0);
+					FDropdown("Quality", &tSkin.iQuality, vQualityNames, vQualityValues, FDropdownEnum::Right);
+					PopDisabled();
+				}
+				PopTransparent();
+				PushTransparent(tSkin.iPaintKit < 0);
+				{
+					FSlider("Seed", &tSkin.iSeed, 0, 255, 1, "%i", FSliderEnum::Clamp);
+				}
+				PopTransparent();
+
+				PushDisabled(!CSkinChanger::CanBotkiller(iKey));
+				{
+					static const std::vector<const char*> vBotkiller = { "Off", "Silver Mk.I", "Gold Mk.I", "Rust Mk.I", "Blood Mk.I", "Carbonado Mk.I", "Diamond Mk.I", "Silver Mk.II", "Gold Mk.II" };
+					FDropdown("Botkiller", &tSkin.iBotkiller, vBotkiller, {});
+				}
+				PopDisabled();
+
+				FSlider("StatTrak kills", &tSkin.iStatTrak, -1, 100000, 1, "%i", FSliderEnum::Clamp);
+				if (tSkin.iStatTrak >= 0)
+					FText("StatTrak applies Strange quality");
+
+				if (bValid && !(tSkin == F::SkinChanger.Get(iKey)))
+					F::SkinChanger.Set(iKey, tSkin);
+				PopDisabled();
+			} EndSection();
+
+			TableNextColumn();
+			if (Section("Weapon effects", 0, flSectionHeight, true))
+			{
+				const HeldWeapon_t tHeld = F::SkinChanger.GetHeldWeapon();
+				const int iKey = iSelectedWeapon >= 0 ? iSelectedWeapon : (tHeld.bValid ? tHeld.iKey : -1);
+				const bool bValid = iKey >= 0;
+				Skin_t tSkin = bValid ? F::SkinChanger.Get(iKey) : Skin_t{};
+
+				PushDisabled(!bValid);
+				PushDisabled(!CSkinChanger::CanAustralium(iKey));
+				{
+					FToggle(CSkinChanger::IsGoldenPan(iKey) ? "Golden" : "Australium", &tSkin.bAustralium, FToggleEnum::Left);
+				}
+				PopDisabled();
+				PushDisabled(!CSkinChanger::CanFestive(iKey));
+				{
+					FToggle("Festivizer", &tSkin.bFestive, FToggleEnum::Right);
+				}
+				PopDisabled();
+
+				FSlider("Killstreak", &tSkin.iKillstreak, 0, 3, 1, "%i", FSliderEnum::Clamp);
+				static const std::vector<const char*> vSheen = { "Off", "Team shine", "Deadly daffodil", "Manndarin", "Mean green", "Agonizing emerald", "Villainous violet", "Hot rod" };
+				static const std::vector<const char*> vUnusual = { "Off", "Hot", "Isotope", "Cool", "Energy orb" };
+				FDropdown("Sheen", &tSkin.iSheen, vSheen, {}, FDropdownEnum::Left);
+				FDropdown("Weapon unusual", &tSkin.iUnusual, vUnusual, {}, FDropdownEnum::Right);
+
+				static const std::vector<const char*> vKillFx = { "Off", "Cerebral Discharge", "Fire Horns", "Flames", "Hypno-Beam", "Incinerator", "Singularity", "Tornado" };
+				static const std::vector<int> vKillFxIds = { -1, 2002, 2003, 2004, 2005, 2006, 2007, 2008 };
+				FDropdown("Kill effect", &tSkin.iKillEffect, vKillFx, vKillFxIds);
+
+				bool bPaintColor = tSkin.iPaintColor >= 0;
+				const bool bOldPaintColor = bPaintColor;
+				Color_t tPaintColor = bPaintColor ? Color_t{ byte(tSkin.iPaintColor & 255), byte((tSkin.iPaintColor >> 8) & 255), byte((tSkin.iPaintColor >> 16) & 255) } : Color_t{ 255, 255, 255 };
+				FToggle("Paint color", &bPaintColor, FToggleEnum::Left);
+				if (bPaintColor)
+				{
+					if (!bOldPaintColor)
+						tSkin.iPaintColor = int(tPaintColor.r) | (int(tPaintColor.g) << 8) | (int(tPaintColor.b) << 16);
+					if (FColorPicker("##PaintColor", &tPaintColor))
+						tSkin.iPaintColor = int(tPaintColor.r) | (int(tPaintColor.g) << 8) | (int(tPaintColor.b) << 16);
+				}
+				else
+					tSkin.iPaintColor = -1;
+				PopDisabled();
+
+				if (bValid && !(tSkin == F::SkinChanger.Get(iKey)))
+					F::SkinChanger.Set(iKey, tSkin);
+
+				PushDisabled(!bValid);
+				if (FButton("Remove skin", FButtonEnum::Left) && bValid)
+					F::SkinChanger.Set(iKey, Skin_t{});
+				PopDisabled();
+				if (FButton("Remove all skins", FButtonEnum::Right | FButtonEnum::SameLine))
+					F::SkinChanger.Clear();
+			} EndSection();
+
+			EndTable();
+		}
+
+		if (Section("Skin actions", 0, 0.f, false, true))
+		{
+			FToggle(Vars::Misc::Exploits::BackpackExpander, FToggleEnum::Left);
+			FToggle(Vars::Misc::Exploits::EquipRegionUnlock, FToggleEnum::Right);
+			FSDropdown(Vars::Visuals::Effects::BulletTracer);
+
+			if (FButton("Full update", FButtonEnum::Left))
+				F::SkinChanger.RequestFullUpdate();
+		} EndSection();
+		break;
+	}
+
+	case 1:
+	{
+		const float flSectionHeight = std::max(H::Draw.Scale(320), GetContentRegionAvail().y - H::Draw.Scale(10));
+		if (BeginTable("SkinsBackpackTable", 2))
+		{
+			TableSetupColumn("##Owned", ImGuiTableColumnFlags_WidthStretch, 1.f);
+			TableSetupColumn("##Catalogue", ImGuiTableColumnFlags_WidthStretch, 1.35f);
+			TableNextColumn();
+			if (Section("In-game backpack", 0, flSectionHeight, true))
+			{
+				FToggle(Vars::Visuals::SkinChanger::Enabled, FToggleEnum::Left);
+				FToggle(Vars::Visuals::SkinChanger::AllowUnsupported, FToggleEnum::Right);
+				FInputText("Search backpack...", sBackpackSearch, GetContentRegionAvail().x);
+
+				const std::vector<const ItemInfo_t*> vBackpack = F::SkinChanger.GetInventoryItems();
+				static std::vector<const ItemInfo_t*> s_vBackpackFiltered = {};
+				static std::string s_sBackpackSearch;
+				static size_t s_uBackpackSize = 0;
+				static const ItemInfo_t* const* s_pBackpackData = nullptr;
+				if (s_sBackpackSearch != sBackpackSearch || s_uBackpackSize != vBackpack.size() || s_pBackpackData != vBackpack.data())
+				{
+					s_vBackpackFiltered.clear();
+					const std::string sNeedle = Lowercase(sBackpackSearch);
+					for (const auto* pItem : vBackpack)
+					{
+						if (sNeedle.empty() || Lowercase(pItem->sName).find(sNeedle) != std::string::npos)
+							s_vBackpackFiltered.push_back(pItem);
+					}
+					s_sBackpackSearch = sBackpackSearch;
+					s_uBackpackSize = vBackpack.size();
+					s_pBackpackData = vBackpack.data();
+				}
+
+				FText(std::format("{} items", vBackpack.size()).c_str());
+				if (vBackpack.empty())
+					FText("Empty. Add something from the catalogue.");
+
+				const ItemInfo_t* pSelected = uBackpackSelected ? FindItemInfo(uBackpackSelected) : nullptr;
+				const bool bSelectedOwned = pSelected && vBackpack.cend() != std::find(vBackpack.cbegin(), vBackpack.cend(), pSelected);
+				const float flGridHeight = std::max(H::Draw.Scale(120), GetContentRegionAvail().y - H::Draw.Scale(bSelectedOwned ? 88 : 8));
+				const ItemGrid_t tGrid = DrawItemGrid("##OwnedGrid", s_vBackpackFiltered, {}, flGridHeight, true);
+				if (tGrid.uClicked)
+					uBackpackSelected = tGrid.uClicked;
+				if (tGrid.uDoubleClicked && F::SkinChanger.InBackpack(tGrid.uDoubleClicked))
+					F::SkinChanger.RemoveFromBackpack(tGrid.uDoubleClicked);
+
+				const bool bSelectedAdded = bSelectedOwned && F::SkinChanger.InBackpack(uBackpackSelected);
+				PushDisabled(!bSelectedAdded);
+				if (FButton("Delete from backpack", FButtonEnum::Fit))
+					F::SkinChanger.RemoveFromBackpack(uBackpackSelected);
+				PopDisabled();
+				if (bSelectedOwned)
+					FText(TruncateText(pSelected->sName, int(GetContentRegionAvail().x)).c_str());
+			} EndSection();
+
+			TableNextColumn();
+			if (Section("Catalogue", 0, flSectionHeight, true))
+			{
+				static const std::vector<const char*> vFilters = { "All", "Weapons", "Hats & misc", "Tools & cases" };
+				std::vector<int> vFilterIds = { 0, 1, 2, 3 };
+				FDropdown("Filter", &iBackpackFilter, vFilters, vFilterIds);
+				FInputText("Search items...", sItemSearch, GetContentRegionAvail().x);
+
+				const auto& vItems = CSkinChanger::GetItems();
+				static std::vector<const ItemInfo_t*> s_vCatalogueFiltered = {};
+				static std::string s_sCatalogueSearch;
+				static int s_iCatalogueFilter = -1;
+				static size_t s_uCatalogueSize = 0;
+				static const ItemInfo_t* s_pCatalogueData = nullptr;
+				if (s_sCatalogueSearch != sItemSearch || s_iCatalogueFilter != iBackpackFilter || s_uCatalogueSize != vItems.size() || s_pCatalogueData != vItems.data())
+				{
+					s_vCatalogueFiltered.clear();
+					const std::string sNeedle = Lowercase(sItemSearch);
+					for (const auto& tItem : vItems)
+					{
+						bool bMatch = true;
+						switch (iBackpackFilter)
+						{
+						case 1: bMatch = tItem.sClass.starts_with("tf_weapon"); break;
+						case 2: bMatch = tItem.sClass == "tf_wearable" || tItem.sClass.starts_with("tf_wearable_"); break;
+						case 3: bMatch = !tItem.sClass.starts_with("tf_weapon") && !tItem.sClass.starts_with("tf_wearable"); break;
+						}
+						if (bMatch && !sNeedle.empty())
+							bMatch = Lowercase(tItem.sName).find(sNeedle) != std::string::npos;
+						if (bMatch)
+							s_vCatalogueFiltered.push_back(&tItem);
+					}
+					s_sCatalogueSearch = sItemSearch;
+					s_iCatalogueFilter = iBackpackFilter;
+					s_uCatalogueSize = vItems.size();
+					s_pCatalogueData = vItems.data();
+				}
+
+				std::unordered_set<uint16_t> tBackpack = {};
+				for (const auto& tItem : F::SkinChanger.GetBackpack())
+					tBackpack.insert(tItem.iDef);
+				FText(std::format("{} items", s_vCatalogueFiltered.size()).c_str());
+
+				const ItemInfo_t* pSelected = uBackpackSelected ? FindItemInfo(uBackpackSelected) : nullptr;
+				const bool bWearable = pSelected && (pSelected->sClass == "tf_wearable" || pSelected->sClass.starts_with("tf_wearable_"));
+				const float flFooterHeight = H::Draw.Scale(pSelected ? (bWearable ? 152 : 128) : 100);
+				const float flGridHeight = std::max(H::Draw.Scale(120), GetContentRegionAvail().y - flFooterHeight);
+				const ItemGrid_t tGrid = DrawItemGrid("##CatalogueGrid", s_vCatalogueFiltered, tBackpack, flGridHeight);
+				if (tGrid.uClicked)
+					uBackpackSelected = tGrid.uClicked;
+
+				bool bAdd = tGrid.uDoubleClicked;
+
+				static std::string sUnusualName = "None";
+				if (pSelected && bWearable)
+				{
+					static std::vector<const char*> vUnusualNames = { "None" };
+					static size_t s_uUnusualCount = 0;
+					const auto& vEffects = GetUnusualEffects();
+					if (s_uUnusualCount != vEffects.size())
+					{
+						vUnusualNames.clear();
+						vUnusualNames.push_back("None");
+						for (const auto& [iEffect, sEffect] : vEffects)
+							vUnusualNames.push_back(sEffect.c_str());
+						s_uUnusualCount = vEffects.size();
+					}
+					FSDropdown("Unusual effect", &sUnusualName, vUnusualNames);
+				}
+
+				PushDisabled(!pSelected);
+				if (FButton("Add to backpack", FButtonEnum::Left))
+					bAdd = true;
+				PopDisabled();
+
+				PushDisabled(tBackpack.empty());
+				if (FButton("Clear", FButtonEnum::Right | FButtonEnum::SameLine))
+					F::SkinChanger.ClearBackpack();
+				PopDisabled();
+
+				if (bAdd)
+				{
+					const uint16_t uAddDef = tGrid.uDoubleClicked ? tGrid.uDoubleClicked : uBackpackSelected;
+					const ItemInfo_t* pAdd = FindItemInfo(uAddDef);
+					const bool bAddWearable = pAdd && (pAdd->sClass == "tf_wearable" || pAdd->sClass.starts_with("tf_wearable_"));
+					F::SkinChanger.AddToBackpack(uAddDef, bAddWearable ? std::max(UnusualEffectId(sUnusualName), 0) : 0);
+				}
+
+				if (pSelected)
+					FText(TruncateText(pSelected->sName, int(GetContentRegionAvail().x)).c_str());
+				else
+					FText("Select an item to add.");
+			} EndSection();
+
+			EndTable();
+		}
+		break;
+	}
+	}
+}
+
 void CMenu::MenuSettings(int iTab)
 {
 	using namespace ImGui;
@@ -4178,7 +4706,7 @@ void CMenu::MenuSettings(int iTab)
 
 	case 0:
 	{
-		if (BeginTable("ConfigSettingsTable", 2))
+		if (BeginTable("ConfigPageTable", 2))
 		{
 
 			auto fDrawConfigs = [](std::string& sStaticName, int iMode = 0)
@@ -4252,19 +4780,20 @@ void CMenu::MenuSettings(int iTab)
 				{
 					bool bCurrentConfig = FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32(sConfig.c_str());
 					ImVec2 vOriginalPos = GetCursorPos();
+					const float flRowRight = vOriginalPos.x + GetContentRegionAvail().x;
 
 					SetCursorPos(vOriginalPos + ImVec2(H::Draw.Scale(2), H::Draw.Scale(9)));
 					bool bLoad = IconButton(bCurrentConfig ? ICON_MD_REFRESH : ICON_MD_DOWNLOAD);
 					FTooltip(ICON_MD_ADD ICON_MD_FILE_UPLOAD_OFF, bNoSave && IsItemHovered(), 300.f, F::Render.IconFont);
 
 					SetCursorPos({ H::Draw.Scale(43), vOriginalPos.y + H::Draw.Scale(14) });
-					TextColored(bCurrentConfig ? F::Render.Active.Value : F::Render.Inactive.Value, TruncateText(sConfigName, GetWindowWidth() - GetStyle().WindowPadding.x * 2 - H::Draw.Scale(80)).c_str());
+					TextColored(bCurrentConfig ? F::Render.Active.Value : F::Render.Inactive.Value, TruncateText(sConfigName, flRowRight - H::Draw.Scale(43) - H::Draw.Scale(80)).c_str());
 
 					int iOffset = 9;
-					SetCursorPos({ GetWindowWidth() - H::Draw.Scale(iOffset += 25), vOriginalPos.y + H::Draw.Scale(9) });
+					SetCursorPos({ flRowRight - H::Draw.Scale(iOffset += 25), vOriginalPos.y + H::Draw.Scale(9) });
 					bool bDelete = IconButton(ICON_MD_DELETE);
 
-					SetCursorPos({ GetWindowWidth() - H::Draw.Scale(iOffset += 25), vOriginalPos.y + H::Draw.Scale(9) });
+					SetCursorPos({ flRowRight - H::Draw.Scale(iOffset += 25), vOriginalPos.y + H::Draw.Scale(9) });
 					bool bSave = IconButton(ICON_MD_SAVE);
 					FTooltip(ICON_MD_ADD ICON_MD_FILE_DOWNLOAD_OFF, bNoSave && IsItemHovered(), 300.f, F::Render.IconFont);
 
@@ -4370,7 +4899,7 @@ void CMenu::MenuSettings(int iTab)
 				fDrawConfigs(sStaticName, true);
 			} EndSection();
 
-			TableNextColumn();
+			DebugDummy({ 0, H::Draw.Scale(8) });
 			if (Section("Skins"))
 			{
 				static std::string sStaticName;

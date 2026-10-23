@@ -493,10 +493,10 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 	if (pLocal->OnSolid())
 	{
 		Vector vVelocity = pLocal->m_vecVelocity();
-		Vector vMoveInput = { pCmd->forwardmove, -pCmd->sidemove, 0.f };
+		Vector vMoveInput = { pCmd->forwardmove, pCmd->sidemove, 0.f };
 		if (vMoveInput.Length() > 0.f)
 		{
-			Vector vViewAngles = I::EngineClient->GetViewAngles();
+			Vector vViewAngles = pCmd->viewangles;
 			Vector vForward, vRight;
 			Math::AngleVectors(vViewAngles, &vForward, &vRight, nullptr);
 			vForward.z = vRight.z = 0.f;
@@ -507,8 +507,8 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 			vVelocity = vRotatedMoveDir.Normalized() * std::max(10.f, vVelocity.Length());
 		}
 
-		const float flJumpForce = 277.f;
-		const float flGravity = 800.f;
+		const float flJumpForce = TFGame::JUMP_SPEED;
+		const float flGravity = TFGame::GRAVITY;
 		float flTimeToPeak = flJumpForce / flGravity;
 		float flDistTravelled = vVelocity.Length2D() * flTimeToPeak;
 		Vector vJumpDirection = vVelocity.Normalized();
@@ -667,13 +667,19 @@ struct LegitPathCandidate_t
 static Vec3 GetFlatDirection(Vec3 vDirection, const Vec3& vFallback)
 {
 	vDirection.z = 0.f;
-	if (vDirection.Normalize() > 24.f)
+	if (vDirection.Length() > 24.f)
+	{
+		vDirection.Normalize();
 		return vDirection;
+	}
 
 	Vec3 vFlatFallback = vFallback;
 	vFlatFallback.z = 0.f;
-	if (vFlatFallback.Normalize() > 0.01f)
+	if (vFlatFallback.Length() > 0.01f)
+	{
+		vFlatFallback.Normalize();
 		return vFlatFallback;
+	}
 
 	return { 1.f, 0.f, 0.f };
 }
@@ -682,8 +688,9 @@ static bool IsPathTargetForward(const Vec3& vOrigin, const Vec3& vTarget, const 
 {
 	Vec3 vToTarget = vTarget - vOrigin;
 	vToTarget.z = 0.f;
-	if (vToTarget.Normalize() < 24.f)
+	if (vToTarget.Length() < 24.f)
 		return true;
+	vToTarget.Normalize();
 	return vPathDirection.Dot(vToTarget) >= flMinDot;
 }
 
@@ -1509,7 +1516,9 @@ namespace NavRuntime
 			return true;
 
 		const int iRoundState = pGameRules->m_iRoundState();
-		if (iRoundState == GR_STATE_PREROUND || iRoundState == GR_STATE_BETWEEN_RNDS)
+		if (iRoundState == GR_STATE_BETWEEN_RNDS)
+			return true;
+		if (iRoundState == GR_STATE_PREROUND && !Vars::Misc::Movement::NavEngine::PathInSetup.Value)
 			return true;
 
 		return false;

@@ -86,8 +86,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const Close
 		if (flDistToSpot < 100.f && m_bTargetVisible)
 			return ApproachMeleeTarget(pCmd, pLocal, bCanSwing ? vTargetOrigin : vBackstabSpot);
 
-		static Timer tSpyMeleeCooldown{};
-		if (!tSpyMeleeCooldown.Run(flDistToSpot < 200.f ? 0.1f : flDistToSpot < 1000.f ? 0.3f : 1.f) && F::NavEngine.IsPathing())
+		if (!m_tSpyMeleeCooldown.Run(flDistToSpot < 200.f ? 0.1f : flDistToSpot < 1000.f ? 0.3f : 1.f) && F::NavEngine.IsPathing())
 			return F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack;
 
 		return F::NavEngine.NavTo(vBackstabSpot, PriorityListEnum::MeleeAttack);
@@ -96,8 +95,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const Close
 	if (tClosestEnemy.m_flDist < 100.f && m_bTargetVisible)
 		return ApproachMeleeTarget(pCmd, pLocal, vTargetOrigin);
 
-	static Timer tMeleeCooldown{};
-	if (!tMeleeCooldown.Run(tClosestEnemy.m_flDist < 100.f ? 0.2f : tClosestEnemy.m_flDist < 1000.f ? 0.5f : 2.f) && F::NavEngine.IsPathing())
+	if (!m_tMeleeCooldown.Run(tClosestEnemy.m_flDist < 100.f ? 0.2f : tClosestEnemy.m_flDist < 1000.f ? 0.5f : 2.f) && F::NavEngine.IsPathing())
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack;
 
 	return F::NavEngine.NavTo(vTargetOrigin, PriorityListEnum::MeleeAttack);
@@ -107,4 +105,6 @@ void CNavBotMelee::Reset()
 {
 	m_iVisibilityTarget = -1;
 	m_bTargetVisible = false;
+	m_tSpyMeleeCooldown = Timer();
+	m_tMeleeCooldown = Timer();
 }

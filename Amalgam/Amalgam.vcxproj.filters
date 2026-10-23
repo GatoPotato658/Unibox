@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="src\Core\Core.cpp" />
@@ -140,6 +140,7 @@
     <ClCompile Include="src\Hooks\CTFPlayer_IsPlayerClass.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayer_ShouldDraw.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayerInventory_GetMaxItemCount.cpp" />
+    <ClCompile Include="src\Hooks\CTFPlayerInventory_ClientInventories.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayerPanel_GetTeam.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayerShared_InCond.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayerShared_IsPlayerDominated.cpp" />

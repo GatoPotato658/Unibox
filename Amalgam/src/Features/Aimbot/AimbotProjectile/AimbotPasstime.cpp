@@ -9,12 +9,12 @@ namespace
 	constexpr float kSimStep = 1.f / 16.f / kSimSubsteps;
 	constexpr int kSimSegments = 100;
 	constexpr float kLockTan = 0.1f;
-	constexpr float kAskDistanceScale = 50.f;
 	constexpr int kThrowIdle = 0, kThrowCharging = 1, kThrowCharged = 2;
 	constexpr int kGoalFlagDisableBallScore = 2;
 	constexpr int kIdlePlanInterval = 4;
 	constexpr int kMaxIdlePlanInterval = 10;
 	constexpr int kReplanInterval = 2;
+	constexpr float kHomingStrength = 0.01f;
 
 	struct BallThrow_t
 	{
@@ -41,6 +41,25 @@ namespace
 		std::vector<Goal_t> m_vGoals = {};
 		float m_flPassRange = FLT_MAX;
 	} s_tEnv;
+
+	class CTraceFilterBall : public ITraceFilter
+	{
+	public:
+		explicit CTraceFilterBall(CBaseEntity* pSkip) : m_pSkip(pSkip) { m_tWorld.m_pSkip = pSkip; }
+
+		bool ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask) override
+		{
+			if (pHandleEntity && pHandleEntity != m_pSkip && reinterpret_cast<CBaseEntity*>(pHandleEntity)->GetClassID() == ETFClassID::CTFPlayer)
+				return nContentsMask & CONTENTS_MONSTER;
+
+			return m_tWorld.ShouldHitEntity(pHandleEntity, nContentsMask);
+		}
+		TraceType_t GetTraceType() const override { return m_tWorld.GetTraceType(); }
+
+	private:
+		CTraceFilterWorldAndPropsOnly m_tWorld;
+		CBaseEntity* m_pSkip = nullptr;
+	};
 
 	ConVar* FindVar(const char* sName)
 	{
@@ -111,6 +130,20 @@ namespace
 		return true;
 	}
 
+	float GetHomingTime(float flDistance, float flSpeed, float flStrength)
+	{
+		const float flStep = TICK_INTERVAL;
+		float flTime = 0.f, flDist = 0.f, flVel = flSpeed, flForce = flStrength;
+		while (flDist < flDistance && flTime < 10.f)
+		{
+			flVel += flForce * flStep;
+			flForce = std::min(flForce * 1.1f, 1.f);
+			flDist += flVel * flStep;
+			flTime += flStep;
+		}
+		return flTime;
+	}
+
 	Vec3 GetLaunchVelocity(const BallThrow_t& tThrow, const Vec3& vForward, const Vec3& vOwnerVel)
 	{
 		const Vec3 vLaunch = (vForward * (1.f - tThrow.m_flArc) + Vec3(0.f, 0.f, tThrow.m_flArc)).Normalized();
@@ -150,7 +183,7 @@ namespace
 
 	bool SimulateBall(CTFPlayer* pLocal, const Vec3& vEye, Vec3 vVelocity, const BallThrow_t& tThrow, const Goal_t& tGoal, float& flTime)
 	{
-		CTraceFilterWorldAndPropsOnly filter(pLocal);
+		CTraceFilterBall filter(pLocal);
 		CGameTrace trace = {};
 		Vec3 vPos = vEye;
 		for (int iSegment = 0; iSegment < kSimSegments; iSegment++)
@@ -175,6 +208,8 @@ namespace
 				return false;
 			if (bEntered)
 				return true;
+			if (vPos.z < tGoal.m_vMins.z && vVelocity.z < 0.f)
+				return false;
 		}
 		return false;
 	}
@@ -184,7 +219,9 @@ namespace
 		return pTeammate != pLocal && !pTeammate->IsDormant() && pTeammate->IsAlive() && pTeammate->m_iTeamNum() == pLocal->m_iTeamNum()
 			&& !pTeammate->m_bHasPasstimeBall() && !pTeammate->m_bCarryingObject()
 			&& !pTeammate->InCond(TF_COND_DISGUISED) && !pTeammate->InCond(TF_COND_INVULNERABLE_WEARINGOFF) && !pTeammate->InCond(TF_COND_SELECTED_TO_TELEPORT)
-			&& !pTeammate->IsInvulnerable() && !pTeammate->IsInvisible() && !pTeammate->IsTaunting() && !pTeammate->InCond(TF_COND_STUNNED);
+			&& !pTeammate->InCond(TF_COND_HALLOWEEN_GHOST_MODE) && !pTeammate->IsInvulnerable() && !pTeammate->IsInvisible() && !pTeammate->IsTaunting()
+			&& !(pTeammate->InCond(TF_COND_STUNNED) && pTeammate->m_iStunFlags() & (TF_STUN_CONTROLS | TF_STUN_LOSER_STATE))
+			&& !SDK::IsInPasstimeNoBallZone(pTeammate->GetAbsOrigin());
 	}
 
 	bool IsLineBlocked(CTFPlayer* pLocal, const Vec3& vStart, const Vec3& vEnd, CBaseEntity* pIgnore, float flPad, bool bEnemiesOnly)
@@ -318,7 +355,6 @@ namespace
 	bool WouldLockPass(CTFPlayer* pLocal, const Vec3& vEye, const Vec3& vAngles, float flTolerance)
 	{
 		Vec3 vForward, vRight, vUp; Math::AngleVectors(vAngles, &vForward, &vRight, &vUp);
-		const float flNow = TICKS_TO_TIME(pLocal->m_nTickBase());
 		for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerTeam))
 		{
 			auto pTeammate = pEntity->As<CTFPlayer>();
@@ -330,9 +366,7 @@ namespace
 			if (flForward <= 0.f || vDelta.Length() > s_tEnv.m_flPassRange)
 				continue;
 
-			float flLock = hypotf(vDelta.Dot(vRight), vDelta.Dot(vUp)) / flForward;
-			if (GetAskForBallTime(pTeammate) > flNow)
-				flLock /= kAskDistanceScale;
+			const float flLock = hypotf(vDelta.Dot(vRight), vDelta.Dot(vUp)) / flForward;
 			if (flLock < kLockTan + flTolerance && HasLockLine(pLocal, vEye, pTeammate))
 				return true;
 		}
@@ -446,7 +480,7 @@ bool CAimbotProjectile::SolvePasstimePass(CTFPlayer* pLocal, CTFPlayer* pTeammat
 	tPlan.m_iEntity = pTeammate->entindex();
 	tPlan.m_vAngle = vAngles;
 	tPlan.m_vPoint = vCenter;
-	tPlan.m_flTime = vEye.DistTo(vCenter) / std::max(GetVar("tf_passtime_mode_homing_speed"), 1.f);
+	tPlan.m_flTime = GetHomingTime(vEye.DistTo(vCenter), std::max(GetVar("tf_passtime_mode_homing_speed"), 1.f), kHomingStrength);
 	return true;
 }
 
@@ -623,8 +657,8 @@ bool CAimbotProjectile::RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, C
 			return false;
 
 		PasstimePlan_t tPlan;
-		if (!PlanPasstime(pLocal, pWeapon, tPlan)
-			|| tPlan.m_iKind == PasstimeKindEnum::Goal && pLocal->m_hPasstimePassTarget().GetEntryIndex())
+		const int iLocked = pLocal->m_hPasstimePassTarget().GetEntryIndex();
+		if (!PlanPasstime(pLocal, pWeapon, tPlan, iLocked ? PasstimeKindEnum::Pass : PasstimeKindEnum::None, iLocked))
 		{
 			tState.m_iNextPlanTick = iTick + std::min(kIdlePlanInterval + tState.m_iIdleFails * 2, kMaxIdlePlanInterval);
 			tState.m_iIdleFails++;

@@ -16,6 +16,17 @@ public:
 	OFFSET(m_pMvMTours, void*, 2352);
 	OFFSET(m_iMvMTourCount, int, 2368);
 
+	inline int GetItemDefCount()
+	{
+		return *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + 336);
+	}
+
+	inline void* GetItemDefEntry(int iIndex)
+	{
+		uintptr_t uData = *reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(this) + 312);
+		return reinterpret_cast<void*>(uData + iIndex * 24);
+	}
+
 	static CEconItemSchema* GetInstance()
 	{
 		return S::TFItemSystem_GetItemSchema.Call<CEconItemSchema*>();
@@ -39,6 +50,16 @@ class CTFItemDefinition
 {
 public:
 	OFFSET(m_pTauntData, void*, 0x2A8);
+	OFFSET(m_pszImageInventory, const char*, 0x88);
+	OFFSET(m_pszItemName, const char*, 0x58);
+	OFFSET(m_pszItemClass, const char*, 0x168);
+	OFFSET(m_pszName, const char*, 0x180);
+
+	inline uint16 GetDefinitionIndex()
+	{
+		return *reinterpret_cast<uint16*>(reinterpret_cast<uintptr_t>(this) + 0x10);
+	}
+
 };
 
 class CEconItemView

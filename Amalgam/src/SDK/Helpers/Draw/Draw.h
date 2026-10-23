@@ -39,7 +39,15 @@ class CDraw
 private:
 	std::unordered_map<uint32, int> m_mAvatars = {};
 
+	int m_iRenderFrame = -1;
+	int m_iRenderDraws = 0;
+	int m_iRenderVertices = 0;
+
+	bool ConsumeRenderBudget(int iVertices);
+
 public:
+	bool HasRenderBudget();
+
 	inline float Scale(float flN = 1.f, int iFlags = Scale_None, float flScale = Vars::Menu::Scale.Value)
 	{
 		flN *= flScale;

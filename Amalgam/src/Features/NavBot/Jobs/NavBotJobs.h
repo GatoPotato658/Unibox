@@ -4,6 +4,7 @@
 #include "../NavEngine.h"
 #include "../Hazards.h"
 #include <optional>
+#include <unordered_map>
 
 struct NavBotJobResult_t
 {
@@ -31,8 +32,15 @@ struct SupplyData_t
 	float m_flRespawnTime = 0.f;
 	Vector m_vOrigin = {};
 
+	int m_iDispenserIdx = -1;
 	int m_iCacheIndex = -1;
 	bool m_bHealthCache = false;
+};
+
+struct CoverCache_t
+{
+	int m_iTick = 0;
+	float m_flScore = 0.f;
 };
 
 Enum(EngineerTaskStage, None,
@@ -188,6 +196,13 @@ private:
 	std::vector<BuildingSpot_t>  m_vBuildingSpots;
 	FocusPoint_t m_tCurrentFocusPoint = {};
 	std::vector<FailedSpot_t> m_vFailedSpots;
+
+	Timer m_tWaitUntilPath{};
+	Timer m_tBuildRotation{};
+	Timer m_tBuildAttempt{};
+	Timer m_tBuildCommand{};
+	Timer m_tRefreshBuildingSpots{};
+	Timer m_tBuildingCheck{};
 private:
 	bool IsBuildSpotFailed(const Vector& vPos) const;
 	void MarkSpotFailed(const Vector& vPos);
@@ -222,6 +237,9 @@ private:
 	Timer m_tEscapeRefresh{};
 	CNavArea* m_pProjectileTargetArea = nullptr;
 	int m_iSpawnExitAttempt = 0;
+	Timer m_tEscapeRepath{};
+	Timer m_tProjectileRepath{};
+	Timer m_tSpawnEscape{};
 public:
 	std::wstring m_sDangerStatus = {};
 public:
@@ -243,14 +261,16 @@ private:
 
 	bool m_bWasForce = false;
 	bool m_bHasRememberedDispenser = false;
+	int m_iRememberedDispenserIdx = -1;
 	Vector m_vRememberedDispenser = {};
 	Timer m_tRememberedDispenser{};
 	Timer m_tStickyLock{};
 	Timer m_tCooldown{};
 	Timer m_tRepathCooldown{};
 
-	bool GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bool bAmmo);
+	bool GetSuppliesData(CTFPlayer* pLocal, bool bAmmo);
 	bool GetDispensersData(CTFPlayer* pLocal);
+	bool GetRememberedDispenser(CTFPlayer* pLocal, SupplyData_t& tOut) const;
 
 	bool ShouldSearchHealth(CTFPlayer* pLocal, bool bLowPrio = false);
 	bool ShouldSearchAmmo(CTFPlayer* pLocal);
@@ -290,6 +310,8 @@ private:
 	int m_iVisibilityTarget = -1;
 	bool m_bTargetVisible = false;
 	Timer m_tVisibility{};
+	Timer m_tSpyMeleeCooldown{};
+	Timer m_tMeleeCooldown{};
 public:
 	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const ClosestEnemy_t& tClosestEnemy);
 	void Reset();
@@ -297,11 +319,15 @@ public:
 
 class CNavBotReload
 {
+private:
+	Timer m_tRunReloadCooldown{};
+	Timer m_tSafeReloadCooldown{};
 public:
 	bool Run();
 	bool RunSafe();
 	int GetReloadWeaponSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy);
 	bool HasTask() const { return G::Reloading || (m_iLastReloadSlot >= SLOT_PRIMARY && m_iLastReloadSlot <= SLOT_SECONDARY); }
+	void Reset();
 
 	int m_iLastReloadSlot = -1;
 };
@@ -310,18 +336,15 @@ class CNavBotRoam
 {
 private:
 	std::vector<CNavArea*> m_vVisitedAreas;
-	std::unordered_set<CNavArea*> m_sConnectedAreas;
 
 	CNavArea* m_pCurrentTargetArea = nullptr;
 	CNavArea* m_pDefendSpotArea = nullptr;
-	CNavArea* m_pLastConnectedSeed = nullptr;
 	const void* m_pLastMap = nullptr;
 	const void* m_pLastAreaData = nullptr;
 	size_t m_nLastAreaCount = 0;
 
 	Timer m_tRoamTimer{};
 	Timer m_tVisitedAreasClear{};
-	Timer m_tConnectedAreasRefresh{};
 
 	int m_iConsecutiveFails = 0;
 
@@ -336,10 +359,14 @@ public:
 class CNavBotSnipe
 {
 private:
+	Timer m_tSnipeCooldown{};
+	Timer m_tInvalidTargetTimer{};
+
 	bool IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bool bShortRangeClass);
 	bool TryToSnipe(int iEntIdx, bool bShortRangeClass);
 public:
 	bool Run(CTFPlayer* pLocal);
+	void Reset();
 
 	int m_iTargetIdx = -1;
 };
@@ -347,6 +374,13 @@ public:
 class CNavBotStayNear
 {
 private:
+	Timer m_tCooldown{};
+	Timer m_tInvalidTarget{};
+	Timer m_tTargetSwitch{};
+	std::unordered_map<uint64_t, CoverCache_t> mCoverCache{};
+	int m_iLastFlankTarget = -1;
+	float m_flFlankSide = 1.f;
+
 	bool StayNearTarget(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex);
 	bool IsAreaValidForStayNear(Vector vEntOrigin, CNavArea* pArea, bool bFixLocalZ = true);
 	bool IsStayNearTargetValid(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iEntIndex);

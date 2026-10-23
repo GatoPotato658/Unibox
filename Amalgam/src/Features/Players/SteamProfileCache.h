@@ -31,8 +31,15 @@ public:
 	std::string GetPersonaName(uint32_t uAccountID);
 	bool TryGetAvatarImage(uint32_t uAccountID, AvatarImage_t& tOutImage);
 	void CaptureNativeAvatar(uint64_t uSteamID, const uint8_t* pRgba, uint32_t uWidth, uint32_t uHeight);
+#ifndef TEXTMODE
+	void* GetAvatarTexture(uint32_t uAccountID);
+	void ReleaseTextures();
+#endif
 	static std::filesystem::path GetAvatarPath(uint32_t uAccountID);
 	static bool SaveAvatarToDisk(uint32_t uAccountID, const std::vector<uint8_t>& vPixels, uint32_t uWidth, uint32_t uHeight, std::filesystem::path* pOutPath = nullptr, bool bLog = true);
+
+	void HandlePersonaStateChange(const PersonaStateChange_t& tCallback);
+	void HandleAvatarImageLoaded(const AvatarImageLoaded_t& tCallback);
 
 private:
 	struct Entry_t
@@ -63,11 +70,6 @@ private:
 	static bool ReadAvatarFile(uint32_t uAccountID, std::vector<uint8_t>& vPixels, uint32_t& uWidth, uint32_t& uHeight, std::filesystem::file_time_type& tTimestamp);
 	void CaptureSteamAvatar(uint32_t uAccountID, int iImage, uint32_t uWidth = 0, uint32_t uHeight = 0);
 	void StoreAvatar(uint32_t uAccountID, std::vector<uint8_t>&& vBgra, uint32_t uWidth, uint32_t uHeight, bool bSave);
-	void HandlePersonaStateChange(const PersonaStateChange_t& tCallback);
-	void HandleAvatarImageLoaded(const AvatarImageLoaded_t& tCallback);
-
-	friend class CSteamProfilePersonaCallback;
-	friend class CSteamProfileAvatarCallback;
 };
 
 ADD_FEATURE(CSteamProfileCache, SteamProfileCache);

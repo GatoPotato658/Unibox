@@ -438,8 +438,8 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 
 	if ((iFlags & (FaceTypeEnum::BoxBrush | FaceTypeEnum::PlaneBrush)) && I::BSPData && I::BSPData->numbrushes > 0)
 	{
-		std::vector<int> vBrushStorage(I::BSPData->numbrushes);
-		CUtlVector<int> vBrushes(vBrushStorage.data(), static_cast<int>(vBrushStorage.size()));
+		m_vBrushStorage.resize(I::BSPData->numbrushes);
+		CUtlVector<int> vBrushes(m_vBrushStorage.data(), static_cast<int>(m_vBrushStorage.size()));
 		I::EngineTrace->GetBrushesInAABB(vMins, vMaxs, &vBrushes, iMask);
 		for (int iBrush = 0; iBrush < vBrushes.Count(); iBrush++)
 		{
@@ -477,6 +477,7 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 
 	if (iFlags & FaceTypeEnum::Displacement && *I::DispCollTrees)
 	{
+		std::vector<Vec3>& vVertices = m_vDispVertices;
 		for (int iDisplacement = 0; iDisplacement < *I::DispCollTreeCount; iDisplacement++)
 		{
 			CDispCollTree* pDispTree = &(*I::DispCollTrees)[iDisplacement];
@@ -487,8 +488,10 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 			for (int iFace = 0; iFace < iFaces; iFace++)
 			{
 				CDispCollTri* pTri = &pDispTree->m_aTris[iFace];
-						
-				std::vector<Vec3> vVertices = { pDispTree->m_aVerts[pTri->GetVert(0)], pDispTree->m_aVerts[pTri->GetVert(1)], pDispTree->m_aVerts[pTri->GetVert(2)] };
+
+				vVertices[0] = pDispTree->m_aVerts[pTri->GetVert(0)];
+				vVertices[1] = pDispTree->m_aVerts[pTri->GetVert(1)];
+				vVertices[2] = pDispTree->m_aVerts[pTri->GetVert(2)];
 
 				if (FaceValid(vVertices, &pTri->m_vecNormal, &vMins, &vMaxs))
 					vFaces.emplace_back(vVertices, pTri->m_vecNormal, FaceTypeEnum::Displacement);

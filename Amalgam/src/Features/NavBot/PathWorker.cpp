@@ -46,6 +46,7 @@ namespace PathWorker
 
 		{
 			std::lock_guard lock(m_mPending);
+			tRequest.m_uGeneration = m_uNextGeneration++;
 			if (m_pActiveCancellation) m_pActiveCancellation->store(true, std::memory_order_relaxed);
 			if (m_oPending) m_oPending->m_tToken.Cancel();
 			m_oPending = std::move(tRequest);
@@ -84,11 +85,13 @@ namespace PathWorker
 				tRequest = std::move(*m_oPending);
 				m_oPending.reset();
 				m_pActiveCancellation = tRequest.m_tToken.m_pCancelled;
+				m_uActiveGeneration = tRequest.m_uGeneration;
 			}
 
 			PathResult tResult{};
 			tResult.m_uRequestId = tRequest.m_uRequestId;
 			tResult.m_uWorldGeneration = tRequest.m_uWorldGeneration;
+			tResult.m_uGeneration = tRequest.m_uGeneration;
 			tResult.m_ePriority = tRequest.m_ePriority;
 
 			if (m_pMap && !tRequest.m_tToken.IsCancelled())
@@ -103,7 +106,11 @@ namespace PathWorker
 
 			{
 				std::lock_guard lock(m_mPending);
-				m_pActiveCancellation.reset();
+				if (m_uActiveGeneration == tRequest.m_uGeneration)
+				{
+					m_pActiveCancellation.reset();
+					m_uActiveGeneration = 0;
+				}
 			}
 			std::lock_guard lock(m_mCompleted);
 			while (m_vCompleted.size() >= 4)

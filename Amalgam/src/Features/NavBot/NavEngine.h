@@ -1,5 +1,6 @@
 #pragma once
 #include "Map.h"
+#include <array>
 
 namespace PathWorker { class CPathWorker; }
 
@@ -30,8 +31,13 @@ struct Crumb_t
 	CNavArea* m_pNavArea = nullptr;
 	Vector m_vPos = {};
 	Vector m_vApproachDir = {};
+	Vector m_vLanding = {};
 	bool m_bRequiresDrop = false;
+	bool m_bRequiresJump = false;
+	bool m_bRequiresCrouch = false;
+	bool m_bRequiresLadder = false;
 	float m_flDropHeight = 0.f;
+	float m_flJumpHeight = 0.f;
 	float m_flApproachDistance = 0.f;
 };
 
@@ -64,14 +70,19 @@ private:
 	bool m_bLocalAreaSearchFailed = false;
 	uint32_t m_uPolicyEpoch = 0;
 	int m_iDoorWaitStartTick = 0;
+	int m_iDoorWaitEntIndex = 0;
 	std::vector<BlockedDoor_t> m_vBlockedDoors;
 	Timer m_tDoorUpdateTimer = {};
 
 	Timer m_tStuckSampleTimer = {};
 	Timer m_tLastProgressTimer = {};
+	Timer m_tLadderProgressTimer = {};
+	int m_iJumpStartTick = 0;
 	Vector m_vLastStuckSamplePos = {};
 	float m_flLastDistToCrumb = FLT_MAX;
+	float m_flLadderLastZ = 0.f;
 	CNavArea* m_pLastProgressArea = nullptr;
+	int m_iStuckJumps = 0;
 
 	Timer m_tOffMeshTimer = {};
 	Timer m_tOffMeshRecoverTimer = {};
@@ -87,8 +98,23 @@ private:
 	Vector m_vDestinationBeforePending = {};
 	bool m_bRecoveryRetryUsed = false;
 	bool m_bBypassFailedDestination = false;
+	bool m_bHoldingCrouch = false;
 
 	bool m_bUpdatedRespawnRooms = false;
+
+	Timer m_tSetupCheck = {};
+	bool m_bSetupTime = false;
+	bool m_bMapHasBlueSetupGate = false;
+	bool m_bMapHasRedSetupGate = false;
+	Timer m_tNoAreaRetry = {};
+	Timer m_tVischeck = {};
+	Timer m_tBlacklistCheck = {};
+	Timer m_tRestartTimer = {};
+	bool m_bWasEnabled = false;
+
+	std::array<Vector, 2> m_aPayloadPos = {};
+	std::array<float, 2> m_aPayloadMoveTime = {};
+	std::array<bool, 2> m_aSeenPayload = {};
 
 	std::unique_ptr<PathWorker::CPathWorker> m_pPathWorker;
 	uint64_t m_uNextRequestId = 1;
@@ -125,7 +151,8 @@ private:
 	void SampleFallSpeed(float flVerticalVelocity);
 	bool RecentlyAtRest() const;
 	StuckPhase TickStuckSample(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
-	void DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& vMoveTarget, bool bHaveTarget);
+	void DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& vMoveTarget, bool bHaveTarget, bool bIncludePitch = false);
+	bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrigin);
 
 public:
 	std::string m_sLastFailureReason = "";
@@ -144,7 +171,8 @@ public:
 	bool IsSetupTime();
 
 	bool IsVectorVisibleNavigation(const Vector vFrom, const Vector vTo, unsigned int nMask = MASK_SHOT);
-	bool IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFrom, Vector vTo, unsigned int nMask = MASK_PLAYERSOLID);
+	bool IsPlayerPassableNavigation(CTFPlayer* pLocal, const Vector vFrom, Vector vTo,
+		unsigned int nMask = MASK_PLAYERSOLID, bool* pbNeedsCrouch = nullptr, CBaseEntity** ppBlocker = nullptr);
 
 	bool IsPathing() { return !m_vCrumbs.empty() || m_uPendingRequestId != 0 || m_bRepathRequested; }
 	bool IsPriorityAllowed(PriorityListEnum::PriorityListEnum ePriority) const

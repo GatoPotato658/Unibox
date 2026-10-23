@@ -76,6 +76,9 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 
 	DWORD dwOldRGB; pDevice->GetRenderState(D3DRS_SRGBWRITEENABLE, &dwOldRGB);
 	pDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, false);
+	DWORD dwOldSRGBRead = TRUE;
+	pDevice->GetSamplerState(0, D3DSAMP_SRGBTEXTURE, &dwOldSRGBRead);
+	pDevice->SetSamplerState(0, D3DSAMP_SRGBTEXTURE, FALSE);
 	ImGui_ImplDX9_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
@@ -114,6 +117,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	else
 		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
 	pDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, dwOldRGB);
+	pDevice->SetSamplerState(0, D3DSAMP_SRGBTEXTURE, dwOldSRGBRead);
 }
 
 void CRender::LoadColors()

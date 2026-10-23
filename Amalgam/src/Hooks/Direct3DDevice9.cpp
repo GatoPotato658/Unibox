@@ -6,6 +6,7 @@
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/ImGui/Overlay/CaptureOverlay.h"
 #include "../Features/Visuals/ESP/ESP.h"
+#include "../Features/Players/SteamProfileCache.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -20,7 +21,10 @@ MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), H
 		SDK::TickCleanScreenshot();
 	}
 	else
+	{
 		F::CaptureOverlay.ReleaseDeviceObjects();
+		F::SteamProfileCache.ReleaseTextures();
+	}
 
 	return CALL_ORIGINAL(pDevice, pSource, pDestination, pDirtyRegion);
 }
@@ -32,6 +36,7 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 
 	F::CaptureOverlay.ReleaseDeviceObjects();
 	InvalidateESPIconTextures();
+	F::SteamProfileCache.ReleaseTextures();
 	ImGui_ImplDX9_InvalidateDeviceObjects();
 	const HRESULT Original = CALL_ORIGINAL(pDevice, pPresentationParameters);
 	ImGui_ImplDX9_CreateDeviceObjects();

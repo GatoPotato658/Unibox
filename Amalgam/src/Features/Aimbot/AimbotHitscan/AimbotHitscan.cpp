@@ -375,8 +375,7 @@ std::vector<Vec3> CAimbotHitscan::GetHitboxPoints(CBaseEntity* pTarget, CTFWeapo
 
 void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRecord, std::vector<TickRecord*>& vRecords)
 {
-	const int iMode = Vars::Aimbot::Hitscan::ForwardTrack.Value;
-	if (!iMode || !pTarget || !pBaseRecord || !pTarget->IsAlive() || pTarget->IsDormant() || pTarget->IsAGhost())
+	if (!Vars::Aimbot::Hitscan::ForwardTrack.Value || !pTarget || !pBaseRecord || !pTarget->IsAlive() || pTarget->IsDormant() || pTarget->IsAGhost())
 		return;
 
 	if (Vars::Aimbot::Hitscan::ForwardTrackAirOnly.Value && pTarget->IsOnGround())
@@ -388,41 +387,40 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 	const bool bBrokenLagComp = H::Entities.GetLagCompensation(pTarget->entindex());
 	const int iChoke = H::Entities.GetChoke(pTarget->entindex());
 
-	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackEnum::BrokenLagComp && !bBrokenLagComp)
+	int iMode = Vars::Aimbot::Hitscan::ForwardTrackMode.Value;
+	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackModeEnum::Auto)
+		iMode = bBrokenLagComp ? Vars::Aimbot::Hitscan::ForwardTrackModeEnum::BrokenLagComp
+			: iChoke > 0 ? Vars::Aimbot::Hitscan::ForwardTrackModeEnum::ChokedOnly
+			: Vars::Aimbot::Hitscan::ForwardTrackModeEnum::Always;
+
+	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackModeEnum::BrokenLagComp && !bBrokenLagComp)
 		return;
-	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackEnum::ChokedOnly && iChoke <= 0 && !bBrokenLagComp)
+	if (iMode == Vars::Aimbot::Hitscan::ForwardTrackModeEnum::ChokedOnly && iChoke <= 0 && !bBrokenLagComp)
 		return;
 
-	int iMaxTicks = std::clamp(TIME_TO_TICKS(F::Backtrack.GetReal(FLOW_OUTGOING) + F::Backtrack.GetFakeInterp()), 1, 6);
-	if (pTarget->IsOnGround())
-		iMaxTicks = std::min(iMaxTicks, 2);
+	const int iBaseTick = TIME_TO_TICKS(pBaseRecord->m_flSimTime);
+	const int iOneWayTicks = TIME_TO_TICKS(F::Backtrack.GetReal(FLOW_OUTGOING) * 0.5f);
+	const int iInterpTicks = TIME_TO_TICKS(std::max(F::Backtrack.GetFakeInterp(), G::Lerp));
 
-	int iSimTicks = iMaxTicks;
-	if (bBrokenLagComp)
-	{
-		float flLatency = F::Backtrack.GetReal(MAX_FLOWS, false) + F::Backtrack.GetFakeInterp();
-		iSimTicks = std::clamp(TIME_TO_TICKS(flLatency) + F::Backtrack.GetAnticipatedChoke(), 1, iMaxTicks);
-	}
-	else if (iChoke > 0)
-	{
-		iSimTicks = std::clamp(iChoke, 1, iMaxTicks);
-	}
-	else
-	{
-		iSimTicks = std::clamp(TIME_TO_TICKS(F::Backtrack.GetReal(FLOW_OUTGOING)) + 1, 1, iMaxTicks);
-	}
+	const int iWant = iInterpTicks + iOneWayTicks + iChoke + F::Backtrack.GetAnticipatedChoke();
+	const int iTrusted = std::max(TIME_TO_TICKS(0.19f) - iOneWayTicks, 0);
+	const int iReachable = std::max(F::Backtrack.GetServerTick() - iBaseTick - 1, 0);
+	const int iLead = std::clamp(iWant, 0, std::min(iTrusted, iReachable));
+
+	if (!iLead)
+		return;
 
 	MoveStorage tMoveStorage;
-	if (!F::MoveSim.Initialize(pTarget, tMoveStorage, false, true, false) || tMoveStorage.m_bFailed)
+	if (!F::MoveSim.Initialize(pTarget, tMoveStorage, false, true, false, &pBaseRecord->m_vOrigin) || tMoveStorage.m_bFailed)
 	{
 		F::MoveSim.Restore(tMoveStorage);
 		return;
 	}
 
-	const Vec3 vBaseOrigin = pBaseRecord->m_vOrigin;
+	const Vec3 vBaseOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
 	const size_t uStart = m_vForwardRecords.size();
 
-	for (int tick = 1; tick <= iSimTicks; tick++)
+	for (int tick = 1; tick <= iLead; tick++)
 	{
 		F::MoveSim.RunTick(tMoveStorage, false);
 		if (tMoveStorage.m_bFailed)

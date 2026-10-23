@@ -51,8 +51,12 @@ namespace NavAreaUtils
 		qAreas.push({ pArea, iStartDepth });
 		setVisited.insert(pArea);
 
+		constexpr size_t kMaxVisited = 192;
 		while (!qAreas.empty())
 		{
+			if (setVisited.size() > kMaxVisited)
+				break;
+
 			auto [pCurrentArea, iDepth] = qAreas.front();
 			qAreas.pop();
 

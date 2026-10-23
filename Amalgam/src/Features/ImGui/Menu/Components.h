@@ -783,16 +783,33 @@ namespace ImGui
 
 	static std::unordered_map<uint32_t, float> mLastHeights = {};
 	static std::vector<uint32_t> vStoredLabels = {};
-	inline bool Section(const char* sLabel, float flPaddingMod = 0.f, float flMinHeight = 28.f, bool bForceHeight = false)
+	inline float GetSectionHeight(const char* sLabel, float flDefault = 0.f)
+	{
+		auto it = mLastHeights.find(FNV1A::Hash32(sLabel));
+		return it != mLastHeights.end() ? it->second : flDefault;
+	}
+	inline float GetSectionPairHeight(const char* sLeft, const char* sRight, float flDefault = 0.f)
+	{
+		return std::max(GetSectionHeight(sLeft, flDefault), GetSectionHeight(sRight, flDefault));
+	}
+	inline float GetSectionMaxHeight(std::initializer_list<const char*> vLabels, float flDefault = 0.f)
+	{
+		float flHeight = flDefault;
+		for (const char* sLabel : vLabels)
+			flHeight = std::max(flHeight, GetSectionHeight(sLabel, flDefault));
+		return flHeight;
+	}
+	inline bool Section(const char* sLabel, float flPaddingMod = 0.f, float flMinHeight = 28.f, bool bForceHeight = false, bool bAutoHeight = false)
 	{
 		uint32_t uHash = FNV1A::Hash32(sLabel);
 		vStoredLabels.push_back(uHash);
 
-		if (!bForceHeight && mLastHeights.contains(uHash) && mLastHeights[uHash] > flMinHeight)
+		if (!bForceHeight && !bAutoHeight && mLastHeights.contains(uHash) && mLastHeights[uHash] > flMinHeight)
 			flMinHeight = mLastHeights[uHash];
 		PushStyleVar(ImGuiStyleVar_CellPadding, { 0, 0 });
 
-		bool bReturn = BeginChild(sLabel, { GetColumnWidth(), flMinHeight }, ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		const ImGuiChildFlags iChildFlags = bAutoHeight ? ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysAutoResize : ImGuiChildFlags_AlwaysUseWindowPadding;
+		bool bReturn = BeginChild(sLabel, { GetColumnWidth(), bAutoHeight ? 0.f : flMinHeight }, iChildFlags, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		if (bReturn)
 		{
 			if (sLabel[0] != '#')
@@ -1163,7 +1180,9 @@ namespace ImGui
 		ImVec2 vOriginalPos = GetCursorPos();
 		DebugShift({ 0, GetStyle().WindowPadding.y });
 
-		ImColor tColor = !Disabled && !Transparent ? F::Render.Accent : F::Render.Background2;
+		ImColor tColor = !Disabled && !Transparent ? F::Render.Accent : Disabled ? F::Render.Inactive : F::Render.Background2;
+		if (Disabled)
+			tColor.Value.w *= 0.7f;
 		ImVec2 vDrawPos = GetCursorPos() + GetDrawPos();
 		bool bClicked = IsMouseDown(ImGuiMouseButton_Left);
 		bool bWithin = !Disabled && (IsWindowHovered() || bClicked) && IsMouseWithin(vDrawPos.x, vDrawPos.y, vSize.x, vSize.y);

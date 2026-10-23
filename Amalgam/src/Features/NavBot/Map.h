@@ -17,7 +17,10 @@ inline constexpr float PLAYER_DUCK_HEIGHT = 62.0f;
 inline constexpr float PLAYER_STEP_HEIGHT = 18.0f;
 inline constexpr float PLAYER_JUMP_HEIGHT = 72.0f;
 inline constexpr float PLAYER_CROUCHED_JUMP_HEIGHT = 72.0f;
+// TF's CTFBotLocomotion::GetDeathDropHeight() and tf_gamerules.cpp both use 1000; falls below that are survivable.
 inline constexpr float PLAYER_DEATH_DROP_HEIGHT = 1000.0f;
+inline constexpr float LADDER_APPROACH_DISTANCE = 32.0f;
+inline constexpr float LADDER_DISMOUNT_DISTANCE = 24.0f;
 
 static_assert(HALF_PLAYER_WIDTH == TFGame::HULL_HALF_WIDTH && PLAYER_WIDTH == 2.f * TFGame::HULL_HALF_WIDTH);
 static_assert(PLAYER_HEIGHT == TFGame::HULL_HEIGHT && PLAYER_DUCK_HEIGHT == TFGame::HULL_DUCK_HEIGHT);
@@ -32,12 +35,14 @@ public:
 	explicit CNavFile(const char* szLevelname);
 	bool Load(const char* szLevelname);
 	bool Write(const char* szFilename = nullptr);
-	void QueryOverlapping(const Vector& vPos, float flRadius, std::vector<CNavArea*>& vOut) const;
+	void QueryOverlapping(const Vector& vPos, float flRadius, std::vector<CNavArea*>& vOut);
 
 	std::vector<NavPlace_t> m_vPlaces;
 	std::vector<CNavArea> m_vAreas;
+	std::vector<NavLadder_t> m_vLadders;
 	std::string m_sMapName;
 	unsigned int m_uBspSize = 0;
+	std::vector<char> m_vTailData;
 	bool m_bHasUnnamedAreas{};
 	bool m_bAnalyzed{};
 	bool m_bOK = false;
@@ -50,9 +55,6 @@ private:
 	int m_nGridW = 0;
 	int m_nGridH = 0;
 	std::vector<std::vector<CNavArea*>> m_vGrid;
-
-	mutable std::vector<uint32_t> m_vQueryStamp;
-	mutable uint32_t m_uQueryStamp = 0;
 };
 
 struct NavPolicyState
@@ -90,9 +92,12 @@ struct DropdownHint_t
 {
 	Vector m_vAdjustedPos = {};
 	bool m_bRequiresDrop = false;
+	bool m_bRequiresJump = false;
 	float m_flDropHeight = 0.f;
+	float m_flJumpHeight = 0.f;
 	float m_flApproachDistance = 0.f;
 	Vector m_vApproachDir = {};
+	Vector m_vLanding = {};
 };
 
 struct CachedPathCrumb_t
@@ -100,8 +105,13 @@ struct CachedPathCrumb_t
 	CNavArea* m_pNavArea = nullptr;
 	Vector m_vPos = {};
 	Vector m_vApproachDir = {};
+	Vector m_vLanding = {};
 	bool m_bRequiresDrop = false;
+	bool m_bRequiresJump = false;
+	bool m_bRequiresCrouch = false;
+	bool m_bRequiresLadder = false;
 	float m_flDropHeight = 0.f;
+	float m_flJumpHeight = 0.f;
 	float m_flApproachDistance = 0.f;
 };
 
@@ -114,6 +124,7 @@ struct CachedConnection_t
 	NavPoints_t m_tPoints = {};
 	bool m_bPassable = false;
 	bool m_bStuckBlacklist = false;
+	bool m_bHasPoints = false;
 };
 
 struct CachedStucktime_t
@@ -127,8 +138,11 @@ struct SolveContext
 	int m_iTeam = 0;
 	int m_iTickcount = 0;
 	int m_iVischeckCacheSeconds = 30;
+	float m_flTickInterval = 1.f / 66.f;
 	bool m_bIgnoreTraces = false;
 	bool m_bCanJump = true;
+	float m_flJumpRange = 240.f;
+	float m_flDeathDropHeight = PLAYER_DEATH_DROP_HEIGHT;
 	float m_flHazardScale = 1.f;
 	NavPolicyState m_tPolicy{};
 	const std::atomic_bool* m_pCancel = nullptr;

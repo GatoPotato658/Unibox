@@ -77,6 +77,7 @@ enum TFNavAttributeType
 };
 
 class CNavArea;
+struct NavLadder_t;
 struct NavPlace_t
 {
 public:
@@ -152,6 +153,23 @@ struct SpotEncounter_t
 	std::vector<SpotOrder_t> m_vSpots;
 };
 
+struct NavLadder_t
+{
+	uint32_t m_uId = 0;
+	float m_flWidth = 0.f;
+	Vector m_vTop = {};
+	Vector m_vBottom = {};
+	float m_flLength = 0.f;
+	int m_iDirection = 0;
+	Vector m_vNormal = {};
+
+	CNavArea* m_pTopForwardArea = nullptr;
+	CNavArea* m_pTopLeftArea = nullptr;
+	CNavArea* m_pTopRightArea = nullptr;
+	CNavArea* m_pTopBehindArea = nullptr;
+	CNavArea* m_pBottomArea = nullptr;
+};
+
 class CNavArea
 {
 public:
@@ -173,6 +191,7 @@ public:
 	std::vector<SpotEncounter_t> m_vSpotEncounters;
 	std::vector<CHidingSpot> m_vHidingSpots;
 	std::vector<uint32_t> m_vLadders[2];
+	std::vector<NavLadder_t*> m_vLadderLinks[2];
 
 	uint32_t m_uConnectionCount;
 	uint32_t m_uVisibleAreaCount;

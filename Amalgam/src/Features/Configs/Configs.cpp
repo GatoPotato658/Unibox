@@ -7,6 +7,7 @@
 #include "../Visuals/SkinChanger/SkinChanger.h"
 
 #include <cctype>
+#include <format>
 #include <functional>
 
 static bool IsSafeConfigName(const std::string& sConfigName)
@@ -94,12 +95,31 @@ static void SaveSkinChanger(boost::property_tree::ptree& tWrite)
 		F::Configs.SaveJson(tChild, "StatTrak", tSkin.iStatTrak);
 		tSub.put_child(std::to_string(iDef), tChild);
 	}
+	{
+		boost::property_tree::ptree tBackpack;
+		for (const auto& tItem : F::SkinChanger.GetBackpack())
+		{
+			boost::property_tree::ptree tChild;
+			tChild.put("Def", tItem.iDef);
+			if (tItem.iUnusual > 0)
+				tChild.put("Unusual", tItem.iUnusual);
+			tBackpack.put_child(std::to_string(tItem.uSerial), tChild);
+		}
+		tSub.put_child("Backpack", tBackpack);
+
+		boost::property_tree::ptree tLoadout;
+		for (const auto& [iIndex, uItemID] : F::SkinChanger.GetLoadout())
+			tLoadout.put(std::to_string(iIndex), std::to_string(uItemID));
+		tSub.put_child("Loadout", tLoadout);
+	}
 	tWrite.put_child("SkinChanger", tSub);
 }
 
 static void LoadSkinChanger(const boost::property_tree::ptree& tRead)
 {
 	std::unordered_map<int, Skin_t> mSkins;
+	std::vector<BackpackItem_t> vBackpack;
+	std::map<int, uint64_t> mLoadout;
 	if (auto tSub = tRead.get_child_optional("SkinChanger"))
 	{
 		for (const auto& tPair : *tSub)
@@ -127,7 +147,43 @@ static void LoadSkinChanger(const boost::property_tree::ptree& tRead)
 			if (!tSkin.Empty())
 				mSkins[CSkinChanger::Key(iDef)] = tSkin;
 		}
+
+		if (auto tBackpackRead = tSub->get_child_optional("Backpack"))
+		{
+			for (const auto& tPair : *tBackpackRead)
+			{
+				try
+				{
+					const int iKey = std::stoi(tPair.first);
+					const int iUnusual = std::max(tPair.second.get<int>("Unusual", 0), 0);
+					if (const int iDef = tPair.second.get<int>("Def", 0); iDef > 0 && iDef <= 0xFFFF && iKey > 0)
+						vBackpack.push_back({ uint32_t(iKey), uint16_t(iDef), iUnusual });
+					else if (iKey > 0 && iKey <= 0xFFFF)
+					{
+						uint32_t uSerial = 1;
+						while (std::any_of(vBackpack.begin(), vBackpack.end(), [uSerial](const BackpackItem_t& tItem) { return tItem.uSerial == uSerial; }))
+							uSerial++;
+						vBackpack.push_back({ uSerial, uint16_t(iKey), iUnusual });
+					}
+				}
+				catch (...) {}
+			}
+		}
+
+		if (auto tLoadoutRead = tSub->get_child_optional("Loadout"))
+		{
+			for (const auto& tPair : *tLoadoutRead)
+			{
+				try
+				{
+					mLoadout[std::stoi(tPair.first)] = std::stoull(tPair.second.data());
+				}
+				catch (...) {}
+			}
+		}
 	}
+	F::SkinChanger.SetBackpack(std::move(vBackpack));
+	F::SkinChanger.SetLoadout(std::move(mLoadout));
 	F::SkinChanger.SetSkins(std::move(mSkins));
 }
 
@@ -399,7 +455,7 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 	}
 }
 
-template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s, ESP_t& v)
+template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s,ESP_t& v)
 {
 	if (auto tChild = t.get_child_optional(s))
 	{
@@ -1287,6 +1343,8 @@ bool CConfigs::LoadSkins(const std::string& sConfigName, bool bNotify)
 		return false;
 
 	auto mOldSkins = F::SkinChanger.GetSkins();
+	auto tOldBackpack = F::SkinChanger.GetBackpack();
+	auto mOldLoadout = F::SkinChanger.GetLoadout();
 	const std::string sOldCurrentSkins = m_sCurrentSkins;
 	bool bTransaction = false;
 	try
@@ -1311,6 +1369,8 @@ bool CConfigs::LoadSkins(const std::string& sConfigName, bool bNotify)
 		if (bTransaction)
 		{
 			F::SkinChanger.SetSkins(std::move(mOldSkins));
+			F::SkinChanger.SetBackpack(std::move(tOldBackpack));
+			F::SkinChanger.SetLoadout(std::move(mOldLoadout));
 			m_sCurrentSkins = sOldCurrentSkins;
 		}
 		SDK::Output("unibox", "Load skins failed", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
@@ -1346,6 +1406,8 @@ void CConfigs::ResetSkins(const std::string& sConfigName, bool bNotify)
 	try
 	{
 		F::SkinChanger.SetSkins({});
+		F::SkinChanger.ClearBackpack();
+		F::SkinChanger.SetLoadout({});
 
 		SaveSkins(sConfigName, false);
 

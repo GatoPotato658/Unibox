@@ -76,6 +76,7 @@ public:
 	float GetFakeInterp();
 	float GetWindow();
 	void SetLerp();
+	int GetServerTick();
 	int GetAnticipatedChoke(int iMethod = Vars::Aimbot::General::AimType.Value);
 
 	void ResolverUpdate(CBaseEntity* pEntity);

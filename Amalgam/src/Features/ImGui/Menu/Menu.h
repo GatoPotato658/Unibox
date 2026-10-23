@@ -25,6 +25,7 @@ private:
 	void MenuMisc(int iTab);
 	void MenuAnticheat(int iTab);
 	void MenuLogs(int iTab);
+	void MenuSkins(int iTab);
 	void MenuSettings(int iTab);
 	void MenuSearch(std::string sSearch);
 

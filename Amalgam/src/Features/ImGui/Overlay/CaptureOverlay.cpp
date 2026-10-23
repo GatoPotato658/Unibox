@@ -48,16 +48,18 @@ DWORD WINAPI CCaptureOverlay::WindowThread(LPVOID pParam)
 	RegisterClassExW(&tClass);
 
 	HWND hWindow = CreateWindowExW(
-		WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+		WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
 		s_szClassName, L"", WS_POPUP,
 		0, 0, 1, 1,
 		nullptr, nullptr, hInstance, nullptr);
 
 	const MARGINS tMargins{ -1, -1, -1, -1 };
+	DWORD dwAffinity = 0;
 	if (!hWindow
-		|| !SetLayeredWindowAttributes(hWindow, 0, 255, LWA_ALPHA)
 		|| FAILED(DwmExtendFrameIntoClientArea(hWindow, &tMargins))
-		|| !SetWindowDisplayAffinity(hWindow, WDA_EXCLUDEFROMCAPTURE))
+		|| !SetWindowDisplayAffinity(hWindow, WDA_EXCLUDEFROMCAPTURE)
+		|| !GetWindowDisplayAffinity(hWindow, &dwAffinity)
+		|| dwAffinity != WDA_EXCLUDEFROMCAPTURE)
 	{
 		if (hWindow)
 			DestroyWindow(hWindow);

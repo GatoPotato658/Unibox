@@ -85,7 +85,6 @@ namespace ObjectiveUtils
 
 			const Vector vOrigin = pZone->GetAbsOrigin();
 			CaptureZone_t tZone{};
-			tZone.m_pZone = pZone;
 			tZone.m_iTeam = pZone->m_iTeamNum();
 			tZone.m_vMins = vOrigin + pZone->m_vecMins();
 			tZone.m_vMaxs = vOrigin + pZone->m_vecMaxs();
@@ -554,11 +553,6 @@ bool CCPController::IsCapturing(int iIndex, int iTeam) const
 		&& m_pObjectiveResource->m_iCappingTeam(iIndex) == iTeam;
 }
 
-bool CCPController::HasControlPoints() const
-{
-	return m_pObjectiveResource && m_pObjectiveResource->m_iNumControlPoints() > 0;
-}
-
 bool CCPController::GetClosestControlPointInfo(Vector vPos, int iTeam, std::pair<int, Vector>& tOut, bool bIncludePending)
 {
 	const int iTeamIdx = iTeam - TF_TEAM_RED;
@@ -705,6 +699,7 @@ void CMissionBoard::Reset()
 	m_iFriendliesNear = 0;
 	m_iEnemiesNear = 0;
 	m_sStatus = L"";
+	m_sLastStatus = L"";
 }
 
 void CMissionBoard::SetMission(MissionKindEnum::MissionKindEnum eKind, const Vector& vPos, float flValue, float flScore, int iCarrierIdx, const wchar_t* sStatus)
@@ -944,10 +939,9 @@ void CMissionBoard::Update(CTFPlayer* pLocal)
 
 	if (Vars::Debug::Logging.Value)
 	{
-		static std::wstring sLastStatus{};
-		if (sLastStatus != m_sStatus)
+		if (m_sLastStatus != m_sStatus)
 		{
-			sLastStatus = m_sStatus;
+			m_sLastStatus = m_sStatus;
 			SDK::Output("NavBotMission", std::format("Mission: {} urgency={:.2f} friends={} enemies={}",
 				SDK::ConvertWideToUTF8(m_sStatus), m_flUrgency, m_iFriendliesNear, m_iEnemiesNear).c_str(),
 				{ 120, 220, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);

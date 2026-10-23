@@ -12,6 +12,7 @@ MAKE_SIGNATURE(CTFPlayer_GetEffectiveInvisibilityLevel, "client.dll", "40 57 48 
 MAKE_SIGNATURE(CTFPlayer_UpdateWearables, "client.dll", "40 53 48 83 EC ? 48 8B D9 E8 ? ? ? ? 48 8B 03 48 8B CB FF 90 ? ? ? ? 4C 8D 0D ? ? ? ? C7 44 24 ? ? ? ? ? 48 8B C8 4C 8D 05 ? ? ? ? 33 D2 E8 ? ? ? ? 48 85 C0", 0x0);
 MAKE_SIGNATURE(CTFPlayer_GetObjectOfType, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 56 41 57 48 83 EC ? 48 63 B1", 0x0);
 MAKE_SIGNATURE(CTFPlayer_GetEntityForLoadoutSlot, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 54 41 55 41 56 41 57 48 83 EC ? 8D 42", 0x0);
+MAKE_SIGNATURE(CTFPlayer_SetBodygroupsDirty, "client.dll", "48 83 EC 38 41 B0 01 C6 81 51 1E 00 00 01 33 D2 E8", 0x0);
 
 class CBaseObject;
 
@@ -220,6 +221,7 @@ public:
 	SIGNATURE(UpdateClientSideAnimation, void, CTFPlayer, this);
 	SIGNATURE(GetEffectiveInvisibilityLevel, float, CTFPlayer, this);
 	SIGNATURE(UpdateWearables, void, CTFPlayer, this);
+	SIGNATURE(SetBodygroupsDirty, void, CTFPlayer, this);
 
 	Vec3 GetEyeAngles();
 	Vec3 GetViewOffset(bool bScale = true); // use on nonlocal players

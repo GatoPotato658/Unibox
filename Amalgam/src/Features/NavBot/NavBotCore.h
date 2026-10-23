@@ -31,10 +31,14 @@ private:
 
 	Timer m_tIdleTimer = {};
 	Timer m_tAntiStuckTimer = {};
+	Timer m_tSlotTimer = {};
+	Timer m_tDropCarriedObjectTimer = {};
+	Timer m_tDoubletapRecharge = {};
 	float m_flNextStuckAngleChange = 0.f;
 	float m_flNextIdleTime = 0.f;
 	Vec3 m_vStuckAngles = {};
 	bool m_bHoldingRunReload = false;
+	bool m_bWasEnabled = false;
 	CNavBotJobSystem m_tJobSystem = {};
 };
 

@@ -130,6 +130,9 @@ MAKE_HOOK(CEntityMapData_ExtractValue, S::CEntityMapData_ExtractValue(), bool,
 		case FNV1A::Hash32Const("trigger_apply_impulse"):
 			eType = TriggerTypeEnum::ApplyImpulse;
 			break;
+		case FNV1A::Hash32Const("func_passtime_no_ball_zone"):
+			eType = TriggerTypeEnum::NoBallZone;
+			break;
 #endif
 		case FNV1A::Hash32Const("item_ammopack_full"):
 		case FNV1A::Hash32Const("item_ammopack_medium"):

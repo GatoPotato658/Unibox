@@ -99,7 +99,8 @@ Enum(TriggerType, None,
 	 RespawnRoom,
 	 CaptureArea,
 	 Catapult,
-	 ApplyImpulse
+	 ApplyImpulse,
+	 NoBallZone
 );
 
 struct BrushSurface_t
@@ -120,6 +121,8 @@ struct TriggerData_t
 
 	std::vector<BrushSurface_t> m_vBrushSurfaces = {};
 
+	Vec3 m_vMins = {};
+	Vec3 m_vMaxs = {};
 	bool PointIsWithin(Vec3 vPoint) const;
 };
 

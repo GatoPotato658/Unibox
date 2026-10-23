@@ -56,7 +56,6 @@ public:
 
 struct CaptureZone_t
 {
-	CCaptureZone* m_pZone = nullptr;
 	int m_iTeam = TEAM_UNASSIGNED;
 	Vector m_vMins = {};
 	Vector m_vMaxs = {};
@@ -105,7 +104,6 @@ public:
 	bool IsCapturing(int iIndex, int iTeam) const;
 	bool GetClosestControlPoint(Vector vPos, int iTeam, Vector& vOut);
 	bool GetClosestControlPointInfo(Vector vPos, int iTeam, std::pair<int, Vector>& tOut, bool bIncludePending = false);
-	bool HasControlPoints() const;
 	void Init();
 	void Update();
 };
@@ -430,6 +428,7 @@ private:
 	float m_flUrgency = 0.f;
 	int m_iFriendliesNear = 0;
 	int m_iEnemiesNear = 0;
+	std::wstring m_sLastStatus = L"";
 
 	void SetMission(MissionKindEnum::MissionKindEnum eKind, const Vector& vPos, float flValue, float flScore, int iCarrierIdx, const wchar_t* sStatus);
 	void UpdateCtf(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam);
@@ -447,8 +446,6 @@ public:
 
 	const Mission_t& GetMission() const { return m_tMission; }
 	float GetUrgency() const { return m_flUrgency; }
-	int GetFriendliesNear() const { return m_iFriendliesNear; }
-	int GetEnemiesNear() const { return m_iEnemiesNear; }
 
 	std::wstring m_sStatus = L"";
 };

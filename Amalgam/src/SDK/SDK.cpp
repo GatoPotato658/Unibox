@@ -113,6 +113,8 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 			return TriggerTypeEnum::Catapult;
 		case FNV1A::Hash32Const("trigger_apply_impulse"):
 			return TriggerTypeEnum::ApplyImpulse;
+		case FNV1A::Hash32Const("func_passtime_no_ball_zone"):
+			return TriggerTypeEnum::NoBallZone;
 		default:
 			return TriggerTypeEnum::None;
 		}
@@ -1409,6 +1411,8 @@ bool SDK::BuildTriggerGeometry(TriggerData_t& tTrigger)
 
 	tTrigger.m_vBrushSurfaces.clear();
 	tTrigger.m_vCenter = {};
+	tTrigger.m_vMins = {};
+	tTrigger.m_vMaxs = {};
 
 	const int iNumSurfaces = tTrigger.m_pModel->brush.nummodelsurfaces;
 	const bool bShouldRotate = !tTrigger.m_vRotate.IsZero();
@@ -1462,6 +1466,21 @@ bool SDK::BuildTriggerGeometry(TriggerData_t& tTrigger)
 
 		vSurfaceCenter += tTrigger.m_vOrigin;
 		tTrigger.m_vBrushSurfaces.push_back(BrushSurface_t(vSurfaceCenter, vPoints));
+	}
+
+	if (!tTrigger.m_vBrushSurfaces.empty())
+	{
+		Vec3 vMins = tTrigger.m_vBrushSurfaces.front().m_vPoints.front();
+		Vec3 vMaxs = vMins;
+		for (const auto& tSurface : tTrigger.m_vBrushSurfaces)
+		{
+			for (const auto& vPoint : tSurface.m_vPoints)
+			{
+				vMins.x = std::min(vMins.x, vPoint.x), vMins.y = std::min(vMins.y, vPoint.y), vMins.z = std::min(vMins.z, vPoint.z);
+				vMaxs.x = std::max(vMaxs.x, vPoint.x), vMaxs.y = std::max(vMaxs.y, vPoint.y), vMaxs.z = std::max(vMaxs.z, vPoint.z);
+			}
+		}
+		tTrigger.m_vMins = vMins, tTrigger.m_vMaxs = vMaxs;
 	}
 
 	tTrigger.m_vCenter = tTrigger.m_vOrigin + Vector(vBottomSurfCenter.x, vBottomSurfCenter.y + (vTopSurfCenter.y - vBottomSurfCenter.y) / 2, vBottomSurfCenter.z);
@@ -1550,6 +1569,24 @@ int SDK::GetPasstimeGoalMapTeam(const Vec3& vOrigin, std::string* pTargetname)
 	if (pTargetname)
 		*pTargetname = pBestGoal->m_sTargetname;
 	return pBestGoal->m_iTeam;
+}
+
+bool SDK::IsInPasstimeNoBallZone(const Vec3& vOrigin)
+{
+	for (const auto& tTrigger : G::TriggerStorage)
+	{
+		if (tTrigger.m_eType != TriggerTypeEnum::NoBallZone || !tTrigger.m_pModel)
+			continue;
+
+		if (vOrigin.x < tTrigger.m_vMins.x || vOrigin.x > tTrigger.m_vMaxs.x
+			|| vOrigin.y < tTrigger.m_vMins.y || vOrigin.y > tTrigger.m_vMaxs.y
+			|| vOrigin.z < tTrigger.m_vMins.z || vOrigin.z > tTrigger.m_vMaxs.z)
+			continue;
+
+		if (tTrigger.PointIsWithin(vOrigin))
+			return true;
+	}
+	return false;
 }
 
 std::string SDK::GetLevelName()

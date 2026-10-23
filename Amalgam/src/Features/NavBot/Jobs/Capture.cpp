@@ -33,7 +33,7 @@ static Vector AdjustCaptureCandidateToNav(Vector vCandidate)
 	if (auto pArea = F::NavEngine.FindClosestNavArea(vCandidate))
 	{
 		Vector vCorrected = pArea->GetNearestPoint(vCandidate.Get2D());
-		vCorrected.z = pArea->m_vCenter.z;
+		vCorrected.z = pArea->GetZ(vCorrected.x, vCorrected.y);
 		return vCorrected;
 	}
 
@@ -199,9 +199,14 @@ bool CNavBotCapture::FindCoverNearPoint(const Vector& vPoint, float flRadius, Ve
 
 	bool bFound = false;
 	float flBestDistSqr = flRadius * flRadius;
-	for (const auto& tArea : pNavFile->m_vAreas)
+	std::vector<CNavArea*> vAreas;
+	pNavFile->QueryOverlapping(vPoint, flRadius, vAreas);
+	for (CNavArea* pArea : vAreas)
 	{
-		for (const auto& tHidingSpot : tArea.m_vHidingSpots)
+		if (!pArea)
+			continue;
+
+		for (const auto& tHidingSpot : pArea->m_vHidingSpots)
 		{
 			if (!tHidingSpot.HasGoodCover())
 				continue;
@@ -432,8 +437,11 @@ bool CNavBotCapture::GetStagedPointGoal(CTFPlayer* pLocal, int iOurTeam, Vector&
 	{
 		Vector vDir = vSpawn - tPoint.second;
 		vDir.z = 0.f;
-		if (vDir.Normalize() > 1.f)
+		if (vDir.Length() > 1.f)
+		{
+			vDir.Normalize();
 			vStage += vDir * flStageDistance;
+		}
 	}
 	vStage = ObjectiveUtils::AdjustPosToNav(vStage);
 
@@ -812,7 +820,8 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	}
 
 	const float flRetargetThresholdSq = bPasstimeCarrier ? 180.0f * 180.0f : 256.0f;
-	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Capture && vTarget.DistToSqr(m_vPreviousTarget) <= flRetargetThresholdSq)
+	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Capture && F::NavEngine.IsPathing()
+		&& vTarget.DistToSqr(m_vPreviousTarget) <= flRetargetThresholdSq)
 		return true;
 
 	if (!F::NavEngine.NavTo(vTarget, PriorityListEnum::Capture))

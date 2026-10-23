@@ -17,6 +17,9 @@
 #endif
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Debug/Debug.h"
+#ifndef TEXTMODE
+#include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#endif
 
 MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	void* rcx, int iMode)
@@ -29,6 +32,11 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	F::AutoQueue.Run();
 #if __has_include("../Features/Misc/ProfileStalker/ProfileStalker.h")
 	F::ProfileStalker.Run();
+#endif
+
+#ifndef TEXTMODE
+	if ((iMode & PAINT_UIPANELS) && I::EngineClient && !I::EngineClient->IsInGame())
+		F::SkinChanger.Service();
 #endif
 
 	if (iMode & PAINT_UIPANELS)

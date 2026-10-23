@@ -85,10 +85,7 @@ bool CNavBotMVMSniper::CampAt(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseEntity* pA
 	const Vector vAnchorOrigin = pAnchor->GetAbsOrigin();
 	const float flDist = pLocal->GetAbsOrigin().DistTo(vAnchorOrigin);
 	if (flDist > 150.f)
-	{
-		F::NavEngine.NavTo(vAnchorOrigin, PriorityListEnum::MVMSniper);
-		return true;
-	}
+		return F::NavEngine.NavTo(vAnchorOrigin, PriorityListEnum::MVMSniper);
 
 	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
 		F::NavEngine.CancelPath();
@@ -160,8 +157,7 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 		if (flDist > 250.f)
 		{
 			m_flOnEntranceSince = 0.f;
-			F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper);
-			return true;
+			return F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper);
 		}
 
 		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())

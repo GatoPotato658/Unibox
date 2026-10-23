@@ -9,6 +9,9 @@
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/Visuals/Materials/Materials.h"
+#ifndef TEXTMODE
+#include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#endif
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/NavBot/NavEngine.h"
@@ -254,6 +257,7 @@ void CCore::Unload()
 
 #ifndef TEXTMODE
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
+	F::SkinChanger.Unload();
 	F::CaptureOverlay.Shutdown();
 #endif
 	U::BytePatches.Unload();

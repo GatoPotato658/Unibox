@@ -5,6 +5,60 @@
 #include "../../CritHack/CritHack.h"
 #include "../../Backtrack/Backtrack.h"
 
+static inline Vec3 ToIVP(const Vec3& v)
+{
+	return { v.x, -v.z, v.y };
+}
+
+static inline void RotateIVP(Vec3& vX, Vec3& vY, Vec3& vZ, const Vec3& vRotation)
+{
+	const float flAngle = vRotation.Length();
+	if (flAngle <= 0.f)
+		return;
+
+	const Vec3 vAxis = vRotation / flAngle;
+	const float flSin = sinf(flAngle), flCos = cosf(flAngle);
+
+	const float flOneMinusCos = 1.f - flCos;
+	const float flXX = vAxis.x * vAxis.x * flOneMinusCos;
+	const float flYY = vAxis.y * vAxis.y * flOneMinusCos;
+	const float flZZ = vAxis.z * vAxis.z * flOneMinusCos;
+	const float flXY = vAxis.x * vAxis.y * flOneMinusCos;
+	const float flXZ = vAxis.x * vAxis.z * flOneMinusCos;
+	const float flYZ = vAxis.y * vAxis.z * flOneMinusCos;
+	const float flXS = vAxis.x * flSin;
+	const float flYS = vAxis.y * flSin;
+	const float flZS = vAxis.z * flSin;
+
+	const float fl00 = flCos + flXX, fl01 = flXY - flZS, fl02 = flXZ + flYS;
+	const float fl10 = flXY + flZS, fl11 = flCos + flYY, fl12 = flYZ - flXS;
+	const float fl20 = flXZ - flYS, fl21 = flYZ + flXS, fl22 = flCos + flZZ;
+
+	auto fRotate = [&](Vec3& v)
+		{
+			const Vec3 vOld = v;
+			v.x = fl00 * vOld.x + fl01 * vOld.y + fl02 * vOld.z;
+			v.y = fl10 * vOld.x + fl11 * vOld.y + fl12 * vOld.z;
+			v.z = fl20 * vOld.x + fl21 * vOld.y + fl22 * vOld.z;
+		};
+	fRotate(vX);
+	fRotate(vY);
+	fRotate(vZ);
+}
+
+static inline bool IsStickyType(uint32_t uType)
+{
+	switch (uType)
+	{
+	case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb.mdl"):
+	case FNV1A::Hash32Const("models/workshop/weapons/c_models/c_kingmaker_sticky/w_kingmaker_stickybomb.mdl"):
+	case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb_d.mdl"):
+	case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb2.mdl"):
+		return true;
+	}
+	return false;
+}
+
 static const char* GetPasstimeThrowSpeedCvar(CTFPlayer* pPlayer)
 	{
 		switch (pPlayer ? pPlayer->m_iClass() : TF_CLASS_UNDEFINED)
@@ -46,7 +100,7 @@ const SpecialProjectile_t* CProjectileSimulation::GetSpecial(int iSpecial)
 	static const SpecialProjectile_t aSpecials[] = {
 		{ "", 0, "", 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f },
 		{ "Sniper spit", FNV1A::Hash32Const("zi/sniper_spit"), sNade, 2000.f, 0.f, 50.f, 0.f, 12.f, flNoLifetime, 130.f - 50.f * 0.70710678f, 130.f - 50.f * 0.70710678f, 0.5f },
-		{ "Spy EMP", FNV1A::Hash32Const("zi/spy_emp"), sNade, 1500.f, 0.f, -20.f, 0.f, 0.f, 1.75f, 900.f, 450.f, 0.f },
+		{ "Spy EMP", FNV1A::Hash32Const("zi/spy_emp"), sNade, 1500.f, 0.f, -20.f, 0.f, 0.f, 1.75f, 0.f, 500.f, 0.f },
 		{ "Pyro spew", FNV1A::Hash32Const("zi/pyro_spew"), sNade, 1200.f, 0.f, 32.f, 0.f, 12.f, 5.f, 0.f, 0.f, 0.f },
 		{ "Heavy rock", FNV1A::Hash32Const("zi/heavy_rock"), sNade, 1100.f, 350.f, 40.f, -10.f, 12.f, 6.f, 150.f, 150.f, 1.9f },
 	};
@@ -595,7 +649,13 @@ void CProjectileSimulation::GetInfo(CBaseEntity* pProjectile, ProjectileInfo& tP
 bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate, bool bWorld)
 {
 	if (!m_pEnv)
+	{
 		m_pEnv = I::Physics->CreateEnvironment();
+		m_flEnvStep = m_pEnv ? m_pEnv->GetSimulationTimestep() : 0.f;
+	}
+
+	m_bFastPhysics = false;
+	m_tFast = {};
 
 	if (!m_pObjBox)
 	{
@@ -717,7 +777,11 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 			m_pObj->m_angDragBasis = vAngDragBasis;
 		}
 		m_bPhysics = m_pObj->m_dragCoefficient && m_pObj->m_dragBasis;
+		m_tFast.m_vDragBasis = vDragBasis;
+		m_tFast.m_vAngularDragBasis = vAngDragBasis;
+		m_tFast.m_flDrag = flDrag;
 	}
+	const bool bFast = m_bPhysics && !bWorld && m_bEnvWarmed && IsStickyType(tProjInfo.m_uType) && m_flEnvStep > 0.f;
 
 	// set position and velocity
 	{
@@ -828,7 +892,27 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 		if (bSimulate && !m_bPhysics)
 			vVelocity.z += tProjInfo.m_flGravity * TICK_INTERVAL / 2;
 
-		if (m_bPhysics)
+		if (bFast)
+		{
+			Vec3 vForward, vRight, vUp; Math::AngleVectors(tProjInfo.m_vAng, &vForward, &vRight, &vUp);
+			m_tFast.m_vOrigin = tProjInfo.m_vPos;
+			m_tFast.m_vVelocity = vVelocity;
+			const float flMaxVelocity = m_bEnvParamsValid ? m_flEnvMaxVelocity : k_flMaxVelocity;
+			const float flSpeed = m_tFast.m_vVelocity.Length();
+			if (flSpeed > flMaxVelocity)
+				m_tFast.m_vVelocity *= flMaxVelocity / flSpeed;
+			m_tFast.m_vAngularVelocity = ToIVP({ Math::Deg2Rad(vAngularVelocity.x), Math::Deg2Rad(vAngularVelocity.y), Math::Deg2Rad(vAngularVelocity.z) });
+			m_tFast.m_vAxisX = ToIVP(vForward);
+			m_tFast.m_vAxisY = ToIVP(-vUp);
+			m_tFast.m_vAxisZ = ToIVP(-vRight);
+			m_tFast.m_flGravity = tProjInfo.m_flGravity;
+			m_tFast.m_flStep = m_flEnvStep;
+			m_tFast.m_flTime = m_flEnvStep;
+			m_tFast.m_flNextStep = m_flEnvStep;
+			m_tFast.m_flClock = 0.0;
+			m_bFastPhysics = true;
+		}
+		else if (m_bPhysics)
 		{
 			m_pObj->SetPosition(tProjInfo.m_vPos, bSpecialObject ? QAngle() : tProjInfo.m_vAng, true);
 			m_pObj->SetVelocity(&vVelocity, &vAngularVelocity);
@@ -876,20 +960,97 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 		params.maxVelocity = flMaxVelocity;
 		params.maxAngularVelocity = vMaxAngularVelocity;
 
-		m_pEnv->SetPerformanceSettings(&params);
-		m_pEnv->SetAirDensity(AIR_DENSITY);
-		m_pEnv->SetGravity({ 0.f, 0.f, -tProjInfo.m_flGravity });
+		if (!m_bEnvParamsValid || m_flEnvMaxVelocity != flMaxVelocity || m_flEnvMaxAngularVelocity != vMaxAngularVelocity || m_flEnvGravity != tProjInfo.m_flGravity)
+		{
+			m_pEnv->SetPerformanceSettings(&params);
+			m_pEnv->SetAirDensity(AIR_DENSITY);
+			m_pEnv->SetGravity({ 0.f, 0.f, -tProjInfo.m_flGravity });
 
-		m_pEnv->ResetSimulationClock();
+			m_flEnvMaxVelocity = flMaxVelocity;
+			m_flEnvMaxAngularVelocity = vMaxAngularVelocity;
+			m_flEnvGravity = tProjInfo.m_flGravity;
+			m_bEnvParamsValid = true;
+		}
+
+		if (m_bFastPhysics)
+			m_tFast.m_flMaxVelocity = flMaxVelocity;
+		else
+			m_pEnv->ResetSimulationClock();
 	}
 
 	if (tProjInfo.m_uType == FNV1A::Hash32Const("custom"))
 		tProjInfo.m_uType = FNV1A::Hash32(Vars::Visuals::Trajectory::Type.Value.c_str());
 
 	if (m_bPhysics)
+	{
 		RunTick(tProjInfo, false); // simulate an initial time because dumb
+		m_bEnvWarmed = true;
+	}
 
 	return true;
+}
+
+void CProjectileSimulation::FastAdvance(double flDelta)
+{
+	if (flDelta <= 0.0)
+		return;
+
+	m_tFast.m_vOrigin += m_tFast.m_vVelocity * float(flDelta);
+
+	const Vec3 vAngularWorld = m_tFast.m_vAxisX * m_tFast.m_vAngularVelocity.x
+		+ m_tFast.m_vAxisY * m_tFast.m_vAngularVelocity.y
+		+ m_tFast.m_vAxisZ * m_tFast.m_vAngularVelocity.z;
+	const Vec3 vRotate = vAngularWorld * float(flDelta);
+	RotateIVP(m_tFast.m_vAxisX, m_tFast.m_vAxisY, m_tFast.m_vAxisZ, vRotate);
+}
+
+void CProjectileSimulation::FastUpdate()
+{
+	const float flStep = m_tFast.m_flStep;
+
+	Vec3 vVelocity = m_tFast.m_vVelocity;
+	vVelocity.z -= m_tFast.m_flGravity * flStep;
+
+	const Vec3 vLocal = ToIVP(vVelocity);
+	const float flDrag = std::min(0.5f * m_tFast.m_flDrag * AIR_DENSITY * flStep * METERS_PER_INCH
+		* (fabsf(vLocal.Dot(m_tFast.m_vAxisX)) * m_tFast.m_vDragBasis.x
+		+ fabsf(vLocal.Dot(m_tFast.m_vAxisY)) * m_tFast.m_vDragBasis.y
+		+ fabsf(vLocal.Dot(m_tFast.m_vAxisZ)) * m_tFast.m_vDragBasis.z), 1.f);
+	vVelocity *= 1.f - flDrag;
+
+	const float flSpeed = vVelocity.Length();
+	// IVP clamps to 99% of the configured limit once it is exceeded
+	if (flSpeed > m_tFast.m_flMaxVelocity)
+		vVelocity *= 0.99f * m_tFast.m_flMaxVelocity / flSpeed;
+	m_tFast.m_vVelocity = vVelocity;
+
+	const Vec3& vAngular = m_tFast.m_vAngularVelocity;
+	const float flAngularDrag = std::min(m_tFast.m_flDrag * AIR_DENSITY * flStep
+		* (fabsf(vAngular.x) * m_tFast.m_vAngularDragBasis.x
+		+ fabsf(vAngular.y) * m_tFast.m_vAngularDragBasis.y
+		+ fabsf(vAngular.z) * m_tFast.m_vAngularDragBasis.z), 1.f);
+	m_tFast.m_vAngularVelocity = vAngular * (1.f - flAngularDrag);
+}
+
+void CProjectileSimulation::RunFastTick()
+{
+	m_tFast.m_flClock += TICK_INTERVAL;
+	const double flEnd = m_tFast.m_flClock;
+
+	// IVP advances in PSI steps that are independent of the server tick
+	while (m_tFast.m_flNextStep <= flEnd + 1e-9)
+	{
+		FastAdvance(m_tFast.m_flNextStep - m_tFast.m_flTime);
+		m_tFast.m_flTime = m_tFast.m_flNextStep;
+		FastUpdate();
+		m_tFast.m_flNextStep += m_tFast.m_flStep;
+	}
+
+	if (flEnd > m_tFast.m_flTime)
+	{
+		FastAdvance(flEnd - m_tFast.m_flTime);
+		m_tFast.m_flTime = flEnd;
+	}
 }
 
 void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bug: per frame projectile trace can cause inconsistencies?
@@ -897,7 +1058,9 @@ void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bu
 	if (bPath)
 		tProjInfo.m_vPath.push_back(GetOrigin());
 
-	if (m_bPhysics)
+	if (m_bFastPhysics)
+		RunFastTick();
+	else if (m_bPhysics)
 		m_pEnv->Simulate(TICK_INTERVAL);
 	else
 	{
@@ -923,6 +1086,9 @@ void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bu
 
 Vec3 CProjectileSimulation::GetOrigin()
 {
+	if (m_bFastPhysics)
+		return m_tFast.m_vOrigin;
+
 	if (!m_pObj)
 		return {};
 
@@ -935,6 +1101,9 @@ Vec3 CProjectileSimulation::GetOrigin()
 
 Vec3 CProjectileSimulation::GetVelocity()
 {
+	if (m_bFastPhysics)
+		return m_tFast.m_vVelocity;
+
 	if (!m_pObj)
 		return {};
 
