@@ -4,6 +4,7 @@
 #include "../AimbotGlobal/AimbotGlobal.h"
 #include "../../Simulation/MovementSimulation/MovementSimulation.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
+#include "ProjProfiler.h"
 
 struct PasstimeGoalInfo;
 

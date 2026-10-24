@@ -1,4 +1,5 @@
 #include "AutoDetonate.h"
+#include "../AimbotProjectile/ProjProfiler.h"
 
 enum
 {
@@ -543,6 +544,8 @@ void CAutoDetonate::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
 	if (!Vars::Aimbot::Projectile::AutoDetonate.Value)
 		return;
+
+	PROJ_FRAME("AutoDetonate", -1);
 
 	if ((Vars::Aimbot::Projectile::AutoDetonate.Value & Vars::Aimbot::Projectile::AutoDetonateEnum::Stickies && StickyCheck(pLocal, pCmd))
 		|| (Vars::Aimbot::Projectile::AutoDetonate.Value & Vars::Aimbot::Projectile::AutoDetonateEnum::Flares && FlareCheck(pLocal)))

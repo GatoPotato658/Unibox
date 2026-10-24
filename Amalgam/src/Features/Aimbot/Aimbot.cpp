@@ -141,6 +141,8 @@ void CAimbot::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 void CAimbot::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	F::ProjProfiler.Update();
+
 	Store(false);
 
 	G::AimbotSteering = false;

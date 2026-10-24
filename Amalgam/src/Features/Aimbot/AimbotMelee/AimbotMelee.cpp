@@ -166,6 +166,32 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 	return vTargets;
 }
 
+static inline Vec3 GetLastNetworkedOrigin(CBaseEntity* pEntity)
+{
+	if (pEntity->m_iv_vecOrigin().m_LastNetworkedValue)
+		return *pEntity->m_iv_vecOrigin().m_LastNetworkedValue;
+	return pEntity->m_vecOrigin();
+}
+
+std::vector<int> CAimbotMelee::GetTimeMods()
+{
+	std::vector<int> vTimeMods = {};
+	switch (Vars::Aimbot::Melee::SwingValidateMode.Value)
+	{
+	case Vars::Aimbot::Melee::SwingValidateModeEnum::Both:
+		if (m_iSimulatedTicks != m_iSwingTicks)
+			vTimeMods.push_back(m_iSimulatedTicks);
+		[[fallthrough]];
+	case Vars::Aimbot::Melee::SwingValidateModeEnum::Swing:
+		vTimeMods.push_back(m_iSwingTicks);
+		break;
+	case Vars::Aimbot::Melee::SwingValidateModeEnum::Simulated:
+		vTimeMods.push_back(m_iSimulatedTicks);
+		break;
+	}
+	return vTimeMods;
+}
+
 static inline int GetSwingTime(CTFWeaponBase* pWeapon, bool bVar = true)
 {
 	return pWeapon->GetWeaponID() == TF_WEAPON_KNIFE ? 0
@@ -189,11 +215,35 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		return;
 	}
 
+	const bool bAccountPing = Vars::Aimbot::Melee::SwingAccountPing.Value;
 	std::unordered_map<int, MoveStorage> mMoveStorage;
+	std::unordered_map<int, int> mTargetTicks;
 
 	F::MoveSim.Initialize(pLocal, mMoveStorage[pLocal->entindex()], false, !m_iDoubletapTicks, false);
 	for (auto& tTarget : vTargets)
-		F::MoveSim.Initialize(tTarget.m_pEntity, mMoveStorage[tTarget.m_pEntity->entindex()], false, true, false);
+	{
+		const bool bNetworked = bAccountPing && tTarget.m_pEntity->IsPlayer();
+		const Vec3 vTargetOrigin = bNetworked ? GetLastNetworkedOrigin(tTarget.m_pEntity) : tTarget.m_pEntity->m_vecOrigin();
+		F::MoveSim.Initialize(tTarget.m_pEntity, mMoveStorage[tTarget.m_pEntity->entindex()], false, true, false, bNetworked ? &vTargetOrigin : nullptr);
+	}
+
+	auto fStepTarget = [&](const Target_t& tTarget)
+	{
+		const int iIndex = tTarget.m_pEntity->entindex();
+		auto& tMoveStorage = mMoveStorage[iIndex];
+		if (tMoveStorage.m_bFailed)
+			return;
+
+		F::MoveSim.RunTick(tMoveStorage);
+		const int iTick = ++mTargetTicks[iIndex];
+		if (Vars::Aimbot::Melee::SwingPredictLag.Value && !tMoveStorage.m_bPredictNetworked)
+			return;
+
+		Vec3 vOrigin = Vars::Aimbot::Melee::SwingPredictLag.Value ? tMoveStorage.m_vPredictedOrigin : tMoveStorage.m_MoveData.m_vecAbsOrigin;
+		m_mRecordMap[iIndex].emplace_front(
+			tTarget.m_pEntity->m_flSimulationTime() + TICKS_TO_TIME(iTick), vOrigin, tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs()
+		);
+	};
 
 	int iMax = std::max(m_iSimulatedTicks, m_iDoubletapTicks), iTicks = iMax; bool bSwung = false;
 	Vec3 vLocalOrigin = mMoveStorage[pLocal->entindex()].m_MoveData.m_vecAbsOrigin;
@@ -226,23 +276,29 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		if (i < m_iSimulatedTicks - m_iDoubletapTicks)
 		{
 			for (auto& tTarget : vTargets)
-			{
-				auto& tMoveStorage = mMoveStorage[tTarget.m_pEntity->entindex()];
-				if (tMoveStorage.m_bFailed)
-					continue;
-
-				F::MoveSim.RunTick(tMoveStorage);
-				if (Vars::Aimbot::Melee::SwingPredictLag.Value && !tMoveStorage.m_bPredictNetworked)
-					continue;
-
-				Vec3 vOrigin = Vars::Aimbot::Melee::SwingPredictLag.Value ? tMoveStorage.m_vPredictedOrigin : tMoveStorage.m_MoveData.m_vecAbsOrigin;
-				m_mRecordMap[tTarget.m_pEntity->entindex()].emplace_front(
-					tTarget.m_pEntity->m_flSimulationTime() + TICKS_TO_TIME(i + 1), vOrigin, tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs()
-				);
-			}
+				fStepTarget(tTarget);
 		}
 	}
-	m_vEyePos = vLocalOrigin + pLocal->m_vecViewOffset();
+
+	if (bAccountPing)
+	{
+		const auto vTimeMods = GetTimeMods();
+		const int iMaxExtra = TIME_TO_TICKS(0.2f);
+		for (auto& tTarget : vTargets)
+		{
+			if (!tTarget.m_pEntity->IsPlayer())
+				continue;
+
+			const int iRewound = TIME_TO_TICKS(tTarget.m_pEntity->m_flSimulationTime()) + mTargetTicks[tTarget.m_pEntity->entindex()];
+			int iExtra = 0;
+			for (int iTimeMod : vTimeMods)
+				iExtra = std::max(iExtra, F::Backtrack.GetRewindTick(-TICKS_TO_TIME(iTimeMod)) - iRewound);
+
+			for (int i = 0; i < std::min(iExtra, iMaxExtra); i++)
+				fStepTarget(tTarget);
+		}
+	}
+	m_vEyePos =vLocalOrigin + pLocal->m_vecViewOffset();
 	m_flRange = pWeapon->GetSwingRange();
 
 	if (Vars::Visuals::Prediction::SwingLines.Value && Vars::Visuals::Prediction::PlayerPath.Value)
@@ -383,20 +439,7 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 	std::vector<TickRecord*> vRecords = {};
 	if (F::Backtrack.GetRecords(tTarget.m_pEntity, vRecords))
 	{
-		std::vector<int> vTimeMods = {};
-		switch (Vars::Aimbot::Melee::SwingValidateMode.Value)
-		{
-		case Vars::Aimbot::Melee::SwingValidateModeEnum::Both:
-			if (m_iSimulatedTicks != m_iSwingTicks)
-				vTimeMods.push_back(m_iSimulatedTicks);
-			[[fallthrough]];
-		case Vars::Aimbot::Melee::SwingValidateModeEnum::Swing:
-			vTimeMods.push_back(m_iSwingTicks);
-			break;
-		case Vars::Aimbot::Melee::SwingValidateModeEnum::Simulated:
-			vTimeMods.push_back(m_iSimulatedTicks);
-			break;
-		}
+		const auto vTimeMods = GetTimeMods();
 
 		for (auto& tRecord : vSimRecords)
 			vRecords.push_back(&tRecord);

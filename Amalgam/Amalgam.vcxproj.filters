@@ -41,6 +41,7 @@
     <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotProjectile.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotSpecial.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotProjectile\AimbotPasstime.cpp" />
+    <ClCompile Include="src\Features\Aimbot\AimbotProjectile\ProjProfiler.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoAirblast\AutoAirblast.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.cpp" />
     <ClCompile Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.cpp" />
@@ -446,6 +447,7 @@
     <ClInclude Include="src\Features\Aimbot\AimbotHitscan\AimbotHitscan.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotMelee\AimbotMelee.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotProjectile\AimbotProjectile.h" />
+    <ClInclude Include="src\Features\Aimbot\AimbotProjectile\ProjProfiler.h" />
     <ClInclude Include="src\Features\Aimbot\AutoAirblast\AutoAirblast.h" />
     <ClInclude Include="src\Features\Aimbot\AutoDetonate\AutoDetonate.h" />
     <ClInclude Include="src\Features\Aimbot\AutoRocketJump\AutoRocketJump.h" />
@@ -460,6 +462,7 @@
     <ClInclude Include="src\Features\Misc\Misc.h" />
     <ClInclude Include="src\Features\NetworkFix\NetworkFix.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpread.h" />
+    <ClInclude Include="src\Features\NoSpread\SpreadMath.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpreadHitscan\NoSpreadHitscan.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpreadProjectile\NoSpreadProjectile.h" />
     <ClInclude Include="src\Features\PacketManip\AntiAim\AntiAim.h" />

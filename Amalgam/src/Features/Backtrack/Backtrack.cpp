@@ -82,6 +82,12 @@ int CBacktrack::GetServerTick()
 	return m_iTickCount + TIME_TO_TICKS(GetReal(FLOW_OUTGOING)) + GetAnticipatedChoke();
 }
 
+int CBacktrack::GetRewindTick(float flTimeMod)
+{
+	float flCorrect = std::clamp(GetReal(MAX_FLOWS, false) + ROUND_TO_TICKS(GetFakeInterp()), 0.f, m_flMaxUnlag) + flTimeMod;
+	return GetServerTick() + Vars::Backtrack::Offset.Value - TIME_TO_TICKS(flCorrect);
+}
+
 void CBacktrack::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	if (F::AntiCheatCompatibility.Active())

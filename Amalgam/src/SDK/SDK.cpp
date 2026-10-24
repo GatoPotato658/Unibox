@@ -5,6 +5,7 @@
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/NavBot/NavEngine.h"
 #include "../Features/Ticks/Ticks.h"
+#include "../Features/Aimbot/AimbotProjectile/ProjProfiler.h"
 
 #include <Windows.h>
 #include <charconv>
@@ -666,6 +667,8 @@ bool SDK::IsOnScreen(CBaseEntity* pEntity, bool bShouldGetOwner)
 
 void SDK::Trace(const Vec3& vStart, const Vec3& vEnd, unsigned int nMask, ITraceFilter* pFilter, CGameTrace* pTrace)
 {
+	PROJ_ZONE_ROOT(Trace);
+
 	Ray_t ray;
 	ray.Init(vStart, vEnd);
 	I::EngineTrace->TraceRay(ray, nMask, pFilter, pTrace);
@@ -678,6 +681,8 @@ void SDK::Trace(const Vec3& vStart, const Vec3& vEnd, unsigned int nMask, ITrace
 
 void SDK::TraceHull(const Vec3& vStart, const Vec3& vEnd, const Vec3& vHullMin, const Vec3& vHullMax, unsigned int nMask, ITraceFilter* pFilter, CGameTrace* pTrace)
 {
+	PROJ_ZONE_ROOT(TraceHull);
+
 	Ray_t ray;
 	ray.Init(vStart, vEnd, vHullMin, vHullMax);
 	I::EngineTrace->TraceRay(ray, nMask, pFilter, pTrace);

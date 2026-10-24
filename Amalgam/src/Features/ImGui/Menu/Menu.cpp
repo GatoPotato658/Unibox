@@ -533,6 +533,11 @@ void CMenu::MenuAimbot(int iTab)
 							FSlider(Vars::Aimbot::Projectile::DragOverride, FSliderEnum::Left);
 							FSlider(Vars::Aimbot::Projectile::TimeOverride, FSliderEnum::Right);
 							FToggle(Vars::Aimbot::Projectile::LobAnglesUnderpredict);
+#ifdef PROJ_PROFILER
+							FToggle(Vars::Aimbot::Projectile::LagProfile, FToggleEnum::Left);
+							FSlider(Vars::Aimbot::Projectile::LagProfileFPS, FSliderEnum::Right);
+							FTooltip("writes unibox/ProjLag.txt when fps drops below this");
+#endif
 
 							Divider();
 							FSlider(Vars::Aimbot::Projectile::HuntsmanLerp, FSliderEnum::Left);
@@ -639,6 +644,7 @@ void CMenu::MenuAimbot(int iTab)
 						{
 							FSlider(Vars::Aimbot::Melee::SwingTicks, FSliderEnum::Left);
 							FToggle(Vars::Aimbot::Melee::SwingPredictLag, FToggleEnum::Right);
+							FToggle(Vars::Aimbot::Melee::SwingAccountPing, FToggleEnum::Left);
 							FDropdown(Vars::Aimbot::Melee::SwingValidateMode, FDropdownEnum::Left);
 							FDropdown(Vars::Aimbot::Melee::BackstabFlags, FDropdownEnum::Right);
 

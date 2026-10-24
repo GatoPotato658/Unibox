@@ -592,6 +592,8 @@ bool CAimbotProjectile::PlanPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 bool CAimbotProjectile::RunPasstime(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	PROJ_FRAME("Passtime", pWeapon ? pWeapon->GetWeaponID() : -1);
+
 	auto& tState = m_tPasstime;
 	const int iTick = I::GlobalVars->tickcount;
 	if (tState.m_iLastTick == iTick)

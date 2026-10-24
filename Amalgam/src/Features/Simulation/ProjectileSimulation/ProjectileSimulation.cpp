@@ -1,6 +1,7 @@
 #include "ProjectileSimulation.h"
 
 #include "../../EnginePrediction/EnginePrediction.h"
+#include "../../Aimbot/AimbotProjectile/ProjProfiler.h"
 #include "../../NoSpread/NoSpreadProjectile/NoSpreadProjectile.h"
 #include "../../CritHack/CritHack.h"
 #include "../../Backtrack/Backtrack.h"
@@ -597,6 +598,8 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 
 bool CProjectileSimulation::GetInfo(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const Vec3& vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge)
 {
+	PROJ_ZONE(ProjGetInfo);
+
 	bool bInitCheck = iFlags & ProjSimEnum::InitCheck;
 	bool bInterp = iFlags & ProjSimEnum::Interp;
 	bool bReturn = false;
@@ -648,6 +651,8 @@ void CProjectileSimulation::GetInfo(CBaseEntity* pProjectile, ProjectileInfo& tP
 
 bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate, bool bWorld)
 {
+	PROJ_ZONE(ProjInit);
+
 	if (!m_pEnv)
 	{
 		m_pEnv = I::Physics->CreateEnvironment();
@@ -1055,6 +1060,17 @@ void CProjectileSimulation::RunFastTick()
 
 void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bug: per frame projectile trace can cause inconsistencies?
 {
+	const bool bTimed = m_bFastPhysics || m_bPhysics;
+	ProjScope_t tProf(ProjZoneEnum::ProjTick, bTimed ? ProjScope_t::Ambient : ProjScope_t::Never);
+	if (bTimed)
+	{
+		PROJ_COUNT(ProjTicksPhysics);
+	}
+	else
+	{
+		PROJ_COUNT(ProjTicksSimple);
+	}
+
 	if (bPath)
 		tProjInfo.m_vPath.push_back(GetOrigin());
 

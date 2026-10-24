@@ -59,6 +59,8 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 		: !Vars::Visuals::Simulation::ShotPath.Value)
 		return;
 
+	PROJ_FRAME(bInterp ? "VisualsTrajectory" : "VisualsShotPath", pWeapon ? pWeapon->GetWeaponID() : -1);
+
 	Vec3 vAngles = bInterp ? I::EngineClient->GetViewAngles() : G::CurrentUserCmd->viewangles;
 	int iFlags = bInterp ? ProjSimEnum::Redirect | ProjSimEnum::InitCheck | ProjSimEnum::Interp : ProjSimEnum::Redirect | ProjSimEnum::InitCheck;
 	if (F::Spectate.HasTarget() && bInterp && pPlayer && pPlayer->m_hObserverTarget())

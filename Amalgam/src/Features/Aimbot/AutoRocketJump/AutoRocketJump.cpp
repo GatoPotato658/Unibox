@@ -1,4 +1,5 @@
 #include "AutoRocketJump.h"
+#include "../AimbotProjectile/ProjProfiler.h"
 
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include "../../Simulation/MovementSimulation/MovementSimulation.h"
@@ -113,6 +114,8 @@ bool CAutoRocketJump::SetAngles(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 
 void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	PROJ_FRAME("AutoRocketJump", pWeapon ? pWeapon->GetWeaponID() : -1);
+
 	if (!ShouldRun(pLocal, pWeapon, pCmd))
 	{
 		m_iFrame = -1;

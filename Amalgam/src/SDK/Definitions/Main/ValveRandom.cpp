@@ -1,3 +1,4 @@
+#pragma fp_contract(off)
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //fuck you
 // Purpose: Random number generator

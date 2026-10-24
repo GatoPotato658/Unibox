@@ -435,6 +435,9 @@ NAMESPACE_BEGIN(Vars)
 				RunReduce = 1 << 0, CalculateIncrease = 1 << 1);
 			CVar(AccountPing, "Account for ping", true, DEBUGVAR);
 			CVar(AutodetAccountPing, "Auto detonate account for ping", true, DEBUGVAR);
+
+			CVar(LagProfile, "Lag profiler", true, NOSAVE | DEBUGVAR);
+			CVar(LagProfileFPS, "Lag profiler FPS", 30, NOSAVE | DEBUGVAR | SLIDER_MIN, 5, 144);
 		NAMESPACE_END(Projectile)
 
 		NAMESPACE_BEGIN(AutoEngie)
@@ -483,6 +486,7 @@ NAMESPACE_BEGIN(Vars)
 
 			CVar(SwingTicks, "Swing ticks", 13, NOSAVE | DEBUGVAR | SLIDER_MIN, 0, 14);
 			CVar(SwingPredictLag, "Swing predict lag", true, NOSAVE | DEBUGVAR);
+			CVar(SwingAccountPing, "Swing account for ping", true, DEBUGVAR);
 			CVarEnum(SwingValidateMode, "Swing validate mode", 0, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("Both", "Swing", "Simulated"),
 				Both, Swing, Simulated);

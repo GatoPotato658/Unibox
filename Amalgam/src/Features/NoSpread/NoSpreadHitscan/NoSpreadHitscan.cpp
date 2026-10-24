@@ -1,12 +1,14 @@
 #include "NoSpreadHitscan.h"
 
-#include "../../Ticks/Ticks.h"
+#include "../SpreadMath.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../../ImGui/IndicatorPanel.h"
 #include <regex>
 #include <numeric>
 
 MAKE_SIGNATURE(CTFWeaponBaseGun_GetWeaponSpread, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 4C 63 91", 0x0);
+
+static_assert(offsetof(IMatchGroupDescription, m_bFixedWeaponSpread) == 0x70);
 
 void CNoSpreadHitscan::Reset()
 {
@@ -37,7 +39,7 @@ bool CNoSpreadHitscan::ShouldRun(CTFWeaponBase* pWeapon)
 int CNoSpreadHitscan::GetSeed(CUserCmd* pCmd)
 {
 	static auto sv_usercmd_custom_random_seed = H::ConVars.FindVar("sv_usercmd_custom_random_seed");
-	if (!sv_usercmd_custom_random_seed->GetBool())
+	if (sv_usercmd_custom_random_seed && !sv_usercmd_custom_random_seed->GetBool())
 		return pCmd->random_seed & 255;
 
 	double dFloatTime = SDK::PlatFloatTime() + m_dTimeDelta;
@@ -47,12 +49,23 @@ int CNoSpreadHitscan::GetSeed(CUserCmd* pCmd)
 
 float CNoSpreadHitscan::CalcMantissaStep(float flV)
 {
-	// calculate the delta to the next representable value
-	float flNextValue = std::nextafter(flV, std::numeric_limits<float>::infinity());
-	float flMantissaStep = (flNextValue - flV) * 1000;
+	float flMs = float(double(flV) * 1000.0);
+	return std::nextafter(flMs, std::numeric_limits<float>::infinity()) - flMs;
+}
 
-	// get the closest mantissa (next power of 2)
-	return powf(2, ceilf(logf(flMantissaStep) / logf(2)));
+bool CNoSpreadHitscan::IsFixedSpread(CTFWeaponBase* pWeapon)
+{
+	if (pWeapon->GetBulletsPerShot(false) <= 1 || !(pWeapon->GetDamageType() & DMG_BUCKSHOT))
+		return false;
+
+	static auto tf_use_fixed_weaponspreads = H::ConVars.FindVar("tf_use_fixed_weaponspreads");
+	bool bFixed = tf_use_fixed_weaponspreads && tf_use_fixed_weaponspreads->GetBool();
+	if (auto pGameRules = I::TFGameRules())
+	{
+		if (auto pMatchDesc = pGameRules->GetMatchGroupDescription())
+			bFixed = pMatchDesc->m_bFixedWeaponSpread;
+	}
+	return bFixed || int(SDK::AttribHookValue(0.f, "fixed_shot_pattern", pWeapon));
 }
 
 std::string CNoSpreadHitscan::GetFormat(int iServerTime)
@@ -98,7 +111,6 @@ bool CNoSpreadHitscan::ParsePlayerPerf(const std::string& sMsg)
 	{
 		m_bWaitingForPlayerPerf = false;
 
-		// credits to kgb for idea
 		float flNewServerTime = std::stof(tMatch[1].str());
 		if (flNewServerTime < m_flServerTime)
 			return true;
@@ -144,63 +156,35 @@ void CNoSpreadHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* 
 	SDK::Output("CNoSpreadHitscan::Run", std::format("{}: {}", SDK::PlatFloatTime() + m_dTimeDelta, m_iSeed).c_str(), { 255, 0, 0 });
 #endif
 
-	if (!m_bSynced)
+	const int iBullets = pWeapon->GetBulletsPerShot();
+	if (iBullets <= 0)
 		return;
 
-	// credits to cathook for average spread stuff
-	float flSpread = pWeapon->GetWeaponSpread();
-	int iBulletsPerShot = pWeapon->GetBulletsPerShot();
-	float flFireRate = std::ceilf(pWeapon->GetFireRate() / TICK_INTERVAL) * TICK_INTERVAL;
+	const bool bFixed = IsFixedSpread(pWeapon);
+	if (!bFixed && !m_bSynced)
+		return;
 
-	CValve_Random* Random = new CValve_Random();
-
-	std::vector<std::pair<int,Vec3>> vBulletCorrections = {};
-	Vec3 vAverageSpread = {};
-	for (int iBullet = 0; iBullet < iBulletsPerShot; iBullet++)
+	SpreadMath::Shot_t tShot = { m_iSeed, pWeapon->GetWeaponSpread(), iBullets, bFixed };
+	if (!bFixed && TICKS_TO_TIME(pLocal->m_nTickBase()) - pWeapon->m_flLastFireTime() > (iBullets > 1 ? 0.25f : 1.25f))
 	{
-		Random->SetSeed(m_iSeed + iBullet);// SDK::RandomSeed(m_iSeed + iBullet);
-
-		if (!iBullet) // check if we'll get a guaranteed perfect shot
-		{
-			// if we are doubletapping and firerate is fast enough, prioritize later bullets
-			int iTicks = F::Ticks.GetTicks();
-			if (!iTicks || iTicks < TIME_TO_TICKS(flFireRate) * 2)
-			{
-				float flTimeSinceLastShot = I::GlobalVars->curtime - pWeapon->m_flLastFireTime();
-				if (flTimeSinceLastShot > (iBulletsPerShot > 1 ? 0.25f : 1.25f))
-					return;
-			}
-		}
-
-		const float x = Random->RandomFloat(-0.5f, 0.5f) + Random->RandomFloat(-0.5f, 0.5f);//SDK::RandomFloat(-0.5f, 0.5f) + SDK::RandomFloat(-0.5f, 0.5f);
-		const float y = Random->RandomFloat(-0.5f, 0.5f) + Random->RandomFloat(-0.5f, 0.5f);//SDK::RandomFloat(-0.5f, 0.5f) + SDK::RandomFloat(-0.5f, 0.5f);
-
-		Vec3 vForward, vRight, vUp; Math::AngleVectors(pCmd->viewangles, &vForward, &vRight, &vUp);
-		Vec3 vFixedSpread = vForward + (vRight * x * flSpread) + (vUp * y * flSpread);
-		vFixedSpread.Normalize();
-		vAverageSpread += vFixedSpread;
-
-		vBulletCorrections.push_back( { iBullet, vFixedSpread } );
+		tShot.m_flFirstRange = SDK::AttribHookValue(0.f, "mult_spread_scale_first_shot", pWeapon);
+		tShot.m_bFirstPerfect = !tShot.m_flFirstRange;
 	}
-	delete(Random);
-	vAverageSpread /= static_cast<float>(iBulletsPerShot);
 
-	const auto cFixedSpread = std::ranges::min_element(vBulletCorrections,
-		[&](const std::pair<int,Vec3>& lhs, const std::pair<int,Vec3>& rhs)
-		{
-			return lhs.second.DistToSqr(vAverageSpread) < rhs.second.DistToSqr(vAverageSpread);
-		});
+	const Vec3 vPunch = pLocal->m_vecPunchAngle();
+	const Vec3 vShotAngles = pCmd->viewangles + vPunch;
 
-	if (cFixedSpread == vBulletCorrections.end() && iBulletsPerShot > 1)
+	auto vPellets = SpreadMath::GetPellets(tShot);
+	m_iPredictionBullet = SpreadMath::ChoosePellet(vPellets, vShotAngles, tShot.m_bFirstPerfect);
+
+	const auto& tPellet = vPellets[m_iPredictionBullet];
+	if (!tPellet.m_flRight && !tPellet.m_flUp)
 		return;
 
-	Vec3 vFixedAngles = Math::VectorAngles((*cFixedSpread).second);
-
-	pCmd->viewangles += pCmd->viewangles - vFixedAngles;
+	Vec3 vForward; Math::AngleVectors(vShotAngles, &vForward);
+	pCmd->viewangles = SpreadMath::SolveAngles(vForward, tPellet, vShotAngles.z, vShotAngles.x) - vPunch;
 	Math::ClampAngles(pCmd->viewangles);
 
-	m_iPredictionBullet = (*cFixedSpread).first;
-	
 	G::SilentAngles = true;
 }
 

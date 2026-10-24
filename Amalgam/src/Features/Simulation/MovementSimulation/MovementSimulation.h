@@ -75,6 +75,10 @@ struct TrajectoryCache
 	Vec3 m_vRequestedOrigin = {};
 	bool m_bRequestedOrigin = false;
 	bool m_bPredict = true;
+	bool m_bStrafe = true;
+	bool m_bHitchance = true;
+	bool m_bInitResult = true;
+	int m_iInitTicks = 0;
 	Vec3 m_vInitialOrigin = {};
 	Vec3 m_vInitialVelocity = {};
 	bool m_bFailed = false;
@@ -98,6 +102,9 @@ private:
 	void GetAverageYaw(MoveStorage& tMoveStorage, int iSamples);
 	InputEstimate GetInputEstimate(MoveStorage& tMoveStorage, int iMode, int iSamples);
 	bool StrafePrediction(MoveStorage& tMoveStorage, bool bStrafe = true, bool bHitchance = false);
+
+	static constexpr int MaxChokeTicks = 33;
+	static constexpr int MaxLatencyTicks = 66;
 
 	void SetBounds(CTFPlayer* pPlayer);
 	void RestoreBounds(CTFPlayer* pPlayer);
@@ -127,6 +134,8 @@ public:
 	int GetStrafeSamples(int iBaseSamples) const;
 	int GetSubstep(int iCurrentSimTick) const;
 	int GetMaxTargetCandidates(int iConfiguredMax) const;
+	int GetChoke(int iIndex) const;
+	int GetLatency(int iLeadTicks, int iChoke) const;
 	void ClearCache();
 };
 

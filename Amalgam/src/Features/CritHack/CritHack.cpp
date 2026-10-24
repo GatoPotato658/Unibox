@@ -47,8 +47,10 @@ bool CCritHack::IsCritSeed(int iSeed, CTFWeaponBase* pWeapon, bool bCrit, bool b
 		int iLower, iUpper;
 		if (m_bMelee)
 			iLower = 1500, iUpper = 6000;
+		else if (pWeapon->IsRapidFire())
+			iLower = 102, iUpper = 435;
 		else
-			iLower = 100, iUpper = 800;
+			iLower = 200, iUpper = 800;
 		iLower *= m_flMultCritChance, iUpper *= m_flMultCritChance;
 
 		if (bCrit ? iLower >= 0 : iUpper < WEAPON_RANDOM_RANGE)
@@ -78,8 +80,8 @@ void CCritHack::UpdateWeaponInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		m_flCritChance = TF_DAMAGE_CRIT_CHANCE_MELEE * pLocal->GetCritMult();
 	else if (pWeapon->IsRapidFire())
 	{
-		m_flCritChance = TF_DAMAGE_CRIT_CHANCE_RAPID * pLocal->GetCritMult();
-		float flNonCritDuration = (TF_DAMAGE_CRIT_DURATION_RAPID / m_flCritChance) - TF_DAMAGE_CRIT_DURATION_RAPID;
+		float flTotalCritChance = std::clamp(TF_DAMAGE_CRIT_CHANCE_RAPID * pLocal->GetCritMult(), 0.01f, 0.99f);
+		float flNonCritDuration = (TF_DAMAGE_CRIT_DURATION_RAPID / flTotalCritChance) - TF_DAMAGE_CRIT_DURATION_RAPID;
 		m_flCritChance = 1.f / flNonCritDuration;
 	}
 	else
@@ -130,7 +132,8 @@ void CCritHack::UpdateWeaponInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	float flMult = m_bMelee ? 0.5f : Math::RemapVal(float(iCritSeedRequests + 1) / (iCritChecks + 1), 0.1f, 1.f, 1.f, 3.f);
 	float flCost = flDamage * TF_DAMAGE_CRIT_MULTIPLIER;
 
-	int iPotentialCrits = (std::max(flBucketCap, flBucket) - flBaseDamage) / (TF_DAMAGE_CRIT_MULTIPLIER * flDamage / (m_bMelee ? 2 : 1) - flBaseDamage);
+	float flDivisor = TF_DAMAGE_CRIT_MULTIPLIER * flDamage / (m_bMelee ? 2.f : 1.f) - flBaseDamage;
+	int iPotentialCrits = flDivisor > 0.f ? (std::max(flBucketCap, flBucket) - flBaseDamage) / flDivisor : 0;
 	int iAvailableCrits = 0;
 	{
 		int iTestShots = iCritChecks, iTestCrits = iCritSeedRequests;
@@ -307,7 +310,7 @@ int CCritHack::GetCritRequest(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* 
 {
 	bool bCanCrit = m_iAvailableCrits > 0 && !m_bCritBanned;
 
-	bool bForce = bCanCrit && Vars::CritHack::ForceCrits.Value;
+	bool bForce = bCanCrit && (Vars::CritHack::ForceCrits.Value || m_bForce);
 	if (bCanCrit && m_bMelee && Vars::CritHack::AlwaysMeleeCrit.Value
 		&& (Vars::Aimbot::General::AutoShoot.Value ? pCmd->buttons & IN_ATTACK && !(G::OriginalCmd.buttons & IN_ATTACK) : Vars::Aimbot::General::AimType.Value)
 		&& G::AimTarget.m_iEntIndex)
@@ -410,10 +413,12 @@ int CCritHack::PredictCmdNum(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd
 	static int iCommandNumber = 0; // cache, don't constantly test
 
 	static int iStaticCommand = 0;
-	if (pCmd->command_number != iStaticCommand)
+	static CTFWeaponBase* pStaticWeapon = nullptr;
+	if (pCmd->command_number != iStaticCommand || pWeapon != pStaticWeapon)
 	{
 		iCommandNumber = fGetCmdNum(pCmd->command_number);
 		iStaticCommand = pCmd->command_number;
+		pStaticWeapon = pWeapon;
 	}
 
 	return iCommandNumber;
@@ -429,7 +434,7 @@ bool CCritHack::ShouldForceEffects(CTFPlayer* pLocal)
 		return false;
 
 	float flTickBase = TICKS_TO_TIME(pLocal->m_nTickBase());
-	return Vars::CritHack::ForceCrits.Value && !m_bCritBanned && m_iAvailableCrits > 0 || pWeapon->m_flCritTime() > flTickBase;
+	return (Vars::CritHack::ForceCrits.Value || m_bForce) && !m_bCritBanned && m_iAvailableCrits > 0 || pWeapon->m_flCritTime() > flTickBase;
 }
 
 void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
@@ -443,7 +448,7 @@ void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
 
 		int iVictim = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
 		int iAttacker = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("attacker"));
-		bool bCrit = pEvent->GetBool("crit") || pEvent->GetBool("minicrit");
+		bool bCrit = pEvent->GetBool("crit");
 		int iDamage = pEvent->GetInt("damageamount");
 		int iHealth = pEvent->GetInt("health");
 		int iWeaponID = pEvent->GetInt("weaponid");
@@ -539,6 +544,7 @@ void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
 	}
 	case FNV1A::Hash32Const("scorestats_accumulated_update"):
 	case FNV1A::Hash32Const("mvm_reset_stats"):
+	case FNV1A::Hash32Const("teamplay_round_start"):
 	{
 		m_iRangedDamage = m_iCritDamage = m_iMeleeDamage = 0;
 		return;

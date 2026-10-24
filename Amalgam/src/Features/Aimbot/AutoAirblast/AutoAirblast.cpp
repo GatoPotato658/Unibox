@@ -49,6 +49,8 @@ void CAutoAirblast::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 	if (!(Vars::Aimbot::Projectile::AutoAirblast.Value & Vars::Aimbot::Projectile::AutoAirblastEnum::Enabled) || !G::CanSecondaryAttack)
 		return;
 
+	PROJ_FRAME("AutoAirblast", pWeapon ? pWeapon->GetWeaponID() : -1);
+
 	const int iWeaponID = pWeapon->GetWeaponID();
 	if (iWeaponID != TF_WEAPON_FLAMETHROWER && iWeaponID != TF_WEAPON_FLAME_BALL || SDK::AttribHookValue(0, "airblast_disabled", pWeapon))
 		return;

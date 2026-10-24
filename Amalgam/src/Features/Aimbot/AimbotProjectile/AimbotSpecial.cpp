@@ -176,6 +176,8 @@ bool CAimbotProjectile::SolveAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, 
 
 bool CAimbotProjectile::RunZombieAbility(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
+	PROJ_FRAME("ZombieAbility", pWeapon ? pWeapon->GetWeaponID() : -1);
+
 	auto& tState = m_tZombie;
 	if (!pWeapon || pLocal->m_iTeamNum() != TF_TEAM_BLUE || !Vars::Aimbot::Zombie::Abilities.Value || !Vars::Aimbot::General::AimType.Value
 		|| !pLocal->IsAlive() || pLocal->IsAGhost() || !IsZombieMap())

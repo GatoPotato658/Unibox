@@ -35,12 +35,12 @@ void CNoSpreadProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		for (int i = 0; i < 6; ++i)
 			SDK::RandomFloat();
 
+		const float flCurTime = TICKS_TO_TIME(pLocal->m_nTickBase());
 		Vec3 vAngAdd = pLocal->EyeAngles() - pWeapon->GetSpreadAngles();
 		switch (pWeapon->GetWeaponID())
 		{
 		case TF_WEAPON_COMPOUND_BOW:
-			if (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f
-				&& I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > TF_ARROW_MAX_CHARGE_TIME)
+			if (flCurTime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() >= TF_ARROW_MAX_CHARGE_TIME)
 			{
 				vAngAdd.x -= float(SDK::RandomInt()) / VALVE_RAND_MAX * 12.f - 6.f;
 				vAngAdd.y -= float(SDK::RandomInt()) / VALVE_RAND_MAX * 12.f - 6.f;
@@ -59,13 +59,17 @@ void CNoSpreadProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 				flSpeed = SDK::AttribHookValue(pLocal->InCond(TF_COND_RUNE_PRECISION) ? 3000.f : SDK::AttribHookValue(1200.f, "mult_projectile_speed", pWeapon), "mult_projectile_range", pWeapon);
 			else
 			{
-				float flCharge = (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f ? I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() : 0.f);
-				flSpeed = SDK::AttribHookValue(Math::RemapVal(flCharge, 0.f, SDK::AttribHookValue(4.f, "stickybomb_charge_rate", pWeapon), 900.f, 2400.f), "mult_projectile_range", pWeapon);
+				float flElapsed = flCurTime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime();
+				float flChargeTime = SDK::AttribHookValue(4.f, "stickybomb_charge_rate", pWeapon);
+				float flCharge = flChargeTime != 0.f ? std::clamp(flElapsed / flChargeTime, 0.f, 1.f) : flElapsed >= 0.f ? 1.f : 0.f;
+				flSpeed = SDK::AttribHookValue(900.f + flCharge * 1500.f, "mult_projectile_range", pWeapon);
 			}
 
 			Vec3 vForward, vRight, vUp; Math::AngleVectors(pCmd->viewangles, &vForward, &vRight, &vUp);
 			Vec3 vVelocity = vForward * flSpeed + vUp * 200.f;
-			Vec3 vAdjusted = vVelocity + vUp * SDK::RandomFloat(-10.f, 10.f) + vRight * SDK::RandomFloat(-10.f, 10.f);
+			float flUpRandom = SDK::RandomFloat(-10.f, 10.f);
+			float flRightRandom = SDK::RandomFloat(-10.f, 10.f);
+			Vec3 vAdjusted = vVelocity + vUp * flUpRandom + vRight * flRightRandom;
 
 			vAngAdd -= Math::VectorAngles(vAdjusted) - Math::VectorAngles(vVelocity);
 		}
