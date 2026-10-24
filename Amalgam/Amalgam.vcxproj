@@ -1,77 +1,41 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="DebugAVX2|Win32">
-      <Configuration>DebugAVX2</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="DebugAVX2|x64">
       <Configuration>DebugAVX2</Configuration>
       <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="DebugFreetypeAVX2|Win32">
-      <Configuration>DebugFreetypeAVX2</Configuration>
-      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="DebugFreetypeAVX2|x64">
       <Configuration>DebugFreetypeAVX2</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="DebugFreetype|Win32">
-      <Configuration>DebugFreetype</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="DebugFreetype|x64">
       <Configuration>DebugFreetype</Configuration>
       <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseAVX2|Win32">
-      <Configuration>ReleaseAVX2</Configuration>
-      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseAVX2|x64">
       <Configuration>ReleaseAVX2</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseFreetypeAVX2|Win32">
-      <Configuration>ReleaseFreetypeAVX2</Configuration>
-      <Platform>Win32</Platform>
+    <ProjectConfiguration Include="ReleaseLocalAVX2|x64">
+      <Configuration>ReleaseLocalAVX2</Configuration>
+      <Platform>x64</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseFreetypeAVX2|x64">
       <Configuration>ReleaseFreetypeAVX2</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseFreetype|Win32">
-      <Configuration>ReleaseFreetype</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseFreetype|x64">
       <Configuration>ReleaseFreetype</Configuration>
       <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseTextmodeAVX2|Win32">
-      <Configuration>ReleaseTextmodeAVX2</Configuration>
-      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseTextmodeAVX2|x64">
       <Configuration>ReleaseTextmodeAVX2</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseTextmode|Win32">
-      <Configuration>ReleaseTextmode</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseTextmode|x64">
       <Configuration>ReleaseTextmode</Configuration>
       <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -79,6 +43,10 @@
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseLocal|x64">
+      <Configuration>ReleaseLocal</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
@@ -90,76 +58,6 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>false</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -195,6 +93,13 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocal|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
@@ -210,6 +115,13 @@
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocalAVX2|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
@@ -238,36 +150,6 @@
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -283,6 +165,9 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseLocal|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -290,6 +175,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocalAVX2|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|x64'" Label="PropertySheets">
@@ -334,6 +222,13 @@
     <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocal|x64'">
+    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
+    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
+    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|x64'">
     <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
     <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
@@ -354,6 +249,13 @@
     <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocalAVX2|x64'">
+    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
+    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
+    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|x64'">
     <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
     <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
@@ -367,420 +269,6 @@
     <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|Win32'">
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(VC_ReferencesPath_x64);</ReferencePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
-    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);$(VC_LibraryPath_x64)</ExcludePath>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="Debug";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <Optimization>MaxSpeed</Optimization>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <StringPooling>true</StringPooling>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <OmitFramePointers />
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="DebugFreetype";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <Optimization>MaxSpeed</Optimization>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <StringPooling>true</StringPooling>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="DebugAVX2";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <Optimization>MaxSpeed</Optimization>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <StringPooling>true</StringPooling>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="DebugFreetypeAVX2";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <Optimization>MaxSpeed</Optimization>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <StringPooling>true</StringPooling>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="Release";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <OmitFramePointers />
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;TEXTMODE;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="ReleaseTextmode";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="ReleaseFreetype";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="ReleaseAVX2";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;TEXTMODE;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="ReleaseTextmodeAVX2";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="ReleaseFreetypeAVX2";__PLATFORM__="Win32";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -943,6 +431,41 @@
       </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocal|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="ReleaseLocal";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+      <AdditionalOptions>/Gw %(AdditionalOptions)</AdditionalOptions>
+      <OmitFramePointers>
+      </OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode>
+      </SupportJustMyCode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalOptions>/LTCG:INCREMENTAL /cgthreads:8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -1026,6 +549,41 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLocalAVX2|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="ReleaseLocalAVX2";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+      <AdditionalOptions>/Gw %(AdditionalOptions)</AdditionalOptions>
+      <OmitFramePointers>
+      </OmitFramePointers>
+      <StringPooling>true</StringPooling>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode>
+      </SupportJustMyCode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalOptions>/LTCG:INCREMENTAL /cgthreads:8 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
     </Link>
