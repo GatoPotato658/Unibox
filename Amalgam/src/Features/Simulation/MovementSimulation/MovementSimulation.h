@@ -75,6 +75,10 @@ struct TrajectoryCache
 	Vec3 m_vRequestedOrigin = {};
 	bool m_bRequestedOrigin = false;
 	bool m_bPredict = true;
+	bool m_bStrafe = true;
+	bool m_bHitchance = true;
+	bool m_bInitResult = true;
+	int m_iInitTicks = 0;
 	Vec3 m_vInitialOrigin = {};
 	Vec3 m_vInitialVelocity = {};
 	bool m_bFailed = false;

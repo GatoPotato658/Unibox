@@ -327,7 +327,7 @@ static inline bool ShouldLob(Info_t& tInfo)
 
 static inline bool ShouldLob(MoveStorage& tMoveStorage, Info_t& tInfo)
 {
-	return tInfo.m_bIgnoreTiming && (tMoveStorage.m_bFailed || tMoveStorage.m_pPlayer->IsOnGround());
+	return tInfo.m_bIgnoreTiming && (tMoveStorage.m_bFailed || (tMoveStorage.m_bCached ? tMoveStorage.m_bDirectMove : tMoveStorage.m_pPlayer->IsOnGround()));
 }
 
 static inline bool AirSplash(CTFWeaponBase* pWeapon, Info_t& tInfo)
@@ -713,6 +713,7 @@ void CAimbotProjectile::SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& v
 		: !m_tInfo.m_flGravity ? Vars::Aimbot::Projectile::SplashPointsDirect.Value : Vars::Aimbot::Projectile::SplashPointsArc.Value;
 	{
 		auto vPoints = ComputePoints(flRadius, iPoints);
+		bool bAirCenter = false;
 
 		for (int i = 0; i < vPoints.size(); i++)
 		{
@@ -742,8 +743,12 @@ void CAimbotProjectile::SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& v
 					{
 						if (!Vars::Aimbot::Projectile::SplashAirCount.Value)
 							vSplashPoints.emplace_back(vPoints[i] * SDK::StdRandomFloat() + vTargetCenter, PointTypeEnum::Air);
-						else for (float r = i ? 1.f : 0.f; r < Vars::Aimbot::Projectile::SplashAirCount.Value; r++)
-							vSplashPoints.emplace_back(vPoints[i] * r / Vars::Aimbot::Projectile::SplashAirCount.Value + vTargetCenter, PointTypeEnum::Air);
+						else
+						{
+							for (float r = bAirCenter ? 1.f : 0.f; r < Vars::Aimbot::Projectile::SplashAirCount.Value; r++)
+								vSplashPoints.emplace_back(vPoints[i] * r / Vars::Aimbot::Projectile::SplashAirCount.Value + vTargetCenter, PointTypeEnum::Air);
+							bAirCenter = true;
+						}
 					}
 					return Vars::Aimbot::Projectile::SplashMode.Value == Vars::Aimbot::Projectile::SplashModeEnum::Face && i || !trace.DidHit();
 				};

@@ -231,6 +231,8 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 			&& it->second.m_iTickCount == I::GlobalVars->tickcount
 			&& it->second.m_flSimulationTime == pPlayer->m_flSimulationTime()
 			&& it->second.m_bPredict == bPredict
+			&& it->second.m_bStrafe == bStrafe
+			&& it->second.m_bHitchance == bHitchance
 			&& it->second.m_bRequestedOrigin == (pvOrigin != nullptr)
 			&& (!pvOrigin || it->second.m_vRequestedOrigin == *pvOrigin)
 			&& (it->second.m_bFailed || !it->second.m_vTicks.empty()))
@@ -249,9 +251,19 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 			tMoveStorage.m_MoveData.m_vecVelocity = it->second.m_vInitialVelocity;
 			tMoveStorage.m_vPredictedOrigin = it->second.m_vInitialOrigin;
 			tMoveStorage.m_vPath = { it->second.m_vInitialOrigin };
-			return !it->second.m_bFailed;
+			if (it->second.m_bFailed)
+				return it->second.m_bInitResult;
+
+			for (int i = 0; i < it->second.m_iInitTicks; i++)
+				RunTick(tMoveStorage);
+			return true;
 		}
 	}
+
+	tMoveStorage.m_bCached = false;
+	tMoveStorage.m_bFailed = false;
+	tMoveStorage.m_iTick = 0;
+	tMoveStorage.m_iSubstepCounter = 0;
 
 	m_bOldInPrediction = I::Prediction->m_bInPrediction;
 	m_bOldFirstTimePredicted = I::Prediction->m_bFirstTimePredicted;
@@ -298,7 +310,10 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 			cache.m_vRequestedOrigin = pvOrigin ? *pvOrigin : Vec3();
 			cache.m_bRequestedOrigin = pvOrigin != nullptr;
 			cache.m_bPredict = bPredict;
+			cache.m_bStrafe = bStrafe;
+			cache.m_bHitchance = bHitchance;
 			cache.m_bFailed = true;
+			cache.m_bInitResult = true;
 		}
 		return true;
 	}
@@ -314,7 +329,10 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 			cache.m_vRequestedOrigin = pvOrigin ? *pvOrigin : Vec3();
 			cache.m_bRequestedOrigin = pvOrigin != nullptr;
 			cache.m_bPredict = bPredict;
+			cache.m_bStrafe = bStrafe;
+			cache.m_bHitchance = bHitchance;
 			cache.m_bFailed = true;
+			cache.m_bInitResult = false;
 		}
 		return false;
 	}
@@ -328,6 +346,10 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 		cache.m_vRequestedOrigin = pvOrigin ? *pvOrigin : Vec3();
 		cache.m_bRequestedOrigin = pvOrigin != nullptr;
 		cache.m_bPredict = bPredict;
+		cache.m_bStrafe = bStrafe;
+		cache.m_bHitchance = bHitchance;
+		cache.m_bInitResult = true;
+		cache.m_iInitTicks = bPredict ? H::Entities.GetChoke(pPlayer->entindex()) : 0;
 		cache.m_vInitialOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
 		cache.m_vInitialVelocity = tMoveStorage.m_MoveData.m_vecVelocity;
 		cache.m_bFailed = false;
@@ -754,7 +776,8 @@ InputEstimate CMovementSimulation::GetInputEstimate(MoveStorage& tMoveStorage, i
 	tEstimate.m_flKeyOffset = bUseKey ? flSnapped : 0.f;
 	tEstimate.m_bKeyInput = bUseKey;
 
-	SDK::Output("MovementSimulation", std::format("input alpha {} ({}%) key {} ({}%) rate {} -> {}{}", flAlpha, int(flAlphaResultant * 100), flKey, int(flKeyResultant * 100), flRate, bUseKey ? "key" : "alpha", bLocal ? " (local)" : "").c_str(), { 100, 255, 150 }, Vars::Debug::Logging.Value);
+	if (Vars::Debug::Logging.Value)
+		SDK::Output("MovementSimulation", std::format("input alpha {} ({}%) key {} ({}%) rate {} -> {}{}", flAlpha, int(flAlphaResultant * 100), flKey, int(flKeyResultant * 100), flRate, bUseKey ? "key" : "alpha", bLocal ? " (local)" : "").c_str(), { 100, 255, 150 }, Vars::Debug::Logging.Value);
 	return tEstimate;
 }
 
@@ -833,7 +856,8 @@ void CMovementSimulation::GetAverageYaw(MoveStorage& tMoveStorage, int iSamples)
 		return;
 
 	tMoveStorage.m_flAverageYaw = flAverageYaw;
-	SDK::Output("MovementSimulation", std::format("flAverageYaw calculated to {} from {} ({}){}", flAverageYaw, iTicks, iMinimum, bLocal ? " (local)" : "").c_str(), { 100, 255, 150 }, Vars::Debug::Logging.Value);
+	if (Vars::Debug::Logging.Value)
+		SDK::Output("MovementSimulation", std::format("flAverageYaw calculated to {} from {} ({}){}", flAverageYaw, iTicks, iMinimum, bLocal ? " (local)" : "").c_str(), { 100, 255, 150 }, Vars::Debug::Logging.Value);
 }
 
 bool CMovementSimulation::StrafePrediction(MoveStorage& tMoveStorage, bool bStrafe, bool bHitchance)
@@ -910,7 +934,8 @@ bool CMovementSimulation::StrafePrediction(MoveStorage& tMoveStorage, bool bStra
 
 			if (flCurrentChance < Vars::Aimbot::Projectile::HitChance.Value / 100)
 			{
-				SDK::Output("MovementSimulation", std::format("Hitchance ({}% < {}%)", flCurrentChance * 100, Vars::Aimbot::Projectile::HitChance.Value).c_str(), { 80, 200, 120 }, Vars::Debug::Logging.Value);
+				if (Vars::Debug::Logging.Value)
+					SDK::Output("MovementSimulation", std::format("Hitchance ({}% < {}%)", flCurrentChance * 100, Vars::Aimbot::Projectile::HitChance.Value).c_str(), { 80, 200, 120 }, Vars::Debug::Logging.Value);
 				return false;
 			}
 		}
