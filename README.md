@@ -12,7 +12,6 @@
   [![Download AVX2](.github/assets/download_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseAVX2.zip)
   [![PDB AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseAVX2PDB.zip)
   <br>
-  <br>
   [![Textmode](.github/assets/textmode.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmode.zip)
   [![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodePDB.zip)
   [![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2.zip)
