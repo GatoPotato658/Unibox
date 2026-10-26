@@ -529,7 +529,6 @@ void CNamedPipe::ConnectAndMaintainPipe()
 				if (dwBytesRead > 0)
 				{
 					sReadBuffer.append(cBuffer, dwBytesRead);
-					// F::NamedPipe.Log("Received chunk: " + std::string(cBuffer, dwBytesRead));
 
 					size_t pos = 0;
 					size_t newlinePos;
@@ -548,7 +547,6 @@ void CNamedPipe::ConnectAndMaintainPipe()
 						if (sLine.empty())
 							continue;
 
-						// F::NamedPipe.Log("Processing line: " + sLine);
 						if (!sLine.empty() && sLine.back() == '\r')
 							sLine.pop_back();
 
@@ -832,29 +830,6 @@ std::vector<Vector> CNamedPipe::GetReservedCaptureSpots(const std::string& sMap,
 		vReserved.push_back(reservation.m_vSpot);
 	}
 	return vReserved;
-}
-
-std::vector<int> CNamedPipe::GetOtherBotsOnServer(std::string sServerIP)
-{
-	std::vector<int> vBotIds;
-	if (sServerIP == "N/A" || sServerIP.empty())
-		return vBotIds;
-
-	std::lock_guard lock(m_otherBotsMutex);
-	double flNow = GetNowSeconds();
-	for (auto it = m_mOtherBots.begin(); it != m_mOtherBots.end();)
-	{
-		if (flNow - it->second.m_flLastUpdate > 30.0) // 30 second timeout
-		{
-			it = m_mOtherBots.erase(it);
-			continue;
-		}
-
-		if (it->second.m_sServerIP == sServerIP)
-			vBotIds.push_back(it->second.m_iBotId);
-		++it;
-	}
-	return vBotIds;
 }
 
 void CNamedPipe::ProcessLocalBotMessage(std::string sContent)

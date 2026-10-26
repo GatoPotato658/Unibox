@@ -1,5 +1,6 @@
 #include "Glow.h"
 
+#include "../Visuals.h"
 #include "../Groups/Groups.h"
 #include "../Materials/Materials.h"
 #include "../FakeAngle/FakeAngle.h"
@@ -255,63 +256,6 @@ void CGlow::RenderSecond()
 	End();
 }
 
-void CGlow::RenderBacktrack(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
-{
-	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
-	if (!pEntityBase)
-		return;
-
-	auto pEntity = pEntityBase->As<CTFPlayer>();
-	if (!pEntity || !pEntity->IsPlayer())
-		return;
-
-	std::vector<TickRecord*> vRecords = {};
-	if (!F::Backtrack.GetRecords(pEntity, vRecords))
-		return;
-
-	vRecords = F::Backtrack.GetValidRecords(vRecords);
-	if (!vRecords.size())
-		return;
-
-	bool bDrawLast = m_iFlags & BacktrackEnum::Last;
-	bool bDrawFirst = m_iFlags & BacktrackEnum::First;
-
-	float flOriginalBlend = I::RenderView->GetBlend();
-	auto fDrawModel = [&](Vec3& vOrigin, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld, float flBlend)
-	{
-		if (!SDK::IsOnScreen(pEntity, vOrigin))
-			return;
-
-		I::RenderView->SetBlend(flBlend * flOriginalBlend);
-		static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
-		IVModelRender_DrawModelExecute->As<DrawModelExecuteFn>()(pModelRender, pState, pInfo, pBoneToWorld);
-	};
-
-	Vector vEntityOrigin = pEntity->GetAbsOrigin();
-	if (!bDrawLast && !bDrawFirst)
-	{
-		for (auto pRecord : vRecords)
-		{
-			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
-				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
-		}
-	}
-	else
-	{
-		if (bDrawLast)
-		{
-			auto pRecord = vRecords.back();
-			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
-				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
-		}
-		if (bDrawFirst)
-		{
-			auto pRecord = vRecords.front();
-			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
-				fDrawModel(pRecord->m_vOrigin, pState, pInfo, pRecord->m_aBones, flBlend);
-		}
-	}
-}
 void CGlow::RenderFakeAngle(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
 {
 	static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
@@ -327,7 +271,7 @@ void CGlow::RenderHandler(IVModelRender* pModelRender, const DrawModelState_t& p
 	else
 	{
 		if (pInfo.entity_index != I::EngineClient->GetLocalPlayer())
-			RenderBacktrack(pModelRender, pState, pInfo);
+			RenderBacktrackModel(pModelRender, pState, pInfo, m_iFlags);
 		else
 			RenderFakeAngle(pModelRender, pState, pInfo);
 	}

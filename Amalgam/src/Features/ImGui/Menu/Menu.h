@@ -51,7 +51,6 @@ public:
 	{
 		std::string m_sTitle;
 		std::string m_sMessage;
-		bool m_bVisible;
 	};
 	std::vector<Notification_t> m_vNotifications;
 	std::vector<Notification_t> m_vDeferredNotifications;

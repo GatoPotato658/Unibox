@@ -100,6 +100,7 @@ private:
 	std::vector<int> m_vDummy = {};
 	std::string ResolveAccountName(uint32_t uAccountID, const std::string& sAlias) const;
 	std::string ResolveAccountName(uint32_t uAccountID) const;
+	int GetPriorityByType(uint32_t uAccountID, PriorityTypeEnum::PriorityTypeEnum eType);
 
 public:
 	void Store();
@@ -135,10 +136,6 @@ public:
 	void RemoveTag(uint32_t uAccountID, int iID, bool bSave = true, const char* sName = nullptr);
 	void RemoveTag(int iIndex, int iID, bool bSave, const char* sName, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags);
 	void RemoveTag(int iIndex, int iID, bool bSave = true, const char* sName = nullptr);
-	bool HasTags(uint32_t uAccountID, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags);
-	bool HasTags(uint32_t uAccountID);
-	bool HasTags(int iIndex, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags);
-	bool HasTags(int iIndex);
 	bool HasTag(uint32_t uAccountID, int iID, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags);
 	bool HasTag(uint32_t uAccountID, int iID);
 	bool HasTag(int iIndex, int iID, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags);
@@ -160,9 +157,7 @@ public:
 	int GetNameType(int iIndex);
 	int GetNameType(uint32_t uAccountID);
 	const char* GetPlayerName(int iIndex, const char* sDefault, int* pType = nullptr);
-	const char* GetPlayerName(uint32_t uAccountID, const char* sDefault, int* pType = nullptr);
 	const char* GetPlayerName(int iIndex);
-	const char* GetPlayerName(uint32_t uAccountID);
 
 	std::vector<int>& GetPlayerTags(uint32_t uAccountID) { return m_mPlayerTags.contains(uAccountID) ? m_mPlayerTags[uAccountID] : m_vDummy; }
 	std::string* GetPlayerAlias(uint32_t uAccountID) { return m_mPlayerAliases.contains(uAccountID) ? &m_mPlayerAliases[uAccountID] : nullptr; }
@@ -171,7 +166,6 @@ public:
 	const CheaterRecord_t* GetCheaterRecord(uint32_t uAccountID) const { return m_mCheaterRecords.contains(uAccountID) ? &m_mCheaterRecords.at(uAccountID) : nullptr; }
 	bool HasCheaterRecord(uint32_t uAccountID) const { return m_mCheaterRecords.contains(uAccountID); }
 	void UpdateCheaterRecord(uint32_t uAccountID, const char* sName, const char* sReason, int iDetections, bool bAuto);
-	void RemoveCheaterRecord(uint32_t uAccountID, bool bMarkSave = true);
 	std::vector<std::pair<uint32_t, CheaterRecord_t>> GetCheaterVector();
 	bool ImportCheatersFromJson(const std::string& sJson, bool bMarkDirty);
 	std::string ExportCheatersToJson() const;

@@ -5,6 +5,59 @@
 #include "../Misc.h"
 #include "../NamedPipe/NamedPipe.h"
 
+static bool RunMvMQueue(bool bEnabled, ETFMatchGroup eMatchGroup, bool (*pfnApplyCriteria)())
+{
+	const bool bMannUp = eMatchGroup == k_eTFMatchGroup_MvM_MannUp;
+	static bool bWasMannUpEnabled = false;
+	static float flLastQueueTimeMannUp = 0.f;
+	static bool bQueuedOnceMannUp = false;
+	static bool bWasBootCampEnabled = false;
+	static float flLastQueueTimeBootCamp = 0.f;
+	static bool bQueuedOnceBootCamp = false;
+
+	if (!bEnabled)
+	{
+		bool& bWasEnabled = bMannUp ? bWasMannUpEnabled : bWasBootCampEnabled;
+		if (bWasEnabled)
+		{
+			if (bMannUp)
+				F::MvmQueue.ClearMannUpCriteria();
+			else
+				F::MvmQueue.ClearBootcampCriteria();
+			bWasEnabled = false;
+		}
+		return false;
+	}
+
+	float& flLastQueueTime = bMannUp ? flLastQueueTimeMannUp : flLastQueueTimeBootCamp;
+	bool& bQueuedOnce = bMannUp ? bQueuedOnceMannUp : bQueuedOnceBootCamp;
+	bool& bWasEnabled = bMannUp ? bWasMannUpEnabled : bWasBootCampEnabled;
+	bWasEnabled = true;
+	if (I::TFPartyClient->BInQueueForMatchGroup(eMatchGroup))
+		return false;
+
+	const bool bInGame = I::EngineClient->IsInGame();
+	const bool bIsLoadingMap = I::EngineClient->IsDrawingLoadingImage();
+	if (bIsLoadingMap && Vars::Misc::Queueing::RQLTM.Value)
+		return true;
+
+	const float flQueueDelay = Vars::Misc::Queueing::QueueDelay.Value == 0 ? 20.0f : Vars::Misc::Queueing::QueueDelay.Value * 60.0f;
+	const float flCurrentTime = I::GlobalVars->realtime;
+	bool bShouldQueue = !bQueuedOnce || (flCurrentTime - flLastQueueTime >= flQueueDelay);
+	if (!I::EngineClient->IsConnected() && !bIsLoadingMap)
+		bShouldQueue = true;
+
+	if (bShouldQueue && (!bIsLoadingMap || !Vars::Misc::Queueing::RQLTM.Value) && !bInGame)
+	{
+		pfnApplyCriteria();
+		I::TFPartyClient->RequestQueueForMatch(eMatchGroup);
+		flLastQueueTime = flCurrentTime;
+		bQueuedOnce = true;
+	}
+
+	return false;
+}
+
 void CAutoQueue::Run()
 {
 	static float flLastQueueTime = 0.0f;
@@ -112,83 +165,10 @@ void CAutoQueue::Run()
 			m_bAutoDumpedThisMatch = false;
 	}
 
-	// Auto Mann Up queue
-	static bool bWasMannUpEnabled = false;
-	if (!Vars::Misc::Queueing::AutoMannUpQueue.Value)
-	{
-		if (bWasMannUpEnabled)
-		{
-			F::MvmQueue.ClearMannUpCriteria();
-			bWasMannUpEnabled = false;
-		}
-	}
-	else
-	{
-		bWasMannUpEnabled = true;
-		if (!I::TFPartyClient->BInQueueForMatchGroup(k_eTFMatchGroup_MvM_MannUp))
-		{
-			bool bInGame = I::EngineClient->IsInGame();
-			bool bIsLoadingMap = I::EngineClient->IsDrawingLoadingImage();
-			if (bIsLoadingMap && Vars::Misc::Queueing::RQLTM.Value)
-				return;
-
-			float flQueueDelay = Vars::Misc::Queueing::QueueDelay.Value == 0 ? 20.0f : Vars::Misc::Queueing::QueueDelay.Value * 60.0f;
-
-			static float flLastQueueTimeMannUp = 0.0f;
-			static bool bQueuedOnceMannUp = false;
-
-			bool bShouldQueue = !bQueuedOnceMannUp || (flCurrentTime - flLastQueueTimeMannUp >= flQueueDelay);
-			if (!bIsConnectedNow && !bIsLoadingMap)
-				bShouldQueue = true;
-
-			if (bShouldQueue && (!bIsLoadingMap || !Vars::Misc::Queueing::RQLTM.Value) && !bInGame)
-			{
-				F::MvmQueue.ApplyMannUpCriteria();
-				I::TFPartyClient->RequestQueueForMatch(k_eTFMatchGroup_MvM_MannUp);
-				flLastQueueTimeMannUp = flCurrentTime;
-				bQueuedOnceMannUp = true;
-			}
-		}
-	}
-
-	// Auto Boot Camp queue
-	static bool bWasBootCampEnabled = false;
-	if (!Vars::Misc::Queueing::AutoBootCampQueue.Value)
-	{
-		if (bWasBootCampEnabled)
-		{
-			F::MvmQueue.ClearBootcampCriteria();
-			bWasBootCampEnabled = false;
-		}
-	}
-	else
-	{
-		bWasBootCampEnabled = true;
-		if (!I::TFPartyClient->BInQueueForMatchGroup(k_eTFMatchGroup_MvM_Practice))
-		{
-			bool bInGame = I::EngineClient->IsInGame();
-			bool bIsLoadingMap = I::EngineClient->IsDrawingLoadingImage();
-			if (bIsLoadingMap && Vars::Misc::Queueing::RQLTM.Value)
-				return;
-
-			float flQueueDelay = Vars::Misc::Queueing::QueueDelay.Value == 0 ? 20.0f : Vars::Misc::Queueing::QueueDelay.Value * 60.0f;
-
-			static float flLastQueueTimeBootCamp = 0.0f;
-			static bool bQueuedOnceBootCamp = false;
-
-			bool bShouldQueue = !bQueuedOnceBootCamp || (flCurrentTime - flLastQueueTimeBootCamp >= flQueueDelay);
-			if (!bIsConnectedNow && !bIsLoadingMap)
-				bShouldQueue = true;
-
-			if (bShouldQueue && (!bIsLoadingMap || !Vars::Misc::Queueing::RQLTM.Value) && !bInGame)
-			{
-				F::MvmQueue.ApplyBootcampCriteria();
-				I::TFPartyClient->RequestQueueForMatch(k_eTFMatchGroup_MvM_Practice);
-				flLastQueueTimeBootCamp = flCurrentTime;
-				bQueuedOnceBootCamp = true;
-			}
-		}
-	}
+	if (RunMvMQueue(Vars::Misc::Queueing::AutoMannUpQueue.Value, k_eTFMatchGroup_MvM_MannUp, [] { return F::MvmQueue.ApplyMannUpCriteria(); }))
+		return;
+	if (RunMvMQueue(Vars::Misc::Queueing::AutoBootCampQueue.Value, k_eTFMatchGroup_MvM_Practice, [] { return F::MvmQueue.ApplyBootcampCriteria(); }))
+		return;
 
 	// Auto Competitive queue
 	if (Vars::Misc::Queueing::AutoCompetitiveQueue.Value)

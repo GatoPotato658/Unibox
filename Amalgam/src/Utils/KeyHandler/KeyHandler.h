@@ -19,7 +19,6 @@ public:
 	bool Down(byte iKey, const bool bStore = false, KeyStorage* pStorage = nullptr);
 	bool Pressed(byte iKey, const bool bStore = false, KeyStorage* pStorage = nullptr);
 	bool Double(byte iKey, const bool bStore = false, KeyStorage* pStorage = nullptr);
-	bool Released(byte iKey, const bool bStore = false, KeyStorage* pStorage = nullptr);
 
 	std::array<KeyStorage, 256> m_aKeyStorage = {};
 

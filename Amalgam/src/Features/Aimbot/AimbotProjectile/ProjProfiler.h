@@ -103,7 +103,6 @@ private:
 	int m_iDumps = 0;
 	int m_iSuppressed = 0;
 	int m_iQuiet = 0;
-	int64_t m_iFirstStamp = 0;
 
 	friend class ProjScope_t;
 	friend class ProjTargetScope_t;

@@ -22,6 +22,62 @@ MAKE_SIGNATURE(CTFPlayerShared_UpdateCritBoostEffect, "client.dll", "48 8B C4 48
 
 enum ECritBoostUpdateType { kCritBoost_Ignore, kCritBoost_ForceRefresh };
 
+void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags)
+{
+	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+	if (!pEntityBase)
+		return;
+
+	auto pEntity = pEntityBase->As<CTFPlayer>();
+	if (!pEntity || !pEntity->IsPlayer())
+		return;
+
+	std::vector<TickRecord*> vRecords = {};
+	if (!F::Backtrack.GetRecords(pEntity, vRecords))
+		return;
+	vRecords = F::Backtrack.GetValidRecords(vRecords);
+	if (vRecords.empty())
+		return;
+
+	float flOriginalBlend = I::RenderView->GetBlend();
+	auto fDrawModel = [&](Vec3& vOrigin, matrix3x4* pBoneToWorld, float flBlend)
+		{
+			if (!SDK::IsOnScreen(pEntity, vOrigin))
+				return;
+
+			I::RenderView->SetBlend(flBlend * flOriginalBlend);
+			static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
+			IVModelRender_DrawModelExecute->As<DrawModelExecuteFn>()(pModelRender, pState, pInfo, pBoneToWorld);
+		};
+
+	Vector vEntityOrigin = pEntity->GetAbsOrigin();
+	if (!(iFlags & (BacktrackEnum::Last | BacktrackEnum::First)))
+	{
+		for (auto pRecord : vRecords)
+		{
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+				fDrawModel(pRecord->m_vOrigin, pRecord->m_aBones, flBlend);
+		}
+	}
+	else
+	{
+		if (iFlags & BacktrackEnum::Last)
+		{
+			auto pRecord = vRecords.back();
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+				fDrawModel(pRecord->m_vOrigin, pRecord->m_aBones, flBlend);
+		}
+		if (iFlags & BacktrackEnum::First)
+		{
+			auto pRecord = vRecords.front();
+			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
+				fDrawModel(pRecord->m_vOrigin, pRecord->m_aBones, flBlend);
+		}
+	}
+
+	I::RenderView->SetBlend(flOriginalBlend);
+}
+
 static std::vector<Vec3> SplashTrace(Vec3 vOrigin, float flRadius, Vec3 vNormal = { 0, 0, 1 }, bool bTrace = true, int iSegments = 100)
 {
 	if (!flRadius)

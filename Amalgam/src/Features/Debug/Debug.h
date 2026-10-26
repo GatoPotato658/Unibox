@@ -31,7 +31,6 @@ public:
 	const std::map<int, std::vector<DebugText_t>>& GetText();
 	const std::vector<DebugText_t>& GetText(uint32_t uType);
 	void ClearText(uint32_t uType = 0);
-	void PopText(uint32_t uType = 0);
 	void AddText(const DebugText_t& sText);
 	void AddText(const DebugText_t& sText, uint32_t uType);
 	void AddText(const std::string& sString, Color_t tColor = Vars::Menu::Theme::Active.Value);

@@ -187,7 +187,6 @@ public:
 	static bool CanFestive(int iKey);
 	static bool CanPaint(int iKey, bool bAllowUnsupported);
 	static bool CanBotkiller(int iKey);
-	static int BotkillerDef(int iKey, int iHead);
 	static void GetKits(int iKey, bool bAllowUnsupported, int iCurrent, std::vector<std::string>& vNames, std::vector<int>& vIds);
 };
 

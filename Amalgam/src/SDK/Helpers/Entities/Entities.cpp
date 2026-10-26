@@ -203,7 +203,6 @@ void CEntities::Store()
 	if (!pLocalEntity)
 		return;
 
-	m_bIsSpectated = false;
 	m_pLocal = pLocalEntity->As<CTFPlayer>();
 	if (!m_pLocal)
 		return;
@@ -247,12 +246,6 @@ void CEntities::Store()
 				{
 					if (!UpdatePlayerDetails(n, pPlayer, iLag))
 						continue;
-
-					// Check if this player is spectating the local player 
-					if (!m_bIsSpectated && !pPlayer->IsAlive() &&
-						pPlayer->m_iObserverMode() == OBS_MODE_FIRSTPERSON &&
-						pPlayer->m_hObserverTarget().GetEntryIndex() == nLocalIndex)
-						m_bIsSpectated = true;
 				}
 				m_aModels[n] = FNV1A::Hash32(I::ModelInfoClient->GetModelName(pEntity->GetModel()));
 			}
@@ -636,4 +629,3 @@ int CEntities::GetParty(int iIndex) { return m_mIParty.contains(iIndex) ? m_mIPa
 int CEntities::GetParty(uint32_t uAccountID) { return m_mUParty.contains(uAccountID) ? m_mUParty[uAccountID] : 0; }
 int CEntities::GetPartyCount() { return m_iPartyCount; }
 uint32_t CEntities::GetLocalAccountID() { return m_uAccountID; }
-bool CEntities::IsSpectated() { return m_bIsSpectated; }

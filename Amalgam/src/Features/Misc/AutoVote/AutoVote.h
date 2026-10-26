@@ -15,7 +15,6 @@ private:
 	};
 
 	float m_flCallCooldownExpireTime = 0.f;
-	Timer m_tAutoVotekickTimer = {};
 	std::unordered_map<int, Vote_t> m_mPendingVotes = {};
 public:
 	void OnVoteStart(const int iTeam, const int iVoteID, const int iCaller, const int iTarget);

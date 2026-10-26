@@ -525,7 +525,7 @@ bool CNavBotCapture::GetRobotDestructionGoal(CTFPlayer* pLocal, Vector& vOut)
 	return true;
 }
 
-bool CNavBotCapture::GetDoomsdayGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam, Vector& vOut)
+bool CNavBotCapture::GetDoomsdayGoal(CTFPlayer* pLocal, Vector& vOut)
 {
 	if (!F::DoomsdayController.GetGoal(vOut))
 		return false;
@@ -734,7 +734,7 @@ bool CNavBotCapture::GetObjectiveGoal(CTFPlayer* pLocal, int iOurTeam, int iEnem
 	case TF_GAMETYPE_RD:
 		return GetCachedGoal(pLocal, &CNavBotCapture::GetRobotDestructionGoal, vOut);
 	default:
-		return tObjectives.m_bDoomsday ? GetDoomsdayGoal(pLocal, iOurTeam, iEnemyTeam, vOut)
+		return tObjectives.m_bDoomsday ? GetDoomsdayGoal(pLocal, vOut)
 			: GetControlPointGoal(vLocalOrigin, iOurTeam, vOut);
 	}
 }

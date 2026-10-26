@@ -65,17 +65,6 @@ bool CKeyHandler::Double(byte iKey, const bool bStore, KeyStorage* pStorage)
 	return pStorage->m_bIsDouble;
 }
 
-bool CKeyHandler::Released(byte iKey, const bool bStore, KeyStorage* pStorage)
-{
-	if (!pStorage)
-		pStorage = &m_aKeyStorage[iKey];
-
-	if (bStore)
-		StoreKey(iKey, pStorage);
-
-	return pStorage->m_bIsReleased;
-}
-
 static inline bool VirtualKeyOverride(byte iKey, std::string& sKey)
 {
 	switch (iKey)

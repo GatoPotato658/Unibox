@@ -63,7 +63,6 @@ private:
 	std::unordered_map<uint32_t, int> m_mULevels = {};
 	uint32_t m_uAccountID;
 	int m_iPartyCount = 0;
-	bool m_bIsSpectated = false;
 
 public:
 	void Store();
@@ -110,7 +109,6 @@ public:
 	int GetParty(uint32_t uAccountID);
 	int GetPartyCount();
 	uint32_t GetLocalAccountID();
-	bool IsSpectated();
 };
 
 ADD_FEATURE_CUSTOM(CEntities, Entities, H);

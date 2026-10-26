@@ -156,11 +156,7 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 	if (!Vars::Misc::Movement::AutoEdgebug.Value || pLocal->OnSolid())
 	{
 		m_bEdgeBug = false;
-		m_iEdgeBugMoveStage = EBStageEnum::Normal;
-		m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
-		m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
-		m_vEdgeBugMove.Zero();
-		m_vEdgebugPath.clear();
+		ResetEdgebug();
 		return;
 	}
 
@@ -171,11 +167,7 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 				&& m_vEdgebugPath.front().DistTo2D(pLocal->m_vecOrigin()) > 30.f)
 			{
 				m_bEdgeBug = false;
-				m_iEdgeBugMoveStage = EBStageEnum::Normal;
-				m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
-				m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
-				m_vEdgeBugMove.Zero();
-				m_vEdgebugPath.clear();
+				ResetEdgebug();
 				return;
 			}
 			if (m_flEdgeBugYawDelta)
@@ -183,11 +175,7 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 				if (G::Attacking == 1)
 				{
 					m_bEdgeBug = false;
-					m_iEdgeBugMoveStage = EBStageEnum::Normal;
-					m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
-					m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
-					m_vEdgeBugMove.Zero();
-					m_vEdgebugPath.clear();
+					ResetEdgebug();
 					return;
 				}
 				pCmd->viewangles.y = Math::NormalizeAngle(m_flEdgeBugStartYaw + m_flEdgeBugYawDelta * (1 + m_iEdgeBugTicksTotal - m_iEdgeBugTicksLeft));
@@ -205,10 +193,7 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 		if (!m_iEdgeBugTicksLeft)
 		{
 			m_bEdgeBug = false;
-			m_iEdgeBugMoveStage = EBStageEnum::Normal;
-			m_iEdgeBugTicksTotal = 0;
-			m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
-			m_vEdgeBugMove.Zero();
+			ResetEdgebug();
 		}
 		else
 		{
@@ -1076,6 +1061,15 @@ void CMisc::EdgeJump(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost)
 		pCmd->buttons |= IN_JUMP;
 }
 
+void CMisc::ResetEdgebug()
+{
+	m_iEdgeBugMoveStage = EBStageEnum::Normal;
+	m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
+	m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
+	m_vEdgeBugMove.Zero();
+	m_vEdgebugPath.clear();
+}
+
 void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 {
 	switch (uHash)
@@ -1092,11 +1086,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 		F::AntiAim.OnLevelInit();
 
 		m_bEdgeBug = m_bEdgeBugCrouch = false;
-		m_iEdgeBugMoveStage = EBStageEnum::Normal;
-		m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
-		m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
-		m_vEdgeBugMove.Zero();
-		m_vEdgebugPath.clear();
+		ResetEdgebug();
 		break;
 	case FNV1A::Hash32Const("player_spawn"):
 	{
@@ -1106,11 +1096,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 		m_bPeekPlaced = false;
 
 		m_bEdgeBug = m_bEdgeBugCrouch = false;
-		m_iEdgeBugMoveStage = EBStageEnum::Normal;
-		m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
-		m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
-		m_vEdgeBugMove.Zero();
-		m_vEdgebugPath.clear();
+		ResetEdgebug();
 		break;
 	case FNV1A::Hash32Const("player_death"):
 	{
@@ -1340,83 +1326,51 @@ void CMisc::PingReducer()
 	pNetChan->SendNetMsg(cmd);
 }
 
-void CMisc::UnlockAchievements()
+void CMisc::ProcessAchievements(bool bItems, bool bAward)
 {
 	const auto pAchievementMgr = I::EngineClient->GetAchievementMgr();
-	if (pAchievementMgr)
+	if (!pAchievementMgr)
+		return;
+
+	const auto& vItemAchievementIDs = Vars::Misc::Automation::GetItemAchievementIDs();
+	I::SteamUserStats->RequestCurrentStats();
+	for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
 	{
-		I::SteamUserStats->RequestCurrentStats();
-		for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
-		{
-			if (const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i))
-				pAchievementMgr->AwardAchievement(pAchievement->GetAchievementID());
-		}
-		I::SteamUserStats->StoreStats();
-		I::SteamUserStats->RequestCurrentStats();
+		const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i);
+		if (!pAchievement)
+			continue;
+
+		const int iAchievementID = pAchievement->GetAchievementID();
+		if (bItems && std::ranges::find(vItemAchievementIDs, iAchievementID) == vItemAchievementIDs.end())
+			continue;
+
+		if (bAward)
+			pAchievementMgr->AwardAchievement(iAchievementID);
+		else
+			I::SteamUserStats->ClearAchievement(pAchievement->GetName());
 	}
+	I::SteamUserStats->StoreStats();
+	I::SteamUserStats->RequestCurrentStats();
+}
+
+void CMisc::UnlockAchievements()
+{
+	ProcessAchievements(false, true);
 }
 
 void CMisc::UnlockItemAchievements()
 {
-	const auto pAchievementMgr = I::EngineClient->GetAchievementMgr();
-	if (pAchievementMgr)
-	{
-		const std::unordered_set<int> vItemAchievementIDs(
-			Vars::Misc::Automation::GetItemAchievementIDs().begin(),
-			Vars::Misc::Automation::GetItemAchievementIDs().end());
-
-		I::SteamUserStats->RequestCurrentStats();
-		for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
-		{
-			if (const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i))
-			{
-				const int iAchievementID = pAchievement->GetAchievementID();
-				if (vItemAchievementIDs.contains(iAchievementID))
-					pAchievementMgr->AwardAchievement(iAchievementID);
-			}
-		}
-		I::SteamUserStats->StoreStats();
-		I::SteamUserStats->RequestCurrentStats();
-	}
+	ProcessAchievements(true, true);
 }
 
 void CMisc::LockAchievements()
 {
-	const auto pAchievementMgr = I::EngineClient->GetAchievementMgr();
-	if (pAchievementMgr)
-	{
-		I::SteamUserStats->RequestCurrentStats();
-		for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
-		{
-			if (const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i))
-				I::SteamUserStats->ClearAchievement(pAchievement->GetName());
-		}
-		I::SteamUserStats->StoreStats();
-		I::SteamUserStats->RequestCurrentStats();
-	}
+	ProcessAchievements(false, false);
 }
 
 void CMisc::LockItemAchievements()
 {
-	const auto pAchievementMgr = I::EngineClient->GetAchievementMgr();
-	if (pAchievementMgr)
-	{
-		const std::unordered_set<int> vItemAchievementIDs(
-			Vars::Misc::Automation::GetItemAchievementIDs().begin(),
-			Vars::Misc::Automation::GetItemAchievementIDs().end());
-
-		I::SteamUserStats->RequestCurrentStats();
-		for (int i = 0; i < pAchievementMgr->GetAchievementCount(); i++)
-		{
-			if (const auto pAchievement = pAchievementMgr->GetAchievementByIndex(i))
-			{
-				if (vItemAchievementIDs.contains(pAchievement->GetAchievementID()))
-					I::SteamUserStats->ClearAchievement(pAchievement->GetName());
-			}
-		}
-		I::SteamUserStats->StoreStats();
-		I::SteamUserStats->RequestCurrentStats();
-	}
+	ProcessAchievements(true, false);
 }
 
 void CMisc::AchievementSpam(CTFPlayer* pLocal)
@@ -1845,18 +1799,14 @@ void CMisc::DoKillSay(int iVictim)
 		return;
 
 	std::string sVictim;
-	{
-		player_info_t pi;
-		if (I::EngineClient->GetPlayerInfo(iVictim, &pi))
-			sVictim = pi.name;
-	}
+	player_info_t tVictimInfo;
+	if (I::EngineClient->GetPlayerInfo(iVictim, &tVictimInfo))
+		sVictim = tVictimInfo.name;
 
 	std::string sKiller;
-	{
-		player_info_t pi;
-		if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &pi))
-			sKiller = pi.name;
-	}
+	player_info_t tKillerInfo;
+	if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &tKillerInfo))
+		sKiller = tKillerInfo.name;
 
 	const int iIndex = SDK::RandomInt(0, static_cast<int>(m_vKillSayLines.size()) - 1);
 	std::string sLine = ReplaceTags(m_vKillSayLines[iIndex], "", "", sKiller, sVictim);

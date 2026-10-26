@@ -480,20 +480,6 @@ int CTicks::GetShotsWithinPacket(CTFWeaponBase* pWeapon, int iTicks)
 	return 1 + (iTicks - iDelay) / std::ceilf(pWeapon->GetFireRate() / TICK_INTERVAL);
 }
 
-int CTicks::GetMinimumTicksNeeded(CTFWeaponBase* pWeapon)
-{
-	int iDelay = 1;
-	switch (pWeapon->GetWeaponID())
-	{
-	case TF_WEAPON_MINIGUN:
-	case TF_WEAPON_PIPEBOMBLAUNCHER:
-	case TF_WEAPON_CANNON:
-		iDelay = 2;
-	}
-
-	return (GetShotsWithinPacket(pWeapon) - 1) * std::ceilf(pWeapon->GetFireRate() / TICK_INTERVAL) + iDelay;
-}
-
 void CTicks::SaveShootPos(CTFPlayer* pLocal)
 {
 	if (m_iShiftedTicks == m_iShiftStart)

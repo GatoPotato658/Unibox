@@ -970,42 +970,6 @@ bool CMovementSimulation::StrafePrediction(MoveStorage& tMoveStorage, bool bStra
 	return true;
 }
 
-bool CMovementSimulation::SetDuck(MoveStorage& tMoveStorage, bool bDuck)
-{
-	if (bDuck == tMoveStorage.m_pPlayer->m_bDucked())
-		return true;
-
-	auto pGameRules = I::TFGameRules();
-	auto pViewVectors = pGameRules ? pGameRules->GetViewVectors() : nullptr;
-	float flScale = tMoveStorage.m_pPlayer->m_flModelScale();
-
-	if (!tMoveStorage.m_pPlayer->IsOnGround())
-	{
-		Vec3 vHullMins = (pViewVectors ? pViewVectors->m_vHullMin : Vec3(-24, -24, 0)) * flScale;
-		Vec3 vHullMaxs = (pViewVectors ? pViewVectors->m_vHullMax : Vec3(24, 24, 82)) * flScale;
-		Vec3 vDuckHullMins = (pViewVectors ? pViewVectors->m_vDuckHullMin : Vec3(-24, -24, 0)) * flScale;
-		Vec3 vDuckHullMaxs = (pViewVectors ? pViewVectors->m_vDuckHullMax : Vec3(24, 24, 62)) * flScale;
-
-		if (bDuck)
-			tMoveStorage.m_MoveData.m_vecAbsOrigin += (vHullMaxs - vHullMins) - (vDuckHullMaxs - vDuckHullMins);
-		else
-		{
-			Vec3 vOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin - ((vHullMaxs - vHullMins) - (vDuckHullMaxs - vDuckHullMins));
-
-			CGameTrace trace = {};
-			CTraceFilterWorldAndPropsOnly filter(tMoveStorage.m_pPlayer);
-			SDK::TraceHull(vOrigin, vOrigin, vHullMins, vHullMaxs, tMoveStorage.m_pPlayer->SolidMask(), &filter, &trace);
-			if (trace.DidHit())
-				return false;
-
-			tMoveStorage.m_MoveData.m_vecAbsOrigin = vOrigin;
-		}
-	}
-	tMoveStorage.m_pPlayer->m_bDucked() = bDuck;
-
-	return true;
-}
-
 void CMovementSimulation::SetBounds(CTFPlayer* pPlayer)
 {
 	if (pPlayer->entindex() == I::EngineClient->GetLocalPlayer())

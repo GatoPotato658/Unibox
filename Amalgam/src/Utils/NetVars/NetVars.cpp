@@ -56,15 +56,3 @@ RecvProp* CNetVars::GetProp(RecvTable* pTable, const char* szNetVar)
 
 	return nullptr;
 }
-
-RecvProp* CNetVars::GetNetProp(const char* szClass, const char* szNetVar)
-{
-	auto uHash = FNV1A::Hash32(szClass);
-	for (auto pCurrNode = I::Client->GetAllClasses(); pCurrNode; pCurrNode = pCurrNode->m_pNext)
-	{
-		if (uHash == FNV1A::Hash32(pCurrNode->m_pNetworkName))
-			return GetProp(pCurrNode->m_pRecvTable, szNetVar);
-	}
-
-	return nullptr;
-}

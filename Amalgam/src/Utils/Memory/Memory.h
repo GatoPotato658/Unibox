@@ -19,8 +19,6 @@ public:
 	std::string GetModuleOffset(uintptr_t uAddress);
 	std::string GetModuleName(uintptr_t uAddress);
 	std::string GenerateSignatureAtAddress(uintptr_t address, size_t maxLength = 120);
-	uintptr_t GetOffsetFromBase(void* pAddress) { return GetOffsetFromBase(uintptr_t(pAddress)); };
-	uintptr_t GetOffsetFromBase(uintptr_t uAddress);
 
 	inline void* GetVirtual(void* p, size_t i)
 	{

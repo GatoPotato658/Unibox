@@ -29,6 +29,7 @@ private:
 	void AchievementSpam(CTFPlayer* pLocal);
 	void NoiseSpam(CTFPlayer* pLocal);
 	void CallVoteSpam(CTFPlayer* pLocal);
+	void ProcessAchievements(bool bItems, bool bAward);
 
 	void AutoReport();
 	void AutoRetry(CTFPlayer* pLocal);
@@ -42,6 +43,7 @@ private:
 
 	void AutoPeek(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost = false);
 	void EdgeJump(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost = false);
+	void ResetEdgebug();
 
 	int m_iEdgeBugTicksLeft = 0;
 	int m_iEdgeBugTicksTotal = 0;
@@ -58,8 +60,6 @@ private:
 
 	bool m_bPeekPlaced = false;
 	Vec3 m_vPeekReturnPos = {};
-
-	//bool bSteamCleared = false;
 
 	std::vector<std::string> m_vChatSpamLines;
 	std::vector<std::string> m_vKillSayLines;
@@ -150,7 +150,6 @@ public:
 	ProfileDumpResult_t DumpProfiles(bool bAnnounce = true);
 
 	int m_iWishCmdrate = -1;
-	//int m_iWishUpdaterate = -1;
 	bool m_bAntiAFK = false;
 	std::string m_sLastKilledName = "";
 };

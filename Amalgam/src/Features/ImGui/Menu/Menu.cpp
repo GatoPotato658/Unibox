@@ -1880,9 +1880,7 @@ namespace
 
 	std::string Lowercase(const std::string& sText)
 	{
-		std::string sReturn = sText;
-		std::transform(sReturn.begin(), sReturn.end(), sReturn.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-		return sReturn;
+		return ToLower(sText);
 	}
 
 	struct ItemGrid_t
@@ -2046,16 +2044,6 @@ namespace
 			s_bBuilt = !s_vEffects.empty();
 		}
 		return s_vEffects;
-	}
-
-	const char* UnusualEffectName(int iEffect)
-	{
-		for (const auto& [iId, sName] : GetUnusualEffects())
-		{
-			if (iId == iEffect)
-				return sName.c_str();
-		}
-		return "None";
 	}
 
 	int UnusualEffectId(const std::string& sName)
@@ -3909,22 +3897,12 @@ void CMenu::AddOutput(const char* sFunction, const char* sLog, Color_t tColor)
 
 void CMenu::ShowNotification(const char* sTitle, const char* sMessage)
 {
-	Notification_t notification;
-	notification.m_sTitle = sTitle;
-	notification.m_sMessage = sMessage;
-	notification.m_bVisible = true;
-
-	m_vNotifications.push_back(notification);
+	m_vNotifications.emplace_back(sTitle, sMessage);
 }
 
 void CMenu::ShowDeferredNotification(const char* sTitle, const char* sMessage)
 {
-	Notification_t notification;
-	notification.m_sTitle = sTitle;
-	notification.m_sMessage = sMessage;
-	notification.m_bVisible = true;
-
-	m_vDeferredNotifications.push_back(notification);
+	m_vDeferredNotifications.emplace_back(sTitle, sMessage);
 }
 
 void CMenu::ProcessDeferredNotifications()
@@ -3932,11 +3910,7 @@ void CMenu::ProcessDeferredNotifications()
 	if (m_vDeferredNotifications.empty())
 		return;
 
-	for (auto& notification : m_vDeferredNotifications)
-	{
-		m_vNotifications.push_back(notification);
-	}
-
+	m_vNotifications.insert(m_vNotifications.end(), m_vDeferredNotifications.begin(), m_vDeferredNotifications.end());
 	m_vDeferredNotifications.clear();
 }
 
@@ -3955,9 +3929,6 @@ void CMenu::DrawNotifications()
 	for (size_t i = 0; i < m_vNotifications.size(); ++i)
 	{
 		auto& notification = m_vNotifications[i];
-		if (!notification.m_bVisible)
-			continue;
-
 		PushStyleVar(ImGuiStyleVar_WindowRounding, H::Draw.Scale(8));
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(16), H::Draw.Scale(14) });
 		PushStyleVar(ImGuiStyleVar_ItemSpacing, { H::Draw.Scale(8), H::Draw.Scale(6) });

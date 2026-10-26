@@ -107,7 +107,6 @@ public:
 	void ProcessCommandQueue();
 
 	bool IsLocalBot(uint32_t uAccountID);
-	std::vector<int> GetOtherBotsOnServer(std::string sServerIP);
 	void AnnounceCaptureSpotClaim(const std::string& sMap, int iPointIdx, const Vector& vSpot, float flDurationSeconds = 1.0f);
 	void AnnounceCaptureSpotRelease(const std::string& sMap, int iPointIdx);
 	std::vector<Vector> GetReservedCaptureSpots(const std::string& sMap, int iPointIdx, uint32_t uIgnoreAccountID = 0);

@@ -14,16 +14,6 @@ public:
 	std::vector<IHandleEntity*>	m_vEntities = {};
 };
 
-void CWorld::SetVerticesValidCallback(VerticesValidCallback* pCallback)
-{
-	m_pVerticesValidCallback = pCallback ? pCallback : &s_fVerticesValid;
-}
-
-void CWorld::SetBoundsValidCallback(BoundsValidCallback* pCallback)
-{
-	m_pBoundsValidCallback = pCallback ? pCallback : &s_fBoundsValid;
-}
-
 void CWorld::SetNormalValidCallback(NormalValidCallback* pCallback)
 {
 	m_pNormalValidCallback = pCallback ? pCallback : &s_fNormalValid;
@@ -375,60 +365,6 @@ void CWorld::Uncache()
 
 	m_iNeedsCache = FaceTypeEnum::Cache;
 }
-
-void CWorld::UncacheBoxBrushes()
-{
-	if (m_iNeedsCache & FaceTypeEnum::BoxBrush)
-		return;
-
-	std::erase_if(m_mFaceCache, [](const auto& pair)
-	{
-		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::BoxBrush;
-	});
-
-	m_iNeedsCache |= FaceTypeEnum::BoxBrush;
-}
-
-void CWorld::UncachePlaneBrushes()
-{
-	if (m_iNeedsCache & FaceTypeEnum::PlaneBrush)
-		return;
-
-	std::erase_if(m_mFaceCache, [](const auto& pair)
-	{
-		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::PlaneBrush;
-	});
-
-	m_iNeedsCache |= FaceTypeEnum::PlaneBrush;
-}
-
-void CWorld::UncacheProps()
-{
-	if (m_iNeedsCache & FaceTypeEnum::Prop)
-		return;
-
-	std::erase_if(m_mFaceCache, [](const auto& pair)
-	{
-		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::Prop;
-	});
-
-	m_iNeedsCache |= FaceTypeEnum::Prop;
-}
-
-void CWorld::UncacheEntities()
-{
-	if (m_iNeedsCache & FaceTypeEnum::Entity)
-		return;
-
-	std::erase_if(m_mFaceCache, [](const auto& pair)
-	{
-		return pair.second.empty() || pair.second.front().m_iType == FaceTypeEnum::Entity;
-	});
-
-	m_iNeedsCache |= FaceTypeEnum::Entity;
-}
-
-
 
 std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags)
 {

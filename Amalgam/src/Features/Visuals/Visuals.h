@@ -4,6 +4,8 @@
 
 struct ImDrawList;
 
+void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags);
+
 //#define DEBUG_UNI
 #ifdef DEBUG_UNI
 #include "Images.h"

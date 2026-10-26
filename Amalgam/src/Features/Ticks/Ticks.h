@@ -50,7 +50,6 @@ public:
 	bool CanChoke(bool bCanShift = false);
 	int GetTicks(CTFWeaponBase* pWeapon = nullptr);
 	int GetShotsWithinPacket(CTFWeaponBase* pWeapon, int iTicks = Vars::Doubletap::TickLimit.Value);
-	int GetMinimumTicksNeeded(CTFWeaponBase* pWeapon);
 
 	void SaveShootPos(CTFPlayer* pLocal);
 	Vec3 GetShootPos();

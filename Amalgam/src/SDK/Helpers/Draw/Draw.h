@@ -37,8 +37,6 @@ enum Scale_
 class CDraw
 {
 private:
-	std::unordered_map<uint32, int> m_mAvatars = {};
-
 	int m_iRenderFrame = -1;
 	int m_iRenderDraws = 0;
 	int m_iRenderVertices = 0;
@@ -60,22 +58,8 @@ public:
 		return flN;
 	}
 
-	inline float Unscale(float flN = 1.f, int iFlags = Scale_None, float flScale = Vars::Menu::Scale.Value)
-	{
-		flN /= flScale;
-		switch (iFlags)
-		{
-		case Scale_Round: flN = roundf(flN); break;
-		case Scale_Floor: flN = floorf(flN); break;
-		case Scale_Ceil: flN = ceilf(flN); break;
-		}
-		return flN;
-	}
-
 	void Start(bool bBadFontCheck = false);
 	void End();
-	void StartClipping(int x, int y, int w, int h);
-	void EndClipping();
 
 	void UpdateScreenSize();
 	void UpdateW2SMatrix();
@@ -97,23 +81,8 @@ public:
 
 	void FillRect(int x, int y, int w, int h, Color_t tColor);
 	void LineRect(int x, int y, int w, int h, Color_t tColor);
-	void GradientRect(int x, int y, int w, int h, Color_t tColorTop, Color_t tColorBottom, bool bHorizontal);
-	void FillRectOutline(int x, int y, int w, int h, Color_t tColor, Color_t tColorOut = { 0, 0, 0, 255 });
-	void LineRectOutline(int x, int y, int w, int h, Color_t tColor, Color_t tColorOut = { 0, 0, 0, 255 }, bool bInside = true);
-	void FillRectPercent(int x, int y, int w, int h, float t, Color_t tColor, Color_t tColorOut = { 0, 0, 0, 255 }, EAlign eAlign = ALIGN_LEFT, bool bAdjust = false);
-	void FillRoundRect(int x, int y, int w, int h, int iRadius, Color_t tColor, int iCount = 64);
-	void LineRoundRect(int x, int y, int w, int h, int iRadius, Color_t tColor, int iCount = 64);
-
-	void FillCircle(int x, int y, float iRadius, int iSegments, Color_t tColor);
-	void LineCircle(int x, int y, float iRadius, int iSegments, Color_t tColor);
-
-	void Texture(const char* sTexture, int x, int y, int w, int h, EAlign eAlign = ALIGN_CENTER);
 	CHudTexture* GetIcon(const char* szIcon, int eIconFormat = 0);
 	int CreateTextureFromArray(const unsigned char* rgba, int w, int h);
-	void DrawHudTexture(float x, float y, float s, const CHudTexture* pTexture, Color_t tColor = { 255, 255, 255, 255 });
-	void DrawHudTextureByName(float x, float y, float s, const char* sTexture, Color_t tColor = { 255, 255, 255, 255 });
-	void Avatar(int x, int y, int w, int h, const uint32 nFriendID, EAlign eAlign = ALIGN_CENTER);
-	void ClearAvatarCache();
 
 	void RenderLine(const Vec3& vStart, const Vec3& vEnd, Color_t tColor, bool bZBuffer = false);
 	void RenderPath(const std::vector<Vec3>& vPath, Color_t tColor, bool bZBuffer = false,

@@ -103,7 +103,6 @@ namespace SDK
 	float StdRandomFloat(float flMin = 0.f, float flMax = 1.f);
 
 	int SeedFileLineHash(int iSeed, const char* sName, int iAdditionalSeed);
-	int SharedRandomInt(unsigned iSeed, const char* sName, int iMinVal, int iMaxVal, int iAdditionalSeed);
 	void RandomSeed(int iSeed);
 	int RandomInt(int iMinVal = 0, int iMaxVal = VALVE_RAND_MAX);
 	float RandomFloat(float flMinVal = 0.f, float flMaxVal = 1.f);
@@ -152,7 +151,6 @@ namespace SDK
 
 	void FixMovement(CUserCmd* pCmd, const Vec3& vCurAngle, const Vec3& vTargetAngle);
 	void FixMovement(CUserCmd* pCmd, const Vec3& vTargetAngle);
-	bool StopMovement(CTFPlayer* pLocal, CUserCmd* pCmd);
 
 	Vec3 ComputeMove(const CUserCmd* pCmd, CTFPlayer* pLocal, const Vec3& vFrom, const Vec3& vTo);
 	void WalkTo(CUserCmd* pCmd, CTFPlayer* pLocal, const Vec3& vFrom, const Vec3& vTo, float flScale = 1.f);

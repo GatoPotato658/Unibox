@@ -1073,11 +1073,6 @@ struct Color_t
 		return r * flRed + g * flGreen + b * flBlue;
 	}
 
-	inline bool IsColorBright(float flValue = 175, float flRed = 0.299f, float flGreen = 0.587f, float flBlue = 0.114f) const
-	{
-		return Brightness(flRed, flGreen, flBlue) > flValue;
-	}
-
 	inline bool IsColorDark(float flValue = 80, float flRed = 0.299f, float flGreen = 0.587f, float flBlue = 0.114f)const
 	{
 		return Brightness(flRed, flGreen, flBlue) < flValue;

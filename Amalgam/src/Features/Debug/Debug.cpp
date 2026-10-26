@@ -176,18 +176,6 @@ void CDebug::ClearText(uint32_t uType)
 		m_mDebugText.erase(uType);
 }
 
-void CDebug::PopText(uint32_t uType)
-{
-	if (m_mDebugText.contains(uType))
-		return;
-
-	auto& vDebugText = m_mDebugText[uType];
-	if (!vDebugText.empty())
-		return;
-
-	vDebugText.erase(vDebugText.begin());
-}
-
 void CDebug::AddText(const DebugText_t& sText)
 {
 	m_mDebugText[0].push_back(sText);

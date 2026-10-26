@@ -3,15 +3,18 @@
 
 Enum(Model, Visible, Occluded);
 
+struct Group_t;
+
 class CChams
 {
 private:
 	void Begin();
 	void End();
+	template <typename FDraw>
+	bool RenderViewmodelMaterial(IMatRenderContext* pRenderContext, Group_t* pGroup, MaterialCullMode_t restore, FDraw fDraw);
 
 	void DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderContext* pRenderContext, int iModel = ModelEnum::Visible, bool bTwoModel = false);
 
-	void RenderBacktrack(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 	void RenderFakeAngle(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 
 	struct ChamsInfo_t

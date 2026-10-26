@@ -89,15 +89,6 @@ namespace ImGui
 	{
 		return GetWindowPos() - GetCurrentWindow()->Scroll;
 	}
-	inline float GetDrawPosX()
-	{
-		return GetWindowPos().x - GetCurrentWindow()->Scroll.x;
-	}
-	inline float GetDrawPosY()
-	{
-		return GetWindowPos().y - GetCurrentWindow()->Scroll.y;
-	}
-
 	struct Row_t
 	{
 		ImVec2 m_vPos;
@@ -129,15 +120,6 @@ namespace ImGui
 		for (auto& [_, vSize] : *pRowSizes)
 			flMax = std::max(flMax, vSize.y);
 		return flMax;
-	}
-
-	inline bool IsColorBright(ImColor tColor, float flValue = 0.686f, float flRed = 0.299f, float flGreen = 0.587f, float flBlue = 0.114f)
-	{
-		return tColor.Value.x * flRed + tColor.Value.y * flGreen + tColor.Value.z * flBlue > flValue;
-	}
-	inline bool IsColorDark(ImColor tColor, float flValue = 0.313f, float flRed = 0.299f, float flGreen = 0.587f, float flBlue = 0.114f)
-	{
-		return tColor.Value.x * flRed + tColor.Value.y * flGreen + tColor.Value.z * flBlue < flValue;
 	}
 
 	inline ImU32 ColorByteToInt(Color_t tColor)
@@ -174,11 +156,6 @@ namespace ImGui
 	{
 		Dummy(vSize);
 	}
-	inline void DebugShift(ImVec2 vSize)
-	{
-		SetCursorPos(GetCursorPos() + vSize);
-	}
-
 	inline bool IsMouseWithin(float x, float y, float w, float h)
 	{
 		ImVec2 vMouse = GetMousePos();
@@ -329,14 +306,6 @@ namespace ImGui
 		return vTextSize;
 	}
 
-	inline ImVec2 IconSize(const char* sIcon)
-	{
-		PushFont(F::Render.IconFont);
-		ImVec2 vTextSize = CalcTextSize(sIcon);
-		PopFont();
-		return vTextSize;
-	}
-
 	inline const char* FormatText(const char* fmt, ...)
 	{
 		va_list args;
@@ -423,7 +392,6 @@ namespace ImGui
 	{
 		return WrapText(sText, std::vector<int>({ iPixels }), pFont);
 	}
-
 	inline std::string ListPreview(const std::vector<std::string>& vNames, float flWidth, const char* sNone)
 	{
 		if (vNames.empty())

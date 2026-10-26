@@ -478,12 +478,6 @@ int SDK::SeedFileLineHash(int iSeed, const char* sName, int iAdditionalSeed)
 	return static_cast<int>(iReturn);
 }
 
-int SDK::SharedRandomInt(unsigned iSeed, const char* sName, int iMinVal, int iMaxVal, int iAdditionalSeed)
-{
-	int iSeed2 = SeedFileLineHash(iSeed, sName, iAdditionalSeed);
-	I::UniformRandomStream->SetSeed(iSeed2);
-	return I::UniformRandomStream->RandomInt(iMinVal, iMaxVal);
-}
 void SDK::RandomSeed(int iSeed)
 {
 	static auto RandomSeed = U::Memory.GetModuleExport<void(*)(uint32_t)>("vstdlib.dll", "RandomSeed");
@@ -1123,33 +1117,6 @@ void SDK::FixMovement(CUserCmd* pCmd, const Vec3& vCurAngle, const Vec3& vTarget
 void SDK::FixMovement(CUserCmd* pCmd, const Vec3& vTargetAngle)
 {
 	FixMovement(pCmd, pCmd->viewangles, vTargetAngle);
-}
-
-bool SDK::StopMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
-{
-	if (pLocal->m_vecVelocity().IsZero())
-	{
-		pCmd->forwardmove = 0.f;
-		pCmd->sidemove = 0.f;
-		return false;
-	}
-
-	if (G::Attacking != 1)
-	{
-		float flDirection = Math::VectorAngles(-pLocal->m_vecVelocity()).y;
-		pCmd->viewangles = { 90, flDirection, 0 };
-		pCmd->sidemove = 0; pCmd->forwardmove = 0;
-		return true;
-	}
-	else
-	{
-		Vec3 vDirection = pLocal->m_vecVelocity().ToAngle();
-		vDirection.y = pCmd->viewangles.y - vDirection.y;
-		Vec3 vNegatedDirection = vDirection.FromAngle() * -pLocal->m_vecVelocity().Length2D();
-		pCmd->forwardmove = vNegatedDirection.x;
-		pCmd->sidemove = vNegatedDirection.y;
-		return false;
-	}
 }
 
 Vec3 SDK::ComputeMove(const CUserCmd* pCmd, CTFPlayer* pLocal, const Vec3& vFrom, const Vec3& vTo)

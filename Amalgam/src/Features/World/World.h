@@ -89,15 +89,9 @@ public:
 	void CacheProps();
 	void CacheEntities();
 	void Uncache();
-	void UncacheBoxBrushes();
-	void UncachePlaneBrushes();
-	void UncacheProps();
-	void UncacheEntities();
 
 	std::vector<Face_t> GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask = MASK_SOLID, ITraceFilter* pFilter = nullptr, int iFlags = FaceTypeEnum::All);
 
-	void SetVerticesValidCallback(VerticesValidCallback* pCallback = nullptr);
-	void SetBoundsValidCallback(BoundsValidCallback* pCallback = nullptr);
 	void SetNormalValidCallback(NormalValidCallback* pCallback = nullptr);
 
 #ifdef WORLD_DEBUG

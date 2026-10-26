@@ -15,7 +15,6 @@ private:
 
 	void DrawModel(CBaseEntity* pEntity);
 
-	void RenderBacktrack(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 	void RenderFakeAngle(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 
 	IMaterial* m_pMatGlowColor;

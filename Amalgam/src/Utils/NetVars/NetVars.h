@@ -9,7 +9,6 @@ public:
 	int GetNetVar(const char* szClass, const char* szNetVar);
 
 	RecvProp* GetProp(RecvTable* pTable, const char* szNetVar);
-	RecvProp* GetNetProp(const char* szClass, const char* szNetVar);
 };
 
 ADD_FEATURE_CUSTOM(CNetVars, NetVars, U);

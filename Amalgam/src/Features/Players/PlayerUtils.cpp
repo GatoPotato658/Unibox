@@ -45,6 +45,16 @@ PriorityLabel_t* CPlayerlistUtils::GetTag(int iID)
 	return nullptr;
 }
 
+static int GetPriorityValue(const PriorityLabel_t& tTag, PriorityTypeEnum::PriorityTypeEnum eType)
+{
+	switch (eType)
+	{
+	case PriorityTypeEnum::Follow: return tTag.m_iFollowPriority;
+	case PriorityTypeEnum::Vote: return tTag.m_iVotePriority;
+	default: return tTag.m_iPriority;
+	}
+}
+
 int CPlayerlistUtils::GetTag(const std::string& sTag)
 {
 	if (sTag.empty())
@@ -169,37 +179,6 @@ void CPlayerlistUtils::RemoveTag(int iIndex, int iID, bool bSave, const char* sN
 	RemoveTag(iIndex, iID, bSave, sName, m_mPlayerTags);
 }
 
-bool CPlayerlistUtils::HasTags(uint32_t uAccountID, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags)
-{
-	if (!uAccountID)
-		return false;
-
-	if (&mPlayerTags == &m_mPlayerTags)
-	{
-		std::shared_lock tLock(m_tMutex);
-		if (m_mCheaterRecords.contains(uAccountID))
-			return true;
-	}
-
-	auto it = mPlayerTags.find(uAccountID);
-	return it != mPlayerTags.end() && !it->second.empty();
-}
-bool CPlayerlistUtils::HasTags(int iIndex, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags)
-{
-	return HasTags(GetAccountID(iIndex), mPlayerTags);
-}
-bool CPlayerlistUtils::HasTags(uint32_t uAccountID)
-{
-	return HasTags(uAccountID, m_mPlayerTags);
-}
-
-bool CPlayerlistUtils::HasTags(int iIndex)
-{
-	if (const uint32_t uAccountID = GetAccountID(iIndex))
-		return HasTags(uAccountID);
-	return false;
-}
-
 bool CPlayerlistUtils::HasTag(uint32_t uAccountID, int iID, std::unordered_map<uint32_t, std::vector<int>>& mPlayerTags)
 {
 	if (!uAccountID)
@@ -237,17 +216,14 @@ bool CPlayerlistUtils::HasTag(int iIndex, int iID)
 
 
 
-int CPlayerlistUtils::GetPriority(uint32_t uAccountID, bool bCache)
+int CPlayerlistUtils::GetPriorityByType(uint32_t uAccountID, PriorityTypeEnum::PriorityTypeEnum eType)
 {
-	if (bCache)
-		return H::Entities.GetPriority(uAccountID);
-
-	const int iDefault = m_vTags[TagToIndex(DEFAULT_TAG)].m_iPriority;
+	const int iDefault = GetPriorityValue(m_vTags[TagToIndex(DEFAULT_TAG)], eType);
 	if (!uAccountID)
 		return iDefault;
 
-	if (HasTag(uAccountID, TagToIndex(IGNORED_TAG)))
-		return m_vTags[TagToIndex(IGNORED_TAG)].m_iPriority;
+	if (eType == PriorityTypeEnum::Relationship && HasTag(uAccountID, TagToIndex(IGNORED_TAG)))
+		return GetPriorityValue(m_vTags[TagToIndex(IGNORED_TAG)], eType);
 
 	std::vector<int> vPriorities;
 	if (auto it = m_mPlayerTags.find(uAccountID); it != m_mPlayerTags.end())
@@ -256,32 +232,46 @@ int CPlayerlistUtils::GetPriority(uint32_t uAccountID, bool bCache)
 		{
 			auto pTag = GetTag(iID);
 			if (pTag && !pTag->m_bLabel)
-				vPriorities.push_back(pTag->m_iPriority);
+			{
+				const int iPriority = GetPriorityValue(*pTag, eType);
+				if (eType != PriorityTypeEnum::Relationship && iPriority < 0)
+					return -1;
+
+				vPriorities.push_back(iPriority);
+			}
 		}
 	}
 	if (H::Entities.IsFriend(uAccountID))
 	{
 		auto& tTag = m_vTags[TagToIndex(FRIEND_TAG)];
 		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iPriority);
+			vPriorities.push_back(GetPriorityValue(tTag, eType));
 	}
 	if (H::Entities.InParty(uAccountID))
 	{
 		auto& tTag = m_vTags[TagToIndex(PARTY_TAG)];
 		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iPriority);
+			vPriorities.push_back(GetPriorityValue(tTag, eType));
 	}
 	if (H::Entities.IsF2P(uAccountID))
 	{
 		auto& tTag = m_vTags[TagToIndex(F2P_TAG)];
 		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iPriority);
+			vPriorities.push_back(GetPriorityValue(tTag, eType));
 	}
 	if (vPriorities.empty())
 		return iDefault;
 
 	std::sort(vPriorities.begin(), vPriorities.end(), std::greater<int>());
 	return vPriorities.front();
+}
+
+int CPlayerlistUtils::GetPriority(uint32_t uAccountID, bool bCache)
+{
+	if (bCache)
+		return H::Entities.GetPriority(uAccountID);
+
+	return GetPriorityByType(uAccountID, PriorityTypeEnum::Relationship);
 }
 int CPlayerlistUtils::GetPriority(int iIndex, bool bCache)
 {
@@ -296,48 +286,7 @@ int CPlayerlistUtils::GetFollowPriority(uint32_t uAccountID, bool bCache)
 	if (bCache)
 		return H::Entities.GetPriority(uAccountID, PriorityTypeEnum::Follow);
 
-	const int iDefault = m_vTags[TagToIndex(DEFAULT_TAG)].m_iFollowPriority;
-	if (!uAccountID)
-		return iDefault;
-
-	std::vector<int> vPriorities;
-	if (auto it = m_mPlayerTags.find(uAccountID); it != m_mPlayerTags.end())
-	{
-		for (auto& iID : it->second)
-		{
-			auto pTag = GetTag(iID);
-			if (pTag && !pTag->m_bLabel)
-			{
-				if (pTag->m_iFollowPriority < 0)
-					return -1;
-
-				vPriorities.push_back(pTag->m_iFollowPriority);
-			}
-		}
-	}
-	if (H::Entities.IsFriend(uAccountID))
-	{
-		auto& tTag = m_vTags[TagToIndex(FRIEND_TAG)];
-		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iFollowPriority);
-	}
-	if (H::Entities.InParty(uAccountID))
-	{
-		auto& tTag = m_vTags[TagToIndex(PARTY_TAG)];
-		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iFollowPriority);
-	}
-	if (H::Entities.IsF2P(uAccountID))
-	{
-		auto& tTag = m_vTags[TagToIndex(F2P_TAG)];
-		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iFollowPriority);
-	}
-	if (vPriorities.empty())
-		return iDefault;
-
-	std::sort(vPriorities.begin(), vPriorities.end(), std::greater<int>());
-	return vPriorities.front();
+	return GetPriorityByType(uAccountID, PriorityTypeEnum::Follow);
 }
 
 int CPlayerlistUtils::GetFollowPriority(int iIndex, bool bCache)
@@ -353,48 +302,7 @@ int CPlayerlistUtils::GetVotePriority(uint32_t uAccountID, bool bCache)
 	if (bCache)
 		return H::Entities.GetPriority(uAccountID, PriorityTypeEnum::Vote);
 
-	const int iDefault = m_vTags[TagToIndex(DEFAULT_TAG)].m_iVotePriority;
-	if (!uAccountID)
-		return iDefault;
-
-	std::vector<int> vPriorities;
-	if (auto it = m_mPlayerTags.find(uAccountID); it != m_mPlayerTags.end())
-	{
-		for (auto& iID : it->second)
-		{
-			auto pTag = GetTag(iID);
-			if (pTag && !pTag->m_bLabel)
-			{
-				if (pTag->m_iVotePriority < 0)
-					return -1;
-
-				vPriorities.push_back(pTag->m_iVotePriority);
-			}
-		}
-	}
-	if (H::Entities.IsFriend(uAccountID))
-	{
-		auto& tTag = m_vTags[TagToIndex(FRIEND_TAG)];
-		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iVotePriority);
-	}
-	if (H::Entities.InParty(uAccountID))
-	{
-		auto& tTag = m_vTags[TagToIndex(PARTY_TAG)];
-		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iVotePriority);
-	}
-	if (H::Entities.IsF2P(uAccountID))
-	{
-		auto& tTag = m_vTags[TagToIndex(F2P_TAG)];
-		if (!tTag.m_bLabel)
-			vPriorities.push_back(tTag.m_iVotePriority);
-	}
-	if (vPriorities.empty())
-		return iDefault;
-
-	std::sort(vPriorities.begin(), vPriorities.end(), std::greater<int>());
-	return vPriorities.front();
+	return GetPriorityByType(uAccountID, PriorityTypeEnum::Vote);
 }
 
 int CPlayerlistUtils::GetVotePriority(int iIndex, bool bCache)
@@ -606,42 +514,9 @@ const char* CPlayerlistUtils::GetPlayerName(int iIndex, const char* sDefault, in
 	return sDefault;
 }
 
-const char* CPlayerlistUtils::GetPlayerName(uint32_t uAccountID, const char* sDefault, int* pType)
-{
-	int iType = GetNameType(uAccountID);
-	if (pType) *pType = iType;
-
-	switch (iType)
-	{
-	case NameTypeEnum::Local:
-		return LOCAL;
-	case NameTypeEnum::Friend:
-		return FRIEND;
-	case NameTypeEnum::Party:
-		return PARTY;
-	case NameTypeEnum::Player:
-		if (auto pTag = GetSignificantTag(uAccountID, 0))
-			return pTag->m_sName.c_str();
-		else if (auto pResource = H::Entities.GetResource(); (iType = GetIndex(uAccountID)) && pResource && pResource->m_bValid(iType))
-			return pResource->m_iTeam(I::EngineClient->GetLocalPlayer()) != pResource->m_iTeam(iType) ? ENEMY : TEAMMATE;
-		return PLAYER;
-	case NameTypeEnum::Custom:
-		if (auto sAlias = GetPlayerAlias(uAccountID))
-			return sAlias->c_str();
-	}
-	return sDefault;
-}
-
 const char* CPlayerlistUtils::GetPlayerName(int iIndex)
 {
 	auto pResource = H::Entities.GetResource();
-	return pResource && pResource->IsValid(iIndex) ? pResource->GetName(iIndex) : PLAYER_ERROR_NAME;
-}
-
-const char* CPlayerlistUtils::GetPlayerName(uint32_t uAccountID)
-{
-	auto pResource = H::Entities.GetResource();
-	int iIndex = GetIndex(uAccountID);
 	return pResource && pResource->IsValid(iIndex) ? pResource->GetName(iIndex) : PLAYER_ERROR_NAME;
 }
 
@@ -671,10 +546,6 @@ void CPlayerlistUtils::Store()
 		uint32_t uAccountID = pResource->m_iAccountID(n);
 		const char* sName = pResource->GetName(n);
 		
-		// (dont) Process special characters in player names
-		//if (sName && uAccountID)
-		//	ProcessSpecialCharsInName(uAccountID, sName);
-
 		m_vPlayerCache.emplace_back(
 			sName,
 			uAccountID,
@@ -773,7 +644,7 @@ std::vector<MarkedPlayer_t> CPlayerlistUtils::GetMarkedPlayers()
 	std::vector<MarkedPlayer_t> vMarkedPlayers = {};
 	vMarkedPlayers.reserve(vTaggedAccounts.size());
 
-	auto getRoleTag = [&](const std::vector<int>& vTags, uint32_t uAccountID) -> PriorityLabel_t
+	auto getRoleTag = [&](const std::vector<int>& vTags) -> PriorityLabel_t
 	{
 		std::vector<PriorityLabel_t*> vRoles = {};
 		if (std::ranges::find(vTags, TagToIndex(IGNORED_TAG)) != vTags.end())
@@ -824,7 +695,7 @@ std::vector<MarkedPlayer_t> CPlayerlistUtils::GetMarkedPlayers()
 			}
 		}
 
-		tPlayer.m_tRole = getRoleTag(vTags, uAccountID);
+		tPlayer.m_tRole = getRoleTag(vTags);
 		tPlayer.m_sRoleName = tPlayer.m_tRole.m_sName;
 		vMarkedPlayers.emplace_back(std::move(tPlayer));
 	}
@@ -930,20 +801,6 @@ void CPlayerlistUtils::UpdateCheaterRecord(uint32_t uAccountID, const char* sNam
 	tRecord.m_iTimestamp = I::GlobalVars ? I::GlobalVars->tickcount : int(std::time(nullptr));
 
 	m_bCheaterSave = true;
-}
-
-void CPlayerlistUtils::RemoveCheaterRecord(uint32_t uAccountID, bool bMarkSave)
-{
-	if (!uAccountID)
-		return;
-
-	{
-		std::lock_guard tLock(m_tMutex);
-		if (!m_mCheaterRecords.erase(uAccountID))
-			return;
-	}
-	if (bMarkSave)
-		m_bCheaterSave = true;
 }
 
 std::vector<std::pair<uint32_t, CheaterRecord_t>> CPlayerlistUtils::GetCheaterVector()

@@ -437,11 +437,6 @@ bool CSkinChanger::CanBotkiller(int iKey)
 	return BotkillerOffset(iKey) >= 0;
 }
 
-int CSkinChanger::BotkillerDef(int iKey, int iHead)
-{
-	return BotkillerTargetDef(iKey, iHead);
-}
-
 void CSkinChanger::GetKits(int iKey, bool bAllowUnsupported, int iCurrent, std::vector<std::string>& vNames, std::vector<int>& vIds)
 {
 	vNames = { "None" };
