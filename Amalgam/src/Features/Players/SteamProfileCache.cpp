@@ -16,6 +16,12 @@ static constexpr Color_t LogColor = { 175, 150, 255, 255 };
 static constexpr Color_t ErrorColor = { 255, 150, 150, 255 };
 static constexpr auto AvatarRefreshAge = std::chrono::days(7);
 static constexpr uint32_t MaxAvatarDimension = 1024;
+static constexpr double AvatarRequestTimeout = 8.0;
+
+static double NowSeconds()
+{
+	return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 using RegisterCallbackFn = void(__cdecl*)(CCallbackBase*, int);
 using UnregisterCallbackFn = void(__cdecl*)(CCallbackBase*);
@@ -328,6 +334,27 @@ void CSteamProfileCache::Pump()
 		CaptureSteamAvatar(uAccountID, iImage);
 }
 
+bool CSteamProfileCache::IsAvatarPending(uint32_t uAccountID)
+{
+	if (!uAccountID)
+		return false;
+
+	TouchAvatar(uAccountID);
+	std::lock_guard tLock(m_mutex);
+	const auto it = m_mEntries.find(uAccountID);
+	if (it == m_mEntries.end() || it->second.m_pAvatarPixels)
+		return false;
+
+	auto& tEntry = it->second;
+	if (tEntry.m_bAvatarRequested && !tEntry.m_bAvatarUnavailable
+		&& NowSeconds() - tEntry.m_flAvatarRequestedAt > AvatarRequestTimeout)
+	{
+		tEntry.m_bAvatarRequested = false;
+		tEntry.m_bAvatarUnavailable = true;
+	}
+	return tEntry.m_bAvatarRequested || tEntry.m_bDiskLoadQueued || tEntry.m_iPendingImage > 0;
+}
+
 std::string CSteamProfileCache::GetPersonaName(uint32_t uAccountID)
 {
 	if (!uAccountID)
@@ -388,13 +415,15 @@ void CSteamProfileCache::RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, boo
 	{
 		const bool bFresh = tEntry.m_pAvatarPixels && tEntry.m_tAvatarTimestamp.time_since_epoch().count()
 			&& std::filesystem::file_time_type::clock::now() - tEntry.m_tAvatarTimestamp < AvatarRefreshAge;
-		if (bFresh || tEntry.m_bAvatarRequested)
+		if (bFresh || tEntry.m_bAvatarRequested || tEntry.m_bAvatarUnavailable)
 			return;
 	}
 
 	const CSteamID tSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual);
 	I::SteamFriends->RequestUserInformation(tSteamID, false);
 	tEntry.m_bAvatarRequested = true;
+	tEntry.m_bAvatarUnavailable = false;
+	tEntry.m_flAvatarRequestedAt = NowSeconds();
 	if (const int iImage = I::SteamFriends->GetLargeFriendAvatar(tSteamID); iImage > 0)
 		tEntry.m_iPendingImage = iImage;
 }
@@ -450,6 +479,7 @@ void CSteamProfileCache::StoreAvatar(uint32_t uAccountID, std::vector<uint8_t>&&
 
 	auto& tEntry = m_mEntries[uAccountID];
 	tEntry.m_bAvatarRequested = false;
+	tEntry.m_bAvatarUnavailable = false;
 	if (tEntry.m_pAvatarPixels)
 	{
 		// the game feeds small thumbnails through the same path, never swap a larger avatar for one

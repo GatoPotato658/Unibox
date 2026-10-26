@@ -1,6 +1,134 @@
 #pragma once
 
 #include "Render.h"
+#include "Easings/Easings.h"
+#include <ImGui/imgui_internal.h>
+
+struct IndicatorAnim_t
+{
+	float m_flAnim = 0.f;
+
+	float Update(bool bVisible, bool& bOpening, float flDuration = 0.20f)
+	{
+		const float flDelta = ImGui::GetIO().DeltaTime > 0.f ? ImGui::GetIO().DeltaTime : (1.f / 60.f);
+		if (bVisible)
+		{
+			bOpening = true;
+			m_flAnim = std::min(1.0f, m_flAnim + flDelta / flDuration);
+		}
+		else
+		{
+			bOpening = false;
+			m_flAnim = std::max(0.0f, m_flAnim - flDelta / flDuration);
+		}
+		return m_flAnim;
+	}
+
+	bool ShouldDraw(bool bVisible) const
+	{
+		return bVisible || m_flAnim > 0.0001f;
+	}
+};
+
+static inline void TransformIndicatorVertices(
+	ImDrawList* pDrawList,
+	int iVtxStart,
+	int iVtxEnd,
+	int iCmdStart,
+	int iCmdEnd,
+	float flAnim,
+	bool bOpening,
+	ImVec2 vDisplay,
+	ImVec2 vExplicitCenter = { -FLT_MAX, -FLT_MAX })
+{
+	if (!pDrawList || iVtxEnd <= iVtxStart || flAnim >= 1.0f)
+		return;
+
+	const float flT = std::clamp(flAnim, 0.0f, 1.0f);
+	float flScaleX = 0.f, flScaleY = 0.f;
+	if (bOpening)
+	{
+		const float flEaseY = Ease::OutCubic(flT);
+		const float flEaseX = Ease::OutCubic(powf(flT, 1.35f));
+		const float flPop = 0.04f * sinf(flT * 3.14159265f);
+		flScaleY = flEaseY * (1.0f + flPop);
+		flScaleX = flEaseX * (1.0f + flPop);
+	}
+	else
+	{
+		const float flEaseY = Ease::InCubic(flT);
+		const float flEaseX = Ease::InCubic(powf(flT, 1.35f));
+		flScaleY = flEaseY;
+		flScaleX = flEaseX;
+	}
+	flScaleX = std::max(0.0001f, flScaleX);
+	flScaleY = std::max(0.0001f, flScaleY);
+	const float flAlpha = std::clamp(flT * (bOpening ? 1.5f : 1.2f), 0.0f, 1.0f);
+
+	ImVec2 vCenter = vExplicitCenter;
+	if (vCenter.x == -FLT_MAX)
+	{
+		ImVec2 vMin(FLT_MAX, FLT_MAX), vMax(-FLT_MAX, -FLT_MAX);
+		for (int i = iVtxStart; i < iVtxEnd; i++)
+		{
+			const auto& pos = pDrawList->VtxBuffer[i].pos;
+			vMin.x = std::min(vMin.x, pos.x);
+			vMin.y = std::min(vMin.y, pos.y);
+			vMax.x = std::max(vMax.x, pos.x);
+			vMax.y = std::max(vMax.y, pos.y);
+		}
+		vCenter = ImVec2((vMin.x + vMax.x) * 0.5f, (vMin.y + vMax.y) * 0.5f);
+	}
+
+	for (int i = iVtxStart; i < iVtxEnd; i++)
+	{
+		auto& vtx = pDrawList->VtxBuffer[i];
+		vtx.pos.x = vCenter.x + (vtx.pos.x - vCenter.x) * flScaleX;
+		vtx.pos.y = vCenter.y + (vtx.pos.y - vCenter.y) * flScaleY;
+
+		if (flAlpha < 0.999f)
+		{
+			const ImU32 a = (vtx.col >> IM_COL32_A_SHIFT) & 0xFF;
+			const ImU32 new_a = static_cast<ImU32>(a * flAlpha);
+			vtx.col = (vtx.col & ~IM_COL32_A_MASK) | (new_a << IM_COL32_A_SHIFT);
+		}
+	}
+
+	for (int i = iCmdStart; i < iCmdEnd; i++)
+	{
+		auto& cmd = pDrawList->CmdBuffer[i];
+		float x1 = std::clamp(vCenter.x + (cmd.ClipRect.x - vCenter.x) * flScaleX, 0.f, vDisplay.x);
+		float y1 = std::clamp(vCenter.y + (cmd.ClipRect.y - vCenter.y) * flScaleY, 0.f, vDisplay.y);
+		float x2 = std::clamp(vCenter.x + (cmd.ClipRect.z - vCenter.x) * flScaleX, 0.f, vDisplay.x);
+		float y2 = std::clamp(vCenter.y + (cmd.ClipRect.w - vCenter.y) * flScaleY, 0.f, vDisplay.y);
+		cmd.ClipRect = ImVec4(std::min(x1, x2), std::min(y1, y2), std::max(x1, x2), std::max(y1, y2));
+	}
+}
+
+static inline void TransformWindowDrawList(
+	ImGuiWindow* pWindow,
+	float flAnim,
+	bool bOpening,
+	ImVec2 vDisplay)
+{
+	if (!pWindow || !pWindow->DrawList || flAnim >= 1.0f)
+		return;
+
+	if (pWindow->DrawList->_Splitter._Count > 1)
+		pWindow->DrawList->ChannelsMerge();
+
+	const ImVec2 vCenter = ImVec2(pWindow->Pos.x + pWindow->Size.x * 0.5f, pWindow->Pos.y + pWindow->Size.y * 0.5f);
+	TransformIndicatorVertices(
+		pWindow->DrawList,
+		0,
+		pWindow->DrawList->VtxBuffer.Size,
+		0,
+		pWindow->DrawList->CmdBuffer.Size,
+		flAnim,
+		bOpening,
+		vDisplay,
+		vCenter);
+}
 #include <algorithm>
 #include <cfloat>
 #include <cmath>

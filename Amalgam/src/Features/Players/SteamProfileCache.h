@@ -26,6 +26,7 @@ public:
 	void Shutdown();
 	void Touch(uint32_t uAccountID);
 	void TouchAvatar(uint32_t uAccountID);
+	bool IsAvatarPending(uint32_t uAccountID);
 	void Refresh(uint32_t uAccountID);
 	void Pump();
 	std::string GetPersonaName(uint32_t uAccountID);
@@ -54,6 +55,8 @@ private:
 		bool m_bDiskLoadQueued = false;
 		bool m_bNameRequested = false;
 		bool m_bAvatarRequested = false;
+		bool m_bAvatarUnavailable = false;
+		double m_flAvatarRequestedAt = 0.0;
 		bool m_bSavePending = false;
 		int m_iPendingImage = 0;
 	};

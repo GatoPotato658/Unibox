@@ -480,9 +480,22 @@ void CNavBotCore::CacheDrawInfo(CTFPlayer* pLocal)
 
 void CNavBotCore::Draw()
 {
+	static IndicatorAnim_t tAnim;
+	static std::vector<NavIndicatorLine_t> s_vLastValidLines;
+
 	const std::vector<NavIndicatorLine_t> vCachedLines = m_tDrawCache.Get();
-	if (vCachedLines.empty())
+	if (!vCachedLines.empty())
+		s_vLastValidLines = vCachedLines;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) != 0;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && !vCachedLines.empty();
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 		return;
+
+	const auto& vDraw = !vCachedLines.empty() ? vCachedLines : s_vLastValidLines;
 
 	int x = Vars::Menu::NavBotDisplay.Value.x;
 	const int y = Vars::Menu::NavBotDisplay.Value.y + 8;
@@ -502,11 +515,16 @@ void CNavBotCore::Draw()
 		eAlign = ALIGN_TOPRIGHT;
 	}
 
-	for (size_t i = 0; i < vCachedLines.size(); i++)
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
+	for (size_t i = 0; i < vDraw.size(); i++)
 	{
 		const int iY = y + static_cast<int>(i) * nTall;
-		DrawIndicatorText(pDrawList, x, iY, vCachedLines[i].m_tColor, Vars::Menu::Theme::Background.Value, eAlign, vCachedLines[i].m_sText);
+		DrawIndicatorText(pDrawList, x, iY, vDraw[i].m_tColor, Vars::Menu::Theme::Background.Value, eAlign, vDraw[i].m_sText);
 	}
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
 }
 
 void CNavBotCore::DrawDangerOverlay(CTFPlayer* pLocal)

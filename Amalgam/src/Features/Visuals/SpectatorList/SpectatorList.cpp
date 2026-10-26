@@ -3,6 +3,7 @@
 #include "../../ImGui/Menu/Components.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../Spectate/Spectate.h"
+#include "../../ImGui/IndicatorPanel.h"
 
 bool CSpectatorList::GetSpectators(CTFPlayer* pTarget)
 {
@@ -107,15 +108,28 @@ void CSpectatorList::Draw()
 {
 	using namespace ImGui;
 
+	static IndicatorAnim_t tAnim;
+	static std::vector<Spectator_t> s_vLastValidSpectators;
+
 	const std::vector<Spectator_t> vSpectators = m_tDrawCache.Get();
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators) || (vSpectators.empty() && !F::Menu.m_bIsOpen))
+	if (!vSpectators.empty())
+		s_vLastValidSpectators = vSpectators;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators) != 0;
+	const bool bVisible = bEnabled && (!vSpectators.empty() || F::Menu.m_bIsOpen);
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 		return;
+
+	const auto& vActiveSpectators = !vSpectators.empty() ? vSpectators : s_vLastValidSpectators;
 
 	ImFont* pSmall = F::Render.FontSmall, *pRegular = F::Render.FontRegular;
 	auto fTextWidth = [](ImFont* pFont, const char* sText) { return pFont->CalcTextSizeA(pFont->LegacySize, FLT_MAX, 0.f, sText).x; };
 	std::vector<std::string> vRespawns = {};
 	float flNameWidth = 0.f, flRespawnWidth = 0.f, flChipWidth = 0.f;
-	for (auto& tSpectator : vSpectators)
+	for (auto& tSpectator : vActiveSpectators)
 	{
 		vRespawns.push_back(tSpectator.m_flRespawnIn >= 0.f ? std::format("{}s", static_cast<int>(tSpectator.m_flRespawnIn)) : "");
 		flNameWidth = std::max(flNameWidth, fTextWidth(pRegular, tSpectator.m_sName.c_str()));
@@ -125,7 +139,7 @@ void CSpectatorList::Draw()
 
 	const float flPad = H::Draw.Scale(12), flHeader = H::Draw.Scale(32), flRow = H::Draw.Scale(26), flTop = flHeader + H::Draw.Scale(6);
 	const float flWidth = std::max(flPad * 2 + flNameWidth + H::Draw.Scale(18) + (flRespawnWidth ? flRespawnWidth + H::Draw.Scale(10) : 0.f) + flChipWidth, H::Draw.Scale(170));
-	const float flHeight = flTop + flRow * vSpectators.size() + H::Draw.Scale(vSpectators.empty() ? 0 : 6);
+	const float flHeight = flTop + flRow * vActiveSpectators.size() + H::Draw.Scale(vActiveSpectators.empty() ? 0 : 6);
 	SetNextWindowSize({ flWidth, flHeight }, ImGuiCond_Always);
 
 	static DragBox_t tOld = { -2147483648, -2147483648 };
@@ -134,19 +148,26 @@ void CSpectatorList::Draw()
 		SetNextWindowPos({ float(tDragBox.x), float(tDragBox.y) }, ImGuiCond_Always);
 
 	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(40), H::Draw.Scale(32) });
-	if (Begin("Spectators", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings))
+	ImGuiWindowFlags iWindowFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+	if (flAnim < 1.0f)
+		iWindowFlags |= ImGuiWindowFlags_NoInputs;
+
+	if (Begin("Spectators", nullptr, iWindowFlags))
 	{
 		const ImVec2 vWindowPos = GetWindowPos();
 
 		RenderOverlayWindow(flHeader, ICON_MD_VISIBILITY, "Spectators");
 
-		tDragBox.x = vWindowPos.x; tDragBox.y = vWindowPos.y; tOld = tDragBox;
-		if (F::Menu.m_bIsOpen)
-			FSet(Vars::Menu::SpectatorsDisplay, tDragBox);
+		if (flAnim >= 1.0f)
+		{
+			tDragBox.x = vWindowPos.x; tDragBox.y = vWindowPos.y; tOld = tDragBox;
+			if (F::Menu.m_bIsOpen)
+				FSet(Vars::Menu::SpectatorsDisplay, tDragBox);
+		}
 
 		ImDrawList* pDrawList = GetWindowDrawList();
 		int i = 0;
-		for (auto& tSpectator : vSpectators)
+		for (auto& tSpectator : vActiveSpectators)
 		{
 			ImVec4 tName = F::Render.Active.Value;
 			if (tSpectator.m_bIsFriend)
@@ -170,6 +191,12 @@ void CSpectatorList::Draw()
 		}
 
 		End();
+
+		if (flAnim < 1.0f)
+		{
+			if (ImGuiWindow* pWindow = FindWindowByName("Spectators"))
+				TransformWindowDrawList(pWindow, flAnim, bOpening, GetIO().DisplaySize);
+		}
 	}
 	PopStyleVar();
 }

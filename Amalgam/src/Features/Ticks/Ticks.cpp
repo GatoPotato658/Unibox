@@ -542,15 +542,26 @@ void CTicks::CacheDrawInfo(CTFPlayer* pLocal)
 void CTicks::Draw()
 {
 	static float flCurrentProgress = 0.f;
+	static IndicatorAnim_t tAnim;
+	static DrawCache_t s_tLastValidCache;
 
 	const DrawCache_t tCache = m_tDrawCache.Get();
-	if (!tCache.m_bValid)
+	if (tCache.m_bValid)
+		s_tLastValidCache = tCache;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks) != 0;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && tCache.m_bValid;
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 	{
 		flCurrentProgress = 0.f;
 		return;
 	}
 
-	const float flTargetProgress = tCache.m_iMaxTicks > 0 ? static_cast<float>(tCache.m_iTicks) / static_cast<float>(tCache.m_iMaxTicks) : 0.f;
+	const auto& tDraw = tCache.m_bValid ? tCache : s_tLastValidCache;
+	const float flTargetProgress = tDraw.m_iMaxTicks > 0 ? static_cast<float>(tDraw.m_iTicks) / static_cast<float>(tDraw.m_iMaxTicks) : 0.f;
 	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
@@ -562,17 +573,23 @@ void CTicks::Draw()
 		static_cast<float>(dtPos.y)
 	};
 
+	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
 	DrawIndicatorPanel(
-		ImGui::GetBackgroundDrawList(),
+		pDrawList,
 		vPanelPos,
 		flPanelWidth,
 		flPanelHeight,
 		"Ticks",
-		std::format("{} / {}", tCache.m_iTicks, tCache.m_iMaxTicks).c_str(),
+		std::format("{} / {}", tDraw.m_iTicks, tDraw.m_iMaxTicks).c_str(),
 		Vars::Menu::Theme::Active.Value,
 		Vars::Menu::Theme::Active.Value,
-		tCache.m_bWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255),
+		tDraw.m_bWait ? Color_t(255, 150, 0, 255) : Color_t(0, 255, 100, 255),
 		flCurrentProgress,
-		tCache.m_bWait,
+		tDraw.m_bWait,
 		"Not Ready");
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
 }

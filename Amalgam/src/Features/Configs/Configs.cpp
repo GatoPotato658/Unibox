@@ -49,6 +49,13 @@ static std::filesystem::path GetConfigFilePath(const std::string& sDirectory, co
 
 using ConfigMapRestore = std::vector<std::function<void()>>;
 
+struct LoadingScope_t
+{
+	std::atomic_bool& m_bLoading;
+	explicit LoadingScope_t(std::atomic_bool& bLoading) : m_bLoading(bLoading) { m_bLoading = true; }
+	~LoadingScope_t() { m_bLoading = false; }
+};
+
 static ConfigMapRestore CaptureConfigMaps()
 {
 	ConfigMapRestore vRestore;
@@ -795,6 +802,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 
 bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 {
+	LoadingScope_t tLoading(m_bConfigLoading);
 	SDK::CInitTimingScope tLoad("Configs.LoadConfig");
 	const std::filesystem::path tPath = GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension);
 	if (tPath.empty())
@@ -1066,6 +1074,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 
 bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 {
+	LoadingScope_t tLoading(m_bVisualsLoading);
 	const std::filesystem::path tPath = GetConfigFilePath(m_sVisualsPath, sConfigName, m_sConfigExtension);
 	if (tPath.empty())
 		return false;
@@ -1338,6 +1347,7 @@ bool CConfigs::SaveSkins(const std::string& sConfigName, bool bNotify)
 
 bool CConfigs::LoadSkins(const std::string& sConfigName, bool bNotify)
 {
+	LoadingScope_t tLoading(m_bSkinsLoading);
 	const std::filesystem::path tPath = GetConfigFilePath(m_sSkinsPath, sConfigName, m_sConfigExtension);
 	if (tPath.empty())
 		return false;

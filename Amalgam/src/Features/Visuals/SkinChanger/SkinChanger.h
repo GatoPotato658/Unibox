@@ -78,6 +78,7 @@ class CSkinChanger
 	std::unordered_map<int, Skin_t> m_mSkins;
 	std::vector<BackpackItem_t> m_vBackpack = {};
 	uint32_t m_uNextSerial = 1;
+	bool m_bInventoryLoaded = false;
 	std::unordered_map<uint64_t, void*> m_mClientItemsByID = {};
 	std::unordered_set<uint64_t> m_tFailedItems = {};
 	std::unordered_map<uint64_t, int> m_mAppliedUnusual = {};
@@ -173,9 +174,11 @@ public:
 	std::vector<BackpackItem_t> GetBackpack();
 	void SetBackpack(std::vector<BackpackItem_t> vBackpack);
 	std::vector<const ItemInfo_t*> GetInventoryItems();
+	bool IsInventoryLoading();
 	int GetInventoryCount(uint16_t iDef);
 
 	static const std::vector<ItemInfo_t>& GetItems();
+	static bool IsCatalogueLoading();
 
 	static int Key(int iDefIndex);
 	static const char* WeaponName(int iKey);

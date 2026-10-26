@@ -207,6 +207,21 @@ namespace ImGui
 		return flValue;
 	}
 
+	inline float Reveal(ImGuiID uID, int iSalt, bool bVisible, float flSpeed = 14.f)
+	{
+		static std::unordered_map<uint64_t, std::pair<bool, float>> mReveal = {};
+
+		auto [it, bNew] = mReveal.try_emplace((uint64_t(uID) << 8) | uint64_t(iSalt & 0xFF), std::pair{ false, 0.f });
+		auto& [bWasVisible, flValue] = it->second;
+		if (bVisible && !bWasVisible)
+			flValue = 0.f;
+		bWasVisible = bVisible;
+		flValue = ImLerp(flValue, bVisible ? 1.f : 0.f, std::clamp(GetIO().DeltaTime * flSpeed, 0.f, 1.f));
+		if (fabsf(flValue - (bVisible ? 1.f : 0.f)) < 0.003f)
+			flValue = bVisible ? 1.f : 0.f;
+		return flValue;
+	}
+
 	inline ImU32 FadeColor(const ImVec4& tColor, float flMul = 1.f)
 	{
 		return GetColorU32(ImVec4(tColor.x, tColor.y, tColor.z, tColor.w * flMul));
@@ -654,9 +669,9 @@ namespace ImGui
 		}
 	}
 
-	inline bool FBeginPopup(const char* sLabel, float flOffset = 0.f, ImGuiWindowFlags iFlags = ImGuiWindowFlags_NoSavedSettings)
+	inline bool FBeginPopup(const char* sLabel, float flOffset = 0.f, ImGuiWindowFlags iFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)
 	{
-		bool bReturn = BeginPopup(sLabel, iFlags | ImGuiWindowFlags_NoBackground);
+		bool bReturn = BeginPopup(sLabel, iFlags | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
 
 		if (bReturn)
 		{
@@ -669,11 +684,11 @@ namespace ImGui
 		return bReturn;
 	}
 
-	inline bool FBeginPopupModal(const char* sLabel, float flOffset = 0.f, bool* pOpen = nullptr, ImGuiWindowFlags iFlags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings)
+	inline bool FBeginPopupModal(const char* sLabel, float flOffset = 0.f, bool* pOpen = nullptr, ImGuiWindowFlags iFlags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)
 	{
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(16), H::Draw.Scale(14) });
 		PushStyleVar(ImGuiStyleVar_ItemSpacing, { H::Draw.Scale(8), 0 });
-		bool bReturn = BeginPopupModal(sLabel, pOpen, iFlags | ImGuiWindowFlags_NoBackground);
+		bool bReturn = BeginPopupModal(sLabel, pOpen, iFlags | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
 
 		if (bReturn)
 		{
@@ -743,7 +758,7 @@ namespace ImGui
 	{
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(5), H::Draw.Scale(5) });
 		SetNextWindowSizeConstraints({ H::Draw.Scale(170), 0 }, { FLT_MAX, FLT_MAX });
-		const bool bReturn = FBeginPopup(sLabel, 0.f, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize);
+		const bool bReturn = FBeginPopup(sLabel, 0.f, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar);
 		PopStyleVar();
 		if (bReturn)
 			PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
@@ -847,7 +862,10 @@ namespace ImGui
 		pWindow->DC.CursorMaxPos.y = std::max(pWindow->DC.CursorMaxPos.y, vMin.y + flHeight);
 
 		if (bReturn)
+		{
+			GetCurrentWindow()->Flags |= ImGuiWindowFlags_NoScrollbar;
 			RenderBackground(F::Render.Popup);
+		}
 		return bReturn;
 	}
 
@@ -1053,6 +1071,102 @@ namespace ImGui
 		DebugDummy({});
 	}
 
+	inline void FSkeletonRect(ImDrawList* pDrawList, ImVec2 vMin, ImVec2 vMax, float flRounding = H::Draw.Scale(4), float flAlpha = 1.f)
+	{
+		if (!pDrawList || vMax.x <= vMin.x || vMax.y <= vMin.y || flAlpha <= 0.f)
+			return;
+
+		flAlpha *= Transparent || Disabled ? 0.5f : 1.f;
+		const float flWidth = vMax.x - vMin.x;
+		const float flPhase = fmodf(float(GetTime()) * 0.8f, 1.f);
+		const float flBand = std::max(flWidth * 0.7f, H::Draw.Scale(24));
+		const float flBandX = vMin.x - flBand + (flWidth + flBand) * flPhase;
+		const ImU32 uEdge = FadeColor(F::Render.Active, 0.f);
+		const ImU32 uCenter = FadeColor(F::Render.Active, 0.055f * flAlpha);
+
+		pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Background1p5L, flAlpha), flRounding);
+		pDrawList->PushClipRect(vMin, vMax, true);
+		{
+			const float flMiddle = flBandX + flBand / 2.f;
+			pDrawList->AddRectFilledMultiColor({ flBandX, vMin.y }, { flMiddle, vMax.y }, uEdge, uCenter, uCenter, uEdge);
+			pDrawList->AddRectFilledMultiColor({ flMiddle, vMin.y }, { flBandX + flBand, vMax.y }, uCenter, uEdge, uEdge, uCenter);
+		}
+		pDrawList->PopClipRect();
+	}
+
+	inline void FSkeletonLine(ImDrawList* pDrawList, ImVec2 vMin, float flWidth, float flHeight = H::Draw.Scale(9), float flAlpha = 1.f)
+	{
+		FSkeletonRect(pDrawList, vMin, vMin + ImVec2(flWidth, flHeight), flHeight / 2.f, flAlpha);
+	}
+
+	inline void FSkeletonRows(float flTop, int iCount, float flHeight = H::Draw.Scale(30), float flIndent = 0.f)
+	{
+		const float flWidth = GetWindowWidth() - GetStyle().WindowPadding.x * 2 - flIndent;
+		ImDrawList* pDrawList = GetWindowDrawList();
+		for (int i = 0; i < iCount; i++)
+		{
+			const ImVec2 vMin = GetDrawPos() + ImVec2(GetStyle().WindowPadding.x + flIndent, flTop + i * (flHeight + H::Draw.Scale(2)));
+			const ImVec2 vMax = vMin + ImVec2(flWidth, flHeight);
+			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Background1p5, 0.55f), H::Draw.Scale(5));
+			FSkeletonRect(pDrawList, vMin + ImVec2(H::Draw.Scale(8), floorf((flHeight - H::Draw.Scale(16)) / 2)), vMin + ImVec2(H::Draw.Scale(24), floorf((flHeight + H::Draw.Scale(16)) / 2)), H::Draw.Scale(4));
+			FSkeletonLine(pDrawList, vMin + ImVec2(H::Draw.Scale(32), floorf((flHeight - H::Draw.Scale(8)) / 2)), std::min(H::Draw.Scale(150), flWidth * 0.4f), H::Draw.Scale(8));
+			FSkeletonLine(pDrawList, vMin + ImVec2(flWidth - H::Draw.Scale(54), floorf((flHeight - H::Draw.Scale(8)) / 2)), H::Draw.Scale(40), H::Draw.Scale(8));
+		}
+		SetCursorPosY(flTop + iCount * (flHeight + H::Draw.Scale(2)));
+		DebugDummy({});
+	}
+
+	inline void FSkeletonCards(float flTop, int iCount = 6)
+	{
+		const float flPad = GetStyle().WindowPadding.x, flWidth = GetWindowWidth() - flPad * 2;
+		const float flGap = H::Draw.Scale(8), flHeight = H::Draw.Scale(52);
+		const int iColumns = std::clamp(int((flWidth + flGap) / H::Draw.Scale(250)), 1, 3);
+		const float flCardWidth = floorf((flWidth - flGap * (iColumns - 1)) / iColumns);
+		const int iRows = (iCount + iColumns - 1) / iColumns;
+		ImDrawList* pDrawList = GetWindowDrawList();
+
+		for (int i = 0; i < iCount; i++)
+		{
+			const ImVec2 vMin = GetDrawPos() + ImVec2(flPad + (i % iColumns) * (flCardWidth + flGap), flTop + (i / iColumns) * (flHeight + flGap));
+			const ImVec2 vMax = vMin + ImVec2(flCardWidth, flHeight);
+			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Background1p5, 0.55f), H::Draw.Scale(6));
+			FSkeletonRect(pDrawList, vMin + ImVec2(H::Draw.Scale(10), H::Draw.Scale(10)), vMin + ImVec2(H::Draw.Scale(42), H::Draw.Scale(42)), H::Draw.Scale(5));
+			FSkeletonLine(pDrawList, vMin + ImVec2(H::Draw.Scale(52), H::Draw.Scale(15)), std::min(flCardWidth * 0.48f, H::Draw.Scale(120)), H::Draw.Scale(9));
+			FSkeletonLine(pDrawList, vMin + ImVec2(H::Draw.Scale(52), H::Draw.Scale(30)), std::min(flCardWidth * 0.66f, H::Draw.Scale(160)), H::Draw.Scale(7));
+		}
+
+		SetCursorPosY(flTop + iRows * (flHeight + flGap) - flGap);
+		DebugDummy({});
+	}
+
+	inline void FSkeletonGrid(float flTop, float flHeight, int iColumns, float flCellWidth, float flIconHeight, int iCount = 8)
+	{
+		if (iColumns <= 0 || iCount <= 0)
+			return;
+
+		const float flSpacing = GetStyle().ItemSpacing.x;
+		const float flCellHeight = H::Draw.Scale(6) + flIconHeight + H::Draw.Scale(21);
+		const int iRows = (iCount + iColumns - 1) / iColumns;
+		ImDrawList* pDrawList = GetWindowDrawList();
+		const ImVec2 vOrigin = GetCursorScreenPos();
+		for (int i = 0; i < iCount; i++)
+		{
+			const ImVec2 vMin = vOrigin + ImVec2((i % iColumns) * (flCellWidth + flSpacing), (i / iColumns) * (flCellHeight + flSpacing));
+			const ImVec2 vMax = vMin + ImVec2(flCellWidth, flCellHeight);
+			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Background1p5, 0.55f), H::Draw.Scale(5));
+			FSkeletonRect(pDrawList, vMin + ImVec2(H::Draw.Scale(7), H::Draw.Scale(6)), vMin + ImVec2(flCellWidth - H::Draw.Scale(7), H::Draw.Scale(6) + flIconHeight), H::Draw.Scale(4));
+			FSkeletonLine(pDrawList, vMin + ImVec2(H::Draw.Scale(12), H::Draw.Scale(6) + flIconHeight + H::Draw.Scale(7)), flCellWidth - H::Draw.Scale(24), H::Draw.Scale(8));
+		}
+
+		SetCursorPosY(flTop + iRows * (flCellHeight + flSpacing) - flSpacing);
+		DebugDummy({ 0, std::min(GetContentRegionAvail().y, std::max(0.f, flHeight - (iRows * (flCellHeight + flSpacing) - flSpacing))) });
+	}
+
+	inline void FSkeletonList(float flTop, int iRows = 3)
+	{
+		FSkeletonRows(flTop + H::Draw.Scale(2), iRows, H::Draw.Scale(30), 0.f);
+	}
+
 	inline void FToolbarSearch(std::string& sSearch, int iButtons)
 	{
 		const float flWidth = GetWindowWidth() - GetStyle().WindowPadding.x * 2;
@@ -1078,24 +1192,26 @@ namespace ImGui
 		bool m_bRemove = false;
 		bool m_bMenu = false;
 	};
-	inline ProfileCard_t FProfileCard(ImTextureID pAvatar, const std::string& sName, const std::string& sDetail, const ImVec4& tColor, const std::string& sBadge, const char* sRemove, ImVec2 vPos, ImVec2 vSize)
+	inline ProfileCard_t FProfileCard(ImTextureID pAvatar, const std::string& sName, const std::string& sDetail, const ImVec4& tColor, const std::string& sBadge, const char* sRemove, ImVec2 vPos, ImVec2 vSize, bool bLoading = false)
 	{
 		ProfileCard_t tReturn = {};
 		const ImVec2 vMin = GetDrawPos() + vPos, vMax = vMin + vSize;
 		ImDrawList* pDrawList = GetWindowDrawList();
 
 		SetCursorPos(vPos);
-		SetNextItemAllowOverlap();
-		InvisibleButton("##Card", vSize);
+		Dummy(vSize);
 		const bool bWithin = IsWindowHovered() && IsMouseHoveringRect(vMin, vMax);
-		const float flHover = Anim(GetItemID(), 0, bWithin || IsPopupOpen("##Menu") ? 1.f : 0.f);
+		const float flHover = Anim(GetID("##Card"), 0, bWithin || IsPopupOpen("##Menu") ? 1.f : 0.f);
 		pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, flHover)), H::Draw.Scale(6));
 
 		const float flAvatar = H::Draw.Scale(32), flInset = floorf((vSize.y - flAvatar) / 2);
 		const ImVec2 vAvatarMin = vMin + ImVec2(flInset, flInset), vAvatarMax = vAvatarMin + ImVec2(flAvatar, flAvatar);
+		const float flAvatarFade = Reveal(GetID("##Avatar"), 0, pAvatar != static_cast<ImTextureID>(0), 12.f);
+		if (bLoading || flAvatarFade < 0.999f)
+			FSkeletonRect(pDrawList, vAvatarMin, vAvatarMax, H::Draw.Scale(5), 1.f - flAvatarFade);
 		if (pAvatar)
-			pDrawList->AddImageRounded(pAvatar, vAvatarMin, vAvatarMax, { 0, 0 }, { 1, 1 }, FadeColor(ImVec4(1, 1, 1, 1)), H::Draw.Scale(5));
-		else
+			pDrawList->AddImageRounded(pAvatar, vAvatarMin, vAvatarMax, { 0, 0 }, { 1, 1 }, FadeColor(ImVec4(1, 1, 1, 1), flAvatarFade), H::Draw.Scale(5));
+		else if (!bLoading)
 		{
 			pDrawList->AddRectFilled(vAvatarMin, vAvatarMax, FadeColor(tColor, 0.16f), H::Draw.Scale(5));
 			char sInitial[2] = { '?', '\0' };

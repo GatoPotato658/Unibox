@@ -748,25 +748,30 @@ void CCritHack::CacheDrawInfo(CTFPlayer* pLocal)
 void CCritHack::Draw()
 {
 	static float flCurrentProgress = 0.f;
-
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) || !I::EngineClient->IsInGame())
-	{
-		flCurrentProgress = 0.f;
-		return;
-	}
+	static IndicatorAnim_t tAnim;
+	static CritDrawCache_t s_tLastValidCache;
 
 	CritDrawCache_t tCache;
 	{
 		std::lock_guard<std::mutex> lock(m_tDrawMutex);
 		tCache = m_tDrawCache;
 	}
-	if (!tCache.m_bValid)
+	if (tCache.m_bValid)
+		s_tLastValidCache = tCache;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::CritHack) != 0;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && tCache.m_bValid;
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 	{
 		flCurrentProgress = 0.f;
 		return;
 	}
 
-	flCurrentProgress = std::lerp(flCurrentProgress, tCache.m_flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
+	const auto& tDraw = tCache.m_bValid ? tCache : s_tLastValidCache;
+	flCurrentProgress = std::lerp(flCurrentProgress, tDraw.m_flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 
 	const ImVec2 vPanelPos =
 	{
@@ -775,5 +780,12 @@ void CCritHack::Draw()
 	};
 	const float flPanelWidth = H::Draw.Scale(180.f);
 	const float flPanelHeight = H::Draw.Scale(29.f);
-	DrawIndicatorPanel(ImGui::GetBackgroundDrawList(), vPanelPos, flPanelWidth, flPanelHeight, tCache.m_sLeftText.c_str(), tCache.m_sRightText.c_str(), tCache.m_tLeftColor, tCache.m_tRightColor, tCache.m_tBarColor, flCurrentProgress, tCache.m_bDrawFooter, "Not Ready");
+
+	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
+	DrawIndicatorPanel(pDrawList, vPanelPos, flPanelWidth, flPanelHeight, tDraw.m_sLeftText.c_str(), tDraw.m_sRightText.c_str(), tDraw.m_tLeftColor, tDraw.m_tRightColor, tDraw.m_tBarColor, flCurrentProgress, tDraw.m_bDrawFooter, "Not Ready");
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
 }

@@ -469,9 +469,22 @@ void CBacktrack::CacheDrawInfo(CTFPlayer* pLocal)
 
 void CBacktrack::Draw()
 {
+	static IndicatorAnim_t tAnim;
+	static DrawCache_t s_tLastValidCache;
+
 	const DrawCache_t tCache = m_tDrawCache.Get();
-	if (!tCache.m_bValid)
+	if (tCache.m_bValid)
+		s_tLastValidCache = tCache;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ping) != 0;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && tCache.m_bValid;
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 		return;
+
+	const auto& tDraw = tCache.m_bValid ? tCache : s_tLastValidCache;
 
 	int x = Vars::Menu::PingDisplay.Value.x;
 	int y = Vars::Menu::PingDisplay.Value.y + 8;
@@ -491,6 +504,11 @@ void CBacktrack::Draw()
 		align = ALIGN_TOPRIGHT;
 	}
 
-	DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, tCache.m_sPingText);
-	DrawIndicatorText(pDrawList, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, tCache.m_sScoreboardText);
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
+	DrawIndicatorText(pDrawList, x, y, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, tDraw.m_sPingText);
+	DrawIndicatorText(pDrawList, x, y += nTall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, tDraw.m_sScoreboardText);
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
 }

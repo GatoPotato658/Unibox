@@ -45,6 +45,7 @@ public:
 	bool m_bIsOpen = false;
 	bool m_bInKeybind = false;
 	bool m_bWindowHovered = false;
+	float m_flMenuAnim = 0.f;
 
 	struct Notification_t
 	{
@@ -68,6 +69,7 @@ public:
 	bool m_bIsOpen = false;
 	bool m_bInKeybind = false;
 	bool m_bWindowHovered = false;
+	float m_flMenuAnim = 0.f;
 };
 #endif // !TEXTMODE
 

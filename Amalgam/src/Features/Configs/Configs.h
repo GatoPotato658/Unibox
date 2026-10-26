@@ -3,6 +3,7 @@
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <atomic>
 #include <filesystem>
 
 class CConfigs
@@ -37,6 +38,9 @@ public:
 	std::string m_sMaterialsPath;
 	std::string m_sStatePath;
 	const std::string m_sConfigExtension = ".json";
+	std::atomic_bool m_bConfigLoading = false;
+	std::atomic_bool m_bVisualsLoading = false;
+	std::atomic_bool m_bSkinsLoading = false;
 
 private:
 	void LoadState();

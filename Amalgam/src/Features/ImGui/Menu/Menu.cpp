@@ -18,6 +18,7 @@
 #include "../../Misc/Misc.h"
 #include "../../Output/Output.h"
 #include "../../World/World.h"
+#include "../IndicatorPanel.h"
 
 #include "../../../SDK/Definitions/Main/IMaterial.h"
 #include "../../../SDK/Definitions/Main/IMaterialVar.h"
@@ -105,6 +106,8 @@ void CMenu::DrawMenu()
 	tShell.m_sEditingBind = CurrentBind != DEFAULT_BIND ? tBind.m_sName.c_str() : nullptr;
 	tShell.m_sBuild = "Built " __DATE__ ", " __TIME__;
 	tShell.m_sVariant = __CONFIGURATION__ " " __PLATFORM__;
+	tShell.m_flAnim = m_flMenuAnim;
+	tShell.m_bIsOpen = m_bIsOpen;
 	tShell.m_fPage = [this](int iPage, int iSub)
 	{
 		if (Pages::Draw(iPage, iSub))
@@ -591,7 +594,9 @@ void CMenu::MenuAnticheat(int iTab)
 			ShellExecuteA(NULL, NULL, F::Configs.m_sCorePath.c_str(), NULL, NULL, SW_SHOWNORMAL);
 
 		const float flTop = GetCursorPosY() + H::Draw.Scale(10);
-		if (vCache.empty())
+		if (F::PlayerUtils.m_bCheaterLoad)
+			FSkeletonCards(flTop);
+		else if (vCache.empty())
 			FEmptyState(sSearch.empty() ? "No cheaters yet" : "No matches", flTop);
 		else
 		{
@@ -603,7 +608,7 @@ void CMenu::MenuAnticheat(int iTab)
 					const std::string sBadge = tRecord.m_bAuto ? std::format("{}", std::max(0, tRecord.m_iDetections)) : "";
 
 					PushID(int(tEntry.first));
-					auto tCard = FProfileCard(reinterpret_cast<ImTextureID>(F::SteamProfileCache.GetAvatarTexture(tEntry.first)), sName, sReason, ColorByteToVec(getReasonColor(tRecord)), sBadge, "Remove tag", vPos, vSize);
+					auto tCard = FProfileCard(reinterpret_cast<ImTextureID>(F::SteamProfileCache.GetAvatarTexture(tEntry.first)), sName, sReason, ColorByteToVec(getReasonColor(tRecord)), sBadge, "Remove tag", vPos, vSize, F::SteamProfileCache.IsAvatarPending(tEntry.first));
 					if (tCard.m_bMenu)
 						OpenPopup("##Menu");
 					if (FBeginContextMenu("##Menu"))
@@ -950,7 +955,9 @@ void CMenu::MenuLogs(int iTab)
 		{
 			if (Section(sLabel))
 			{
-				if (vTeam.empty())
+				if (!F::PlayerUtils.IsStoreInitialized())
+					FSkeletonRows(GetCursorPosY() + H::Draw.Scale(4), 4, H::Draw.Scale(30), H::Draw.Scale(2));
+				else if (vTeam.empty())
 					FEmptyState("Empty", GetCursorPosY() - H::Draw.Scale(16));
 				else
 				{
@@ -1476,7 +1483,9 @@ void CMenu::MenuLogs(int iTab)
 			}
 
 			const float flTop = GetCursorPosY() + H::Draw.Scale(10);
-			if (vCache.empty())
+			if (F::PlayerUtils.m_bLoad)
+				FSkeletonCards(flTop);
+			else if (vCache.empty())
 				FEmptyState(sSearch.empty() ? "No marked players yet" : "No matches", flTop);
 			else
 			{
@@ -1487,7 +1496,7 @@ void CMenu::MenuLogs(int iTab)
 							sDetail += std::format(", {}", tEntry.m_sAlias);
 
 						PushID(int(tEntry.m_uAccountID));
-						auto tCard = FProfileCard(reinterpret_cast<ImTextureID>(F::SteamProfileCache.GetAvatarTexture(tEntry.m_uAccountID)), tEntry.m_sDisplayName, sDetail, ColorByteToVec(tEntry.m_tRole.m_tColor), "", "Clear role", vPos, vSize);
+						auto tCard = FProfileCard(reinterpret_cast<ImTextureID>(F::SteamProfileCache.GetAvatarTexture(tEntry.m_uAccountID)), tEntry.m_sDisplayName, sDetail, ColorByteToVec(tEntry.m_tRole.m_tColor.a ? tEntry.m_tRole.m_tColor : F::PlayerUtils.m_vTags[0].m_tColor), "", "Clear role", vPos, vSize, F::SteamProfileCache.IsAvatarPending(tEntry.m_uAccountID));
 						if (tCard.m_bMenu)
 							OpenPopup("##Menu");
 						if (FBeginContextMenu("##Menu"))
@@ -1631,6 +1640,7 @@ namespace
 		int iAttemptFrame = -1;
 		int iLastUsedFrame = -1;
 		bool bFailed = false;
+		bool bPending = false;
 	};
 
 	std::unordered_map<uint16_t, ItemIcon_t> s_mItemIcons = {};
@@ -1746,8 +1756,9 @@ namespace
 		return TryCreate(D3DPOOL_DEFAULT, D3DUSAGE_DYNAMIC);
 	}
 
-	ImTextureID GetItemIcon(const ItemInfo_t& tItem, ImVec2* pSize = nullptr)
+	ImTextureID GetItemIcon(const ItemInfo_t& tItem, bool& bPending, ImVec2* pSize = nullptr)
 	{
+		bPending = false;
 		const int iFrame = ImGui::GetFrameCount();
 		{
 			static int iLastPruneFrame = -1;
@@ -1771,23 +1782,32 @@ namespace
 		tIcon.iLastUsedFrame = iFrame;
 		if (tIcon.pTexture)
 		{
+			tIcon.bPending = false;
 			if (pSize)
 				*pSize = { float(tIcon.iWidth), float(tIcon.iHeight) };
 			return reinterpret_cast<ImTextureID>(tIcon.pTexture.Get());
 		}
 		if (tIcon.bFailed && iFrame - tIcon.iAttemptFrame < 120)
+		{
+			bPending = tIcon.bPending;
 			return static_cast<ImTextureID>(0);
+		}
 		if (tItem.sImage.empty() || !I::MaterialSystem)
 		{
 			tIcon.bFailed = true;
+			tIcon.bPending = false;
 			tIcon.iAttemptFrame = iFrame;
 			return static_cast<ImTextureID>(0);
 		}
 		if (!ConsumeItemIconBudget())
+		{
+			bPending = tIcon.bPending = true;
 			return static_cast<ImTextureID>(0);
+		}
 
 		tIcon.iAttemptFrame = iFrame;
 		tIcon.bFailed = true;
+		tIcon.bPending = false;
 
 		auto CreateScaled = [&tIcon](const uint8_t* pData, int iWidth, int iHeight, bool bRGBA) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
 		{
@@ -1828,7 +1848,10 @@ namespace
 		if (!pMaterial)
 			pMaterial = I::MaterialSystem->FindMaterial(sPath.c_str(), TEXTURE_GROUP_OTHER, false);
 		if (!pMaterial)
+		{
+			tIcon.bPending = true;
 			return static_cast<ImTextureID>(0);
+		}
 
 		{
 			int iWidth = 0, iHeight = 0;
@@ -1844,11 +1867,14 @@ namespace
 					{
 						tIcon.pTexture = pCreated;
 						tIcon.bFailed = false;
+						tIcon.bPending = false;
 						return reinterpret_cast<ImTextureID>(tIcon.pTexture.Get());
 					}
 				}
 			}
 		}
+		tIcon.bFailed = true;
+		tIcon.bPending = false;
 		return static_cast<ImTextureID>(0);
 	}
 
@@ -1874,18 +1900,23 @@ namespace
 		PushStyleVar(ImGuiStyleVar_ItemSpacing, { flSpacing, flSpacing });
 		if (BeginChild(sID, { GetWindowWidth() - GetStyle().WindowPadding.x * 2, flHeight }, ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar))
 		{
-			if (iTotal == 0)
-			{
-				const char* sEmpty = "No items";
-				SetCursorPos({ (GetWindowWidth() - CalcTextSize(sEmpty).x) * 0.5f, H::Draw.Scale(24) });
-				TextColored(F::Render.Inactive, sEmpty);
-			}
-
 			const float flAvailWidth = GetContentRegionAvail().x - H::Draw.Scale(4);
 			const int iColumns = std::max(1, int((flAvailWidth + flSpacing) / (flMinCellWidth + flSpacing)));
 			const float flCellW = floorf((flAvailWidth - flSpacing * (iColumns - 1)) / iColumns);
 			const float flIconH = std::clamp(flCellW * 0.7f, H::Draw.Scale(56), H::Draw.Scale(84));
 			const float flCellH = H::Draw.Scale(6) + flIconH + H::Draw.Scale(5) + H::Draw.Scale(16) + H::Draw.Scale(4);
+			if (iTotal == 0)
+			{
+				if (F::SkinChanger.IsInventoryLoading() || F::SkinChanger.IsCatalogueLoading())
+					FSkeletonGrid(GetCursorPosY(), flHeight, iColumns, flCellW, flIconH);
+				else
+				{
+					const char* sEmpty = "No items";
+					SetCursorPos({ (GetWindowWidth() - CalcTextSize(sEmpty).x) * 0.5f, H::Draw.Scale(24) });
+					TextColored(F::Render.Inactive, sEmpty);
+				}
+			}
+
 			const float flRowH = flCellH + flSpacing;
 			const int iTotalRows = (iTotal + iColumns - 1) / iColumns;
 			const int iFirstRow = std::clamp(int(GetScrollY() / flRowH) - 1, 0, std::max(0, iTotalRows - 1));
@@ -1922,7 +1953,8 @@ namespace
 						pDrawList->AddCircleFilled(vPos + ImVec2(H::Draw.Scale(9), H::Draw.Scale(9)), H::Draw.Scale(3), FadeColor(F::Render.Accent), 12);
 
 					ImVec2 vSourceSize = { 1.f, 1.f };
-					const ImTextureID pIcon = GetItemIcon(*pItem, &vSourceSize);
+					bool bIconPending = false;
+					const ImTextureID pIcon = GetItemIcon(*pItem, bIconPending, &vSourceSize);
 					const float flIconWidth = std::max(1.f, flCellW - H::Draw.Scale(14)), flIconHeight = flIconH;
 					const ImVec2 vIconMin = vPos + ImVec2((flCellW - flIconWidth) / 2, H::Draw.Scale(6));
 					if (pIcon)
@@ -1932,6 +1964,8 @@ namespace
 						const ImVec2 vIcon = vIconMin + ImVec2((flIconWidth - vIconSize.x) / 2, (flIconHeight - vIconSize.y) / 2);
 						pDrawList->AddImage(pIcon, vIcon, vIcon + vIconSize, { 0, 0 }, { 1, 1 }, FadeColor(ImVec4(1, 1, 1, 1)));
 					}
+					else if (bIconPending)
+						FSkeletonRect(pDrawList, vIconMin, vIconMin + ImVec2(flIconWidth, flIconHeight), H::Draw.Scale(4));
 					else
 						pDrawList->AddRectFilled(vIconMin, vIconMin + ImVec2(flIconWidth, flIconHeight), FadeColor(F::Render.Background1p5), H::Draw.Scale(4));
 
@@ -2439,6 +2473,12 @@ void CMenu::MenuSettings(int iTab)
 			}
 			if (bFolder)
 				ShellExecuteA(NULL, NULL, sPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+
+			if (const bool bLoading = bSkins ? F::Configs.m_bSkinsLoading : !bVisual ? F::Configs.m_bConfigLoading : F::Configs.m_bVisualsLoading)
+			{
+				FSkeletonList(GetCursorPosY(), 3);
+				return;
+			}
 
 			std::vector<std::string> vConfigs = {};
 			bool bDefaultFound = false;
@@ -2952,6 +2992,17 @@ void CMenu::MenuSettings(int iTab)
 			if (bFolder)
 				ShellExecuteA(NULL, NULL, F::Configs.m_sMaterialsPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
 
+			if (F::Materials.m_bLoading)
+			{
+				FSkeletonList(GetCursorPosY(), 5);
+				DebugDummy({});
+				EndSection();
+
+				if (bTable)
+					EndTable();
+				break;
+			}
+
 			std::vector<Material_t> vMaterials;
 			for (auto& tMaterial : F::Materials.m_mMaterials | std::views::values)
 				vMaterials.push_back(tMaterial);
@@ -3292,15 +3343,20 @@ struct DragBoxStorage_t
 	float m_flScale;
 };
 static std::unordered_map<uint32_t, DragBoxStorage_t> s_mDragBoxStorage = {};
+static std::unordered_map<uint32_t, IndicatorAnim_t> s_mDragBoxAnim = {};
+
 void CMenu::AddDraggable(const char* sLabel, ConfigVar<DragBox_t>& tVar, bool bShouldDraw, ImVec2 vSize)
 {
 	using namespace ImGui;
 
-	if (!bShouldDraw)
+	auto uHash = FNV1A::Hash32(sLabel);
+	auto& tAnim = s_mDragBoxAnim[uHash];
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bShouldDraw, bOpening);
+	if (!tAnim.ShouldDraw(bShouldDraw))
 		return;
 
 	auto tDragBox = FGet(tVar, true);
-	auto uHash = FNV1A::Hash32(sLabel);
 
 	bool bContains = s_mDragBoxStorage.contains(uHash);
 	auto& tStorage = s_mDragBoxStorage[uHash];
@@ -3313,18 +3369,31 @@ void CMenu::AddDraggable(const char* sLabel, ConfigVar<DragBox_t>& tVar, bool bS
 	PushStyleVar(ImGuiStyleVar_WindowRounding, H::Draw.Scale(6));
 	PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
 	PushStyleVar(ImGuiStyleVar_WindowMinSize, vSize);
-	if (Begin(sLabel, nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings))
+	ImGuiWindowFlags iFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+	if (flAnim < 1.0f)
+		iFlags |= ImGuiWindowFlags_NoInputs;
+
+	if (Begin(sLabel, nullptr, iFlags))
 	{
 		ImVec2 vWindowPos = GetWindowPos();
 
-		tDragBox.x = vWindowPos.x + vSize.x / 2, tDragBox.y = vWindowPos.y;
-		tStorage = { tDragBox, H::Draw.Scale() };
-		FSet(tVar, tDragBox);
+		if (flAnim >= 1.0f)
+		{
+			tDragBox.x = vWindowPos.x + vSize.x / 2, tDragBox.y = vWindowPos.y;
+			tStorage = { tDragBox, H::Draw.Scale() };
+			FSet(tVar, tDragBox);
+		}
 
 		const ImVec2 vLabelSize = FCalcTextSize(sLabel);
 		GetWindowDrawList()->AddText(vWindowPos + ImVec2(floorf((vSize.x - vLabelSize.x) * 0.5f), floorf((vSize.y - vLabelSize.y) * 0.5f)), FadeColor(F::Render.Active), sLabel);
 
 		End();
+
+		if (flAnim < 1.0f)
+		{
+			if (ImGuiWindow* pWindow = FindWindowByName(sLabel))
+				TransformWindowDrawList(pWindow, flAnim, bOpening, GetIO().DisplaySize);
+		}
 	}
 	PopStyleVar(3);
 	PopStyleColor();
@@ -3336,15 +3405,20 @@ struct WindowBoxStorage_t
 	float m_flScale;
 };
 static std::unordered_map<uint32_t, WindowBoxStorage_t> s_mWindowBoxStorage = {};
+static std::unordered_map<uint32_t, IndicatorAnim_t> s_mWindowBoxAnim = {};
+
 void CMenu::AddResizableDraggable(const char* sLabel, ConfigVar<WindowBox_t>& tVar, bool bShouldDraw, ImGuiSizeCallback fCustomCallback, ImVec2 vMinSize, ImVec2 vMaxSize)
 {
 	using namespace ImGui;
 
-	if (!bShouldDraw)
+	auto uHash = FNV1A::Hash32(sLabel);
+	auto& tAnim = s_mWindowBoxAnim[uHash];
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bShouldDraw, bOpening);
+	if (!tAnim.ShouldDraw(bShouldDraw))
 		return;
 
 	auto tWindowBox = FGet(tVar, true);
-	auto uHash = FNV1A::Hash32(sLabel);
 
 	bool bContains = s_mWindowBoxStorage.contains(uHash);
 	auto& tStorage = s_mWindowBoxStorage[uHash];
@@ -3359,20 +3433,33 @@ void CMenu::AddResizableDraggable(const char* sLabel, ConfigVar<WindowBox_t>& tV
 	PushStyleColor(ImGuiCol_WindowBg, F::Render.AccentDim.Value);
 	PushStyleVar(ImGuiStyleVar_WindowRounding, H::Draw.Scale(6));
 	PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
-	if (Begin(sLabel, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings))
+	ImGuiWindowFlags iFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+	if (flAnim < 1.0f)
+		iFlags |= ImGuiWindowFlags_NoInputs;
+
+	if (Begin(sLabel, nullptr, iFlags))
 	{
 		ImVec2 vWindowPos = GetWindowPos();
 		ImVec2 vWinSize = GetWindowSize();
 
-		tWindowBox.w = vWinSize.x, tWindowBox.h = vWinSize.y;
-		tWindowBox.x = vWindowPos.x + tWindowBox.w / 2, tWindowBox.y = vWindowPos.y;
-		tStorage = { tWindowBox, H::Draw.Scale() };
-		FSet(tVar, tWindowBox);
+		if (flAnim >= 1.0f)
+		{
+			tWindowBox.w = vWinSize.x, tWindowBox.h = vWinSize.y;
+			tWindowBox.x = vWindowPos.x + tWindowBox.w / 2, tWindowBox.y = vWindowPos.y;
+			tStorage = { tWindowBox, H::Draw.Scale() };
+			FSet(tVar, tWindowBox);
+		}
 
 		const ImVec2 vLabelSize = FCalcTextSize(sLabel);
 		GetWindowDrawList()->AddText(vWindowPos + ImVec2(floorf((vWinSize.x - vLabelSize.x) * 0.5f), floorf((vWinSize.y - vLabelSize.y) * 0.5f)), FadeColor(F::Render.Active), sLabel);
 
 		End();
+
+		if (flAnim < 1.0f)
+		{
+			if (ImGuiWindow* pWindow = FindWindowByName(sLabel))
+				TransformWindowDrawList(pWindow, flAnim, bOpening, GetIO().DisplaySize);
+		}
 	}
 	PopStyleVar(2);
 	PopStyleColor();
@@ -3380,19 +3467,19 @@ void CMenu::AddResizableDraggable(const char* sLabel, ConfigVar<WindowBox_t>& tV
 
 struct BindInfo_t
 {
-	const char* sName;
+	std::string sName;
 	std::string sInfo;
 	std::string sState;
 
 	int iBind;
-	Bind_t& tBind;
+	bool bActive;
 };
 void CMenu::DrawBinds()
 {
 	using namespace ImGui;
 
-	if (!F::Binds.m_bDisplay)
-		return;
+	static IndicatorAnim_t tAnim;
+	static std::vector<BindInfo_t> s_vLastValidBinds;
 
 	std::vector<BindInfo_t> vInfo;
 	std::function<void(int)> fGetBinds = [&](int iParent)
@@ -3475,7 +3562,7 @@ void CMenu::DrawBinds()
 				if (tBind.m_bNot && (tBind.m_iType != BindEnum::Key || tBind.m_iInfo == BindEnum::KeyEnum::Hold))
 					sInfo = std::format("not {}", sInfo);
 
-				vInfo.emplace_back(tBind.m_sName.c_str(), sType, sInfo, iBind, tBind);
+				vInfo.emplace_back(tBind.m_sName, sType, sInfo, iBind, tBind.m_bActive);
 			}
 
 			if (tBind.m_bActive || m_bIsOpen)
@@ -3483,7 +3570,20 @@ void CMenu::DrawBinds()
 		}
 	};
 	fGetBinds(DEFAULT_BIND);
-	if (vInfo.empty())
+
+	if (!vInfo.empty())
+		s_vLastValidBinds = vInfo;
+
+	const bool bEnabled = F::Binds.m_bDisplay;
+	const bool bVisible = bEnabled && (!vInfo.empty() || m_bIsOpen);
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
+		return;
+
+	const auto& vActiveInfo = !vInfo.empty() ? vInfo : s_vLastValidBinds;
+	if (vActiveInfo.empty())
 		return;
 
 	static DragBox_t tOld = { -2147483648, -2147483648 };
@@ -3494,9 +3594,9 @@ void CMenu::DrawBinds()
 	ImFont* pSmall = F::Render.FontSmall, *pRegular = F::Render.FontRegular;
 	auto fTextWidth = [&](ImFont* pFont, const char* sText) { return pFont->CalcTextSizeA(pFont->LegacySize, FLT_MAX, 0.f, sText).x; };
 	float flNameWidth = 0, flTypeWidth = 0, flChipWidth = 0;
-	for (auto& [sName, sType, sKey, iBind, tBind] : vInfo)
+	for (auto& [sName, sType, sKey, iBind, bActive] : vActiveInfo)
 	{
-		flNameWidth = std::max(flNameWidth, fTextWidth(pRegular, sName));
+		flNameWidth = std::max(flNameWidth, fTextWidth(pRegular, sName.c_str()));
 		flTypeWidth = std::max(flTypeWidth, fTextWidth(pSmall, sType.c_str()));
 		flChipWidth = std::max(flChipWidth, OverlayChipWidth(sKey.c_str()));
 	}
@@ -3506,32 +3606,40 @@ void CMenu::DrawBinds()
 	const float flRow = H::Draw.Scale(26), flTop = flHeader + H::Draw.Scale(6), flIcon = H::Draw.Scale(22);
 	const float flIcons = m_bIsOpen ? flIcon * 4 + H::Draw.Scale(6) : 0.f;
 	const float flWidth = std::max(flPad * 2 + flNameWidth + H::Draw.Scale(18) + flTypeWidth + H::Draw.Scale(10) + flChipWidth + flIcons, H::Draw.Scale(bTitle ? 170 : 60));
-	const float flHeight = flTop + flRow * vInfo.size() + H::Draw.Scale(6);
+	const float flHeight = flTop + flRow * vActiveInfo.size() + H::Draw.Scale(6);
 	SetNextWindowSize({ flWidth, flHeight }, ImGuiCond_Always);
 	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(40), H::Draw.Scale(40) });
-	if (Begin("Binds", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings))
+	ImGuiWindowFlags iWindowFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+	if (flAnim < 1.0f)
+		iWindowFlags |= ImGuiWindowFlags_NoInputs;
+
+	if (Begin("Binds", nullptr, iWindowFlags))
 	{
 		const ImVec2 vWindowPos = GetWindowPos();
 
 		RenderOverlayWindow(flHeader, ICON_MD_KEYBOARD, "Binds");
 
-		tDragBox.x = vWindowPos.x; tDragBox.y = vWindowPos.y; tOld = tDragBox;
-		if (m_bIsOpen)
-			FSet(Vars::Menu::BindsDisplay, tDragBox);
+		if (flAnim >= 1.0f)
+		{
+			tDragBox.x = vWindowPos.x; tDragBox.y = vWindowPos.y; tOld = tDragBox;
+			if (m_bIsOpen)
+				FSet(Vars::Menu::BindsDisplay, tDragBox);
+		}
 
 		ImDrawList* pDrawList = GetWindowDrawList();
-		int i = 0; for (auto& [sName, sType, sKey, iBind, tBind] : vInfo)
+		int i = 0; for (auto& [sName, sType, sKey, iBind, bActive] : vActiveInfo)
 		{
 			const float flY = flTop + flRow * i;
 			const float flCenterY = vWindowPos.y + flY + flRow / 2;
 			const float flAlpha = m_bIsOpen && !F::Binds.WillBeEnabled(iBind) ? 0.5f : 1.f;
 
-			pDrawList->AddText(pRegular, pRegular->LegacySize, { vWindowPos.x + flPad, floorf(flCenterY - pRegular->LegacySize / 2) }, FadeColor(tBind.m_bActive ? F::Render.Active.Value : MixColor(F::Render.Inactive, F::Render.Active, 0.55f), flAlpha), sName);
+			pDrawList->AddText(pRegular, pRegular->LegacySize, { vWindowPos.x + flPad, floorf(flCenterY - pRegular->LegacySize / 2) }, FadeColor(bActive ? F::Render.Active.Value : MixColor(F::Render.Inactive, F::Render.Active, 0.55f), flAlpha), sName.c_str());
 			pDrawList->AddText(pSmall, pSmall->LegacySize, { vWindowPos.x + flPad + flNameWidth + H::Draw.Scale(18), floorf(flCenterY - pSmall->LegacySize / 2) }, FadeColor(F::Render.Inactive, flAlpha), sType.c_str());
-			DrawOverlayChip(pDrawList, vWindowPos.x + flWidth - flPad - flIcons, flCenterY, sKey.c_str(), tBind.m_bActive, F::Render.Accent.Value, flAlpha, flChipWidth);
+			DrawOverlayChip(pDrawList, vWindowPos.x + flWidth - flPad - flIcons, flCenterY, sKey.c_str(), bActive, F::Render.Accent.Value, flAlpha, flChipWidth);
 
-			if (m_bIsOpen)
+			if (m_bIsOpen && iBind >= 0 && iBind < F::Binds.m_vBinds.size())
 			{
+				auto& tBind = F::Binds.m_vBinds[iBind];
 				PushID(iBind);
 				auto fIcon = [&](int iSlot, const char* sIcon, float flIconAlpha = 1.f)
 				{
@@ -3578,6 +3686,12 @@ void CMenu::DrawBinds()
 		}
 
 		End();
+
+		if (flAnim < 1.0f)
+		{
+			if (ImGuiWindow* pWindow = FindWindowByName("Binds"))
+				TransformWindowDrawList(pWindow, flAnim, bOpening, GetIO().DisplaySize);
+		}
 	}
 	PopStyleVar();
 }
@@ -3709,29 +3823,55 @@ void CMenu::Render()
 			I::MatSystemSurface->SetCursorAlwaysVisible(m_bIsOpen = true);
 	}
 
+	const float flDuration = 0.22f;
+	const float flDelta = GetIO().DeltaTime > 0.f ? GetIO().DeltaTime : (1.f / 60.f);
+	if (m_bIsOpen)
+		m_flMenuAnim = std::min(1.0f, m_flMenuAnim + flDelta / flDuration);
+	else
+		m_flMenuAnim = std::max(0.0f, m_flMenuAnim - flDelta / flDuration);
+
+	static bool s_bWasOpen = false;
+	if (s_bWasOpen && !m_bIsOpen)
+	{
+		if (ImGuiWindow* pMainWindow = FindWindowByName("Main"))
+			ClosePopupsOverWindow(pMainWindow, false);
+	}
+	s_bWasOpen = m_bIsOpen;
+
 	PushFont(F::Render.FontRegular);
 
 	ProcessDeferredNotifications();
 
-	if (m_bIsOpen)
+	if (m_bIsOpen || m_flMenuAnim > 0.0001f)
 	{
-		DrawNotifications();
-		ManageVars();
+		if (m_bIsOpen)
+		{
+			DrawNotifications();
+			ManageVars();
+		}
 
-		AddDraggable("Ticks", Vars::Menu::TicksDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ticks);
-		AddDraggable("Crit hack", Vars::Menu::CritsDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::CritHack);
-		AddDraggable("Ping", Vars::Menu::PingDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ping);
-		AddDraggable("Conditions", Vars::Menu::ConditionsDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Conditions);
-		AddDraggable("Seed prediction", Vars::Menu::SeedPredictionDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::SeedPrediction);
-		AddDraggable("Nav bot", Vars::Menu::NavBotDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::NavBot);
-		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
+		AddDraggable("Ticks", Vars::Menu::TicksDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ticks));
+		AddDraggable("Crit hack", Vars::Menu::CritsDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::CritHack));
+		AddDraggable("Ping", Vars::Menu::PingDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ping));
+		AddDraggable("Conditions", Vars::Menu::ConditionsDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Conditions));
+		AddDraggable("Seed prediction", Vars::Menu::SeedPredictionDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::SeedPrediction));
+		AddDraggable("Nav bot", Vars::Menu::NavBotDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::NavBot));
+		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, m_bIsOpen && FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
 
 		DrawMenu();
 		if (m_bNoticePending)
 			DrawNotice();
 
-		F::Render.Cursor = GetMouseCursor();
-		m_bWindowHovered = IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+		if (m_bIsOpen)
+		{
+			F::Render.Cursor = GetMouseCursor();
+			m_bWindowHovered = IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+		}
+		else
+		{
+			ActiveMap.clear();
+			m_bWindowHovered = false;
+		}
 
 		if (!DisabledVec.empty())
 		{

@@ -1,6 +1,7 @@
 #pragma once
 #include "../../SDK/SDK.h"
 #include <shared_mutex>
+#include <atomic>
 
 #define DEFAULT_TAG 0
 #define IGNORED_TAG (DEFAULT_TAG-1)
@@ -94,6 +95,7 @@ public:
 	bool m_bCheaterSave = false;
 
 	mutable std::shared_mutex m_tMutex;
+	std::atomic_bool m_bStoreInitialized = false;
 private:
 	std::vector<int> m_vDummy = {};
 	std::string ResolveAccountName(uint32_t uAccountID, const std::string& sAlias) const;
@@ -101,6 +103,7 @@ private:
 
 public:
 	void Store();
+	bool IsStoreInitialized() const { return m_bStoreInitialized.load(); }
 
 	uint32_t GetAccountID(int iIndex);
 	int GetIndex(uint32_t uAccountID);

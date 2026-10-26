@@ -208,9 +208,22 @@ void CNoSpreadHitscan::CacheDrawInfo(CTFPlayer* pLocal)
 
 void CNoSpreadHitscan::Draw()
 {
+	static IndicatorAnim_t tAnim;
+	static DrawCache_t s_tLastValidCache;
+
 	const DrawCache_t tCache = m_tDrawCache.Get();
-	if (!tCache.m_bValid)
+	if (tCache.m_bValid)
+		s_tLastValidCache = tCache;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::SeedPrediction) != 0;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && tCache.m_bValid;
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 		return;
+
+	const auto& tDraw = tCache.m_bValid ? tCache : s_tLastValidCache;
 
 	int x = Vars::Menu::SeedPredictionDisplay.Value.x;
 	int y = Vars::Menu::SeedPredictionDisplay.Value.y + 8;
@@ -230,8 +243,13 @@ void CNoSpreadHitscan::Draw()
 		align = ALIGN_TOPRIGHT;
 	}
 
-	DrawIndicatorText(pDrawList, x, y, tCache.m_tColor, Vars::Menu::Theme::Background.Value, align, tCache.m_sUptime);
-	DrawIndicatorText(pDrawList, x, y += nTall, tCache.m_tColor, Vars::Menu::Theme::Background.Value, align, tCache.m_sMantissaStep);
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
+	DrawIndicatorText(pDrawList, x, y, tDraw.m_tColor, Vars::Menu::Theme::Background.Value, align, tDraw.m_sUptime);
+	DrawIndicatorText(pDrawList, x, y += nTall, tDraw.m_tColor, Vars::Menu::Theme::Background.Value, align, tDraw.m_sMantissaStep);
 	if (Vars::Debug::Info.Value)
-		DrawIndicatorText(pDrawList, x, y += nTall, tCache.m_tColor, Vars::Menu::Theme::Background.Value, align, tCache.m_sDelta);
+		DrawIndicatorText(pDrawList, x, y += nTall, tDraw.m_tColor, Vars::Menu::Theme::Background.Value, align, tDraw.m_sDelta);
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
 }

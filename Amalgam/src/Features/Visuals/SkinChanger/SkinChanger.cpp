@@ -1605,6 +1605,7 @@ void CSkinChanger::SyncInventory()
 
 	std::lock_guard tLock(m_tMutex);
 	m_mInventoryCounts = std::move(mDefCount);
+	m_bInventoryLoaded = true;
 }
 
 CEconItemView* CSkinChanger::GetWearableView(int iClass, int iSlot, int iTeam, int iDef, int iUnusual)
@@ -2028,6 +2029,15 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	return s_vItems;
 }
 
+bool CSkinChanger::IsCatalogueLoading()
+{
+	if (!I::EngineClient || !I::EngineClient->IsInGame() || I::EngineClient->IsPlayingDemo())
+		return false;
+
+	const auto pSchema = CEconItemSchema::GetInstance();
+	return !pSchema || !IsReadableMemory(pSchema, 344) || pSchema->GetItemDefCount() <= 0 || GetItems().empty();
+}
+
 bool CSkinChanger::InBackpack(uint16_t iDef)
 {
 	std::lock_guard tLock(m_tMutex);
@@ -2103,6 +2113,10 @@ void CSkinChanger::Unload()
 {
 	ResetWearables(m_hWearableOwner.Get());
 	ClearClientItems();
+	{
+		std::lock_guard tLock(m_tMutex);
+		m_bInventoryLoaded = false;
+	}
 	m_vGraveyard.clear();
 	for (int i = 0; i < 19; i++)
 	{
@@ -2138,6 +2152,12 @@ std::vector<const ItemInfo_t*> CSkinChanger::GetInventoryItems()
 	return vItems;
 }
 
+bool CSkinChanger::IsInventoryLoading()
+{
+	std::lock_guard tLock(m_tMutex);
+	return I::EngineClient && I::EngineClient->IsInGame() && !I::EngineClient->IsPlayingDemo() && !m_bInventoryLoaded;
+}
+
 int CSkinChanger::GetInventoryCount(uint16_t iDef)
 {
 	std::lock_guard tLock(m_tMutex);
@@ -2156,6 +2176,7 @@ void CSkinChanger::CacheMenuInfo(CTFWeaponBase*) {}
 void CSkinChanger::OnLevelShutdown() {}
 void CSkinChanger::Unload() {}
 const std::vector<ItemInfo_t>& CSkinChanger::GetItems() { static std::vector<ItemInfo_t> vItems; return vItems; }
+bool CSkinChanger::IsCatalogueLoading() { return false; }
 void CSkinChanger::RequestFullUpdate() {}
 void CSkinChanger::AddToBackpack(uint16_t, int) {}
 void CSkinChanger::RemoveFromBackpack(uint16_t) {}
@@ -2167,6 +2188,7 @@ int CSkinChanger::GetItemUnusual(uint64_t) { return 0; }
 uint32_t CSkinChanger::NextSerial() { return 0; }
 void CSkinChanger::ClearBackpack() {}
 std::vector<const ItemInfo_t*> CSkinChanger::GetInventoryItems() { return {}; }
+bool CSkinChanger::IsInventoryLoading() { return false; }
 bool CSkinChanger::ClientInventoryActive() { return false; }
 bool CSkinChanger::IsClientItem(uint64_t) { return false; }
 void* CSkinChanger::GetClientSOCData(uint64_t) { return nullptr; }

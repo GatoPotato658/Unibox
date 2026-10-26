@@ -1,5 +1,7 @@
 #pragma once
 #include "Widgets.h"
+#include "../Easings/Easings.h"
+#include <unordered_set>
 
 struct NavPage_t
 {
@@ -14,6 +16,8 @@ struct MenuShell_t
 	const char* m_sEditingBind = nullptr;
 	const char* m_sBuild = nullptr;
 	const char* m_sVariant = nullptr;
+	float m_flAnim = 1.f;
+	bool m_bIsOpen = true;
 	std::function<void(int, int)> m_fPage;
 	std::function<void(const std::string&)> m_fSearch;
 	std::function<void()> m_fStopEditingBind;
@@ -22,6 +26,37 @@ struct MenuShell_t
 namespace Shell
 {
 	using namespace ImGui;
+
+	inline void TransformDrawList(ImDrawList* pDrawList, ImVec2 vCenter, ImVec2 vScale, float flAlpha, ImVec2 vDisplay)
+	{
+		if (!pDrawList)
+			return;
+
+		if (pDrawList->_Splitter._Count > 1)
+			pDrawList->ChannelsMerge();
+
+		for (auto& vtx : pDrawList->VtxBuffer)
+		{
+			vtx.pos.x = vCenter.x + (vtx.pos.x - vCenter.x) * vScale.x;
+			vtx.pos.y = vCenter.y + (vtx.pos.y - vCenter.y) * vScale.y;
+
+			if (flAlpha < 0.999f)
+			{
+				const ImU32 a = (vtx.col >> IM_COL32_A_SHIFT) & 0xFF;
+				const ImU32 new_a = static_cast<ImU32>(a * flAlpha);
+				vtx.col = (vtx.col & ~IM_COL32_A_MASK) | (new_a << IM_COL32_A_SHIFT);
+			}
+		}
+
+		for (auto& cmd : pDrawList->CmdBuffer)
+		{
+			float x1 = std::clamp(vCenter.x + (cmd.ClipRect.x - vCenter.x) * vScale.x, 0.f, vDisplay.x);
+			float y1 = std::clamp(vCenter.y + (cmd.ClipRect.y - vCenter.y) * vScale.y, 0.f, vDisplay.y);
+			float x2 = std::clamp(vCenter.x + (cmd.ClipRect.z - vCenter.x) * vScale.x, 0.f, vDisplay.x);
+			float y2 = std::clamp(vCenter.y + (cmd.ClipRect.w - vCenter.y) * vScale.y, 0.f, vDisplay.y);
+			cmd.ClipRect = ImVec4(std::min(x1, x2), std::min(y1, y2), std::max(x1, x2), std::max(y1, y2));
+		}
+	}
 
 	inline int Page = 0;
 	inline std::vector<int> Subs = {};
@@ -194,7 +229,11 @@ namespace Shell
 		SetNextWindowSize(vDefaultMenuSize, ImGuiCond_FirstUseEver);
 		SetNextWindowSizeConstraints(vMinMenuSize, { std::max(vMinMenuSize.x, vDisplay.x), std::max(vMinMenuSize.y, vDisplay.y) });
 
-		if (!Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove))
+		ImGuiWindowFlags iWindowFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove;
+		if (tShell.m_flAnim < 1.0f)
+			iWindowFlags |= ImGuiWindowFlags_NoInputs;
+
+		if (!Begin("Main", nullptr, iWindowFlags))
 			return End();
 
 		const ImVec2 vWindowSize = GetWindowSize();
@@ -325,9 +364,9 @@ namespace Shell
 			}
 		}
 
-		if (!IsMouseDown(ImGuiMouseButton_Left))
+		if (!IsMouseDown(ImGuiMouseButton_Left) || !tShell.m_bIsOpen)
 			bDraggingMenu = false;
-		bool bCanDragMenu = IsMouseWithin(vDrawPos.x, vDrawPos.y, vWindowSize.x, vWindowSize.y) && !IsAnyItemHovered() && !IsAnyItemActive() && !IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
+		bool bCanDragMenu = tShell.m_flAnim >= 1.0f && IsMouseWithin(vDrawPos.x, vDrawPos.y, vWindowSize.x, vWindowSize.y) && !IsAnyItemHovered() && !IsAnyItemActive() && !IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
 		if (bCanDragMenu && IsMouseClicked(ImGuiMouseButton_Left))
 		{
 			bDraggingMenu = true;
@@ -355,5 +394,57 @@ namespace Shell
 		PopStyleVar(3);
 
 		End();
+
+		if (tShell.m_flAnim < 1.0f)
+		{
+			const float flT = std::clamp(tShell.m_flAnim, 0.0f, 1.0f);
+			float flScaleX = 0.f, flScaleY = 0.f;
+			if (tShell.m_bIsOpen)
+			{
+				const float flEaseY = Ease::OutCubic(flT);
+				const float flEaseX = Ease::OutCubic(powf(flT, 1.35f));
+				const float flPop = 0.04f * sinf(flT * 3.14159265f);
+				flScaleY = flEaseY * (1.0f + flPop);
+				flScaleX = flEaseX * (1.0f + flPop);
+			}
+			else
+			{
+				const float flEaseY = Ease::InCubic(flT);
+				const float flEaseX = Ease::InCubic(powf(flT, 1.35f));
+				flScaleY = flEaseY;
+				flScaleX = flEaseX;
+			}
+			flScaleX = std::max(0.0001f, flScaleX);
+			flScaleY = std::max(0.0001f, flScaleY);
+			const float flAlpha = std::clamp(flT * (tShell.m_bIsOpen ? 1.5f : 1.2f), 0.0f, 1.0f);
+
+			const ImVec2 vCenter = vDrawPos + vWindowSize * 0.5f;
+			if (ImGuiWindow* pMainWindow = FindWindowByName("Main"))
+			{
+				std::unordered_set<ImDrawList*> visited;
+				auto TransformTree = [&](auto& self, ImGuiWindow* pWindow) -> void
+				{
+					if (!pWindow || !pWindow->Active)
+						return;
+
+					if (pWindow->DrawList && visited.insert(pWindow->DrawList).second)
+						TransformDrawList(pWindow->DrawList, vCenter, { flScaleX, flScaleY }, flAlpha, vDisplay);
+
+					for (ImGuiWindow* pChild : pWindow->DC.ChildWindows)
+						self(self, pChild);
+				};
+
+				TransformTree(TransformTree, pMainWindow);
+
+				ImGuiContext& g = *GImGui;
+				for (ImGuiWindow* pWin : g.Windows)
+				{
+					if (!pWin->Active || pWin == pMainWindow)
+						continue;
+					if (pWin->RootWindowPopupTree == pMainWindow)
+						TransformTree(TransformTree, pWin);
+				}
+			}
+		}
 	}
 }

@@ -137,6 +137,7 @@ void CMaterials::ServicePendingOperation()
 	case PendingOperation::None: break;
 	}
 	SDK::CInitTimingScope tOperation(sName);
+	m_bLoading = operation == PendingOperation::Load || operation == PendingOperation::Refresh || operation == PendingOperation::Reload;
 
 	switch (operation)
 	{
@@ -161,6 +162,7 @@ void CMaterials::ServicePendingOperation()
 	case PendingOperation::None:
 		break;
 	}
+	m_bLoading = false;
 }
 
 IMaterial* CMaterials::create_from_vmt(const char* name, const std::string& vmt)

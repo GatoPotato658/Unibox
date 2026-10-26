@@ -401,9 +401,22 @@ void CPlayerConditions::CacheDrawInfo(CTFPlayer* pLocal)
 
 void CPlayerConditions::Draw()
 {
+	static IndicatorAnim_t tAnim;
+	static std::vector<std::string> s_vLastValidConditions;
+
 	const std::vector<std::string> vConditions = m_tDrawCache.Get();
-	if (vConditions.empty())
+	if (!vConditions.empty())
+		s_vLastValidConditions = vConditions;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Conditions) != 0;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && !vConditions.empty();
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
 		return;
+
+	const auto& vDraw = !vConditions.empty() ? vConditions : s_vLastValidConditions;
 
 	int x = Vars::Menu::ConditionsDisplay.Value.x;
 	int y = Vars::Menu::ConditionsDisplay.Value.y + 8;
@@ -423,10 +436,15 @@ void CPlayerConditions::Draw()
 		align = ALIGN_TOPRIGHT;
 	}
 
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
 	int iOffset = 0;
-	for (const std::string& sCondition : vConditions)
+	for (const std::string& sCondition : vDraw)
 	{
 		DrawIndicatorText(pDrawList, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition);
 		iOffset += nTall;
 	}
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
 }

@@ -56,6 +56,7 @@ public:
 	std::unordered_mapset<IMaterial*> m_mMatList = {};
 
 	bool m_bLoaded = false;
+	std::atomic_bool m_bLoading = false;
 
 private:
 	std::atomic<PendingOperation> m_ePendingOperation = PendingOperation::None;
