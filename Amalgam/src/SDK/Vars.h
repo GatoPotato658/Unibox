@@ -199,10 +199,11 @@ NAMESPACE_BEGIN(Vars)
 		CVar(CheapText, "Cheap text", false, NOBIND);
 
 		NAMESPACE_BEGIN(Theme)
-			CVar(Accent, "Accent color", Color_t(149, 139, 209, 255), VISUAL);
-			CVar(Background, "Background color", Color_t(31, 29, 53, 250), VISUAL);
-			CVar(Active, "Active color", Color_t(229, 226, 238, 255), VISUAL);
-			CVar(Inactive, "Inactive color", Color_t(159, 159, 219, 255), VISUAL);
+			CVar(Accent, "Accent color", Color_t(190, 44, 58, 255), VISUAL);
+			CVar(Background, "Background color", Color_t(21, 14, 16, 255), VISUAL);
+			CVar(Active, "Active color", Color_t(240, 231, 232, 255), VISUAL);
+			CVar(Inactive, "Inactive color", Color_t(146, 124, 128, 255), VISUAL);
+			CVar(Opacity, "Opacity", 96, VISUAL | NOBIND | SLIDER_CLAMP, 40, 100, 1, "%i%%");
 		NAMESPACE_END(Theme)
 	NAMESPACE_END(Menu)
 

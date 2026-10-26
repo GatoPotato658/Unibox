@@ -1,15 +1,9 @@
 #ifndef TEXTMODE
 #include "Render.h"
 
-#include <array>
-
 #include "../../Hooks/Direct3DDevice9.h"
 #include <ImGui/imgui_impl_win32.h>
-#include "Fonts/MaterialDesign/MaterialIcons.h"
 #include "Fonts/MaterialDesign/IconDefinitions.h"
-#include "Fonts/CascadiaMono/CascadiaMono.h"
-#include "Fonts/Roboto/RobotoMedium.h"
-#include "Fonts/Roboto/RobotoBlack.h"
 #include "Menu/Menu.h"
 #include "Menu/Components.h"
 #include "../CritHack/CritHack.h"
@@ -24,37 +18,6 @@
 #include "../Visuals/Visuals.h"
 #include "../Aimbot/Aimbot.h"
 #include "Overlay/CaptureOverlay.h"
-
-	static Color_t GetThemeSurface(Color_t tBackground, Color_t tAccent)
-	{
-		float flAccentH, flAccentS, flAccentV;
-		tAccent.GetHSV(flAccentH, flAccentS, flAccentV);
-
-		float flBackgroundH, flBackgroundS, flBackgroundV;
-		tBackground.GetHSV(flBackgroundH, flBackgroundS, flBackgroundV);
-
-		const float flHue = flAccentS >= 8.f ? flAccentH : flBackgroundH;
-		const float flSaturation = std::clamp((flAccentS >= 8.f ? flAccentS : flBackgroundS) * 0.72f, 12.f, 42.f);
-		const float flValue = std::clamp(flBackgroundV + (flBackgroundV < 55.f ? 28.f : -14.f), 26.f, 78.f);
-
-		Color_t tSurface;
-		tSurface.SetHSV(flHue, flSaturation, flValue, tBackground.a);
-		return tSurface;
-	}
-
-	template <size_t t_size>
-	static ImFont* LoadFontWithFallback(ImFontAtlas* pFontAtlas, const std::array<const char*, t_size>& vFontPaths, float flSizePixels, ImFontConfig tFontConfig)
-	{
-		for (const char* sFontPath : vFontPaths)
-		{
-			if (ImFont* pFont = pFontAtlas->AddFontFromFileTTF(sFontPath, flSizePixels, &tFontConfig))
-				return pFont;
-		}
-
-		ImFontConfig tFallbackConfig = tFontConfig;
-		tFallbackConfig.SizePixels = flSizePixels;
-		return pFontAtlas->AddFontDefault(&tFallbackConfig);
-	}
 
 void CRender::Render(IDirect3DDevice9* pDevice)
 {
@@ -109,6 +72,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	if (!bPrivate)
 		F::CaptureOverlay.Hide();
 
+	ImGui::CloseStalePopups();
 	ImGui::EndFrame();
 	ImGui::Render();
 
@@ -122,159 +86,33 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 
 void CRender::LoadColors()
 {
-	using namespace ImGui;
-
-	Accent = ColorByteToFloat(Vars::Menu::Theme::Accent.Value);
-	Background0 = ColorByteToFloat(Vars::Menu::Theme::Background.Value);
-	const Color_t tSurface = GetThemeSurface(Vars::Menu::Theme::Background.Value, Vars::Menu::Theme::Accent.Value);
-	Background0p5 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.16f, LerpEnum::NoAlpha));
-	Background1 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.28f, LerpEnum::NoAlpha));
-	Background1p5 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.4f, LerpEnum::NoAlpha));
-	Background1p5L = { Background1p5.Value.x * 1.1f, Background1p5.Value.y * 1.1f, Background1p5.Value.z * 1.1f, Background1p5.Value.w };
-	Background2 = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tSurface, 0.52f, LerpEnum::NoAlpha));
-	Inactive = ColorByteToFloat(Vars::Menu::Theme::Inactive.Value);
-	Active = ColorByteToFloat(Vars::Menu::Theme::Active.Value);
-
-	ImVec4* colors = GetStyle().Colors;
-	colors[ImGuiCol_Border] = Background2;
-	colors[ImGuiCol_Button] = {};
-	colors[ImGuiCol_ButtonHovered] = {};
-	colors[ImGuiCol_ButtonActive] = {};
-	colors[ImGuiCol_FrameBg] = Background1p5;
-	colors[ImGuiCol_FrameBgHovered] = Background1p5L;
-	colors[ImGuiCol_FrameBgActive] = Background1p5;
-	colors[ImGuiCol_CheckMark] = Accent;
-	colors[ImGuiCol_Header] = {};
-	colors[ImGuiCol_HeaderHovered] = { Background1p5L.Value.x * 1.1f, Background1p5L.Value.y * 1.1f, Background1p5L.Value.z * 1.1f, Background1p5.Value.w }; // divd by 1.1
-	colors[ImGuiCol_HeaderActive] = Background1p5;
-	colors[ImGuiCol_ModalWindowDimBg] = { Background0.Value.x, Background0.Value.y, Background0.Value.z, 0.4f };
-	colors[ImGuiCol_NavHighlight] = Accent;
-	colors[ImGuiCol_PopupBg] = Background1p5L;
-	colors[ImGuiCol_ResizeGrip] = {};
-	colors[ImGuiCol_ResizeGripActive] = {};
-	colors[ImGuiCol_ResizeGripHovered] = {};
-	colors[ImGuiCol_ScrollbarBg] = {};
-	colors[ImGuiCol_SliderGrab] = Accent;
-	colors[ImGuiCol_SliderGrabActive] = Accent;
-	colors[ImGuiCol_Separator] = Background2;
-	colors[ImGuiCol_SeparatorHovered] = Accent;
-	colors[ImGuiCol_SeparatorActive] = Accent;
-	colors[ImGuiCol_Text] = Active;
-	colors[ImGuiCol_TextSelectedBg] = Accent;
-	colors[ImGuiCol_WindowBg] = {};
+	const auto fVec = [](Color_t tColor) { return ImVec4(tColor.r / 255.f, tColor.g / 255.f, tColor.b / 255.f, tColor.a / 255.f); };
+	CMenuTheme::LoadColors({
+		fVec(Vars::Menu::Theme::Accent.Value),
+		fVec(Vars::Menu::Theme::Background.Value),
+		fVec(Vars::Menu::Theme::Active.Value),
+		fVec(Vars::Menu::Theme::Inactive.Value),
+		Vars::Menu::Theme::Opacity.Value / 100.f
+	});
 }
 
 void CRender::LoadFonts()
 {
 	SDK::CInitTimingScope tFonts("ImGui.LoadFonts");
 
-	using namespace ImGui;
-
-	auto& io = GetIO();
-
+	auto& io = ImGui::GetIO();
 	if (static bool bLoaded = false; !bLoaded)
 		bLoaded = true;
 	else
 		io.Fonts->Clear();
 
-	ImFontConfig tFontConfig;
-	tFontConfig.OversampleH = 2;
-	tFontConfig.Flags |= ImFontFlags_NoLoadError;
-#ifndef AMALGAM_CUSTOM_FONTS
-#ifdef _WIN32
-	constexpr std::array<const char*, 5> vRegularFontPaths =
-	{
-		R"(C:\Windows\Fonts\verdana.ttf)",
-		R"(C:\Windows\Fonts\segoeui.ttf)",
-		R"(C:\Windows\Fonts\arial.ttf)",
-		R"(C:\Windows\Fonts\tahoma.ttf)",
-		R"(C:\Windows\Fonts\calibri.ttf)"
-	};
-	constexpr std::array<const char*, 5> vBoldFontPaths =
-	{
-		R"(C:\Windows\Fonts\verdanab.ttf)",
-		R"(C:\Windows\Fonts\segoeuib.ttf)",
-		R"(C:\Windows\Fonts\arialbd.ttf)",
-		R"(C:\Windows\Fonts\tahomabd.ttf)",
-		R"(C:\Windows\Fonts\calibrib.ttf)"
-	};
-	constexpr std::array<const char*, 5> vMonoFontPaths =
-	{
-		R"(C:\Windows\Fonts\consola.ttf)",
-		R"(C:\Windows\Fonts\cascadiamono.ttf)",
-		R"(C:\Windows\Fonts\lucon.ttf)",
-		R"(C:\Windows\Fonts\cour.ttf)",
-		R"(C:\Windows\Fonts\consolab.ttf)"
-	};
-#else
-	constexpr std::array<const char*, 5> vRegularFontPaths =
-	{
-		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-		"/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-		"/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-		"/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-		"/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf"
-	};
-	constexpr std::array<const char*, 5> vBoldFontPaths =
-	{
-		"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-		"/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-		"/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-		"/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-		"/usr/share/fonts/opentype/noto/NotoSans-Bold.ttf"
-	};
-	constexpr std::array<const char*, 5> vMonoFontPaths =
-	{
-		"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-		"/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
-		"/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
-		"/usr/share/fonts/truetype/freefont/FreeMono.ttf",
-		"/usr/share/fonts/opentype/noto/NotoSansMono-Regular.ttf"
-	};
-#endif
-	FontSmall = LoadFontWithFallback(io.Fonts, vRegularFontPaths, H::Draw.Scale(11), tFontConfig);
-	FontRegular = LoadFontWithFallback(io.Fonts, vRegularFontPaths, H::Draw.Scale(13), tFontConfig);
-	FontBold = LoadFontWithFallback(io.Fonts, vBoldFontPaths, H::Draw.Scale(13), tFontConfig);
-	FontLarge = LoadFontWithFallback(io.Fonts, vRegularFontPaths, H::Draw.Scale(14), tFontConfig);
-	FontMono = LoadFontWithFallback(io.Fonts, vMonoFontPaths, H::Draw.Scale(16), tFontConfig);
-#else
-	FontSmall = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, H::Draw.Scale(12), &tFontConfig);
-	FontRegular = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, H::Draw.Scale(13), &tFontConfig);
-	FontBold = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoBlack_compressed_data, RobotoBlack_compressed_size, H::Draw.Scale(13), &tFontConfig);
-	FontLarge = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, H::Draw.Scale(15), &tFontConfig);
-	FontMono = io.Fonts->AddFontFromMemoryCompressedTTF(CascadiaMono_compressed_data, CascadiaMono_compressed_size, H::Draw.Scale(15), &tFontConfig);
-#endif
-
-	ImFontConfig tIconConfig;
-	tIconConfig.PixelSnapH = true;
-	IconFont = io.Fonts->AddFontFromMemoryCompressedTTF(MaterialIcons_compressed_data, MaterialIcons_compressed_size, H::Draw.Scale(16), &tIconConfig);
-
-	io.Fonts->Build();
-	io.FontDefault = FontRegular;
+	CMenuTheme::LoadFonts(io.Fonts, H::Draw.Scale());
 	io.ConfigDebugHighlightIdConflicts = false;
 }
 
 void CRender::LoadStyle()
 {
-	using namespace ImGui;
-
-	auto& style = GetStyle();
-	style.ButtonTextAlign = { 0.5f, 0.5f };
-	style.CellPadding = { H::Draw.Scale(4), 0 };
-	style.ChildBorderSize = 0.f;
-	style.ChildRounding = H::Draw.Scale(4);
-	style.FrameBorderSize = 0.f;
-	style.FramePadding = { 0, 0 };
-	style.FrameRounding = H::Draw.Scale(4);
-	style.ItemInnerSpacing = { 0, 0 };
-	style.ItemSpacing = { H::Draw.Scale(8), H::Draw.Scale(8) };
-	style.PopupBorderSize = 0.f;
-	style.PopupRounding = H::Draw.Scale(4);
-	style.ScrollbarSize = H::Draw.Scale(12);
-	style.ScrollbarRounding = 99.f;
-	style.WindowBorderSize = 0.f;
-	style.WindowPadding = { 0, 0 };
-	style.WindowRounding = H::Draw.Scale(4);
+	CMenuTheme::LoadStyle(H::Draw.Scale());
 }
 
 void CRender::Initialize(IDirect3DDevice9* pDevice)

@@ -19,15 +19,11 @@ class CMenu
 private:
 	void DrawMenu();
 
-	void MenuAimbot(int iTab);
-	void MenuVisuals(int iTab);
-	void MenuHvH(int iTab);
-	void MenuMisc(int iTab);
+	void MenuESP();
 	void MenuAnticheat(int iTab);
 	void MenuLogs(int iTab);
 	void MenuSkins(int iTab);
 	void MenuSettings(int iTab);
-	void MenuSearch(std::string sSearch);
 
 	void AddDraggable(const char* sLabel, ConfigVar<DragBox_t>& tVar, bool bShouldDraw = true, ImVec2 vSize = { H::Draw.Scale(100), H::Draw.Scale(40) });
 	void AddResizableDraggable(const char* sLabel, ConfigVar<WindowBox_t>& tVar, bool bShouldDraw = true, ImGuiSizeCallback fCustomCallback = nullptr, ImVec2 vMinSize = { H::Draw.Scale(100), H::Draw.Scale(100) }, ImVec2 vMaxSize = { H::Draw.Scale(1000), H::Draw.Scale(1000) });

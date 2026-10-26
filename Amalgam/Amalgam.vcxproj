@@ -5,28 +5,12 @@
       <Configuration>DebugAVX2</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="DebugFreetypeAVX2|x64">
-      <Configuration>DebugFreetypeAVX2</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="DebugFreetype|x64">
-      <Configuration>DebugFreetype</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseAVX2|x64">
       <Configuration>ReleaseAVX2</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseLocalAVX2|x64">
       <Configuration>ReleaseLocalAVX2</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseFreetypeAVX2|x64">
-      <Configuration>ReleaseFreetypeAVX2</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="ReleaseFreetype|x64">
-      <Configuration>ReleaseFreetype</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="ReleaseTextmodeAVX2|x64">
@@ -65,21 +49,7 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
@@ -107,13 +77,6 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
@@ -135,13 +98,6 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>false</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
     <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -153,13 +109,7 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -171,9 +121,6 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmode|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -181,9 +128,6 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTextmodeAVX2|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
@@ -194,21 +138,7 @@
     <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|x64'">
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|x64'">
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|x64'">
     <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
     <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
     <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
@@ -235,13 +165,6 @@
     <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
     <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|x64'">
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|x64'">
     <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
     <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
@@ -261,13 +184,6 @@
     <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
     <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
     <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|x64'">
-    <IncludePath>$(ProjectDir)include\;$(IncludePath)</IncludePath>
-    <IntDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</IntDir>
-    <TargetName>$(ProjectName)$(Platform)$(Configuration)</TargetName>
-    <OutDir>$(SolutionDir)output\$(Platform)\$(Configuration)\</OutDir>
-    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -302,77 +218,11 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetype|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>PROJ_PROFILER;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="DebugFreetype";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <Optimization>MaxSpeed</Optimization>
-      <StringPooling>true</StringPooling>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugAVX2|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>PROJ_PROFILER;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="DebugAVX2";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <Optimization>MaxSpeed</Optimization>
-      <StringPooling>true</StringPooling>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugFreetypeAVX2|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>PROJ_PROFILER;_DEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="DebugFreetypeAVX2";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -493,36 +343,6 @@
       </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetype|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="ReleaseFreetype";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseAVX2|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -615,40 +435,9 @@
       </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseFreetypeAVX2|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;IMGUI_ENABLE_FREETYPE;AMALGAM_CUSTOM_FONTS;__CONFIGURATION__="ReleaseFreetypeAVX2";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <OmitFramePointers>
-      </OmitFramePointers>
-      <StringPooling>true</StringPooling>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <SupportJustMyCode>
-      </SupportJustMyCode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="include\ImGui\imgui.cpp" />
     <ClCompile Include="include\ImGui\imgui_draw.cpp" />
-    <ClCompile Include="include\ImGui\imgui_freetype.cpp" />
     <ClCompile Include="include\ImGui\imgui_impl_dx9.cpp" />
     <ClCompile Include="include\ImGui\imgui_impl_win32.cpp" />
     <ClCompile Include="include\ImGui\imgui_stdlib.cpp" />
@@ -728,6 +517,8 @@
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
     <ClCompile Include="src\Features\ImGui\Overlay\CaptureOverlay.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Menu.cpp" />
+    <ClCompile Include="src\Features\ImGui\Menu\Pages.cpp" />
+    <ClCompile Include="src\Features\ImGui\Theme.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
     <ClCompile Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.cpp" />
@@ -914,109 +705,8 @@
     <ClCompile Include="src\Utils\Timer\Timer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\freetype\config\ftconfig.h" />
-    <ClInclude Include="include\freetype\config\ftheader.h" />
-    <ClInclude Include="include\freetype\config\ftmodule.h" />
-    <ClInclude Include="include\freetype\config\ftoption.h" />
-    <ClInclude Include="include\freetype\config\ftstdlib.h" />
-    <ClInclude Include="include\freetype\config\integer-types.h" />
-    <ClInclude Include="include\freetype\config\mac-support.h" />
-    <ClInclude Include="include\freetype\config\public-macros.h" />
-    <ClInclude Include="include\freetype\freetype.h" />
-    <ClInclude Include="include\freetype\ft2build.h" />
-    <ClInclude Include="include\freetype\ftadvanc.h" />
-    <ClInclude Include="include\freetype\ftbbox.h" />
-    <ClInclude Include="include\freetype\ftbdf.h" />
-    <ClInclude Include="include\freetype\ftbitmap.h" />
-    <ClInclude Include="include\freetype\ftbzip2.h" />
-    <ClInclude Include="include\freetype\ftcache.h" />
-    <ClInclude Include="include\freetype\ftchapters.h" />
-    <ClInclude Include="include\freetype\ftcid.h" />
-    <ClInclude Include="include\freetype\ftcolor.h" />
-    <ClInclude Include="include\freetype\ftdriver.h" />
-    <ClInclude Include="include\freetype\fterrdef.h" />
-    <ClInclude Include="include\freetype\fterrors.h" />
-    <ClInclude Include="include\freetype\ftfntfmt.h" />
-    <ClInclude Include="include\freetype\ftgasp.h" />
-    <ClInclude Include="include\freetype\ftglyph.h" />
-    <ClInclude Include="include\freetype\ftgxval.h" />
-    <ClInclude Include="include\freetype\ftgzip.h" />
-    <ClInclude Include="include\freetype\ftimage.h" />
-    <ClInclude Include="include\freetype\ftincrem.h" />
-    <ClInclude Include="include\freetype\ftlcdfil.h" />
-    <ClInclude Include="include\freetype\ftlist.h" />
-    <ClInclude Include="include\freetype\ftlogging.h" />
-    <ClInclude Include="include\freetype\ftlzw.h" />
-    <ClInclude Include="include\freetype\ftmac.h" />
-    <ClInclude Include="include\freetype\ftmm.h" />
-    <ClInclude Include="include\freetype\ftmodapi.h" />
-    <ClInclude Include="include\freetype\ftmoderr.h" />
-    <ClInclude Include="include\freetype\ftotval.h" />
-    <ClInclude Include="include\freetype\ftoutln.h" />
-    <ClInclude Include="include\freetype\ftparams.h" />
-    <ClInclude Include="include\freetype\ftpfr.h" />
-    <ClInclude Include="include\freetype\ftrender.h" />
-    <ClInclude Include="include\freetype\ftsizes.h" />
-    <ClInclude Include="include\freetype\ftsnames.h" />
-    <ClInclude Include="include\freetype\ftstroke.h" />
-    <ClInclude Include="include\freetype\ftsynth.h" />
-    <ClInclude Include="include\freetype\ftsystem.h" />
-    <ClInclude Include="include\freetype\fttrigon.h" />
-    <ClInclude Include="include\freetype\fttypes.h" />
-    <ClInclude Include="include\freetype\ftwinfnt.h" />
-    <ClInclude Include="include\freetype\internal\autohint.h" />
-    <ClInclude Include="include\freetype\internal\cffotypes.h" />
-    <ClInclude Include="include\freetype\internal\cfftypes.h" />
-    <ClInclude Include="include\freetype\internal\compiler-macros.h" />
-    <ClInclude Include="include\freetype\internal\ftcalc.h" />
-    <ClInclude Include="include\freetype\internal\ftdebug.h" />
-    <ClInclude Include="include\freetype\internal\ftdrv.h" />
-    <ClInclude Include="include\freetype\internal\ftgloadr.h" />
-    <ClInclude Include="include\freetype\internal\fthash.h" />
-    <ClInclude Include="include\freetype\internal\ftmemory.h" />
-    <ClInclude Include="include\freetype\internal\ftmmtypes.h" />
-    <ClInclude Include="include\freetype\internal\ftobjs.h" />
-    <ClInclude Include="include\freetype\internal\ftpsprop.h" />
-    <ClInclude Include="include\freetype\internal\ftrfork.h" />
-    <ClInclude Include="include\freetype\internal\ftserv.h" />
-    <ClInclude Include="include\freetype\internal\ftstream.h" />
-    <ClInclude Include="include\freetype\internal\fttrace.h" />
-    <ClInclude Include="include\freetype\internal\ftvalid.h" />
-    <ClInclude Include="include\freetype\internal\psaux.h" />
-    <ClInclude Include="include\freetype\internal\pshints.h" />
-    <ClInclude Include="include\freetype\internal\services\svbdf.h" />
-    <ClInclude Include="include\freetype\internal\services\svcfftl.h" />
-    <ClInclude Include="include\freetype\internal\services\svcid.h" />
-    <ClInclude Include="include\freetype\internal\services\svfntfmt.h" />
-    <ClInclude Include="include\freetype\internal\services\svgldict.h" />
-    <ClInclude Include="include\freetype\internal\services\svgxval.h" />
-    <ClInclude Include="include\freetype\internal\services\svkern.h" />
-    <ClInclude Include="include\freetype\internal\services\svmetric.h" />
-    <ClInclude Include="include\freetype\internal\services\svmm.h" />
-    <ClInclude Include="include\freetype\internal\services\svotval.h" />
-    <ClInclude Include="include\freetype\internal\services\svpfr.h" />
-    <ClInclude Include="include\freetype\internal\services\svpostnm.h" />
-    <ClInclude Include="include\freetype\internal\services\svprop.h" />
-    <ClInclude Include="include\freetype\internal\services\svpscmap.h" />
-    <ClInclude Include="include\freetype\internal\services\svpsinfo.h" />
-    <ClInclude Include="include\freetype\internal\services\svsfnt.h" />
-    <ClInclude Include="include\freetype\internal\services\svttcmap.h" />
-    <ClInclude Include="include\freetype\internal\services\svtteng.h" />
-    <ClInclude Include="include\freetype\internal\services\svttglyf.h" />
-    <ClInclude Include="include\freetype\internal\services\svwinfnt.h" />
-    <ClInclude Include="include\freetype\internal\sfnt.h" />
-    <ClInclude Include="include\freetype\internal\svginterface.h" />
-    <ClInclude Include="include\freetype\internal\t1types.h" />
-    <ClInclude Include="include\freetype\internal\tttypes.h" />
-    <ClInclude Include="include\freetype\internal\wofftypes.h" />
-    <ClInclude Include="include\freetype\otsvg.h" />
-    <ClInclude Include="include\freetype\t1tables.h" />
-    <ClInclude Include="include\freetype\ttnameid.h" />
-    <ClInclude Include="include\freetype\tttables.h" />
-    <ClInclude Include="include\freetype\tttags.h" />
     <ClInclude Include="include\ImGui\imconfig.h" />
     <ClInclude Include="include\ImGui\imgui.h" />
-    <ClInclude Include="include\ImGui\imgui_freetype.h" />
     <ClInclude Include="include\ImGui\imgui_impl_dx9.h" />
     <ClInclude Include="include\ImGui\imgui_impl_win32.h" />
     <ClInclude Include="include\ImGui\imgui_internal.h" />
@@ -1074,10 +764,9 @@
     <ClInclude Include="src\Features\CritHack\CritHack.h" />
     <ClInclude Include="src\Features\EnginePrediction\EnginePrediction.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\CascadiaMono\CascadiaMono.h" />
+    <ClInclude Include="src\Features\ImGui\Fonts\Alata\Alata.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\IconDefinitions.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\MaterialIcons.h" />
-    <ClInclude Include="src\Features\ImGui\Fonts\Roboto\RobotoBlack.h" />
-    <ClInclude Include="src\Features\ImGui\Fonts\Roboto\RobotoMedium.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
     <ClInclude Include="src\Features\Misc\Misc.h" />
     <ClInclude Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.h" />
@@ -1243,6 +932,7 @@
     <ClInclude Include="src\Features\Binds\Binds.h" />
     <ClInclude Include="src\Features\Configs\Configs.h" />
     <ClInclude Include="src\Features\ImGui\Render.h" />
+    <ClInclude Include="src\Features\ImGui\Theme.h" />
     <ClInclude Include="src\Features\ImGui\IndicatorCache.h" />
     <ClInclude Include="src\Features\ImGui\Overlay\CaptureOverlay.h" />
     <ClInclude Include="src\Features\ImGui\RenderSync.h" />
@@ -1251,6 +941,10 @@
     <ClInclude Include="src\Features\ImGui\MaterialDesign\MaterialIcons.h" />
     <ClInclude Include="src\Features\ImGui\Menu\Components.h" />
     <ClInclude Include="src\Features\ImGui\Menu\Menu.h" />
+    <ClInclude Include="src\Features\ImGui\Menu\Pages.h" />
+    <ClInclude Include="src\Features\ImGui\Menu\Shell.h" />
+    <ClInclude Include="src\Features\ImGui\Menu\WidgetEnv.h" />
+    <ClInclude Include="src\Features\ImGui\Menu\Widgets.h" />
     <ClInclude Include="src\Features\Players\PlayerCore.h" />
     <ClInclude Include="src\Features\Players\PlayerUtils.h" />
     <ClInclude Include="src\Features\Visuals\Materials\Materials.h" />
@@ -1383,7 +1077,6 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Library Include="include\freetype\freetype.lib" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

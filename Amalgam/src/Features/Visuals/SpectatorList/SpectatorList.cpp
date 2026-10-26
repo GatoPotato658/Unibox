@@ -111,25 +111,21 @@ void CSpectatorList::Draw()
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators) || (vSpectators.empty() && !F::Menu.m_bIsOpen))
 		return;
 
+	ImFont* pSmall = F::Render.FontSmall, *pRegular = F::Render.FontRegular;
+	auto fTextWidth = [](ImFont* pFont, const char* sText) { return pFont->CalcTextSizeA(pFont->LegacySize, FLT_MAX, 0.f, sText).x; };
 	std::vector<std::string> vRespawns = {};
-	float flNameWidth = 0.f, flModeWidth = 0.f, flRespawnWidth = 0.f;
-	PushFont(F::Render.FontSmall);
-	for (auto& Spectator : vSpectators)
+	float flNameWidth = 0.f, flRespawnWidth = 0.f, flChipWidth = 0.f;
+	for (auto& tSpectator : vSpectators)
 	{
-		vRespawns.push_back(Spectator.m_flRespawnIn >= 0.f ? std::format("respawn {}s", static_cast<int>(Spectator.m_flRespawnIn)) : "");
-		flNameWidth = std::max(flNameWidth, FCalcTextSize(Spectator.m_sName.c_str()).x);
-		flModeWidth = std::max(flModeWidth, FCalcTextSize(Spectator.m_sMode).x);
-		flRespawnWidth = std::max(flRespawnWidth, FCalcTextSize(vRespawns.back().c_str()).x);
+		vRespawns.push_back(tSpectator.m_flRespawnIn >= 0.f ? std::format("{}s", static_cast<int>(tSpectator.m_flRespawnIn)) : "");
+		flNameWidth = std::max(flNameWidth, fTextWidth(pRegular, tSpectator.m_sName.c_str()));
+		flRespawnWidth = std::max(flRespawnWidth, fTextWidth(pSmall, vRespawns.back().c_str()));
+		flChipWidth = std::max(flChipWidth, OverlayChipWidth(tSpectator.m_sMode));
 	}
-	PopFont();
-	flNameWidth += H::Draw.Scale(9), flModeWidth += H::Draw.Scale(9), flRespawnWidth += H::Draw.Scale(9);
 
-	PushFont(F::Render.FontLarge);
-	const float flTitleWidth = CalcTextSize("Spec").x + CalcTextSize("tators").x;
-	PopFont();
-
-	const float flWidth = std::max(flNameWidth + flModeWidth + flRespawnWidth + H::Draw.Scale(14), flTitleWidth + H::Draw.Scale(16));
-	const float flHeight = H::Draw.Scale(18 * vSpectators.size() + 42);
+	const float flPad = H::Draw.Scale(12), flHeader = H::Draw.Scale(32), flRow = H::Draw.Scale(26), flTop = flHeader + H::Draw.Scale(6);
+	const float flWidth = std::max(flPad * 2 + flNameWidth + H::Draw.Scale(18) + (flRespawnWidth ? flRespawnWidth + H::Draw.Scale(10) : 0.f) + flChipWidth, H::Draw.Scale(170));
+	const float flHeight = flTop + flRow * vSpectators.size() + H::Draw.Scale(vSpectators.empty() ? 0 : 6);
 	SetNextWindowSize({ flWidth, flHeight }, ImGuiCond_Always);
 
 	static DragBox_t tOld = { -2147483648, -2147483648 };
@@ -137,59 +133,41 @@ void CSpectatorList::Draw()
 	if (tDragBox != tOld)
 		SetNextWindowPos({ float(tDragBox.x), float(tDragBox.y) }, ImGuiCond_Always);
 
-	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(40), H::Draw.Scale(40) });
+	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(40), H::Draw.Scale(32) });
 	if (Begin("Spectators", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings))
 	{
-		ImVec2 vWindowPos = GetWindowPos();
+		const ImVec2 vWindowPos = GetWindowPos();
 
-		RenderTwoToneBackground(H::Draw.Scale(28), F::Render.Background0, F::Render.Background0p5, F::Render.Background2);
+		RenderOverlayWindow(flHeader, ICON_MD_VISIBILITY, "Spectators");
 
 		tDragBox.x = vWindowPos.x; tDragBox.y = vWindowPos.y; tOld = tDragBox;
 		if (F::Menu.m_bIsOpen)
 			FSet(Vars::Menu::SpectatorsDisplay, tDragBox);
 
-		PushFont(F::Render.FontLarge);
-		SetCursorPos({ H::Draw.Scale(8), H::Draw.Scale(7) });
-		PushStyleColor(ImGuiCol_Text, F::Render.Active.Value);
-		FText("Spec");
-		SetCursorPos({ H::Draw.Scale(8) + CalcTextSize("Spec").x, H::Draw.Scale(7) });
-		PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-		FText("tators");
-		PopStyleColor(2);
-		PopFont();
-
-		PushFont(F::Render.FontSmall);
+		ImDrawList* pDrawList = GetWindowDrawList();
 		int i = 0;
-		for (auto& Spectator : vSpectators)
+		for (auto& tSpectator : vSpectators)
 		{
-			Color_t tNameColor = Vars::Menu::Theme::Accent.Value;
-			if (Spectator.m_bIsFriend)
-				tNameColor = F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(FRIEND_TAG)].m_tColor;
-			else if (Spectator.m_bInParty)
-				tNameColor = F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(PARTY_TAG)].m_tColor;
-			else if (Spectator.m_bRespawnTimeIncreased)
-				tNameColor = F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(CHEATER_TAG)].m_tColor;
-			else if (FNV1A::Hash32(Spectator.m_sMode) == FNV1A::Hash32Const("1st"))
-				tNameColor = tNameColor.Lerp({ 255, 150, 0, 255 }, 0.5f);
+			ImVec4 tName = F::Render.Active.Value;
+			if (tSpectator.m_bIsFriend)
+				tName = ColorByteToVec(F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(FRIEND_TAG)].m_tColor);
+			else if (tSpectator.m_bInParty)
+				tName = ColorByteToVec(F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(PARTY_TAG)].m_tColor);
+			else if (tSpectator.m_bRespawnTimeIncreased)
+				tName = ColorByteToVec(F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(CHEATER_TAG)].m_tColor);
+			const bool bFirstPerson = FNV1A::Hash32(tSpectator.m_sMode) == FNV1A::Hash32Const("1st");
 
-			float flPosX = 0;
-			const float flRowY = H::Draw.Scale(36 + 18 * i);
-
-			SetCursorPos({ flPosX += H::Draw.Scale(12), flRowY });
-			PushStyleColor(ImGuiCol_Text, ColorByteToVec(tNameColor));
-			FText(Spectator.m_sName.c_str());
-			PopStyleColor();
-
-			PushStyleColor(ImGuiCol_Text, F::Render.Active.Value);
-			SetCursorPos({ flPosX += flNameWidth, flRowY });
-			FText(Spectator.m_sMode);
-			SetCursorPos({ flPosX += flModeWidth, flRowY });
-			FText(vRespawns[i].c_str());
-			PopStyleColor();
+			const float flCenterY = vWindowPos.y + flTop + flRow * i + flRow / 2;
+			pDrawList->AddText(pRegular, pRegular->LegacySize, { vWindowPos.x + flPad, floorf(flCenterY - pRegular->LegacySize / 2) }, FadeColor(tName), tSpectator.m_sName.c_str());
+			const float flChipX = DrawOverlayChip(pDrawList, vWindowPos.x + flWidth - flPad, flCenterY, tSpectator.m_sMode, bFirstPerson, F::Render.Danger.Value, 1.f, flChipWidth);
+			if (!vRespawns[i].empty())
+			{
+				const float flRespawn = fTextWidth(pSmall, vRespawns[i].c_str());
+				pDrawList->AddText(pSmall, pSmall->LegacySize, { flChipX - H::Draw.Scale(10) - flRespawn, floorf(flCenterY - pSmall->LegacySize / 2) }, FadeColor(F::Render.Inactive), vRespawns[i].c_str());
+			}
 
 			i++;
 		}
-		PopFont();
 
 		End();
 	}

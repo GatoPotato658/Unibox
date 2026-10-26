@@ -110,8 +110,7 @@ void CNotifications::Draw()
 
 		x -= (w + H::Draw.Scale(8)) * (1.f - flEaseX) * X();
 
-		ImU32 uBackground = F::Render.Background0;
-		ImU32 uBorder = F::Render.Background2;
+		ImU32 uBackground = F::Render.Popup;
 		ImU32 uActive = F::Render.Active;
 		ImU32 uAccentOpaque = ColorByteToInt(tNotification.m_tColor.Alpha(255));
 		ImU32 uAccentTransparent = ColorByteToInt(tNotification.m_tColor.Alpha(50));
@@ -127,8 +126,6 @@ void CNotifications::Draw()
 		pDrawList->PushClipRect(vDrawPos + ImVec2(flInset, h - flInset - H::Draw.Scale(2)), vDrawPos + ImVec2((w - flInset) * flLife, h - flInset), false);
 		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uAccentOpaque, H::Draw.Scale(3));
 		pDrawList->PopClipRect();
-		flInset += H::Draw.Scale(0.5f) - 0.5f - H::Draw.Scale();
-		pDrawList->AddRect(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uBorder, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 		if (!bIcon)
 			pDrawList->AddText(vDrawPos + ImVec2(H::Draw.Scale(15), H::Draw.Scale(13)), uActive, tNotification.m_sText.c_str());
 		else

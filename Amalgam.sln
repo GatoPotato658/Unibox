@@ -9,14 +9,10 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 		DebugAVX2|x64 = DebugAVX2|x64
-		DebugFreetype|x64 = DebugFreetype|x64
-		DebugFreetypeAVX2|x64 = DebugFreetypeAVX2|x64
 		Release|x64 = Release|x64
 		ReleaseAVX2|x64 = ReleaseAVX2|x64
 		ReleaseLocal|x64 = ReleaseLocal|x64
 		ReleaseLocalAVX2|x64 = ReleaseLocalAVX2|x64
-		ReleaseFreetype|x64 = ReleaseFreetype|x64
-		ReleaseFreetypeAVX2|x64 = ReleaseFreetypeAVX2|x64
 		ReleaseTextmode|x64 = ReleaseTextmode|x64
 		ReleaseTextmodeAVX2|x64 = ReleaseTextmodeAVX2|x64
 	EndGlobalSection
@@ -25,10 +21,6 @@ Global
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.Debug|x64.Build.0 = Debug|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.DebugAVX2|x64.ActiveCfg = DebugAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.DebugAVX2|x64.Build.0 = DebugAVX2|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.DebugFreetype|x64.ActiveCfg = DebugFreetype|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.DebugFreetype|x64.Build.0 = DebugFreetype|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.DebugFreetypeAVX2|x64.ActiveCfg = DebugFreetypeAVX2|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.DebugFreetypeAVX2|x64.Build.0 = DebugFreetypeAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.Release|x64.ActiveCfg = Release|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.Release|x64.Build.0 = Release|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseAVX2|x64.ActiveCfg = ReleaseAVX2|x64
@@ -37,10 +29,6 @@ Global
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseLocal|x64.Build.0 = ReleaseLocal|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseLocalAVX2|x64.ActiveCfg = ReleaseLocalAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseLocalAVX2|x64.Build.0 = ReleaseLocalAVX2|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetype|x64.ActiveCfg = ReleaseFreetype|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetype|x64.Build.0 = ReleaseFreetype|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetypeAVX2|x64.ActiveCfg = ReleaseFreetypeAVX2|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetypeAVX2|x64.Build.0 = ReleaseFreetypeAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x64.ActiveCfg = ReleaseTextmode|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x64.Build.0 = ReleaseTextmode|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x64.ActiveCfg = ReleaseTextmodeAVX2|x64
