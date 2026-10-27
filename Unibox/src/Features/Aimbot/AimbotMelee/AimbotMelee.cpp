@@ -1,0 +1,868 @@
+#include "AimbotMelee.h"
+
+#include "../Aimbot.h"
+#include "../../Simulation/MovementSimulation/MovementSimulation.h"
+#include "../../EnginePrediction/EnginePrediction.h"
+#include "../../Ticks/Ticks.h"
+#include "../../Visuals/Visuals.h"
+#include "../../NavBot/BotUtils.h"
+#include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
+
+static inline bool AimFriendlyBuilding(CTFPlayer* pLocal, CBaseObject* pBuilding)
+{
+	int iCurrMetal = pLocal->m_iMetalCount();
+
+	bool bShouldRepair = false;
+	switch (pBuilding->GetClassID())
+	{
+	case ETFClassID::CObjectSentrygun:
+		if (Vars::Aimbot::AutoEngie::AutoRepair.Value & Vars::Aimbot::AutoEngie::AutoRepairEnum::Sentry)
+		{
+			int iShells, iMaxShells, iRockets, iMaxRockets; pBuilding->As<CObjectSentrygun>()->GetAmmoCount(iShells, iMaxShells, iRockets, iMaxRockets);
+			if (iCurrMetal && (iShells < iMaxShells || iRockets < iMaxRockets))
+				return true;
+			bShouldRepair = true;
+		}
+		break;
+	case ETFClassID::CObjectDispenser:
+		if (Vars::Aimbot::AutoEngie::AutoRepair.Value & Vars::Aimbot::AutoEngie::AutoRepairEnum::Dispenser)
+			bShouldRepair = true;
+		break;
+	case ETFClassID::CObjectTeleporter:
+		if (Vars::Aimbot::AutoEngie::AutoRepair.Value & Vars::Aimbot::AutoEngie::AutoRepairEnum::Teleporter)
+			bShouldRepair = true;
+		break;
+	default:
+		break;
+	}
+
+	if (bShouldRepair && ((iCurrMetal && pBuilding->m_iHealth() != pBuilding->m_iMaxHealth()) || pBuilding->m_bHasSapper()))
+		return true;
+
+	if (iCurrMetal && Vars::Aimbot::AutoEngie::AutoUpgrade.Value && !pBuilding->m_bMiniBuilding())
+	{
+		int iUpgradeLevel = pBuilding->m_iUpgradeLevel();
+
+		int iMaxLevel = 0;
+		switch (pBuilding->GetClassID())
+		{
+		case ETFClassID::CObjectSentrygun:
+			if (!(Vars::Aimbot::AutoEngie::AutoUpgrade.Value & Vars::Aimbot::AutoEngie::AutoUpgradeEnum::Sentry))
+				return false;
+			iMaxLevel = Vars::Aimbot::AutoEngie::AutoUpgradeSentryLVL.Value;
+			break;
+		case ETFClassID::CObjectDispenser:
+			if (!(Vars::Aimbot::AutoEngie::AutoUpgrade.Value & Vars::Aimbot::AutoEngie::AutoUpgradeEnum::Dispenser))
+				return false;
+			iMaxLevel = Vars::Aimbot::AutoEngie::AutoUpgradeDispenserLVL.Value;
+			break;
+		case ETFClassID::CObjectTeleporter:
+			if (!(Vars::Aimbot::AutoEngie::AutoUpgrade.Value & Vars::Aimbot::AutoEngie::AutoUpgradeEnum::Teleporter))
+				return false;
+			iMaxLevel = Vars::Aimbot::AutoEngie::AutoUpgradeTeleporterLVL.Value;
+			break;
+		default:
+			break;
+		}
+
+		if (iUpgradeLevel < iMaxLevel)
+			return true;
+	}
+	return false;
+}
+
+static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+{
+	std::vector<Target_t> vTargets;
+
+	const Vec3 vLocalPos = F::Ticks.GetShootPos();
+	const Vec3 vLocalAngles = I::EngineClient->GetViewAngles();
+
+	if (Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Players)
+	{
+		auto eGroup = !SDK::FriendlyFire() || Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Team ? EntityEnum::PlayerEnemy : EntityEnum::PlayerAll;
+		if (Vars::Aimbot::Melee::WhipTeam.Value &&
+			!SDK::FriendlyFire() && SDK::AttribHookValue(0, "speed_buff_ally", pWeapon) > 0)
+			eGroup = EntityEnum::PlayerAll;
+
+		for (auto pEntity : H::Entities.GetGroup(eGroup))
+		{
+			if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
+				continue;
+
+			float flFOVTo; Vec3 vPos, vAngleTo;
+			if (!F::AimbotGlobal.PlayerBoneInFOV(pEntity->As<CTFPlayer>(), vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
+				continue;
+
+			float flDistTo = vLocalPos.DistToSqr(vPos);
+			bool bTeam = pEntity->m_iTeamNum() == pLocal->m_iTeamNum();
+			int iPriority = F::AimbotGlobal.GetPriority(pEntity->entindex());
+			if (bTeam && !SDK::FriendlyFire())
+				iPriority = 0;
+			vTargets.emplace_back(pEntity, TargetEnum::Player, vPos, vAngleTo, flFOVTo, flDistTo, iPriority);
+		}
+	}
+
+	{
+		auto eGroup = EntityEnum::Invalid;
+		if (Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Building)
+			eGroup = EntityEnum::BuildingEnemy;
+		bool bWrench = pWeapon->GetWeaponID() == TF_WEAPON_WRENCH, bSapper = SDK::AttribHookValue(0, "set_dmg_apply_to_sapper", pWeapon);
+		if ((Vars::Aimbot::AutoEngie::AutoUpgrade.Value || Vars::Aimbot::AutoEngie::AutoRepair.Value) && (bWrench || bSapper))
+			eGroup = eGroup != EntityEnum::Invalid ? EntityEnum::BuildingAll : EntityEnum::BuildingTeam;
+		for (auto pEntity : H::Entities.GetGroup(eGroup))
+		{
+			if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
+				continue;
+
+			bool bTeam = pEntity->m_iTeamNum() == pLocal->m_iTeamNum();
+			if (bTeam && (bWrench && !AimFriendlyBuilding(pLocal, pEntity->As<CBaseObject>()) || bSapper && !pEntity->As<CBaseObject>()->m_bHasSapper()))
+				continue;
+
+			float flFOVTo; Vec3 vPos, vAngleTo;
+			if (!F::AimbotGlobal.EntityCenterInFOV(pEntity, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
+				continue;
+
+			int iPriority = 0;
+			if (bTeam)
+			{
+				int iOwner = pEntity->As<CBaseObject>()->m_hBuilder().GetEntryIndex();
+				switch (Vars::Aimbot::Healing::HealPriority.Value)
+				{
+				case Vars::Aimbot::Healing::HealPriorityEnum::PrioritizeFriends:
+					if (iOwner == I::EngineClient->GetLocalPlayer() || H::Entities.IsFriend(iOwner))
+						iPriority = std::numeric_limits<int>::max();
+					break;
+				case Vars::Aimbot::Healing::HealPriorityEnum::PrioritizeParty:
+					if (H::Entities.InParty(iOwner))
+						iPriority = std::numeric_limits<int>::max();
+					break;
+				case Vars::Aimbot::Healing::HealPriorityEnum::PrioritizeTeam:
+					iPriority = std::numeric_limits<int>::max();
+				}
+			}
+
+			float flDistTo = vLocalPos.DistToSqr(vPos);
+			vTargets.emplace_back(pEntity, pEntity->IsSentrygun() ? TargetEnum::Sentry : pEntity->IsDispenser() ? TargetEnum::Dispenser : TargetEnum::Teleporter, vPos, vAngleTo, flFOVTo, flDistTo, iPriority);
+		}
+	}
+
+	if (Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::NPCs)
+	{
+		for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldNPC))
+		{
+			if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
+				continue;
+
+			float flFOVTo; Vec3 vPos, vAngleTo;
+			if (!F::AimbotGlobal.EntityCenterInFOV(pEntity, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo))
+				continue;
+
+			float flDistTo = vLocalPos.DistToSqr(vPos);
+			vTargets.emplace_back(pEntity, TargetEnum::NPC, vPos, vAngleTo, flFOVTo, flDistTo);
+		}
+	}
+
+	return vTargets;
+}
+
+static inline Vec3 GetLastNetworkedOrigin(CBaseEntity* pEntity)
+{
+	if (pEntity->m_iv_vecOrigin().m_LastNetworkedValue)
+		return *pEntity->m_iv_vecOrigin().m_LastNetworkedValue;
+	return pEntity->m_vecOrigin();
+}
+
+std::vector<int> CAimbotMelee::GetTimeMods()
+{
+	std::vector<int> vTimeMods = {};
+	switch (Vars::Aimbot::Melee::SwingValidateMode.Value)
+	{
+	case Vars::Aimbot::Melee::SwingValidateModeEnum::Both:
+		if (m_iSimulatedTicks != m_iSwingTicks)
+			vTimeMods.push_back(m_iSimulatedTicks);
+		[[fallthrough]];
+	case Vars::Aimbot::Melee::SwingValidateModeEnum::Swing:
+		vTimeMods.push_back(m_iSwingTicks);
+		break;
+	case Vars::Aimbot::Melee::SwingValidateModeEnum::Simulated:
+		vTimeMods.push_back(m_iSimulatedTicks);
+		break;
+	}
+	return vTimeMods;
+}
+
+static inline int GetSwingTime(CTFWeaponBase* pWeapon, bool bVar = true)
+{
+	return pWeapon->GetWeaponID() == TF_WEAPON_KNIFE ? 0
+		: bVar ? Vars::Aimbot::Melee::SwingTicks.Value
+		: ceilf(pWeapon->GetSmackDelay() / TICK_INTERVAL);
+}
+
+void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, const std::vector<Target_t>& vTargets)
+{
+	m_mRecordMap.clear(); m_mPaths.clear();
+	m_vEyePos = pLocal->GetShootPos();
+	m_flRange = pWeapon->GetSwingRange();
+	m_iSimulatedTicks = GetSwingTime(pWeapon), m_iSwingTicks = GetSwingTime(pWeapon, false);
+	m_iDoubletapTicks = F::Ticks.GetTicks(pWeapon);
+	m_bShouldSwing = m_iDoubletapTicks <= m_iSwingTicks || Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity();
+	m_bSimulatedLocal = false;
+
+	if ((!Vars::Aimbot::Melee::SwingPrediction.Value || !m_iSimulatedTicks) && !m_iDoubletapTicks || !G::CanPrimaryAttack || pWeapon->m_flSmackTime() > 0.f)
+	{
+		m_iSimulatedTicks = m_iSwingTicks = 0;
+		return;
+	}
+
+	const bool bAccountPing = Vars::Aimbot::Melee::SwingAccountPing.Value;
+	std::unordered_map<int, MoveStorage> mMoveStorage;
+	std::unordered_map<int, int> mTargetTicks;
+
+	F::MoveSim.Initialize(pLocal, mMoveStorage[pLocal->entindex()], false, !m_iDoubletapTicks, false);
+	for (auto& tTarget : vTargets)
+	{
+		const bool bNetworked = bAccountPing && tTarget.m_pEntity->IsPlayer();
+		const Vec3 vTargetOrigin = bNetworked ? GetLastNetworkedOrigin(tTarget.m_pEntity) : tTarget.m_pEntity->m_vecOrigin();
+		F::MoveSim.Initialize(tTarget.m_pEntity, mMoveStorage[tTarget.m_pEntity->entindex()], false, true, false, bNetworked ? &vTargetOrigin : nullptr);
+	}
+
+	auto fStepTarget = [&](const Target_t& tTarget)
+	{
+		const int iIndex = tTarget.m_pEntity->entindex();
+		auto& tMoveStorage = mMoveStorage[iIndex];
+		if (tMoveStorage.m_bFailed)
+			return;
+
+		F::MoveSim.RunTick(tMoveStorage);
+		const int iTick = ++mTargetTicks[iIndex];
+		if (Vars::Aimbot::Melee::SwingPredictLag.Value && !tMoveStorage.m_bPredictNetworked)
+			return;
+
+		Vec3 vOrigin = Vars::Aimbot::Melee::SwingPredictLag.Value ? tMoveStorage.m_vPredictedOrigin : tMoveStorage.m_MoveData.m_vecAbsOrigin;
+		m_mRecordMap[iIndex].emplace_front(
+			tTarget.m_pEntity->m_flSimulationTime() + TICKS_TO_TIME(iTick), vOrigin, tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs()
+		);
+	};
+
+	int iMax = std::max(m_iSimulatedTicks, m_iDoubletapTicks), iTicks = iMax; bool bSwung = false;
+	Vec3 vLocalOrigin = mMoveStorage[pLocal->entindex()].m_MoveData.m_vecAbsOrigin;
+	for (int i = 0; i < iTicks; i++)
+	{
+		{
+			auto& tMoveStorage = mMoveStorage[pLocal->entindex()];
+			if (!bSwung && (!m_iDoubletapTicks || Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity() || iMax - i <= m_iSwingTicks))
+			{
+				iTicks = std::min(i + m_iSwingTicks, iMax), bSwung = true;
+				if (!m_iSwingTicks)
+					break;
+
+				if (pLocal->InCond(TF_COND_SHIELD_CHARGE))
+				{
+					pLocal->RemoveCond(TF_COND_SHIELD_CHARGE);
+					tMoveStorage.m_MoveData.m_flMaxSpeed = tMoveStorage.m_MoveData.m_flClientMaxSpeed = SDK::MaxSpeed(pLocal);
+					pLocal->m_flMaxspeed() = tMoveStorage.m_MoveData.m_flMaxSpeed;
+				}
+			}
+			if (m_iDoubletapTicks && Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity())
+				F::Ticks.AntiWarp(pLocal, pCmd->viewangles.y, tMoveStorage.m_MoveData.m_flForwardMove, tMoveStorage.m_MoveData.m_flSideMove, iMax - i - 1);
+
+			F::MoveSim.RunTick(tMoveStorage);
+
+			vLocalOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
+			m_bSimulatedLocal = true;
+		}
+
+		if (i < m_iSimulatedTicks - m_iDoubletapTicks)
+		{
+			for (auto& tTarget : vTargets)
+				fStepTarget(tTarget);
+		}
+	}
+
+	if (bAccountPing)
+	{
+		const auto vTimeMods = GetTimeMods();
+		const int iMaxExtra = TIME_TO_TICKS(0.2f);
+		for (auto& tTarget : vTargets)
+		{
+			if (!tTarget.m_pEntity->IsPlayer())
+				continue;
+
+			const int iRewound = TIME_TO_TICKS(tTarget.m_pEntity->m_flSimulationTime()) + mTargetTicks[tTarget.m_pEntity->entindex()];
+			int iExtra = 0;
+			for (int iTimeMod : vTimeMods)
+				iExtra = std::max(iExtra, F::Backtrack.GetRewindTick(-TICKS_TO_TIME(iTimeMod)) - iRewound);
+
+			for (int i = 0; i < std::min(iExtra, iMaxExtra); i++)
+				fStepTarget(tTarget);
+		}
+	}
+	m_vEyePos =vLocalOrigin + pLocal->m_vecViewOffset();
+	m_flRange = pWeapon->GetSwingRange();
+
+	if (Vars::Visuals::Prediction::SwingLines.Value && Vars::Visuals::Prediction::PlayerPath.Value)
+	{
+		for (auto& [iIndex, tMoveStorage] : mMoveStorage)
+			m_mPaths[iIndex] = tMoveStorage.m_vPath;
+
+		const bool bAlwaysDraw = !Vars::Aimbot::General::AutoShoot.Value || Vars::Debug::Info.Value;
+		if (bAlwaysDraw)
+		{
+			G::LineStorage.clear();
+			G::BoxStorage.clear();
+			G::PathStorage.clear();
+
+			for (auto& vPath : m_mPaths | std::views::values)
+			{
+				float flDuration = Vars::Visuals::Prediction::PlayerDrawDuration.Value;
+				if (Vars::Colors::PlayerPathIgnoreZ.Value.a)
+					G::PathStorage.emplace_back(vPath, !flDuration ? -int(vPath.size()) : I::GlobalVars->curtime + flDuration, Vars::Colors::PlayerPathIgnoreZ.Value, Vars::Visuals::Prediction::PlayerPath.Value);
+				if (Vars::Colors::PlayerPath.Value.a)
+					G::PathStorage.emplace_back(vPath, !flDuration ? -int(vPath.size()) : I::GlobalVars->curtime + flDuration, Vars::Colors::PlayerPath.Value, Vars::Visuals::Prediction::PlayerPath.Value, true);
+			}
+		}
+	}
+
+	for (auto& tMoveStorage : mMoveStorage | std::views::values)
+		F::MoveSim.Restore(tMoveStorage);
+}
+
+bool CAimbotMelee::CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, Vec3 vEyeAngles)
+{
+	if (!pTarget->IsPlayer() || pTarget->m_iTeamNum() == pLocal->m_iTeamNum())
+		return false;
+
+	if (Vars::Aimbot::Melee::IgnoreRazorback.Value)
+	{
+		CUtlVector<CBaseEntity*> itemList;
+		int iBackstabShield = SDK::AttribHookValue(0, "set_blockbackstab_once", pTarget, &itemList);
+		if (iBackstabShield && itemList.Count())
+		{
+			CBaseEntity* pEntity = itemList.Element(0);
+			if (pEntity && pEntity->ShouldDraw())
+				return false;
+		}
+	}
+
+	Vec3 vEyePos = m_vEyePos;
+	const float flCompDist = PLAYER_ORIGIN_COMPRESSION / 2;
+	const float flSqCompDist = 0.0884f;
+
+	if (auto pCmd = G::CurrentUserCmd;
+		!m_bSimulatedLocal && pCmd->viewangles != vEyeAngles && G::CanPrimaryAttack)
+	{
+		CUserCmd tOldCmd = *pCmd;
+		Vec3 vOldAngles = I::EngineClient->GetViewAngles();
+		int iOldAttacking = G::Attacking;
+		bool bOldSilent = G::PSilentAngles;
+		F::EnginePrediction.End(pLocal, pCmd);
+
+		G::Attacking = true;
+		Aim(pCmd, vEyeAngles);
+		F::Ticks.Start(pLocal, pCmd);
+		vEyePos = pLocal->GetShootPos();
+		F::EnginePrediction.End(pLocal, pCmd);
+
+		*pCmd = tOldCmd;
+		I::EngineClient->SetViewAngles(vOldAngles);
+		G::Attacking = iOldAttacking;
+		G::PSilentAngles = bOldSilent;
+		F::Ticks.Start(pLocal, pCmd);
+	}
+
+	Vec3 vToTarget = (pTarget->GetAbsOrigin() - vEyePos).To2D();
+	const float flDist = vToTarget.Normalize();
+	if (flDist < flSqCompDist)
+		return false;
+
+	const float flExtra = 2.f * flCompDist / flDist;
+	float flPosVsTargetViewMinDot = 0.f + 0.0031f + flExtra;
+	float flPosVsOwnerViewMinDot = 0.5f + flExtra;
+	float flViewAnglesMinDot = -0.3f + 0.0031f;
+
+	auto fTestDots = [&](Vec3 vTargetAngles)
+	{
+		Vec3 vOwnerForward; Math::AngleVectors(vEyeAngles, &vOwnerForward);
+		vOwnerForward.Normalize2D();
+
+		Vec3 vTargetForward; Math::AngleVectors(vTargetAngles, &vTargetForward);
+		vTargetForward.Normalize2D();
+
+		const float flPosVsTargetViewDot = vToTarget.Dot(vTargetForward);
+		const float flPosVsOwnerViewDot = vToTarget.Dot(vOwnerForward);
+		const float flViewAnglesDot = vTargetForward.Dot(vOwnerForward);
+
+		return flPosVsTargetViewDot > flPosVsTargetViewMinDot && flPosVsOwnerViewDot > flPosVsOwnerViewMinDot && flViewAnglesDot > flViewAnglesMinDot;
+	};
+
+	Vec3 vTargetAngles = { 0.f, H::Entities.GetEyeAngles(pTarget->entindex()).y, 0.f };
+	if (!(Vars::Aimbot::Melee::BackstabFlags.Value & Vars::Aimbot::Melee::BackstabFlagsEnum::AccountPing))
+	{
+		if (!fTestDots(vTargetAngles))
+			return false;
+	}
+	else
+	{
+		if (Vars::Aimbot::Melee::BackstabFlags.Value & Vars::Aimbot::Melee::BackstabFlagsEnum::DoubleTest && !fTestDots(vTargetAngles))
+			return false;
+
+		vTargetAngles.y += H::Entities.GetDeltaAngles(pTarget->entindex()).y;
+		if (!fTestDots(vTargetAngles))
+			return false;
+	}
+
+	return true;
+}
+
+int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+{
+	if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Unsimulated && H::Entities.GetChoke(tTarget.m_pEntity->entindex()) > Vars::Aimbot::General::TickTolerance.Value)
+		return false;
+
+	float flRange = SDK::AttribHookValue(m_flRange, "melee_range_multiplier", pWeapon);
+	float flHull = SDK::AttribHookValue(18, "melee_bounds_multiplier", pWeapon);
+	if (pLocal->m_flModelScale() > 1.0f)
+	{
+		flRange *= pLocal->m_flModelScale();
+		flHull *= pLocal->m_flModelScale();
+	}
+	if (pWeapon->GetWeaponID() == TF_WEAPON_WRENCH && tTarget.m_pEntity->m_iTeamNum() == pLocal->m_iTeamNum())
+	{
+		flRange = 70;
+		flHull = 18;
+	}
+	Vec3 vSwingMins = { -flHull, -flHull, -flHull };
+	Vec3 vSwingMaxs = { flHull, flHull, flHull };
+	auto& vSimRecords = m_mRecordMap[tTarget.m_pEntity->entindex()];
+
+	std::vector<TickRecord*> vRecords = {};
+	if (F::Backtrack.GetRecords(tTarget.m_pEntity, vRecords))
+	{
+		const auto vTimeMods = GetTimeMods();
+
+		for (auto& tRecord : vSimRecords)
+			vRecords.push_back(&tRecord);
+		for (auto iTimeMod : vTimeMods)
+			vRecords = F::Backtrack.GetValidRecords(vRecords, pLocal, true, -TICKS_TO_TIME(iTimeMod));
+		if (vRecords.empty())
+			return false;
+	}
+	else
+	{
+		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
+		if (!tTarget.m_pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
+			return false;
+
+		vRecords = { &F::Backtrack.m_tRecord };
+	}
+
+	CGameTrace trace = {};
+	CTraceFilterHitscan filter(pLocal);
+	for (auto pRecord : vRecords)
+	{
+
+		tTarget.m_vPos = m_vEyePos.Clamp(pRecord->m_vOrigin + pRecord->m_vMins, pRecord->m_vOrigin + pRecord->m_vMaxs);
+		if (Vars::Aimbot::Melee::AutoBackstab.Value && pWeapon->GetWeaponID() == TF_WEAPON_KNIFE)
+			tTarget.m_vPos.x = pRecord->m_vOrigin.x, tTarget.m_vPos.y = pRecord->m_vOrigin.y;
+		Aim(G::CurrentUserCmd->viewangles, Math::CalcAngle(m_vEyePos, tTarget.m_vPos), tTarget.m_vAngleTo);
+		if (!F::AimbotGlobal.ShouldAimAtAngle(tTarget.m_vAngleTo))
+			continue;
+
+		Vec3 vRestoreOrigin = tTarget.m_pEntity->GetAbsOrigin();
+		Vec3 vRestoreMins = tTarget.m_pEntity->m_vecMins();
+		Vec3 vRestoreMaxs = tTarget.m_pEntity->m_vecMaxs();
+
+		tTarget.m_pEntity->SetAbsOrigin(pRecord->m_vOrigin);
+		tTarget.m_pEntity->m_vecMins() = pRecord->m_vMins + PLAYER_ORIGIN_COMPRESSION;
+		tTarget.m_pEntity->m_vecMaxs() = pRecord->m_vMaxs - PLAYER_ORIGIN_COMPRESSION;
+
+		Vec3 vForward; Math::AngleVectors(tTarget.m_vAngleTo, &vForward);
+		Vec3 vTraceEnd = m_vEyePos + vForward * flRange;
+
+		SDK::TraceHull(m_vEyePos, vTraceEnd, {}, {}, MASK_SOLID, &filter, &trace);
+		bool bReturn = trace.m_pEnt == tTarget.m_pEntity;
+		if (!bReturn)
+		{
+			SDK::TraceHull(m_vEyePos, vTraceEnd, vSwingMins, vSwingMaxs, MASK_SOLID, &filter, &trace);
+			bReturn = trace.m_pEnt == tTarget.m_pEntity;
+		}
+
+		if (bReturn && Vars::Aimbot::Melee::AutoBackstab.Value && pWeapon->GetWeaponID() == TF_WEAPON_KNIFE)
+			bReturn = CanBackstab(tTarget.m_pEntity, pLocal, tTarget.m_vAngleTo);
+
+		tTarget.m_pEntity->SetAbsOrigin(vRestoreOrigin);
+		tTarget.m_pEntity->m_vecMins() = vRestoreMins;
+		tTarget.m_pEntity->m_vecMaxs() = vRestoreMaxs;
+
+		if (bReturn)
+		{
+			tTarget.m_pRecord = pRecord;
+			tTarget.m_bBacktrack = tTarget.m_iTargetType == TargetEnum::Player;
+
+			return true;
+		}
+		else switch (Vars::Aimbot::General::AimType.Value)
+		{
+		case Vars::Aimbot::General::AimTypeEnum::Smooth:
+		case Vars::Aimbot::General::AimTypeEnum::SmoothVelocity:
+		case Vars::Aimbot::General::AimTypeEnum::Assistive:
+		case Vars::Aimbot::General::AimTypeEnum::Legit:
+		{
+			auto vAngle = Math::CalcAngle(m_vEyePos, tTarget.m_vPos);
+
+			Math::AngleVectors(vAngle, &vForward);
+			vTraceEnd = m_vEyePos + vForward * flRange;
+
+			SDK::TraceHull(m_vEyePos, vTraceEnd, vSwingMins, vSwingMaxs, MASK_SOLID, &filter, &trace);
+			if (trace.m_pEnt == tTarget.m_pEntity)
+				return 2;
+		}
+		}
+	}
+
+	return false;
+}
+
+bool CAimbotMelee::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& vOut, int iMethod)
+{
+
+	bool bReturn = false;
+	switch (iMethod)
+	{
+	case Vars::Aimbot::General::AimTypeEnum::Plain:
+	case Vars::Aimbot::General::AimTypeEnum::Silent:
+	case Vars::Aimbot::General::AimTypeEnum::Locking:
+		vOut = vToAngle;
+		break;
+	case Vars::Aimbot::General::AimTypeEnum::Legit:
+		vOut = vCurAngle;
+		bReturn = true;
+		break;
+	case Vars::Aimbot::General::AimTypeEnum::Smooth:
+	case Vars::Aimbot::General::AimTypeEnum::SmoothVelocity:
+		vOut = vCurAngle.LerpAngle(vToAngle, F::Aimbot.GetSmoothStrength(vCurAngle, vToAngle));
+		bReturn = true;
+		break;
+	case Vars::Aimbot::General::AimTypeEnum::Assistive:
+		Vec3 vMouseDelta = G::CurrentUserCmd->viewangles.DeltaAngle(G::LastUserCmd->viewangles);
+		Vec3 vTargetDelta = vToAngle.DeltaAngle(G::LastUserCmd->viewangles);
+		float flMouseDelta = vMouseDelta.Length2DSqr(), flTargetDelta = vTargetDelta.Length2DSqr();
+		vTargetDelta = vTargetDelta.Normalized() * sqrtf(std::min(flMouseDelta, flTargetDelta));
+		vOut = vCurAngle - vMouseDelta + vMouseDelta.LerpAngle(vTargetDelta, F::Aimbot.GetSmoothStrength(vCurAngle, vToAngle));
+		bReturn = true;
+		break;
+	}
+
+	if (iMethod != Vars::Aimbot::General::AimTypeEnum::Silent || F::AntiCheatCompatibility.Active())
+		Math::ClampAngles(vOut);
+	return bReturn;
+}
+
+void CAimbotMelee::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
+{
+	bool bUnsure = F::Ticks.IsTimingUnsure();
+	switch (iMethod)
+	{
+	case Vars::Aimbot::General::AimTypeEnum::Plain:
+		if (G::Attacking != 1 && !bUnsure)
+			break;
+		[[fallthrough]];
+	case Vars::Aimbot::General::AimTypeEnum::Smooth:
+		case Vars::Aimbot::General::AimTypeEnum::SmoothVelocity:
+	case Vars::Aimbot::General::AimTypeEnum::Assistive:
+		pCmd->viewangles = vAngles;
+		I::EngineClient->SetViewAngles(vAngles);
+		break;
+	case Vars::Aimbot::General::AimTypeEnum::Silent:
+		if (G::Attacking == 1 || bUnsure)
+		{
+			SDK::FixMovement(pCmd, vAngles);
+			pCmd->viewangles = vAngles;
+			G::PSilentAngles = true;
+		}
+		break;
+	case Vars::Aimbot::General::AimTypeEnum::Legit:
+	{
+		auto pLocal = H::Entities.GetLocal();
+		if (pLocal && G::AimPoint.m_iTickCount == I::GlobalVars->tickcount)
+		{
+			F::BotUtils.LookLegit(pLocal, pCmd, G::AimPoint.m_vOrigin, false);
+			vAngles = pCmd->viewangles;
+			if (G::AimbotSteering)
+				return;
+			Vec3 vOldView = I::EngineClient->GetViewAngles();
+			Vec3 vDelta = vAngles.DeltaAngle(vOldView);
+			if (std::fabs(vDelta.x) > 0.01f || std::fabs(vDelta.y) > 0.01f || std::fabs(vDelta.z) > 0.01f)
+				G::AimbotSteering = true;
+		}
+		break;
+	}
+	case Vars::Aimbot::General::AimTypeEnum::Locking:
+		SDK::FixMovement(pCmd, vAngles);
+		pCmd->viewangles = vAngles;
+		G::SilentAngles = true;
+	}
+}
+
+static inline void DrawVisuals(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, Target_t& tTarget, std::unordered_map<int, std::vector<Vec3>>& mPaths)
+{
+	G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount };
+	G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
+
+	bool bPath = Vars::Visuals::Prediction::SwingLines.Value && Vars::Visuals::Prediction::PlayerPath.Value;
+
+	bool bBoxes = Vars::Visuals::Hitbox::BonesEnabled.Value & Vars::Visuals::Hitbox::BonesEnabledEnum::OnShot;
+	bool bRealPath = Vars::Visuals::Prediction::RealPath.Value;
+	if (bPath   || bBoxes || bRealPath)
+	{
+		if (pCmd->buttons & IN_ATTACK && G::CanPrimaryAttack && pWeapon->m_flSmackTime() < 0.f)
+		{
+			G::LineStorage.clear();
+			G::BoxStorage.clear();
+			G::PathStorage.clear();
+
+			if (bPath)
+			{
+				float flDuration = Vars::Visuals::Prediction::PlayerDrawDuration.Value;
+				if (Vars::Colors::PlayerPathIgnoreZ.Value.a)
+				{
+					G::PathStorage.emplace_back(mPaths[pLocal->entindex()], !flDuration ? -int(mPaths[pLocal->entindex()].size()) : I::GlobalVars->curtime + flDuration, Vars::Colors::PlayerPathIgnoreZ.Value, Vars::Visuals::Prediction::PlayerPath.Value);
+					G::PathStorage.emplace_back(mPaths[tTarget.m_pEntity->entindex()], !flDuration ? -int(mPaths[tTarget.m_pEntity->entindex()].size()) : I::GlobalVars->curtime + flDuration, Vars::Colors::PlayerPathIgnoreZ.Value, Vars::Visuals::Prediction::PlayerPath.Value);
+				}
+				if (Vars::Colors::PlayerPath.Value.a)
+				{
+					G::PathStorage.emplace_back(mPaths[pLocal->entindex()], !flDuration ? -int(mPaths[pLocal->entindex()].size()) : I::GlobalVars->curtime + flDuration, Vars::Colors::PlayerPath.Value, Vars::Visuals::Prediction::PlayerPath.Value, true);
+					G::PathStorage.emplace_back(mPaths[tTarget.m_pEntity->entindex()], !flDuration ? -int(mPaths[tTarget.m_pEntity->entindex()].size()) : I::GlobalVars->curtime + flDuration, Vars::Colors::PlayerPath.Value, Vars::Visuals::Prediction::PlayerPath.Value, true);
+				}
+			}
+			if (int iSwingTime = GetSwingTime(pWeapon, false); bRealPath && iSwingTime)
+			{
+				F::Aimbot.Store(pLocal, iSwingTime);
+				F::Aimbot.Store(tTarget.m_pEntity, iSwingTime);
+			}
+		}
+		if (G::Attacking == 1)
+		{
+
+			if (bBoxes)
+			{
+				auto vBoxes = F::Visuals.GetHitboxes(tTarget.m_pRecord->m_aBones, tTarget.m_pEntity->As<CBaseAnimating>());
+				G::BoxStorage.insert(G::BoxStorage.end(), vBoxes.begin(), vBoxes.end());
+
+			}
+		}
+	}
+}
+
+std::pair<float, float> CAimbotMelee::GetClosestRecord(std::vector<TickRecord*> vRecords)
+{
+	float flSimTime = -1.f;
+	float flMaxDist = 300.f;
+	TickRecord* pBest = nullptr;
+	for (auto pRecord : vRecords)
+	{
+		float flDist = pRecord->m_vOrigin.DistTo(m_vEyePos);
+		if (flDist < flMaxDist)
+		{
+			flMaxDist = flDist;
+			flSimTime = pRecord->m_flSimTime;
+		}
+	}
+	return { flMaxDist, flSimTime };
+}
+
+void CAimbotMelee::BacktrackToCrosshair(CTFPlayer* pLocal, CUserCmd* pCmd)
+{
+	float flBestSimTime = -1.f;
+	float flMaxDist = 300.f;
+	m_vEyePos = pLocal->GetShootPos();
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
+	{
+		if (!pEntity->As<CTFPlayer>()->IsAlive()
+			|| pEntity->As<CTFPlayer>()->IsAGhost()
+			|| pEntity->As<CTFPlayer>()->IsInvulnerable()
+			|| pEntity->GetAbsOrigin().DistTo(m_vEyePos) > 1000.f)
+			continue;
+
+		std::vector<TickRecord*> vRecords;
+		if (!F::Backtrack.GetRecords(pEntity, vRecords))
+			continue;
+
+		vRecords = F::Backtrack.GetValidRecords(vRecords);
+		auto tInfo = GetClosestRecord(vRecords);
+		if (tInfo.first < flMaxDist)
+		{
+			flBestSimTime = tInfo.second;
+			flMaxDist = tInfo.first;
+		}
+	}
+
+	if (flBestSimTime == -1.f)
+		return;
+
+	pCmd->tick_count = TIME_TO_TICKS(flBestSimTime) + TIME_TO_TICKS(F::Backtrack.GetFakeInterp());
+}
+
+void CAimbotMelee::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
+{
+	static int iStaticAimType = Vars::Aimbot::General::AimType.Value;
+	const int iLastAimType = iStaticAimType;
+	const int iRealAimType = Vars::Aimbot::General::AimType.Value;
+
+	if (pWeapon->m_flSmackTime() > 0.f && !iRealAimType && iLastAimType)
+		Vars::Aimbot::General::AimType.Value = iLastAimType;
+	iStaticAimType = Vars::Aimbot::General::AimType.Value;
+
+	if (F::AimbotGlobal.ShouldHoldAttack(pWeapon))
+		pCmd->buttons |= IN_ATTACK;
+	if (!Vars::Aimbot::General::AimType.Value
+		|| !F::AimbotGlobal.ShouldAim() && pWeapon->m_flSmackTime() < 0.f)
+		return;
+
+	m_mRecordMap.clear(); m_mPaths.clear();
+	m_iDoubletapTicks = F::Ticks.GetTicks(pWeapon);
+
+	if (RunSapper(pLocal, pWeapon, pCmd))
+		return;
+
+	auto vTargets = F::AimbotGlobal.ManageTargets(GetTargets, pLocal, pWeapon, Vars::Aimbot::General::TargetSelectionMelee.Value);
+	if (vTargets.empty())
+		return;
+
+	UpdateInfo(pLocal, pWeapon, pCmd, vTargets);
+	for (auto& tTarget : vTargets)
+	{
+		const auto iResult = CanHit(tTarget, pLocal, pWeapon);
+		if (!iResult) continue;
+		if (iResult == 2)
+		{
+			G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+			G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
+			Aim(pCmd, tTarget.m_vAngleTo);
+			break;
+		}
+
+		if (Vars::Aimbot::General::AutoShoot.Value && pWeapon->m_flSmackTime() < 0.f)
+		{
+			if (m_bShouldSwing)
+				pCmd->buttons |= IN_ATTACK;
+			if (m_iDoubletapTicks)
+				F::Ticks.m_bDoubletap = true;
+		}
+
+		if (G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
+			F::Aimbot.m_eRanType = EWeaponType::MELEE;
+		if (G::Attacking == 1)
+		{
+			if (tTarget.m_bBacktrack)
+				pCmd->tick_count = TIME_TO_TICKS(tTarget.m_pRecord->m_flSimTime) + TIME_TO_TICKS(F::Backtrack.GetFakeInterp());
+
+		}
+		else
+		{
+			m_vEyePos = pLocal->GetShootPos();
+			Aim(G::CurrentUserCmd->viewangles, Math::CalcAngle(m_vEyePos, tTarget.m_vPos), tTarget.m_vAngleTo);
+		}
+		DrawVisuals(pLocal, pWeapon, pCmd, tTarget, m_mPaths);
+
+		Aim(pCmd, tTarget.m_vAngleTo);
+		break;
+	}
+}
+
+static inline int GetAttachment(CBaseObject* pBuilding, int i)
+{
+	int iAttachment = pBuilding->GetBuildPointAttachmentIndex(i);
+	if (pBuilding->IsSentrygun() && pBuilding->m_iUpgradeLevel() > 1)
+		iAttachment = 3;
+	return iAttachment;
+}
+
+bool CAimbotMelee::FindNearestBuildPoint(CBaseObject* pBuilding, CTFPlayer* pLocal, Vec3& vPoint)
+{
+	bool bFoundPoint = false;
+
+	m_vEyePos = pLocal->GetShootPos();
+	static auto tf_obj_max_attach_dist = H::ConVars.FindVar("tf_obj_max_attach_dist");
+	float flNearestPoint = tf_obj_max_attach_dist->GetFloat();
+
+	for (int i = 0; i < pBuilding->GetNumBuildPoints(); i++)
+	{
+		Vector vOrigin;
+		if (pBuilding->GetAttachment(GetAttachment(pBuilding, i), vOrigin))
+		{
+			if (!SDK::VisPos(pLocal, pBuilding, m_vEyePos, vOrigin))
+				continue;
+
+			float flDist = (vOrigin - pLocal->m_vecOrigin()).Length();
+			if (flDist < flNearestPoint)
+			{
+				flNearestPoint = flDist;
+				vPoint = vOrigin;
+				bFoundPoint = true;
+			}
+		}
+	}
+
+	return bFoundPoint;
+}
+
+bool CAimbotMelee::RunSapper(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
+{
+	if (pWeapon->GetWeaponID() != TF_WEAPON_BUILDER)
+		return false;
+
+	const Vec3 vLocalPos = F::Ticks.GetShootPos();
+	const Vec3 vLocalAngles = I::EngineClient->GetViewAngles();
+
+	std::vector<Target_t> vTargets;
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingEnemy))
+	{
+		if (F::AimbotGlobal.ShouldIgnore(pEntity, pLocal, pWeapon))
+			continue;
+
+		auto pBuilding = pEntity->As<CBaseObject>();
+		if (pBuilding->m_bHasSapper() || !pBuilding->IsInValidTeam())
+			continue;
+
+		Vec3 vPoint;
+		if (!FindNearestBuildPoint(pBuilding, pLocal, vPoint))
+			continue;
+
+		Vec3 vAngleTo = Math::CalcAngle(vLocalPos, vPoint);
+		const float flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
+		const float flDistTo = vLocalPos.DistToSqr(vPoint);
+		if (!F::AimbotGlobal.InAimFOV(flFOVTo))
+			continue;
+
+		vTargets.emplace_back(pBuilding, TargetEnum::Unknown, vPoint, vAngleTo, flFOVTo, flDistTo);
+	}
+	F::AimbotGlobal.SortTargetsPre(vTargets, Vars::Aimbot::General::TargetSelectionMeleeEnum::Distance);
+	if (vTargets.empty())
+		return true;
+
+	auto& tTarget = vTargets.front();
+
+	bool bShouldAim = true;
+	if (Vars::Aimbot::General::AutoShoot.Value)
+		pCmd->buttons |= IN_ATTACK;
+	else
+		bShouldAim = pCmd->buttons & IN_ATTACK;
+	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Silent)
+		bShouldAim &= !I::ClientState->chokedcommands && F::Ticks.CanChoke(true);
+
+	if (bShouldAim)
+	{
+		G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount };
+		G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
+
+		G::Attacking = true;
+
+		Aim(pCmd->viewangles, Math::CalcAngle(m_vEyePos, tTarget.m_vPos), tTarget.m_vAngleTo);
+		tTarget.m_vAngleTo.x = pCmd->viewangles.x;
+		Aim(pCmd, tTarget.m_vAngleTo);
+	}
+
+	return true;
+}

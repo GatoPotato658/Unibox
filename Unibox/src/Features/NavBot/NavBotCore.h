@@ -1,0 +1,36 @@
+#pragma once
+#include "BotUtils.h"
+#include "Jobs/NavBotJobs.h"
+#include "NavBotConfig.h"
+
+class CNavArea;
+class CNavBotCore
+{
+public:
+	NavBotClassConfig_t m_tSelectedConfig = NavBotConfig::CONFIG_MID_RANGE;
+private:
+	void UpdateSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy);
+	void UpdateRunReloadInput(CUserCmd* pCmd, bool bShouldHold);
+	void ResetRuntimeState(CUserCmd* pCmd);
+	void ResetBusy(CUserCmd* pCmd);
+public:
+	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	void Reset();
+
+	float GetIdleLastUpdate() const { return m_tIdleTimer.GetLastUpdate(); }
+
+private:
+	Timer m_tIdleTimer = {};
+	Timer m_tAntiStuckTimer = {};
+	Timer m_tSlotTimer = {};
+	Timer m_tDropCarriedObjectTimer = {};
+	Timer m_tDoubletapRecharge = {};
+	float m_flNextStuckAngleChange = 0.f;
+	float m_flNextIdleTime = 0.f;
+	Vec3 m_vStuckAngles = {};
+	bool m_bHoldingRunReload = false;
+	bool m_bWasEnabled = false;
+	CNavBotJobSystem m_tJobSystem = {};
+};
+
+ADD_FEATURE(CNavBotCore, NavBotCore);

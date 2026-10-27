@@ -23,14 +23,14 @@ jobs:
 
     - name: Build
       working-directory: ${{ env.GITHUB_WORKSPACE }}
-      run: msbuild Amalgam.sln /p:Platform=${{ matrix.platform }} /p:Configuration=${{ matrix.configuration }}
+      run: msbuild Unibox.sln /p:Platform=${{ matrix.platform }} /p:Configuration=${{ matrix.configuration }}
     
     - uses: actions/upload-artifact@v4
       with:
-        name: Amalgam${{ matrix.platform }}${{ matrix.configuration }}
+        name: Unibox${{ matrix.platform }}${{ matrix.configuration }}
         path: output/${{ matrix.platform }}/${{ matrix.configuration }}/*.dll
     
     - uses: actions/upload-artifact@v4
       with:
-        name: Amalgam${{ matrix.platform }}${{ matrix.configuration }}PDB
+        name: Unibox${{ matrix.platform }}${{ matrix.configuration }}PDB
         path: output/${{ matrix.platform }}/${{ matrix.configuration }}/*.pdb
