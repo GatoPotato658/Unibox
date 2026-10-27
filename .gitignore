@@ -18,6 +18,7 @@ mono_crash.*
 
 # Build results
 [Dd]ebug/
+!Unibox/src/Features/Debug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
