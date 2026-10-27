@@ -23,6 +23,7 @@ static constexpr Color_t kColorHullBlocked = { 255, 0, 0, 255 };
 static constexpr Color_t kColorHullGap = { 255, 128, 0, 255 };
 static constexpr Color_t kColorHullSkipped = { 128, 128, 128, 100 };
 static constexpr Color_t kColorHullTight = { 255, 255, 0, 255 };
+static constexpr Color_t kColorHullSnug = { 200, 255, 120, 255 };
 static constexpr Color_t kColorHullAdjusted = { 0, 200, 255, 255 };
 static constexpr Color_t kColorDangerLow = { 255, 200, 0, 80 };
 static constexpr Color_t kColorDangerNormal = { 255, 140, 0, 90 };
@@ -223,6 +224,8 @@ void CNavRender::DrawHullCheck()
 			tColor = kColorHullGap;
 		else if (tSegment.m_bTight)
 			tColor = kColorHullTight;
+		else if (tSegment.m_bSnug)
+			tColor = kColorHullSnug;
 		else if (tSegment.m_bAdjusted)
 			tColor = kColorHullAdjusted;
 

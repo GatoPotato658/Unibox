@@ -22,6 +22,7 @@ inline constexpr float PLAYER_CROUCHED_JUMP_HEIGHT = 72.0f;
 inline constexpr float PLAYER_DEATH_DROP_HEIGHT = 1000.0f;
 // Source nav generation (nav.h HalfHumanWidth) builds areas for a 32-wide hull, so areas may reach 16u from walls; the TF hull is 48 wide.
 inline constexpr float NAV_GEN_HALF_WIDTH = 16.0f;
+inline constexpr float NAV_WALL_CLEARANCE = 12.0f;
 inline constexpr float LADDER_APPROACH_DISTANCE = 32.0f;
 inline constexpr float LADDER_DISMOUNT_DISTANCE = 24.0f;
 

@@ -411,6 +411,8 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 		}
 	}
 
+	KeepCrumbsOffWalls(pLocal, vValidated, 8);
+
 	if (Vars::Misc::Movement::NavEngine::HullCheck.Value && !m_bIgnoreTraces)
 	{
 		size_t iFailed = 0;
@@ -647,7 +649,7 @@ bool CNavEngine::HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumb
 	constexpr float flDuckTop = PLAYER_DUCK_HEIGHT - PLAYER_STEP_HEIGHT;
 	const Vector vStepUp = { 0.f, 0.f, PLAYER_STEP_HEIGHT };
 	const Vector vFloorDown = { 0.f, 0.f, PLAYER_STEP_HEIGHT + 2.f };
-	constexpr float flWallNudge = HALF_PLAYER_WIDTH - NAV_GEN_HALF_WIDTH + 2.f;
+	constexpr float flComfortHalf = HALF_PLAYER_WIDTH + NAV_WALL_CLEARANCE;
 	const Vector vMins = { -HALF_PLAYER_WIDTH, -HALF_PLAYER_WIDTH, 0.f };
 	const Vector vFloorMins = { -HALF_PLAYER_WIDTH * 0.5f, -HALF_PLAYER_WIDTH * 0.5f, 0.f };
 	const Vector vFloorMaxs = { HALF_PLAYER_WIDTH * 0.5f, HALF_PLAYER_WIDTH * 0.5f, 1.f };
@@ -701,32 +703,40 @@ bool CNavEngine::HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumb
 			const float flTop = bCrouch ? flDuckTop : flStandTop;
 			tSegment.m_vMaxs.z = flTop;
 
-			CGameTrace tFullTrace{};
-			if (!Sweep(tSegment.m_vStart, tSegment.m_vEnd, HALF_PLAYER_WIDTH, flTop, tFullTrace))
-			{
-				tSegment.m_bTight = true;
-				tSegment.m_vHit = tFullTrace.endpos;
-
-				Vector vPush = tFullTrace.plane.normal;
-				vPush.z = 0.f;
-				const bool bCanNudge = !tFullTrace.startsolid && i + 2 < vCrumbs.size()
-					&& b.m_pNavArea && vPush.Normalize() > 0.1f;
-				if (bCanNudge)
+			auto TryNudge = [&](const CGameTrace& tHit, float flDistance)
 				{
-					Vector vNudged = b.m_vPos + vPush * flWallNudge;
+					Vector vPush = tHit.plane.normal;
+					vPush.z = 0.f;
+					if (tHit.startsolid || i + 2 >= vCrumbs.size() || !b.m_pNavArea || vPush.Normalize() <= 0.1f)
+						return false;
+
+					Vector vNudged = b.m_vPos + vPush * flDistance;
 					vNudged.x = std::clamp(vNudged.x, b.m_pNavArea->m_vNwCorner.x, b.m_pNavArea->m_vSeCorner.x);
 					vNudged.y = std::clamp(vNudged.y, b.m_pNavArea->m_vNwCorner.y, b.m_pNavArea->m_vSeCorner.y);
 					vNudged.z = b.m_pNavArea->GetZ(vNudged.x, vNudged.y);
 
 					CGameTrace tNudgeTrace{};
-					if (Sweep(tSegment.m_vStart, vNudged + vStepUp, HALF_PLAYER_WIDTH, flTop, tNudgeTrace))
-					{
-						b.m_vPos = vNudged;
-						tSegment.m_vEnd = vNudged + vStepUp;
-						tSegment.m_bTight = false;
-						tSegment.m_bAdjusted = true;
-					}
-				}
+					if (!Sweep(tSegment.m_vStart, vNudged + vStepUp, HALF_PLAYER_WIDTH, flTop, tNudgeTrace))
+						return false;
+
+					b.m_vPos = vNudged;
+					tSegment.m_vEnd = vNudged + vStepUp;
+					tSegment.m_bAdjusted = true;
+					return true;
+				};
+
+			CGameTrace tFullTrace{};
+			if (!Sweep(tSegment.m_vStart, tSegment.m_vEnd, HALF_PLAYER_WIDTH, flTop, tFullTrace))
+			{
+				tSegment.m_vHit = tFullTrace.endpos;
+				tSegment.m_bTight = !TryNudge(tFullTrace, flComfortHalf - NAV_GEN_HALF_WIDTH + 2.f);
+			}
+
+			CGameTrace tComfortTrace{};
+			if (!tSegment.m_bTight && !Sweep(tSegment.m_vStart, tSegment.m_vEnd, flComfortHalf, flTop, tComfortTrace))
+			{
+				tSegment.m_vHit = tComfortTrace.endpos;
+				tSegment.m_bSnug = !TryNudge(tComfortTrace, flComfortHalf - HALF_PLAYER_WIDTH + 2.f);
 			}
 		}
 
@@ -758,6 +768,82 @@ bool CNavEngine::HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumb
 	}
 
 	return true;
+}
+
+void CNavEngine::KeepCrumbsOffWalls(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, int iBudget)
+{
+	if (!Vars::Misc::Movement::NavEngine::HullCheck.Value || !pLocal || vCrumbs.size() < 2 || F::Ticks.m_bWarp || F::Ticks.m_bDoubletap)
+		return;
+
+	constexpr size_t nWindow = 16;
+	constexpr int nProbes = 8;
+	constexpr float flReach = HALF_PLAYER_WIDTH + NAV_WALL_CLEARANCE;
+	constexpr float flMaxPush = flReach - NAV_GEN_HALF_WIDTH;
+	const Vector vStepUp = { 0.f, 0.f, PLAYER_STEP_HEIGHT };
+	const Vector vProbeMins = { -1.f, -1.f, 0.f };
+	const Vector vProbeMaxs = { 1.f, 1.f, PLAYER_DUCK_HEIGHT - PLAYER_STEP_HEIGHT };
+	const Vector vNavMins = { -NAV_GEN_HALF_WIDTH, -NAV_GEN_HALF_WIDTH, 0.f };
+	CTraceFilterNavigation tFilter(pLocal);
+
+	auto IsSpecial = [](const Crumb_t& tCrumb)
+		{
+			return tCrumb.m_bRequiresDrop || tCrumb.m_bRequiresJump || tCrumb.m_bRequiresLadder;
+		};
+	auto NavHullClear = [&](const Vector& vFrom, const Vector& vTo, bool bCrouch)
+		{
+			const Vector vMaxs = { NAV_GEN_HALF_WIDTH, NAV_GEN_HALF_WIDTH, (bCrouch ? PLAYER_DUCK_HEIGHT : PLAYER_HEIGHT) - PLAYER_STEP_HEIGHT };
+			CGameTrace tTrace{};
+			SDK::TraceHull(vFrom + vStepUp, vTo + vStepUp, vNavMins, vMaxs, MASK_PLAYERSOLID, &tFilter, &tTrace);
+			return !tTrace.startsolid && !tTrace.allsolid && tTrace.fraction >= 1.f;
+		};
+
+	const size_t nEnd = std::min(vCrumbs.size() - 1, nWindow);
+	for (size_t i = 0; i < nEnd && iBudget > 0; ++i)
+	{
+		Crumb_t& tCrumb = vCrumbs[i];
+		if (tCrumb.m_bWallChecked)
+			continue;
+
+		tCrumb.m_bWallChecked = true;
+		if (!tCrumb.m_pNavArea || IsSpecial(tCrumb) || (i > 0 && IsSpecial(vCrumbs[i - 1])))
+			continue;
+
+		iBudget--;
+		const Vector vBase = tCrumb.m_vPos + vStepUp;
+		Vector vPushDir = {};
+		float flDepth = 0.f;
+		for (int iProbe = 0; iProbe < nProbes; ++iProbe)
+		{
+			const float flYaw = static_cast<float>(iProbe) * (2.f * std::numbers::pi_v<float> / nProbes);
+			const Vector vDir = { std::cos(flYaw), std::sin(flYaw), 0.f };
+
+			CGameTrace tTrace{};
+			SDK::TraceHull(vBase, vBase + vDir * flReach, vProbeMins, vProbeMaxs, MASK_PLAYERSOLID, &tFilter, &tTrace);
+			if (tTrace.startsolid || tTrace.allsolid || tTrace.fraction >= 1.f)
+				continue;
+
+			const float flPenetration = flReach * (1.f - tTrace.fraction);
+			vPushDir -= vDir * flPenetration;
+			flDepth = std::max(flDepth, flPenetration);
+		}
+
+		if (vPushDir.Normalize() < 1.f || flDepth < 1.f)
+			continue;
+
+		CNavArea* pArea = tCrumb.m_pNavArea;
+		Vector vMoved = tCrumb.m_vPos + vPushDir * std::min(flDepth, flMaxPush);
+		vMoved.x = std::clamp(vMoved.x, pArea->m_vNwCorner.x, pArea->m_vSeCorner.x);
+		vMoved.y = std::clamp(vMoved.y, pArea->m_vNwCorner.y, pArea->m_vSeCorner.y);
+		vMoved.z = pArea->GetZ(vMoved.x, vMoved.y);
+		if (vMoved.DistTo2DSqr(tCrumb.m_vPos) < 1.f)
+			continue;
+
+		const Vector vPrev = i > 0 ? vCrumbs[i - 1].m_vPos : pLocal->GetAbsOrigin();
+		const Crumb_t& tNext = vCrumbs[i + 1];
+		if (NavHullClear(vPrev, vMoved, tCrumb.m_bRequiresCrouch)
+			&& (IsSpecial(tNext) || NavHullClear(vMoved, tNext.m_vPos, tNext.m_bRequiresCrouch)))
+			tCrumb.m_vPos = vMoved;
+	}
 }
 
 bool CNavEngine::ConsumeHullReject()
@@ -1825,6 +1911,7 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	if (Vars::Misc::Movement::NavEngine::VischeckEnabled.Value && !F::Ticks.m_bWarp && !F::Ticks.m_bDoubletap)
 		VischeckPath();
 
+	KeepCrumbsOffWalls(pLocal, m_vCrumbs, 2);
 	FollowCrumbs(pLocal, pWeapon, pCmd);
 	CheckBlacklist(pLocal);
 }

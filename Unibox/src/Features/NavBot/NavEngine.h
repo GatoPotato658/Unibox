@@ -36,6 +36,7 @@ struct Crumb_t
 	bool m_bRequiresJump = false;
 	bool m_bRequiresCrouch = false;
 	bool m_bRequiresLadder = false;
+	bool m_bWallChecked = false;
 	float m_flDropHeight = 0.f;
 	float m_flJumpHeight = 0.f;
 	float m_flApproachDistance = 0.f;
@@ -70,6 +71,7 @@ struct PathHullSegment_t
 	bool m_bGap = false;
 	bool m_bSkipped = false;
 	bool m_bTight = false;
+	bool m_bSnug = false;
 	bool m_bAdjusted = false;
 };
 
@@ -173,6 +175,7 @@ private:
 	bool SolveInline();
 	bool HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, size_t& iFailed, bool& bGap, CBaseEntity*& pBlocker);
 	bool ConsumeHullReject();
+	void KeepCrumbsOffWalls(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, int iBudget);
 	void UpdateRespawnRooms();
 	void ClearPathState();
 	void RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector& vLocalOrigin);

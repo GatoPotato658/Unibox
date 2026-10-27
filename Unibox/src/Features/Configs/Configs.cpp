@@ -9,6 +9,7 @@
 #include <cctype>
 #include <format>
 #include <functional>
+#include <fstream>
 
 static bool IsSafeConfigName(const std::string& sConfigName)
 {
@@ -48,6 +49,30 @@ static std::filesystem::path GetConfigFilePath(const std::string& sDirectory, co
 }
 
 using ConfigMapRestore = std::vector<std::function<void()>>;
+
+static void WriteJson(const std::filesystem::path& tPath, const boost::property_tree::ptree& tTree)
+{
+	std::filesystem::path tTemp = tPath;
+	tTemp += ".tmp";
+
+	boost::property_tree::write_json(tTemp.string(), tTree);
+	if (!std::filesystem::exists(tTemp))
+		throw std::runtime_error("Config was not written");
+
+	std::error_code tError;
+	std::filesystem::rename(tTemp, tPath, tError);
+	if (tError)
+	{
+		std::filesystem::remove(tPath, tError);
+		tError.clear();
+		std::filesystem::rename(tTemp, tPath, tError);
+		if (tError)
+		{
+			std::filesystem::remove(tTemp);
+			throw std::filesystem::filesystem_error("Config replace failed", tTemp, tPath, tError);
+		}
+	}
+}
 
 struct LoadingScope_t
 {
@@ -651,7 +676,7 @@ void CConfigs::SaveState() const
 		tWrite.put("Config", m_sCurrentConfig);
 		tWrite.put("Skins", m_sCurrentSkins);
 		tWrite.put("Visuals", m_sCurrentVisuals);
-		write_json(m_sStatePath, tWrite);
+		WriteJson(m_sStatePath, tWrite);
 	}
 	catch (...) {}
 }
@@ -784,7 +809,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 		}
 
 
-		write_json(tPath.string(), tWrite);
+		WriteJson(tPath, tWrite);
 
 		m_sCurrentConfig = sConfigName; m_sCurrentVisuals = "";
 		SaveState();
@@ -1057,7 +1082,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 		}
 
 
-		write_json(tPath.string(), tWrite);
+		WriteJson(tPath, tWrite);
 		m_sCurrentVisuals = sConfigName;
 		SaveState();
 
@@ -1331,7 +1356,7 @@ bool CConfigs::SaveSkins(const std::string& sConfigName, bool bNotify)
 	{
 		boost::property_tree::ptree tWrite;
 		SaveSkinChanger(tWrite);
-		write_json(tPath.string(), tWrite);
+		WriteJson(tPath, tWrite);
 		m_sCurrentSkins = sConfigName;
 		SaveState();
 	if (bNotify)
