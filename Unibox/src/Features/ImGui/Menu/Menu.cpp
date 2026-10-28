@@ -2508,7 +2508,7 @@ void CMenu::MenuSettings(int iTab)
 				const bool bDefault = !bVisual && !bSkins && FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32Const("default");
 
 				PushID(sConfigName.c_str());
-				auto tRow = FBeginListRow("##Config", bCurrentConfig);
+				auto tRow = FBeginListRow("##Config", bCurrentConfig, 0.f, 2);
 				FTooltip(ICON_MD_ADD ICON_MD_FILE_UPLOAD_OFF, bNoSave && tRow.m_bWithin, 300.f, F::Render.IconFont);
 				bool bLoad = tRow.m_bClicked, bSave = false, bDelete = false, bReset = false;
 
@@ -2847,7 +2847,7 @@ void CMenu::MenuSettings(int iTab)
 
 					PushID(_iBind);
 					PushTransparent(!F::Binds.WillBeEnabled(_iBind), true);
-					auto tRow = FBeginListRow("##Bind", iBind == _iBind, H::Draw.Scale(16) * std::min(x, 3));
+					auto tRow = FBeginListRow("##Bind", iBind == _iBind, H::Draw.Scale(16) * std::min(x, 3), 4);
 					const bool bRowHovered = IsItemHovered();
 					ImDrawList* pDrawList = GetWindowDrawList();
 					const float flCenter = floorf((tRow.m_vMin.y + tRow.m_vMax.y) / 2);
@@ -3013,7 +3013,7 @@ void CMenu::MenuSettings(int iTab)
 			for (auto& tMaterial : vMaterials)
 			{
 				PushID(tMaterial.m_sName.c_str());
-				auto tRow = FBeginListRow("##Material", sCurrentMaterial == tMaterial.m_sName);
+				auto tRow = FBeginListRow("##Material", sCurrentMaterial == tMaterial.m_sName, 0.f, tMaterial.m_bLocked ? 0 : 1);
 				ImDrawList* pDrawList = GetWindowDrawList();
 				const float flCenter = floorf((tRow.m_vMin.y + tRow.m_vMax.y) / 2);
 				bool bOpen = tRow.m_bClicked, bDelete = false;

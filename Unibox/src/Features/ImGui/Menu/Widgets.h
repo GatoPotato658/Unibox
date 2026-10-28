@@ -1272,18 +1272,18 @@ namespace ImGui
 		bool m_bMenu;
 		float m_flHover;
 	};
-	inline ListRow_t FBeginListRow(const char* sID, bool bSelected, float flIndent = 0.f)
+	inline ListRow_t FBeginListRow(const char* sID, bool bSelected, float flIndent = 0.f, int iIcons = 0)
 	{
 		ListRow_t tRow = {};
 		const float flWidth = GetWindowWidth() - GetStyle().WindowPadding.x * 2 - flIndent, flHeight = H::Draw.Scale(30);
+		const float flIconsWidth = iIcons > 0 ? H::Draw.Scale(28) * iIcons + H::Draw.Scale(4) : 0.f;
 		tRow.m_vPos = GetCursorPos() + ImVec2(flIndent, 0);
 		tRow.m_vMin = GetDrawPos() + tRow.m_vPos;
 		tRow.m_vMax = tRow.m_vMin + ImVec2(flWidth, flHeight);
 
 		SetCursorPos(tRow.m_vPos);
-		SetNextItemAllowOverlap();
-		tRow.m_bClicked = InvisibleButton(sID, { flWidth, flHeight });
-		tRow.m_bWithin = IsWindowHovered() && IsMouseHoveringRect(tRow.m_vMin, tRow.m_vMax);
+		tRow.m_bClicked = InvisibleButton(sID, { flWidth - flIconsWidth, flHeight });
+		tRow.m_bWithin = IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) && IsMouseHoveringRect(tRow.m_vMin, tRow.m_vMax);
 		tRow.m_bMenu = tRow.m_bWithin && IsMouseReleased(ImGuiMouseButton_Right);
 		tRow.m_flHover = Anim(GetItemID(), 0, tRow.m_bWithin || IsPopupOpen("##Menu") ? 1.f : 0.f);
 		if (tRow.m_bWithin)
