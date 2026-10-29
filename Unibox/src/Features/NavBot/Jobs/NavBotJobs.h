@@ -209,9 +209,17 @@ private:
 	int m_iHelpTarget = -1;
 	bool m_bHelping = false;
 	bool m_bHelpReached = false;
+	bool m_bHelpResupplying = false;
+	bool m_bHelpHadSapper = false;
 	float m_flHelpAcquireTime = 0.f;
-	float m_flHelpProgress = 0.f;
 	float m_flHelpProgressTime = 0.f;
+	float m_flHelpHealth = 0.f;
+	float m_flHelpConstructed = 0.f;
+	int m_iHelpUpgradeLevel = 0;
+	int m_iHelpUpgradeMetal = 0;
+	int m_iHelpAmmoShells = 0;
+	int m_iHelpAmmoRockets = 0;
+	float m_flHelpSupplyRetryTime = 0.f;
 	std::vector<FailedHelp_t> m_vFailedHelpTargets;
 
 	Timer m_tWaitUntilPath{};
@@ -230,8 +238,13 @@ private:
 
 	bool IsHelpTargetFailed(int iEntIdx) const;
 	void MarkHelpTargetFailed(int iEntIdx, float flDuration);
+	bool IsOwnSetupComplete(CTFPlayer* pLocal);
+	int GetHelpNeed(CBaseObject* pBuilding);
+	bool NeedsMetal(int iNeed) const;
+	void InitializeHelpSnapshot(CBaseObject* pBuilding);
+	bool UpdateHelpProgress(CBaseObject* pBuilding);
 	bool CanHelpFriendlies(CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy);
-	bool IsHelpCandidate(CTFPlayer* pLocal, CBaseObject* pBuilding);
+	bool IsHelpCandidate(CTFPlayer* pLocal, CBaseObject* pBuilding, int* piNeed = nullptr, bool* pbContested = nullptr);
 	CBaseObject* GetHelpBuilding(CTFPlayer* pLocal);
 	bool HelpFriendlyBuilding(CUserCmd* pCmd, CTFPlayer* pLocal);
 

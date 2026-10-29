@@ -688,6 +688,37 @@ static inline float SnapKeyOffset(float flOffset, float* pSnapped)
 	return flBestDelta;
 }
 
+static bool IsCoastingPair(const MoveData& tCurRecord, const MoveData& tPrevRecord, float flMaxSpeed)
+{
+	if (tCurRecord.m_iMode != MoveEnum::Ground || tPrevRecord.m_iMode != MoveEnum::Ground)
+		return false;
+
+	static auto sv_friction = H::ConVars.FindVar("sv_friction");
+	static auto sv_stopspeed = H::ConVars.FindVar("sv_stopspeed");
+	if (!sv_friction || !sv_stopspeed)
+		return false;
+
+	const Vec3 vPrev = tPrevRecord.m_vVelocity.To2D(), vCur = tCurRecord.m_vVelocity.To2D();
+	const float flPrevSpeed = vPrev.Length2D();
+	if (flPrevSpeed < 1.f)
+		return false;
+	if (flMaxSpeed > 0.f && flPrevSpeed > flMaxSpeed + 0.5f)
+		return false;
+
+	const float flFriction = sv_friction->GetFloat(), flStopSpeed = sv_stopspeed->GetFloat();
+	const int iGap = std::max(TIME_TO_TICKS(tCurRecord.m_flSimTime - tPrevRecord.m_flSimTime), 1);
+
+	float flAfterFriction = flPrevSpeed;
+	for (int i = 0; i < iGap; i++)
+	{
+		const float flDrop = (flAfterFriction < flStopSpeed ? flStopSpeed : flAfterFriction) * flFriction * TICK_INTERVAL;
+		flAfterFriction = std::max(flAfterFriction - flDrop, 0.f);
+	}
+
+	Vec3 vResidual = vCur - vPrev * (flAfterFriction / flPrevSpeed);
+	return vResidual.Length2D() <= flPrevSpeed * 0.005f;
+}
+
 InputEstimate CMovementSimulation::GetInputEstimate(MoveStorage& tMoveStorage, int iMode, int iSamples)
 {
 	InputEstimate tEstimate = {};
@@ -723,6 +754,14 @@ InputEstimate CMovementSimulation::GetInputEstimate(MoveStorage& tMoveStorage, i
 	int iStart = iRunStart + 1;
 	if (iStart >= iSamples)
 		return tEstimate;
+
+	if (!bAir && iRunStart == 0 && IsCoastingPair(vRecords[0], vRecords[1], flMaxSpeed))
+	{
+		tEstimate.m_bValid = true;
+		tEstimate.m_bCoast = true;
+		tEstimate.m_flEyeYaw = vRecords.front().m_flEyeYaw;
+		return tEstimate;
+	}
 
 	for (int i = iStart; i < iSamples; i++)
 	{
@@ -1102,7 +1141,8 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 		}
 
 		InputEstimate& tInput = tMoveStorage.m_bDirectMove ? tMoveStorage.m_tGroundInput : tMoveStorage.m_tAirInput;
-		const bool bUseInput = tInput.m_bValid && tMoveStorage.m_MoveData.m_vecVelocity.Length2D() > 0.f;
+		const bool bCoast = tInput.m_bValid && tInput.m_bCoast;
+		const bool bUseInput = tInput.m_bValid && !bCoast && tMoveStorage.m_MoveData.m_vecVelocity.Length2D() > 0.f;
 		// Only the ground frame is anchored to the view: WalkMove's back-speed clamp and its
 		// acceleration both key off the view, and grounded players steer that way. In the air
 		// the invariant that actually holds is the offset from the velocity, so the view is put
@@ -1130,6 +1170,10 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 			tMoveStorage.m_MoveData.m_flForwardMove = cosf(flDelta) * tInput.m_flWishSpeed;
 			tMoveStorage.m_MoveData.m_flSideMove = sinf(flDelta) * tInput.m_flWishSpeed;
 			tMoveStorage.m_MoveData.m_flUpMove = 0.f;
+		}
+		else if (bCoast)
+		{
+			tMoveStorage.m_MoveData.m_flForwardMove = tMoveStorage.m_MoveData.m_flSideMove = tMoveStorage.m_MoveData.m_flUpMove = 0.f;
 		}
 		else if (tMoveStorage.m_flAverageYaw)
 		{

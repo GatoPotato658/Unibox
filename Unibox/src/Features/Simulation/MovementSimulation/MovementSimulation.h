@@ -14,6 +14,7 @@ struct InputEstimate
 	float m_flViewRate = 0.f;
 	float m_flKeyOffset = 0.f;
 	bool m_bKeyInput = false;
+	bool m_bCoast = false;
 	bool m_bValid = false;
 };
 

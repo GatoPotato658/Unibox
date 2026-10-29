@@ -10,17 +10,23 @@ constexpr float kHelpScanInterval = 0.25f;
 constexpr float kHelpMaxDistance = 1200.f;
 constexpr float kHelpEnemyLocalRange = 500.f;
 constexpr float kHelpEnemyBuildingRange = 600.f;
-constexpr float kHelpTravelSpeed = 300.f;
-constexpr float kHelpTravelMargin = 0.5f;
 constexpr float kHelpReachTimeout = 20.f;
 constexpr float kHelpProgressTimeout = 6.f;
 constexpr float kHelpFailMemory = 30.f;
 constexpr float kHelpStallMemory = 20.f;
+constexpr float kHelpSupplyRetryTime = 5.f;
 constexpr float kWrenchReach = 64.f;
 constexpr float kWrenchHull = 16.f;
-constexpr float kSentryBuildTime = 10.f;
-constexpr float kDispenserBuildTime = 20.f;
-constexpr float kTeleporterBuildTime = 20.f;
+
+enum HelpNeedEnum
+{
+	HelpNeed_None = 0,
+	HelpNeed_Construct = 1 << 0,
+	HelpNeed_Sapper = 1 << 1,
+	HelpNeed_Repair = 1 << 2,
+	HelpNeed_Ammo = 1 << 3,
+	HelpNeed_Upgrade = 1 << 4
+};
 
 static bool CanBuildAtPosition(CTFPlayer* pLocal, const Vector& vPos)
 {
@@ -37,14 +43,63 @@ static bool CanBuildAtPosition(CTFPlayer* pLocal, const Vector& vPos)
 	return trace.DidHit();
 }
 
-static float GetBuildTime(int iObjectType)
+static int GetAutoEngieFlag(CBaseObject* pBuilding)
 {
-	switch (iObjectType)
+	if (!pBuilding)
+		return 0;
+
+	switch (pBuilding->GetClassID())
 	{
-	case OBJ_DISPENSER: return kDispenserBuildTime;
-	case OBJ_TELEPORTER: return kTeleporterBuildTime;
-	default: return kSentryBuildTime;
+	case ETFClassID::CObjectSentrygun:
+		return Vars::Aimbot::AutoEngie::AutoRepairEnum::Sentry;
+	case ETFClassID::CObjectDispenser:
+		return Vars::Aimbot::AutoEngie::AutoRepairEnum::Dispenser;
+	case ETFClassID::CObjectTeleporter:
+		return Vars::Aimbot::AutoEngie::AutoRepairEnum::Teleporter;
+	default:
+		return 0;
 	}
+}
+
+static int GetUpgradeTargetLevel(CBaseObject* pBuilding)
+{
+	if (!pBuilding)
+		return 0;
+
+	switch (pBuilding->GetClassID())
+	{
+	case ETFClassID::CObjectSentrygun:
+		return Vars::Aimbot::AutoEngie::AutoUpgradeSentryLVL.Value;
+	case ETFClassID::CObjectDispenser:
+		return Vars::Aimbot::AutoEngie::AutoUpgradeDispenserLVL.Value;
+	case ETFClassID::CObjectTeleporter:
+		return Vars::Aimbot::AutoEngie::AutoUpgradeTeleporterLVL.Value;
+	default:
+		return 0;
+	}
+}
+
+static float GetHelpPriority(int iNeed, CBaseObject* pBuilding, float flDist, bool bContested)
+{
+	float flScore = 0.f;
+	if (iNeed & HelpNeed_Sapper)
+		flScore += 10000.f;
+	if (iNeed & HelpNeed_Construct)
+		flScore += 7000.f + (1.f - pBuilding->m_flPercentageConstructed()) * 1000.f;
+	if (iNeed & HelpNeed_Repair)
+	{
+		const float flHealth = static_cast<float>(pBuilding->m_iHealth()) / std::max(1, pBuilding->m_iMaxHealth());
+		flScore += 4500.f + (1.f - flHealth) * 2000.f;
+	}
+	if (iNeed & HelpNeed_Upgrade)
+		flScore += 3000.f + std::max(0, GetUpgradeTargetLevel(pBuilding) - pBuilding->m_iUpgradeLevel()) * 300.f;
+	if (iNeed & HelpNeed_Ammo)
+		flScore += 1500.f;
+
+	flScore -= std::min(flDist, kHelpMaxDistance) * 0.5f;
+	if (bContested)
+		flScore -= 3000.f;
+	return flScore;
 }
 
 static bool CanWrenchBuilding(CTFPlayer* pLocal, CBaseObject* pBuilding)
@@ -227,8 +282,7 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 		if (bHelp && !m_bHelpReached)
 		{
 			m_bHelpReached = true;
-			m_flHelpProgress = pBuilding->m_flPercentageConstructed();
-			m_flHelpProgressTime = I::GlobalVars->curtime;
+			InitializeHelpSnapshot(pBuilding);
 		}
 
 		if (G::Attacking == 1)
@@ -259,6 +313,80 @@ void CNavBotEngineer::MarkHelpTargetFailed(int iEntIdx, float flDuration)
 	m_vFailedHelpTargets.push_back({ iEntIdx, I::GlobalVars->curtime + flDuration });
 }
 
+bool CNavBotEngineer::IsOwnSetupComplete(CTFPlayer* pLocal)
+{
+	if (!m_pMySentryGun || m_pMySentryGun->m_bPlacing() || BuildingNeedsToBeSmacked(m_pMySentryGun))
+		return false;
+	if (!m_pMyDispenser || m_pMyDispenser->m_bPlacing() || BuildingNeedsToBeSmacked(m_pMyDispenser))
+		return false;
+
+	auto pTeleporter = pLocal->GetObjectOfType(OBJ_TELEPORTER);
+	return !pTeleporter || (!pTeleporter->m_bPlacing() && !pTeleporter->m_bCarried() && !pTeleporter->m_bHasSapper());
+}
+
+int CNavBotEngineer::GetHelpNeed(CBaseObject* pBuilding)
+{
+	if (!pBuilding || pBuilding->IsDormant() || pBuilding->m_iHealth() <= 0 || pBuilding->m_bPlacing() || pBuilding->m_bCarried())
+		return HelpNeed_None;
+
+	const int iKind = GetAutoEngieFlag(pBuilding);
+	if (!iKind)
+		return HelpNeed_None;
+
+	int iNeed = HelpNeed_None;
+	if (pBuilding->m_bBuilding())
+		iNeed |= HelpNeed_Construct;
+	if (pBuilding->m_bHasSapper())
+		iNeed |= HelpNeed_Sapper;
+	if (pBuilding->m_iHealth() < pBuilding->m_iMaxHealth() && Vars::Aimbot::AutoEngie::AutoRepair.Value & iKind)
+		iNeed |= HelpNeed_Repair;
+	if (pBuilding->IsSentrygun() && Vars::Aimbot::AutoEngie::AutoRepair.Value & iKind)
+	{
+		int iShells, iMaxShells, iRockets, iMaxRockets;
+		pBuilding->As<CObjectSentrygun>()->GetAmmoCount(iShells, iMaxShells, iRockets, iMaxRockets);
+		if (iShells < iMaxShells || iRockets < iMaxRockets)
+			iNeed |= HelpNeed_Ammo;
+	}
+
+	if (!pBuilding->m_bBuilding() && !pBuilding->m_bMiniBuilding()
+		&& pBuilding->m_iUpgradeLevel() < GetUpgradeTargetLevel(pBuilding)
+		&& Vars::Aimbot::AutoEngie::AutoUpgrade.Value & iKind)
+		iNeed |= HelpNeed_Upgrade;
+	return iNeed;
+}
+
+bool CNavBotEngineer::NeedsMetal(int iNeed) const
+{
+	return iNeed & (HelpNeed_Construct | HelpNeed_Repair | HelpNeed_Upgrade | HelpNeed_Ammo);
+}
+
+void CNavBotEngineer::InitializeHelpSnapshot(CBaseObject* pBuilding)
+{
+	m_flHelpHealth = static_cast<float>(pBuilding->m_iHealth());
+	m_flHelpConstructed = pBuilding->m_flPercentageConstructed();
+	m_iHelpUpgradeLevel = pBuilding->m_iUpgradeLevel();
+	m_iHelpUpgradeMetal = pBuilding->m_iUpgradeMetal();
+	m_iHelpAmmoShells = pBuilding->IsSentrygun() ? pBuilding->As<CObjectSentrygun>()->m_iAmmoShells() : 0;
+	m_iHelpAmmoRockets = pBuilding->IsSentrygun() ? pBuilding->As<CObjectSentrygun>()->m_iAmmoRockets() : 0;
+	m_bHelpHadSapper = pBuilding->m_bHasSapper();
+	m_flHelpProgressTime = I::GlobalVars->curtime;
+}
+
+bool CNavBotEngineer::UpdateHelpProgress(CBaseObject* pBuilding)
+{
+	const int iShells = pBuilding->IsSentrygun() ? pBuilding->As<CObjectSentrygun>()->m_iAmmoShells() : 0;
+	const int iRockets = pBuilding->IsSentrygun() ? pBuilding->As<CObjectSentrygun>()->m_iAmmoRockets() : 0;
+	const bool bChanged = static_cast<float>(pBuilding->m_iHealth()) > m_flHelpHealth
+		|| pBuilding->m_flPercentageConstructed() > m_flHelpConstructed
+		|| pBuilding->m_iUpgradeLevel() > m_iHelpUpgradeLevel
+		|| pBuilding->m_iUpgradeMetal() != m_iHelpUpgradeMetal
+		|| iShells > m_iHelpAmmoShells || iRockets > m_iHelpAmmoRockets
+		|| (m_bHelpHadSapper && !pBuilding->m_bHasSapper());
+	if (bChanged)
+		InitializeHelpSnapshot(pBuilding);
+	return bChanged;
+}
+
 bool CNavBotEngineer::CanHelpFriendlies(CTFPlayer* pLocal, ClosestEnemy_t& tClosestEnemy)
 {
 	if (!IsEngieMode(pLocal) || !NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::HelpFriendlyEngineers))
@@ -270,26 +398,51 @@ bool CNavBotEngineer::CanHelpFriendlies(CTFPlayer* pLocal, ClosestEnemy_t& tClos
 	if (!Vars::Aimbot::AutoEngie::AutoRepair.Value && !Vars::Aimbot::AutoEngie::AutoUpgrade.Value)
 		return false;
 
-	if (!m_pMySentryGun || m_pMySentryGun->m_bPlacing() || BuildingNeedsToBeSmacked(m_pMySentryGun)
-		|| !m_pMyDispenser || m_pMyDispenser->m_bPlacing() || BuildingNeedsToBeSmacked(m_pMyDispenser))
+	if (!IsOwnSetupComplete(pLocal))
 		return false;
+
+	auto pClientEntity = m_iHelpTarget > 0 ? I::ClientEntityList->GetClientEntity(m_iHelpTarget) : nullptr;
+	auto pCandidate = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr;
+	auto pBuilding = pCandidate && pCandidate->IsBuilding() && pCandidate->m_iTeamNum() == pLocal->m_iTeamNum()
+		? pCandidate->As<CBaseObject>() : nullptr;
+	if (pBuilding)
+	{
+		for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
+		{
+			auto pEnemy = pEntity->As<CTFPlayer>();
+			if (!pEnemy->IsDormant() && pEnemy->IsAlive()
+				&& (pEnemy->GetAbsOrigin().DistTo(pLocal->GetAbsOrigin()) < kHelpEnemyLocalRange
+					|| pEnemy->GetAbsOrigin().DistTo(pBuilding->GetAbsOrigin()) < kHelpEnemyBuildingRange))
+				return false;
+		}
+		return true;
+	}
 
 	return !(tClosestEnemy.m_pPlayer && !tClosestEnemy.m_pPlayer->IsDormant() && tClosestEnemy.m_pPlayer->IsAlive()
 		&& tClosestEnemy.m_flDist < kHelpEnemyLocalRange);
 }
 
-bool CNavBotEngineer::IsHelpCandidate(CTFPlayer* pLocal, CBaseObject* pBuilding)
+bool CNavBotEngineer::IsHelpCandidate(CTFPlayer* pLocal, CBaseObject* pBuilding, int* piNeed, bool* pbContested)
 {
+	if (piNeed)
+		*piNeed = HelpNeed_None;
+	if (pbContested)
+		*pbContested = false;
+
 	if (!pBuilding || pBuilding->IsDormant() || pBuilding->m_iHealth() <= 0)
 		return false;
 
 	if (pBuilding->m_hBuilder().GetEntryIndex() == pLocal->entindex())
 		return false;
 
-	if (!pBuilding->m_bBuilding() || pBuilding->m_bPlacing() || pBuilding->m_bCarried())
+	if (pBuilding->m_bPlacing() || pBuilding->m_bCarried())
 		return false;
 
 	if (IsHelpTargetFailed(pBuilding->entindex()))
+		return false;
+
+	const int iNeed = GetHelpNeed(pBuilding);
+	if (iNeed == HelpNeed_None)
 		return false;
 
 	const Vector vOrigin = pBuilding->GetAbsOrigin();
@@ -297,17 +450,21 @@ bool CNavBotEngineer::IsHelpCandidate(CTFPlayer* pLocal, CBaseObject* pBuilding)
 	if (flDist > kHelpMaxDistance)
 		return false;
 
-	const float flRemaining = (1.f - pBuilding->m_flPercentageConstructed()) * GetBuildTime(pBuilding->m_iObjectType());
-	if (flRemaining <= flDist / kHelpTravelSpeed + kHelpTravelMargin)
-		return false;
-
+	bool bContested = false;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
 		auto pEnemy = pEntity->As<CTFPlayer>();
 		if (!pEnemy->IsDormant() && pEnemy->IsAlive() && pEnemy->GetAbsOrigin().DistTo(vOrigin) < kHelpEnemyBuildingRange)
-			return false;
+		{
+			bContested = true;
+			break;
+		}
 	}
 
+	if (piNeed)
+		*piNeed = iNeed;
+	if (pbContested)
+		*pbContested = bContested;
 	return true;
 }
 
@@ -344,6 +501,9 @@ void CNavBotEngineer::RefreshHelpTarget(CTFPlayer* pLocal, ClosestEnemy_t& tClos
 			return;
 		}
 
+		if (m_bHelpResupplying && flCurTime < m_flHelpSupplyRetryTime)
+			return;
+
 		ReleaseHelp();
 	}
 
@@ -354,18 +514,23 @@ void CNavBotEngineer::RefreshHelpTarget(CTFPlayer* pLocal, ClosestEnemy_t& tClos
 
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	CBaseObject* pBest = nullptr;
-	float flBestDist = FLT_MAX;
+	int iBestNeed = HelpNeed_None;
+	float flBestScore = -FLT_MAX;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingTeam))
 	{
 		auto pBuilding = pEntity->As<CBaseObject>();
-		if (!IsHelpCandidate(pLocal, pBuilding))
+		int iNeed = HelpNeed_None;
+		bool bContested = false;
+		if (!IsHelpCandidate(pLocal, pBuilding, &iNeed, &bContested))
 			continue;
 
 		const float flDist = pBuilding->GetAbsOrigin().DistTo(vLocalOrigin);
-		if (flDist >= flBestDist)
+		const float flScore = GetHelpPriority(iNeed, pBuilding, flDist, bContested);
+		if (flScore <= flBestScore)
 			continue;
 
-		flBestDist = flDist;
+		flBestScore = flScore;
+		iBestNeed = iNeed;
 		pBest = pBuilding;
 	}
 
@@ -375,15 +540,17 @@ void CNavBotEngineer::RefreshHelpTarget(CTFPlayer* pLocal, ClosestEnemy_t& tClos
 
 	if (F::NavEngine.GetPathCost(pLocalArea, F::NavEngine.FindClosestNavArea(pBest->GetAbsOrigin(), false)) == FLT_MAX)
 	{
-		MarkHelpTargetFailed(pBest->entindex(), kHelpFailMemory);
+		ReleaseHelp();
 		return;
 	}
 
 	m_iHelpTarget = pBest->entindex();
-	m_flDistToHelpTarget = flBestDist;
+	m_flDistToHelpTarget = pBest->GetAbsOrigin().DistTo(vLocalOrigin);
 	m_flHelpAcquireTime = m_flHelpProgressTime = flCurTime;
-	m_flHelpProgress = pBest->m_flPercentageConstructed();
 	m_bHelpReached = false;
+	m_bHelpResupplying = NeedsMetal(iBestNeed) && !pLocal->m_iMetalCount();
+	m_flHelpSupplyRetryTime = flCurTime + kHelpSupplyRetryTime;
+	InitializeHelpSnapshot(pBest);
 }
 
 void CNavBotEngineer::ReleaseHelp()
@@ -397,6 +564,9 @@ void CNavBotEngineer::ReleaseHelp()
 	m_iHelpTarget = -1;
 	m_bHelping = false;
 	m_bHelpReached = false;
+	m_bHelpResupplying = false;
+	m_bHelpHadSapper = false;
+	m_flHelpSupplyRetryTime = 0.f;
 	m_flDistToHelpTarget = FLT_MAX;
 }
 
@@ -411,17 +581,44 @@ bool CNavBotEngineer::HelpFriendlyBuilding(CUserCmd* pCmd, CTFPlayer* pLocal)
 	}
 
 	const float flCurTime = I::GlobalVars->curtime;
-	const float flProgress = pBuilding->m_flPercentageConstructed();
-	if (flProgress > m_flHelpProgress)
+	const int iNeed = GetHelpNeed(pBuilding);
+	if (iNeed == HelpNeed_None)
 	{
-		m_flHelpProgress = flProgress;
+		ReleaseHelp();
+		return false;
+	}
+
+	const bool bCanBuild = iNeed & (HelpNeed_Construct | HelpNeed_Repair | HelpNeed_Ammo);
+	const bool bCanUpgrade = (iNeed & HelpNeed_Upgrade) && pLocal->m_iMetalCount() >= std::max(1, pBuilding->m_iUpgradeMetalRequired());
+	if (NeedsMetal(iNeed) && !(iNeed & HelpNeed_Sapper) && !bCanBuild && !bCanUpgrade)
+		m_bHelpResupplying = true;
+
+	if (m_bHelpReached && UpdateHelpProgress(pBuilding))
+		m_flHelpProgressTime = flCurTime;
+	else if (m_bHelpReached && flCurTime - m_flHelpProgressTime > kHelpProgressTimeout)
+	{
+		if (pLocal->m_iMetalCount())
+		{
+			MarkHelpTargetFailed(m_iHelpTarget, kHelpStallMemory);
+			ReleaseHelp();
+			return false;
+		}
+
+		m_bHelpResupplying = true;
 		m_flHelpProgressTime = flCurTime;
 	}
 
-	const bool bStalled = m_bHelpReached ? flCurTime - m_flHelpProgressTime > kHelpProgressTimeout : flCurTime - m_flHelpAcquireTime > kHelpReachTimeout;
-	if (bStalled)
+	if (m_bHelpResupplying)
 	{
-		MarkHelpTargetFailed(m_iHelpTarget, m_bHelpReached ? kHelpStallMemory : kHelpFailMemory);
+		m_flHelpSupplyRetryTime = flCurTime + kHelpSupplyRetryTime;
+		const bool bSupplyJob = F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
+		if (bSupplyJob || NeedsMetal(iNeed))
+			return true;
+	}
+
+	if (!m_bHelpReached && flCurTime - m_flHelpAcquireTime > kHelpReachTimeout)
+	{
+		MarkHelpTargetFailed(m_iHelpTarget, kHelpFailMemory);
 		ReleaseHelp();
 		return false;
 	}
@@ -700,9 +897,17 @@ void CNavBotEngineer::Reset()
 	m_iHelpTarget = -1;
 	m_bHelping = false;
 	m_bHelpReached = false;
+	m_bHelpResupplying = false;
+	m_bHelpHadSapper = false;
 	m_flHelpAcquireTime = 0.f;
-	m_flHelpProgress = 0.f;
 	m_flHelpProgressTime = 0.f;
+	m_flHelpHealth = 0.f;
+	m_flHelpConstructed = 0.f;
+	m_iHelpUpgradeLevel = 0;
+	m_iHelpUpgradeMetal = 0;
+	m_iHelpAmmoShells = 0;
+	m_iHelpAmmoRockets = 0;
+	m_flHelpSupplyRetryTime = 0.f;
 	m_eTaskStage = EngineerTaskStageEnum::None;
 	m_tWaitUntilPath = Timer();
 	m_tBuildRotation = Timer();
