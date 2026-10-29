@@ -133,8 +133,13 @@ static void SaveSkinChanger(boost::property_tree::ptree& tWrite)
 		{
 			boost::property_tree::ptree tChild;
 			tChild.put("Def", tItem.iDef);
+			tChild.put("Style", tItem.iStyle);
 			if (tItem.iUnusual > 0)
 				tChild.put("Unusual", tItem.iUnusual);
+			if (tItem.iPaintColor >= 0)
+				tChild.put("PaintColor", tItem.iPaintColor);
+			if (tItem.iPaintColor2 >= 0)
+				tChild.put("PaintColor2", tItem.iPaintColor2);
 			tBackpack.put_child(std::to_string(tItem.uSerial), tChild);
 		}
 		tSub.put_child("Backpack", tBackpack);
@@ -188,14 +193,17 @@ static void LoadSkinChanger(const boost::property_tree::ptree& tRead)
 				{
 					const int iKey = std::stoi(tPair.first);
 					const int iUnusual = std::max(tPair.second.get<int>("Unusual", 0), 0);
+					const int iPaintColor = std::clamp(tPair.second.get<int>("PaintColor", -1), -1, 0xFFFFFF);
+					const int iPaintColor2 = std::clamp(tPair.second.get<int>("PaintColor2", -1), -1, 0xFFFFFF);
+					const int iStyle = std::clamp(tPair.second.get<int>("Style", 0), 0, 255);
 					if (const int iDef = tPair.second.get<int>("Def", 0); iDef > 0 && iDef <= 0xFFFF && iKey > 0)
-						vBackpack.push_back({ uint32_t(iKey), uint16_t(iDef), iUnusual });
+						vBackpack.push_back({ uint32_t(iKey), uint16_t(iDef), iUnusual, iPaintColor, iPaintColor2, iStyle });
 					else if (iKey > 0 && iKey <= 0xFFFF)
 					{
 						uint32_t uSerial = 1;
 						while (std::any_of(vBackpack.begin(), vBackpack.end(), [uSerial](const BackpackItem_t& tItem) { return tItem.uSerial == uSerial; }))
 							uSerial++;
-						vBackpack.push_back({ uSerial, uint16_t(iKey), iUnusual });
+						vBackpack.push_back({ uSerial, uint16_t(iKey), iUnusual, iPaintColor, iPaintColor2, iStyle });
 					}
 				}
 				catch (...) {}
