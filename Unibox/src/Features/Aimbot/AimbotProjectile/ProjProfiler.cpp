@@ -409,7 +409,7 @@ void CProjProfiler::Dump(const char* sReason, float flFrameTime, int iWindowFram
 	for (auto pFrame : vDetail)
 	{
 		const double flDur = ToMs(pFrame->m_iEnd - pFrame->m_iStart);
-		sOut += std::format("\n--- {} | frame={} tick={} | dur={:.3f}ms | frametime when it began={:.1f}ms | weapon={}({}) physics={} fastphysics={} special={}{}\n",
+		sOut += std::format("\n--- {} | frame={} tick={} | dur={:.3f}ms | frametime when it began={:.1f}ms | weapon={}({}) physics={} special={}{}\n",
 			pFrame->m_sName, pFrame->m_iFrameCount, pFrame->m_iTick, flDur, pFrame->m_flFrameTime * 1000.f, WeaponName(pFrame->m_iWeaponID), pFrame->m_iWeaponID,
 			pFrame->m_bPhysics, pFrame->m_bSpecial, pFrame->m_iFrameCount == iWindowFrame ? "" : " | NOT in the lag window, heaviest recent entry");
 		AppendZoneTable(sOut, pFrame->m_aZones);

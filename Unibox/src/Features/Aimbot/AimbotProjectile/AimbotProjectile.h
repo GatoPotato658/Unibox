@@ -131,12 +131,13 @@ private:
 	int CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, bool bUpdate = true);
 	bool RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	bool RunMechArm(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	void ResetSolution();
 
 	std::vector<Target_t> GetProjectiles(CTFPlayer* pLocal);
 
 	bool CanHitProjectile(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, Target_t& tTarget, int iSimTicks);
 	bool CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pProjectile);
-	bool TestAngle(CBaseEntity* pProjectile, const Vec3& vPoint, Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags);
+	bool TestAngle(CBaseEntity* pProjectile, const Vec3& vOrigin, const Vec3& vPoint, Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags);
 
 	bool Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& vOut);
 	void Aim(CUserCmd* pCmd, Vec3& vAngles);

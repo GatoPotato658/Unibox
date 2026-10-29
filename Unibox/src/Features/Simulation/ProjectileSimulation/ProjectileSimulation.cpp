@@ -4,6 +4,7 @@
 #include "../../NoSpread/NoSpreadProjectile/NoSpreadProjectile.h"
 #include "../../CritHack/CritHack.h"
 #include "../../Backtrack/Backtrack.h"
+#include "../../Aimbot/AimbotProjectile/ProjProfiler.h"
 
 static const char* GetPasstimeThrowSpeedCvar(CTFPlayer* pPlayer)
 	{
@@ -345,7 +346,7 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 		
 		auto uType = FNV1A::Hash32Const("models/weapons/w_models/w_flaregun_shell.mdl");
 		float flSpeed = SDK::AttribHookValue(2000.f, "mult_projectile_speed", pWeapon);
-		tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 0.f, 0.f, 0.f }, flSpeed, 0.3f * flGravity };
+		tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 0.f, 0.f, 0.f }, flSpeed, 0.3f * flGravity * (flSpeed / 2000.f) };
 		return true;
 	}
 	case TF_WEAPON_FLAREGUN_REVENGE:
@@ -353,7 +354,8 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 		SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, 12.f, bDucking ? 8.f : -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp);
 		
 		auto uType = FNV1A::Hash32Const("models/weapons/w_models/w_flaregun_shell.mdl");
-		tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 0.f, 0.f, 0.f }, 3000.f, 0.45f * flGravity };
+		float flSpeed = SDK::AttribHookValue(2000.f, "mult_projectile_speed", pWeapon);
+		tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 0.f, 0.f, 0.f }, flSpeed, 0.3f * flGravity * (flSpeed / 2000.f) };
 		return true;
 	}
 	case TF_WEAPON_COMPOUND_BOW:
@@ -543,6 +545,8 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 
 bool CProjectileSimulation::GetInfo(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const Vec3& vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge)
 {
+	PROJ_ZONE(ProjGetInfo);
+
 	bool bInitCheck = iFlags & ProjSimEnum::InitCheck;
 	bool bInterp = iFlags & ProjSimEnum::Interp;
 	bool bReturn = false;
@@ -594,6 +598,8 @@ void CProjectileSimulation::GetInfo(CBaseEntity* pProjectile, ProjectileInfo& tP
 
 bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate, bool bWorld)
 {
+	PROJ_ZONE(ProjInit);
+
 	if (!m_pEnv)
 		m_pEnv = I::Physics->CreateEnvironment();
 
@@ -886,14 +892,17 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 	if (tProjInfo.m_uType == FNV1A::Hash32Const("custom"))
 		tProjInfo.m_uType = FNV1A::Hash32(Vars::Visuals::Trajectory::Type.Value.c_str());
 
-	if (m_bPhysics)
-		RunTick(tProjInfo, false); // simulate an initial time because dumb
-
 	return true;
 }
 
 void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bug: per frame projectile trace can cause inconsistencies?
 {
+	PROJ_ZONE(ProjTick);
+	if (m_bPhysics)
+		PROJ_COUNT(ProjTicksPhysics);
+	else
+		PROJ_COUNT(ProjTicksSimple);
+
 	if (bPath)
 		tProjInfo.m_vPath.push_back(GetOrigin());
 

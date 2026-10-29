@@ -21,6 +21,12 @@
 
 void CRender::Render(IDirect3DDevice9* pDevice)
 {
+	if (m_pDevice && pDevice != m_pDevice && m_bLoaded)
+	{
+		F::CaptureOverlay.ReleaseDeviceObjects();
+		ImGui_ImplDX9_Shutdown();
+		ImGui_ImplDX9_Init(pDevice);
+	}
 	m_pDevice = pDevice;
 
 	static std::once_flag tFlag; std::call_once(tFlag, [&]
@@ -49,11 +55,15 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	F::Menu.Render();
-
 	const bool bAntiObs = SDK::AntiObs();
 	const bool bPrivate = bAntiObs && F::CaptureOverlay.Prepare(pDevice);
-	if (I::EngineClient->IsInGame() && (bPrivate || !bAntiObs && !SDK::TakingScreenshot()))
+	const bool bUnsupported = bAntiObs && !bPrivate && F::CaptureOverlay.Unsupported();
+	const bool bDrawGame = !bAntiObs || bUnsupported;
+	const bool bTransient = bAntiObs && !bPrivate && !bUnsupported;
+
+	F::Menu.Render();
+
+	if (I::EngineClient->IsInGame() && !bTransient && (bPrivate || bDrawGame && !SDK::TakingScreenshot()))
 	{
 		ImDrawList* pBackground = ImGui::GetBackgroundDrawList();
 
@@ -79,9 +89,9 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui::EndFrame();
 	ImGui::Render();
 
-	if (bPrivate)
+	if (bAntiObs)
 		F::CaptureOverlay.Present(pDevice, ImGui::GetDrawData());
-	else
+	else if (bDrawGame)
 		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
 	pDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, dwOldRGB);
 	pDevice->SetSamplerState(0, D3DSAMP_SRGBTEXTURE, dwOldSRGBRead);
