@@ -1756,6 +1756,73 @@ namespace
 		return TryCreate(D3DPOOL_DEFAULT, D3DUSAGE_DYNAMIC);
 	}
 
+	void CompositePaintOverlay(std::vector<uint8_t>& vBase, int iWidth, int iHeight, const uint8_t* pOverlay, int iOverlayWidth, int iOverlayHeight, int iColor, int iColor2)
+	{
+		for (int y = 0; y < iHeight; y++)
+		{
+			for (int x = 0; x < iWidth; x++)
+			{
+				const auto* pSource = pOverlay + (size_t(y * iOverlayHeight / iHeight) * iOverlayWidth + x * iOverlayWidth / iWidth) * 4;
+				auto* pTarget = vBase.data() + (size_t(y) * iWidth + x) * 4;
+				const unsigned uAlpha = pSource[3];
+				if (!uAlpha)
+					continue;
+				const unsigned uBaseAlpha = unsigned(pTarget[3]) * (255 - uAlpha) / 255;
+				const unsigned uOutputAlpha = uAlpha + uBaseAlpha;
+				const uint32_t uColor = uint32_t(iColor2 >= 0 && x >= iWidth / 2 ? iColor2 : iColor);
+				for (int c = 0; c < 3; c++)
+				{
+					// Material previews are BGRA; schema paint colors are 0xRRGGBB.
+					const unsigned uTinted = unsigned(pSource[c]) * ((uColor >> (c * 8)) & 0xFF) / 255;
+					pTarget[c] = uint8_t((uTinted * uAlpha + unsigned(pTarget[c]) * uBaseAlpha) / uOutputAlpha);
+				}
+				pTarget[3] = uint8_t(uOutputAlpha);
+			}
+		}
+	}
+
+	void CompositeItemOverlay(std::vector<uint8_t>& vBase, int iWidth, int iHeight, const uint8_t* pOverlay, int iOverlayWidth, int iOverlayHeight, float flX, float flY, float flScale)
+	{
+		if (!pOverlay || iWidth <= 0 || iHeight <= 0 || iOverlayWidth <= 0 || iOverlayHeight <= 0 || !std::isfinite(flScale) || flScale <= 0.f)
+			return;
+		const int iTargetWidth = std::max(1, int(iWidth * std::min(flScale, 4.f)));
+		const int iTargetHeight = std::max(1, int(float(iTargetWidth) * iOverlayHeight / iOverlayWidth));
+		const int iLeft = int(iWidth * std::clamp(flX, -4.f, 4.f)), iTop = int(iHeight * std::clamp(flY, -4.f, 4.f));
+		for (int y = std::max(0, iTop); y < std::min(iHeight, iTop + iTargetHeight); y++)
+		{
+			for (int x = std::max(0, iLeft); x < std::min(iWidth, iLeft + iTargetWidth); x++)
+			{
+				const auto* pSource = pOverlay + (size_t((y - iTop) * iOverlayHeight / iTargetHeight) * iOverlayWidth + (x - iLeft) * iOverlayWidth / iTargetWidth) * 4;
+				auto* pDest = vBase.data() + (size_t(y) * iWidth + x) * 4;
+				const unsigned uAlpha = pSource[3], uDestAlpha = pDest[3] * (255 - uAlpha) / 255, uOutAlpha = uAlpha + uDestAlpha;
+				if (!uOutAlpha)
+					continue;
+				for (int c = 0; c < 3; c++)
+					pDest[c] = uint8_t((pSource[c] * uAlpha + pDest[c] * uDestAlpha) / uOutAlpha);
+				pDest[3] = uint8_t(uOutAlpha);
+			}
+		}
+	}
+
+	void AddItemIconOverlay(std::vector<uint8_t>& vPixels, int iWidth, int iHeight, std::string sPath, float flX, float flY, float flScale)
+	{
+		if (sPath.empty())
+			return;
+		if (sPath.starts_with("materials/"))
+			sPath.erase(0, 10);
+		if (!sPath.ends_with(".vmt"))
+			sPath += ".vmt";
+		auto* pMaterial = I::MaterialSystem->FindMaterial(sPath.c_str(), TEXTURE_GROUP_VGUI, false);
+		int w = 0, h = 0;
+		ImageFormat eFormat = IMAGE_FORMAT_UNKNOWN;
+		bool bAlpha = false;
+		if (!pMaterial || pMaterial->GetPreviewImageProperties(&w, &h, &eFormat, &bAlpha) != MATERIAL_PREVIEW_IMAGE_OK || w <= 0 || h <= 0 || w > 512 || h > 512)
+			return;
+		std::vector<uint8_t> vOverlay(size_t(w) * h * 4);
+		if (pMaterial->GetPreviewImage(vOverlay.data(), w, h, IMAGE_FORMAT_BGRA8888) == MATERIAL_PREVIEW_IMAGE_OK)
+			CompositeItemOverlay(vPixels, iWidth, iHeight, vOverlay.data(), w, h, flX, flY, flScale);
+	}
+
 	ImTextureID GetItemIcon(const ItemInfo_t& tItem, bool& bPending, ImVec2* pSize = nullptr)
 	{
 		bPending = false;
@@ -1863,6 +1930,28 @@ namespace
 				std::vector<uint8_t> vPixels(size_t(iWidth) * size_t(iHeight) * 4);
 				if (pMaterial->GetPreviewImage(vPixels.data(), iWidth, iHeight, IMAGE_FORMAT_BGRA8888) == MATERIAL_PREVIEW_IMAGE_OK)
 				{
+					if (tItem.iPaintColor >= 0 && !tItem.sImageOverlay.empty())
+					{
+						std::string sOverlayPath = tItem.sImageOverlay;
+						if (sOverlayPath.starts_with("materials/"))
+							sOverlayPath.erase(0, 10);
+						if (!sOverlayPath.ends_with(".vmt"))
+							sOverlayPath += ".vmt";
+						auto* pOverlay = I::MaterialSystem->FindMaterial(sOverlayPath.c_str(), TEXTURE_GROUP_VGUI, false);
+						int iOverlayWidth = 0, iOverlayHeight = 0;
+						ImageFormat eOverlayFormat = IMAGE_FORMAT_UNKNOWN;
+						bool bOverlayAlpha = false;
+						if (pOverlay && pOverlay->GetPreviewImageProperties(&iOverlayWidth, &iOverlayHeight, &eOverlayFormat, &bOverlayAlpha) == MATERIAL_PREVIEW_IMAGE_OK
+							&& iOverlayWidth > 0 && iOverlayHeight > 0 && iOverlayWidth <= 512 && iOverlayHeight <= 512)
+						{
+							std::vector<uint8_t> vOverlay(size_t(iOverlayWidth) * iOverlayHeight * 4);
+							if (pOverlay->GetPreviewImage(vOverlay.data(), iOverlayWidth, iOverlayHeight, IMAGE_FORMAT_BGRA8888) == MATERIAL_PREVIEW_IMAGE_OK)
+								CompositePaintOverlay(vPixels, iWidth, iHeight, vOverlay.data(), iOverlayWidth, iOverlayHeight, tItem.iPaintColor, tItem.iPaintColor2);
+						}
+					}
+					if (tItem.iPaintColor < 0 && !tItem.sImageOverlay.empty())
+						AddItemIconOverlay(vPixels, iWidth, iHeight, tItem.sImageOverlay, 0.f, 0.f, 1.f);
+					AddItemIconOverlay(vPixels, iWidth, iHeight, tItem.sToolTargetImage, tItem.flToolIconX, tItem.flToolIconY, tItem.flToolIconScale);
 					if (auto pCreated = CreateScaled(vPixels.data(), iWidth, iHeight, false))
 					{
 						tIcon.pTexture = pCreated;
@@ -2294,7 +2383,9 @@ void CMenu::MenuSkins(int iTab)
 			const ItemInfo_t* pSelected = uBackpackSelected ? FindItemInfo(uBackpackSelected) : nullptr;
 			const bool bSelectedOwned = pSelected && vBackpack.cend() != std::find(vBackpack.cbegin(), vBackpack.cend(), pSelected);
 			const bool bSelectedAdded = bSelectedOwned && F::SkinChanger.InBackpack(uBackpackSelected);
-			const float flGridHeight = std::max(H::Draw.Scale(120), GetWindowHeight() - GetCursorPosY() - GetStyle().WindowPadding.y - H::Draw.Scale(44));
+			const bool bHasStyles = bSelectedAdded && !pSelected->vStyles.empty();
+			const bool bLocalCrate = bSelectedAdded && pSelected->sClass == "supply_crate";
+			const float flGridHeight = std::max(H::Draw.Scale(120), GetWindowHeight() - GetCursorPosY() - GetStyle().WindowPadding.y - H::Draw.Scale(44 + (bHasStyles ? 36 : 0) + (bLocalCrate ? 36 : 0)));
 			const ItemGrid_t tGrid = DrawItemGrid("##OwnedGrid", s_vBackpackFiltered, {}, bSelectedOwned ? uBackpackSelected : 0, flGridHeight, true);
 			if (tGrid.uClicked)
 				uBackpackSelected = tGrid.uClicked;
@@ -2302,6 +2393,23 @@ void CMenu::MenuSkins(int iTab)
 				F::SkinChanger.RemoveFromBackpack(tGrid.uDoubleClicked);
 
 			DebugDummy({ 0, H::Draw.Scale(6) });
+			if (bHasStyles)
+			{
+				const auto vLocalItems = F::SkinChanger.GetBackpack();
+				const auto it = std::find_if(vLocalItems.rbegin(), vLocalItems.rend(), [&](const BackpackItem_t& tItem) { return tItem.iDef == uBackpackSelected; });
+				if (it != vLocalItems.rend())
+				{
+					std::vector<const char*> vNames;
+					std::vector<int> vIds;
+					for (const auto& [iId, sName] : pSelected->vStyles) { vNames.push_back(sName.c_str()); vIds.push_back(iId); }
+					int iStyle = it->iStyle;
+					FDropdown("Style", &iStyle, vNames, vIds);
+					if (iStyle != it->iStyle)
+						F::SkinChanger.SetBackpackStyle(it->uSerial, iStyle);
+				}
+			}
+			if (bLocalCrate && FButton("Open locally", FButtonEnum::Primary))
+				F::SkinChanger.QueueLocalCrate(uBackpackSelected);
 			PushDisabled(!bSelectedAdded);
 			{
 				if (FButton(bSelectedAdded ? std::format("Remove {}", TruncateText(pSelected->sName, int(GetWindowWidth() / 2))).c_str() : "Remove", FButtonEnum::Danger))
@@ -2313,8 +2421,8 @@ void CMenu::MenuSkins(int iTab)
 		TableNextColumn();
 		if (Section("Catalogue", 0, flSectionHeight, true))
 		{
-			static const std::vector<const char*> vFilters = { "All", "Weapons", "Hats & misc", "Tools & cases" };
-			static const std::vector<int> vFilterIds = { 0, 1, 2, 3 };
+			static const std::vector<const char*> vFilters = { "All", "Weapons", "Hats", "Misc", "Tools & cases" };
+			static const std::vector<int> vFilterIds = { 0, 1, 2, 3, 4 };
 			FDropdown("Show", &iBackpackFilter, vFilters, vFilterIds);
 			DebugDummy({ 0, H::Draw.Scale(4) });
 			FInputText("Search", sItemSearch, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
@@ -2335,8 +2443,9 @@ void CMenu::MenuSkins(int iTab)
 					switch (iBackpackFilter)
 					{
 					case 1: bMatch = tItem.sClass.starts_with("tf_weapon"); break;
-					case 2: bMatch = tItem.sClass == "tf_wearable" || tItem.sClass.starts_with("tf_wearable_"); break;
-					case 3: bMatch = !tItem.sClass.starts_with("tf_weapon") && !tItem.sClass.starts_with("tf_wearable"); break;
+					case 2: bMatch = tItem.sClass.starts_with("tf_wearable") && tItem.bHat; break;
+					case 3: bMatch = tItem.sClass.starts_with("tf_wearable") && !tItem.bHat; break;
+					case 4: bMatch = !tItem.sClass.starts_with("tf_weapon") && !tItem.sClass.starts_with("tf_wearable"); break;
 					}
 					if (bMatch && !sNeedle.empty())
 						bMatch = Lowercase(tItem.sName).find(sNeedle) != std::string::npos;
@@ -2357,7 +2466,11 @@ void CMenu::MenuSkins(int iTab)
 
 			const ItemInfo_t* pSelected = uBackpackSelected ? FindItemInfo(uBackpackSelected) : nullptr;
 			const bool bWearable = pSelected && (pSelected->sClass == "tf_wearable" || pSelected->sClass.starts_with("tf_wearable_"));
-			const float flFooterHeight = H::Draw.Scale(bWearable ? 82 : 44);
+			static uint16_t uStyleDef = 0;
+			static int iSelectedStyle = 0;
+			if (uStyleDef != uBackpackSelected) { uStyleDef = uBackpackSelected; iSelectedStyle = 0; }
+			const bool bHasStyles = pSelected && !pSelected->vStyles.empty();
+			const float flFooterHeight = H::Draw.Scale((bWearable ? 82 : 44) + (bHasStyles ? 36 : 0));
 			const float flGridHeight = std::max(H::Draw.Scale(120), GetWindowHeight() - GetCursorPosY() - GetStyle().WindowPadding.y - flFooterHeight);
 			const ItemGrid_t tGrid = DrawItemGrid("##CatalogueGrid", s_vCatalogueFiltered, tBackpack, uBackpackSelected, flGridHeight);
 			if (tGrid.uClicked)
@@ -2383,6 +2496,13 @@ void CMenu::MenuSkins(int iTab)
 				FSDropdown("Unusual effect", &sUnusualName, vUnusualNames);
 			}
 
+			if (bHasStyles)
+			{
+				std::vector<const char*> vNames;
+				std::vector<int> vIds;
+				for (const auto& [iId, sName] : pSelected->vStyles) { vNames.push_back(sName.c_str()); vIds.push_back(iId); }
+				FDropdown("Style", &iSelectedStyle, vNames, vIds);
+			}
 			PushDisabled(!pSelected);
 			{
 				if (FButton(pSelected ? std::format("Add {}", TruncateText(pSelected->sName, int(GetWindowWidth() / 3))).c_str() : "Add", FButtonEnum::Left | FButtonEnum::Primary))
@@ -2403,7 +2523,7 @@ void CMenu::MenuSkins(int iTab)
 				const uint16_t uAddDef = tGrid.uDoubleClicked ? tGrid.uDoubleClicked : uBackpackSelected;
 				const ItemInfo_t* pAdd = FindItemInfo(uAddDef);
 				const bool bAddWearable = pAdd && (pAdd->sClass == "tf_wearable" || pAdd->sClass.starts_with("tf_wearable_"));
-				F::SkinChanger.AddToBackpack(uAddDef, bAddWearable ? std::max(UnusualEffectId(sUnusualName), 0) : 0);
+				F::SkinChanger.AddToBackpack(uAddDef, bAddWearable ? std::max(UnusualEffectId(sUnusualName), 0) : 0, uAddDef == uStyleDef ? iSelectedStyle : 0);
 			}
 		} EndSection();
 
