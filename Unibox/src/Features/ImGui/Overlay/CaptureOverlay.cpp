@@ -53,10 +53,8 @@ DWORD WINAPI CCaptureOverlay::WindowThread(LPVOID pParam)
 		0, 0, 1, 1,
 		nullptr, nullptr, hInstance, nullptr);
 
-	const MARGINS tMargins{ -1, -1, -1, -1 };
 	DWORD dwAffinity = 0;
 	if (!hWindow
-		|| FAILED(DwmExtendFrameIntoClientArea(hWindow, &tMargins))
 		|| !SetWindowDisplayAffinity(hWindow, WDA_EXCLUDEFROMCAPTURE)
 		|| !GetWindowDisplayAffinity(hWindow, &dwAffinity)
 		|| dwAffinity != WDA_EXCLUDEFROMCAPTURE)
@@ -88,47 +86,104 @@ bool CCaptureOverlay::StartWindowThread()
 {
 	if (m_hWindow)
 		return true;
-	if (m_bThreadFailed || m_hThread)
+	if (m_bThreadFailed)
 		return false;
 
-	m_hReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-	if (m_hReady)
-		m_hThread = CreateThread(nullptr, 0, WindowThread, this, 0, nullptr);
 	if (!m_hThread)
 	{
-		m_bThreadFailed = true;
-		return false;
+		m_hReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+		if (m_hReady)
+			m_hThread = CreateThread(nullptr, 0, WindowThread, this, 0, nullptr);
+		if (!m_hThread)
+		{
+			m_bThreadFailed = true;
+			return false;
+		}
+		WaitForSingleObject(m_hReady, 2000);
 	}
 
-	WaitForSingleObject(m_hReady, 2000);
 	return m_hWindow != nullptr;
 }
 
-bool CCaptureOverlay::CheckDevice(IDirect3DDevice9* pDevice)
+void CCaptureOverlay::ApplyWindowStyle()
 {
-	if (m_bDeviceChecked)
-		return m_bDeviceSupported;
-	m_bDeviceChecked = true;
-	m_bDeviceSupported = false;
+	const HWND hWindow = m_hWindow;
+	if (!hWindow || (m_hStyledWindow == hWindow && m_eStyledMode == m_eMode))
+		return;
+	m_hStyledWindow = hWindow;
+	m_eStyledMode = m_eMode;
 
-	if (GetModuleHandleA("shaderapivk.dll"))
-		return false;
+	const MARGINS tMargins = m_eMode == Mode_t::Alpha ? MARGINS{ -1, -1, -1, -1 } : MARGINS{};
+	DwmExtendFrameIntoClientArea(hWindow, &tMargins);
+}
 
-	HMODULE hD3D9 = nullptr;
-	wchar_t sModule[MAX_PATH]{}, sSystem[MAX_PATH]{};
-	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		reinterpret_cast<LPCWSTR>((*reinterpret_cast<void***>(pDevice))[0]), &hD3D9)
-		|| !GetModuleFileNameW(hD3D9, sModule, MAX_PATH)
-		|| !GetSystemDirectoryW(sSystem, MAX_PATH)
-		|| _wcsnicmp(sModule, sSystem, wcslen(sSystem)) != 0)
-		return false;
+void CCaptureOverlay::ClearGameSurface()
+{
+	if (!m_pDevice || m_hClearedWindow == m_hWindow)
+		return;
+	m_hClearedWindow = m_hWindow;
 
+	m_pDevice->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.f, 0);
+}
+
+bool CCaptureOverlay::SelectMode(IDirect3DDevice9* pDevice)
+{
 	IDirect3DSwapChain9* pMain = nullptr;
 	D3DPRESENT_PARAMETERS tParams{};
-	const bool bQueried = SUCCEEDED(pDevice->GetSwapChain(0, &pMain)) && pMain && SUCCEEDED(pMain->GetPresentParameters(&tParams));
+	const bool bQueried = SUCCEEDED(pDevice->GetSwapChain(0, &pMain)) && pMain
+		&& SUCCEEDED(pMain->GetPresentParameters(&tParams));
 	if (pMain)
 		pMain->Release();
-	return m_bDeviceSupported = bQueried && tParams.Windowed;
+	if (!bQueried)
+	{
+		m_bUnsupported = true;
+		NotifyUnavailable("the game swapchain could not be queried");
+		return false;
+	}
+
+	if (!tParams.Windowed)
+	{
+		m_bUnsupported = true;
+		NotifyUnavailable("the game is running in exclusive fullscreen");
+		return false;
+	}
+
+	m_Format = tParams.BackBufferFormat;
+	IDirect3DSurface9* pBackBuffer = nullptr;
+	if (SUCCEEDED(pDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)) && pBackBuffer)
+	{
+		D3DSURFACE_DESC tDesc{};
+		if (SUCCEEDED(pBackBuffer->GetDesc(&tDesc)) && tDesc.Format != D3DFMT_UNKNOWN)
+			m_Format = tDesc.Format;
+		pBackBuffer->Release();
+	}
+	if (m_Format == D3DFMT_UNKNOWN)
+		m_Format = D3DFMT_X8R8G8B8;
+
+	HMODULE hDevice = nullptr;
+	wchar_t sDevice[MAX_PATH]{}, sSystem[MAX_PATH]{};
+	const bool bNative = GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<LPCWSTR>((*reinterpret_cast<void***>(pDevice))[17]), &hDevice) && hDevice
+		&& GetModuleFileNameW(hDevice, sDevice, MAX_PATH)
+		&& GetSystemDirectoryW(sSystem, MAX_PATH)
+		&& _wcsnicmp(sDevice, sSystem, wcslen(sSystem)) == 0;
+
+	IDirect3DDevice9Ex* pEx = nullptr;
+	const bool bEx = SUCCEEDED(pDevice->QueryInterface(__uuidof(IDirect3DDevice9Ex), reinterpret_cast<void**>(&pEx))) && pEx;
+	if (pEx)
+		pEx->Release();
+
+	m_eMode = bNative && bEx ? Mode_t::Alpha : Mode_t::Opaque;
+	return true;
+}
+
+void CCaptureOverlay::NotifyUnavailable(const char* sReason)
+{
+	if (m_bNotified)
+		return;
+	m_bNotified = true;
+	const std::string sMessage = std::format("Anti-OBS off: {}. Windowed mode is required for capture exclusion.", sReason);
+	SDK::Output("Anti-OBS", sMessage.c_str(), { 255, 190, 120, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_CHAT);
 }
 
 void CCaptureOverlay::SetVisible(bool bVisible)
@@ -143,6 +198,17 @@ void CCaptureOverlay::SetVisible(bool bVisible)
 			SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
 	else
 		ShowWindowAsync(hWindow, SW_HIDE);
+}
+
+void CCaptureOverlay::ReleaseSwapChain()
+{
+	if (m_pSwapChain)
+	{
+		m_pSwapChain->Release();
+		m_pSwapChain = nullptr;
+	}
+	m_bAvailable = false;
+	SetVisible(false);
 }
 
 bool CCaptureOverlay::TrackGameWindow()
@@ -164,11 +230,8 @@ bool CCaptureOverlay::TrackGameWindow()
 
 	if (nWidth != m_nWidth || nHeight != m_nHeight)
 	{
-		if (m_pSwapChain)
-		{
-			m_pSwapChain->Release();
-			m_pSwapChain = nullptr;
-		}
+		ReleaseSwapChain();
+		m_bSwapChainFailed = false;
 		m_nWidth = nWidth;
 		m_nHeight = nHeight;
 	}
@@ -189,11 +252,15 @@ bool CCaptureOverlay::CreateSwapChain(IDirect3DDevice9* pDevice)
 {
 	if (m_pSwapChain)
 		return true;
+	if (m_bSwapChainFailed)
+		return false;
+	if (!m_nWidth || !m_nHeight)
+		return false;
 
 	D3DPRESENT_PARAMETERS tParams{};
 	tParams.Windowed = TRUE;
 	tParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	tParams.BackBufferFormat = D3DFMT_A8R8G8B8;
+	tParams.BackBufferFormat = m_eMode == Mode_t::Alpha ? D3DFMT_A8R8G8B8 : m_Format;
 	tParams.BackBufferWidth = m_nWidth;
 	tParams.BackBufferHeight = m_nHeight;
 	tParams.BackBufferCount = 1;
@@ -201,13 +268,14 @@ bool CCaptureOverlay::CreateSwapChain(IDirect3DDevice9* pDevice)
 	tParams.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	tParams.EnableAutoDepthStencil = FALSE;
 
-	if (FAILED(pDevice->CreateAdditionalSwapChain(&tParams, &m_pSwapChain)) || !m_pSwapChain)
-	{
-		m_pSwapChain = nullptr;
-		return false;
-	}
+	if (SUCCEEDED(pDevice->CreateAdditionalSwapChain(&tParams, &m_pSwapChain)) && m_pSwapChain)
+		return true;
+	m_pSwapChain = nullptr;
 
-	return true;
+	m_bSwapChainFailed = true;
+	m_bUnsupported = true;
+	NotifyUnavailable("an overlay swapchain could not be created for this device");
+	return false;
 }
 
 bool CCaptureOverlay::Prepare(IDirect3DDevice9* pDevice)
@@ -221,9 +289,19 @@ bool CCaptureOverlay::Prepare(IDirect3DDevice9* pDevice)
 		ReleaseDeviceObjects();
 		m_pDevice = pDevice;
 	}
+	if (m_bSwapChainFailed)
+		return false;
 
-	if (!StartWindowThread() || !CheckDevice(pDevice))
+	if (m_eMode == Mode_t::None && !SelectMode(pDevice))
 	{
+		SetVisible(false);
+		return false;
+	}
+
+	if (!StartWindowThread())
+	{
+		m_bUnsupported = true;
+		NotifyUnavailable("the overlay window is not capturable on this system");
 		SetVisible(false);
 		return false;
 	}
@@ -234,6 +312,7 @@ bool CCaptureOverlay::Prepare(IDirect3DDevice9* pDevice)
 		return false;
 	}
 
+	ClearGameSurface();
 	return m_bAvailable = true;
 }
 
@@ -242,9 +321,14 @@ void CCaptureOverlay::Present(IDirect3DDevice9* pDevice, ImDrawData* pDrawData)
 	if (!m_bAvailable || !m_pSwapChain || !pDevice || pDevice != m_pDevice)
 		return;
 
+	ApplyWindowStyle();
+
 	IDirect3DSurface9* pBackBuffer = nullptr;
 	if (FAILED(m_pSwapChain->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)) || !pBackBuffer)
+	{
+		ReleaseSwapChain();
 		return;
+	}
 
 	IDirect3DSurface9* pOldTarget = nullptr;
 	IDirect3DSurface9* pOldDepth = nullptr;
@@ -256,11 +340,28 @@ void CCaptureOverlay::Present(IDirect3DDevice9* pDevice, ImDrawData* pDrawData)
 	pDevice->GetRenderState(D3DRS_COLORWRITEENABLE, &dwColorWrite);
 	pDevice->GetRenderState(D3DRS_SCISSORTESTENABLE, &dwScissor);
 
+	ClearGameSurface();
+
+	if (m_eMode == Mode_t::Opaque)
+	{
+		IDirect3DSurface9* pSource = pOldTarget;
+		D3DSURFACE_DESC tSource{}, tTarget{};
+		if (pSource && SUCCEEDED(pSource->GetDesc(&tSource)) && SUCCEEDED(pBackBuffer->GetDesc(&tTarget))
+			&& tSource.Format == tTarget.Format)
+		{
+			const RECT tDestination{ 0, 0, static_cast<LONG>(tTarget.Width), static_cast<LONG>(tTarget.Height) };
+			pDevice->SetRenderTarget(0, nullptr);
+			pDevice->StretchRect(pSource, nullptr, pBackBuffer, &tDestination, D3DTEXF_NONE);
+		}
+	}
+
+	ClearGameSurface();
 	pDevice->SetRenderTarget(0, pBackBuffer);
 	pDevice->SetDepthStencilSurface(nullptr);
 	pDevice->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE | D3DCOLORWRITEENABLE_ALPHA);
 	pDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-	pDevice->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_ARGB(0, 0, 0, 0), 1.f, 0);
+	if (m_eMode == Mode_t::Alpha)
+		pDevice->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_ARGB(0, 0, 0, 0), 1.f, 0);
 	if (pDrawData)
 		ImGui_ImplDX9_RenderDrawData(pDrawData);
 
@@ -278,9 +379,7 @@ void CCaptureOverlay::Present(IDirect3DDevice9* pDevice, ImDrawData* pDrawData)
 
 	if (FAILED(m_pSwapChain->Present(nullptr, nullptr, nullptr, nullptr, 0)))
 	{
-		m_pSwapChain->Release();
-		m_pSwapChain = nullptr;
-		SetVisible(false);
+		ReleaseSwapChain();
 		return;
 	}
 
@@ -295,16 +394,15 @@ void CCaptureOverlay::Hide()
 
 void CCaptureOverlay::ReleaseDeviceObjects()
 {
-	if (m_pSwapChain)
-	{
-		m_pSwapChain->Release();
-		m_pSwapChain = nullptr;
-	}
+	ReleaseSwapChain();
 	m_pDevice = nullptr;
-	m_bDeviceChecked = false;
-	m_bDeviceSupported = false;
-	m_bAvailable = false;
-	SetVisible(false);
+	m_eMode = Mode_t::None;
+	m_Format = D3DFMT_UNKNOWN;
+	m_hStyledWindow = nullptr;
+	m_hClearedWindow = nullptr;
+	m_eStyledMode = Mode_t::None;
+	m_bSwapChainFailed = false;
+	m_bUnsupported = false;
 }
 
 void CCaptureOverlay::Shutdown()
@@ -328,9 +426,15 @@ void CCaptureOverlay::Shutdown()
 
 	m_hWindow = nullptr;
 	m_hGameWindow = nullptr;
+	m_hStyledWindow = nullptr;
+	m_hClearedWindow = nullptr;
+	m_eStyledMode = Mode_t::None;
 	m_nWidth = m_nHeight = 0;
 	m_tLastRect = {};
 	m_bVisible = false;
 	m_bThreadFailed = false;
+	m_bSwapChainFailed = false;
+	m_bUnsupported = false;
+	m_bNotified = false;
 }
 #endif

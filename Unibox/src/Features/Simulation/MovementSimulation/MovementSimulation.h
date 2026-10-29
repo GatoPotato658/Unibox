@@ -39,6 +39,14 @@ struct MoveData
 	bool m_bInputDirection = false;
 };
 
+struct MoveYawState
+{
+	int m_iChanges = 0;
+	int m_iStart = 0;
+	int m_iLastSign = 0;
+	bool m_bLastZero = false;
+};
+
 class CMovementSimulation
 {
 private:

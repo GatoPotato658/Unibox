@@ -182,7 +182,9 @@ void CNoSpreadHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* 
 		return;
 
 	Vec3 vForward; Math::AngleVectors(vShotAngles, &vForward);
-	pCmd->viewangles = SpreadMath::SolveAngles(vForward, tPellet, vShotAngles.z, vShotAngles.x) - vPunch;
+	Vec3 vAngles = SpreadMath::SolveAngles(vForward, tPellet, vShotAngles.z, vShotAngles.x) - vPunch;
+	SDK::FixMovement(pCmd, vAngles);
+	pCmd->viewangles = vAngles;
 	Math::ClampAngles(pCmd->viewangles);
 
 	G::SilentAngles = true;

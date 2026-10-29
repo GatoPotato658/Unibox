@@ -1,6 +1,7 @@
 #include "MovementSimulation.h"
 
 #include "../../EnginePrediction/EnginePrediction.h"
+#include "../../Aimbot/AimbotProjectile/ProjProfiler.h"
 #include <numeric>
 
 void CMovementSimulation::Store(MoveStorage& tMoveStorage)
@@ -22,7 +23,11 @@ void CMovementSimulation::Reset(MoveStorage& tMoveStorage)
 	{
 		auto pMap = tMoveStorage.m_pPlayer->GetPredDescMap();
 		if (!pMap)
+		{
+			I::MemAlloc->Free(tMoveStorage.m_pData);
+			tMoveStorage.m_pData = nullptr;
 			return;
+		}
 
 		CPredictionCopy copy = { PC_NETWORKED_ONLY, tMoveStorage.m_pPlayer, PC_DATA_NORMAL, tMoveStorage.m_pData, PC_DATA_PACKED };
 		copy.TransferData("MovementSimulationReset", tMoveStorage.m_pPlayer->entindex(), pMap);
@@ -120,11 +125,15 @@ void CMovementSimulation::Store()
 		Vec3 vVelocity = pPlayer->m_vecVelocity();
 		Vec3 vOrigin = pPlayer->m_vecOrigin();
 		Vec3 vDirection = vVelocity.To2D();
+		float flSimTime = pPlayer->m_flSimulationTime();
+
+		if (!vRecords.empty() && vRecords.front().m_flSimTime == flSimTime)
+			continue;
 
 		MoveData* pLastRecord = !vRecords.empty() ? &vRecords.front() : nullptr;
 		vRecords.emplace_front(
 			vDirection,
-			pPlayer->m_flSimulationTime(),
+			flSimTime,
 			GetMoveMode(pPlayer),
 			vVelocity,
 			vOrigin
@@ -188,6 +197,8 @@ void CMovementSimulation::StorePlayer(CTFPlayer* pPlayer, CMoveData& tMoveData, 
 
 bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveStorage, bool bHitchance, bool bStrafe, bool bPredict, const Vec3* pvOrigin)
 {
+	PROJ_ZONE(MoveInit);
+
 	if (!pEntity || !pEntity->IsPlayer() || !pEntity->As<CTFPlayer>()->IsAlive())
 	{
 		tMoveStorage.m_bInitFailed = tMoveStorage.m_bFailed = true;
@@ -369,7 +380,7 @@ static inline void VisualizeRecords(MoveData& tRecord1, MoveData& tRecord2, Colo
 }
 #endif
 
-static inline bool GetYawDifference(MoveData& tRecord1, MoveData& tRecord2, bool bStart, float* pYaw, float flStraightFuzzyValue, int iMaxChanges = 0, int iMaxChangeTime = 0, float flMaxSpeed = 0.f)
+static inline bool GetYawDifference(MoveData& tRecord1, MoveData& tRecord2, bool bStart, float* pYaw, float flStraightFuzzyValue, MoveYawState& tState, int iMaxChanges = 0, int iMaxChangeTime = 0, float flMaxSpeed = 0.f)
 {
 	const float flYaw1 = Math::VectorAngles(tRecord1.m_vDirection).y, flYaw2 = Math::VectorAngles(tRecord2.m_vDirection).y;
 	const float flTime1 = tRecord1.m_flSimTime, flTime2 = tRecord2.m_flSimTime;
@@ -383,31 +394,26 @@ static inline bool GetYawDifference(MoveData& tRecord1, MoveData& tRecord2, bool
 	if (fabsf(*pYaw) > 45.f)
 		return false;
 
-	static int iChanges, iStart;
+	const int iLastSign = tState.m_iLastSign;
+	const int iCurrSign = tState.m_iLastSign = *pYaw ? sign(*pYaw) : tState.m_iLastSign;
+	const bool bLastZero = tState.m_bLastZero;
+	const bool bCurrZero = tState.m_bLastZero = !*pYaw;
+	const bool bChanged = iCurrSign != iLastSign || bCurrZero && bLastZero;
 
-	static int iStaticSign = 0;
-	const int iLastSign = iStaticSign;
-	const int iCurrSign = iStaticSign = *pYaw ? sign(*pYaw) : iStaticSign;
-
-	static bool bStaticZero = false;
-	const bool iLastZero = bStaticZero;
-	const bool iCurrZero = bStaticZero = !*pYaw;
-
-	const bool bChanged = iCurrSign != iLastSign || iCurrZero && iLastZero;
 	const bool bStraight = fabsf(*pYaw) * tRecord1.m_vVelocity.Length2D() * iTicks < flStraightFuzzyValue; // dumb way to get straight bool
 
 	if (bStart)
 	{
-		iChanges = 0, iStart = TIME_TO_TICKS(flTime1);
-		if (bStraight && ++iChanges > iMaxChanges)
+		tState.m_iChanges = 0, tState.m_iStart = TIME_TO_TICKS(flTime1);
+		if (bStraight && ++tState.m_iChanges > iMaxChanges)
 			return false;
 		return true;
 	}
 	else
 	{
-		if ((bChanged || bStraight) && ++iChanges > iMaxChanges)
+		if ((bChanged || bStraight) && ++tState.m_iChanges > iMaxChanges)
 			return false;
-		return iChanges && iStart - TIME_TO_TICKS(flTime2) > iMaxChangeTime ? false : true;
+		return tState.m_iChanges && tState.m_iStart - TIME_TO_TICKS(flTime2) > iMaxChangeTime ? false : true;
 	}
 }
 
@@ -427,6 +433,7 @@ void CMovementSimulation::GetAverageYaw(MoveStorage& tMoveStorage, int iSamples)
 	float flHighMinimumSamples = bGround ? Vars::Aimbot::Projectile::GroundHighMinimumSamples.Value : Vars::Aimbot::Projectile::AirHighMinimumSamples.Value;
 
 	float flAverageYaw = 0.f; int iTicks = 0, iSkips = 0;
+	MoveYawState tYawState = {};
 	iSamples = std::min(iSamples, int(vRecords.size()));
 	size_t i = 1; for (; i < iSamples; i++)
 	{
@@ -448,7 +455,7 @@ void CMovementSimulation::GetAverageYaw(MoveStorage& tMoveStorage, int iSamples)
 #endif
 
 		float flYaw = 0.f;
-		bool bResult = GetYawDifference(tRecord1, tRecord2, !iTicks, &flYaw, flStraightFuzzyValue, iMaxChanges, iMaxChangeTime, flMaxSpeed);
+		bool bResult = GetYawDifference(tRecord1, tRecord2, !iTicks, &flYaw, flStraightFuzzyValue, tYawState, iMaxChanges, iMaxChangeTime, flMaxSpeed);
 		if (Vars::Debug::Logging.Value)
 			SDK::Output("GetYawDifference", std::format("{} ({}): {}, {}", i, iTicks, flYaw, bResult).c_str(), { 50, 127, 75 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 		if (!bResult)
@@ -489,7 +496,7 @@ void CMovementSimulation::GetAverageYaw(MoveStorage& tMoveStorage, int iSamples)
 		iMinimum = flDistance < flLowMinimumDistance ? flLowMinimumSamples : Math::RemapVal(flDistance, flLowMinimumDistance, flHighMinimumDistance, flLowMinimumSamples + 1, flHighMinimumSamples);
 	}
 
-	flAverageYaw /= std::max(iTicks, iMinimum);
+	flAverageYaw /= std::max(iTicks, 1);
 	if (fabsf(flAverageYaw) < 0.36f)
 		return;
 
@@ -499,6 +506,8 @@ void CMovementSimulation::GetAverageYaw(MoveStorage& tMoveStorage, int iSamples)
 
 bool CMovementSimulation::StrafePrediction(MoveStorage& tMoveStorage, bool bStrafe, bool bHitchance)
 {
+	PROJ_ZONE(MoveStrafe);
+
 	if (bStrafe && Vars::Aimbot::Projectile::StrafePrediction.Value & (tMoveStorage.m_bDirectMove ? Vars::Aimbot::Projectile::StrafePredictionEnum::Ground : Vars::Aimbot::Projectile::StrafePredictionEnum::Air))
 	{
 		const int iStrafeSamples = tMoveStorage.m_bDirectMove
@@ -643,6 +652,9 @@ void CMovementSimulation::RestoreBounds(CTFPlayer* pPlayer)
 
 void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback* pCallback)
 {
+	PROJ_ZONE(MoveTick);
+	PROJ_COUNT(MoveTicks);
+
 	if (tMoveStorage.m_bFailed || !tMoveStorage.m_pPlayer || !tMoveStorage.m_pPlayer->IsPlayer())
 		return;
 
@@ -736,6 +748,8 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 
 void CMovementSimulation::Restore(MoveStorage& tMoveStorage)
 {
+	PROJ_ZONE(MoveRestore);
+
 	if (tMoveStorage.m_bInitFailed || !tMoveStorage.m_pPlayer)
 		return;
 
