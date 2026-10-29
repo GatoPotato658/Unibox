@@ -22,9 +22,14 @@ namespace
 			if (!pEntity)
 				return false;
 
-			const int nIndex = reinterpret_cast<CBaseEntity*>(pEntity)->entindex();
-			return nIndex > 0 && nIndex < I::ClientEntityList->GetMaxEntities()
-				&& reinterpret_cast<void*>(I::ClientEntityList->GetClientEntity(nIndex)) == pEntity;
+			if (!I::ClientEntityList)
+				return false;
+			// Client-created wearables have non-networked handles. Their entindex
+			// is not bounded by the server edict limit (and can be -1). Validate
+			// the full handle, including its serial, instead of rejecting them.
+			const auto& hEntity = reinterpret_cast<CBaseEntity*>(pEntity)->GetRefEHandle();
+			return hEntity.IsValid()
+				&& reinterpret_cast<void*>(I::ClientEntityList->GetClientEntityFromHandle(hEntity)) == pEntity;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{

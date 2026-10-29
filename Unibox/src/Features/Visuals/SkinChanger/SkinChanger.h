@@ -17,6 +17,15 @@ struct ItemInfo_t
 	std::string sName;
 	std::string sClass;
 	std::string sImage;
+	std::string sImageOverlay;
+	std::string sToolTargetImage;
+	float flToolIconX = 0.285f, flToolIconY = 0.43f, flToolIconScale = 0.35f;
+	std::string sExtraModel, sExtraModelVM;
+	std::vector<std::pair<int, std::string>> vStyles;
+	int iPaintColor = -1;
+	int iPaintColor2 = -1;
+	bool bPaintable = false;
+	bool bHat = false;
 };
 
 struct BackpackItem_t
@@ -24,6 +33,9 @@ struct BackpackItem_t
 	uint32_t uSerial = 0;
 	uint16_t iDef = 0;
 	int iUnusual = 0;
+	int iPaintColor = -1;
+	int iPaintColor2 = -1;
+	int iStyle = 0;
 };
 
 struct Skin_t
@@ -84,6 +96,7 @@ class CSkinChanger
 	std::unordered_map<uint64_t, int> m_mAppliedUnusual = {};
 	std::vector<void*> m_vGraveyard = {};
 	std::map<int, uint64_t> m_mLoadout = {};
+	std::map<int, uint64_t> m_mOriginalLoadout = {};
 	std::unordered_map<uint16_t, int> m_mInventoryCounts = {};
 	uint64_t m_uLastSync = 0;
 	struct PendingCrate_t
@@ -93,6 +106,7 @@ class CSkinChanger
 		uint64_t uTick = 0;
 	};
 	std::vector<PendingCrate_t> m_vPendingCrates = {};
+	std::vector<PendingCrate_t> m_vPendingPaints = {};
 	std::unordered_map<uint64_t, uint64_t> m_mAwaitingPosition = {};
 	HeldWeapon_t m_tHeld;
 
@@ -103,12 +117,16 @@ class CSkinChanger
 		int iClass = -1;
 		int iTeam = -1;
 		int iUnusual = -1;
+		int iPaintColor = -1;
+		int iPaintColor2 = -1;
+		int iStyle = -1;
 	};
 	struct LoadoutView_t
 	{
 		alignas(16) uint8_t aData[SIZE_OF_ITEMVIEW] = {};
 	};
 	std::array<Wearable_t, 19> m_aWearables = {};
+	std::array<CHandle<CEconWearable>, 8> m_aHiddenWearables = {};
 	std::array<LoadoutView_t, 19> m_aWearableViews = {};
 	uint64_t m_aWearableViewKey[19] = {};
 	bool m_aWearableViewBuilt[19] = {};
@@ -133,10 +151,15 @@ class CSkinChanger
 	int GetItemUnusual(uint64_t uItemID);
 	void ProcessCrates(CTFPlayerInventory* pInventory);
 	bool OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_t& tCrate);
+	bool ApplyLocalPaint(CTFPlayerInventory* pInventory, const PendingCrate_t& tPaint);
 	void UpdateWearables(CTFPlayer* pLocal);
+	void UpdateWeaponVisuals(CTFPlayer* pLocal);
+	void RestoreWeaponVisuals();
 	void ResetWearables(CTFPlayer* pLocal);
+	void RestoreHiddenWearables();
+	void HideReplacedWearables(CTFPlayer* pLocal, int iClass);
 	void RemoveWearable(CTFPlayer* pLocal, Wearable_t& tWearable);
-	CEconItemView* GetWearableView(int iClass, int iSlot, int iTeam, int iDef, int iUnusual);
+	CEconItemView* GetWearableView(int iClass, int iSlot, int iTeam, int iDef, int iUnusual, int iPaintColor, int iPaintColor2, int iStyle);
 	CEconWearable* CreateWearable(CTFPlayer* pLocal, CEconItemView* pView, int iClass, int iTeam);
 	bool AppendWearable(CTFPlayer* pLocal, CEconWearable* pWearable);
 
@@ -152,6 +175,8 @@ public:
 	bool IsClientItem(uint64_t uItemID);
 	void* GetClientSOCData(uint64_t uItemID);
 	bool OnSendMessage(void* pMessage);
+	uint64_t FindOwnedWeapon(uint64_t uClientItemID);
+	bool IsReplacedWearableItem(uint64_t uItemID);
 	void ApplyLocalLoadout(uint64_t uItemID, int iClass, int iSlot);
 	std::map<int, uint64_t> GetLoadout();
 	void SetLoadout(std::map<int, uint64_t> mLoadout);
@@ -168,7 +193,9 @@ public:
 	void RequestFullUpdate();
 
 	bool InBackpack(uint16_t iDef);
-	void AddToBackpack(uint16_t iDef, int iUnusual = 0);
+	void AddToBackpack(uint16_t iDef, int iUnusual = 0, int iStyle = 0);
+	void SetBackpackStyle(uint32_t uSerial, int iStyle);
+	bool QueueLocalCrate(uint16_t iDef);
 	void RemoveFromBackpack(uint16_t iDef);
 	void ClearBackpack();
 	std::vector<BackpackItem_t> GetBackpack();
@@ -191,3 +218,8 @@ public:
 };
 
 ADD_FEATURE(CSkinChanger, SkinChanger);
+
+// Uses the vanilla equip implementation with a real, owned item ID only.
+void EquipOwnedInventoryWeapon(CTFPlayerInventory* pInventory, uint64_t uItemID, int iClass, int iSlot);
+void RefreshInventoryHudModel();
+void ResetInventoryHudModel();
