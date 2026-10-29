@@ -285,7 +285,6 @@ void CProjProfiler::End()
 	auto& tFrame = *m_pFrame;
 	tFrame.m_iEnd = Now();
 	tFrame.m_bPhysics = F::ProjSim.m_bPhysics;
-	tFrame.m_bFastPhysics = F::ProjSim.m_bFastPhysics;
 	tFrame.m_bSpecial = F::ProjSim.m_pSpecial != nullptr;
 	m_pFrame = nullptr;
 	m_pScope = nullptr;
@@ -412,7 +411,7 @@ void CProjProfiler::Dump(const char* sReason, float flFrameTime, int iWindowFram
 		const double flDur = ToMs(pFrame->m_iEnd - pFrame->m_iStart);
 		sOut += std::format("\n--- {} | frame={} tick={} | dur={:.3f}ms | frametime when it began={:.1f}ms | weapon={}({}) physics={} fastphysics={} special={}{}\n",
 			pFrame->m_sName, pFrame->m_iFrameCount, pFrame->m_iTick, flDur, pFrame->m_flFrameTime * 1000.f, WeaponName(pFrame->m_iWeaponID), pFrame->m_iWeaponID,
-			pFrame->m_bPhysics, pFrame->m_bFastPhysics, pFrame->m_bSpecial, pFrame->m_iFrameCount == iWindowFrame ? "" : " | NOT in the lag window, heaviest recent entry");
+			pFrame->m_bPhysics, pFrame->m_bSpecial, pFrame->m_iFrameCount == iWindowFrame ? "" : " | NOT in the lag window, heaviest recent entry");
 		AppendZoneTable(sOut, pFrame->m_aZones);
 		sOut += std::format("    counters: {}\n", FormatCounters(pFrame->m_aCounters));
 		if (SumSelf(pFrame->m_aPre))

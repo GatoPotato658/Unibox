@@ -26,7 +26,6 @@ struct Info_t
 	Vec3 m_vLocalEye = {};
 	Vec3 m_vTargetEye = {};
 
-	int m_iLatency = 0;
 	float m_flLatency = 0.f;
 	Vec3 m_vHull = {};
 	Vec3 m_vOffset = {};

@@ -51,7 +51,6 @@ struct ProjFrame_t
 	int64_t m_iStart = 0;
 	int64_t m_iEnd = 0;
 	bool m_bPhysics = false;
-	bool m_bFastPhysics = false;
 	bool m_bSpecial = false;
 
 	ProjZones_t m_aZones = {};
@@ -64,7 +63,7 @@ struct ProjFrame_t
 	{
 		m_sName = "", m_iFrameCount = 0, m_iTick = 0, m_iWeaponID = -1, m_flFrameTime = 0.f;
 		m_iStart = m_iEnd = 0;
-		m_bPhysics = m_bFastPhysics = m_bSpecial = false;
+		m_bPhysics = m_bSpecial = false;
 		m_aZones = {}, m_aPre = {}, m_aCounters = {};
 		m_vTargets.clear();
 		m_iTargetsDropped = 0;

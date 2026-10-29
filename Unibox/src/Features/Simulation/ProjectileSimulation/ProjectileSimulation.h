@@ -34,22 +34,6 @@ struct ProjectileInfo
 	uint8_t m_iFlags = 0;
 
 	Vec3 m_vVelocityAdd = {};
-
-	void Reset()
-	{
-		m_pOwner = nullptr;
-		m_pWeapon = nullptr;
-		m_uType = 0;
-		m_vPos = {};
-		m_vAng = {};
-		m_vHull = {};
-		m_flVelocity = 0.f;
-		m_flGravity = 0.f;
-		m_flLifetime = 60.f;
-		m_iFlags = 0;
-		m_vVelocityAdd = {};
-		m_vPath.clear();
-	}
 };
 
 Enum(ProjSpecial, None, SniperSpit, SpyEmp, PyroSpew, HeavyRock)
@@ -76,32 +60,10 @@ struct PhysicsObject_t
 	Vec3 m_vVelocity = {};
 };
 
-struct FastPhysics_t
-{
-	Vec3 m_vOrigin = {};
-	Vec3 m_vVelocity = {};
-	Vec3 m_vAngularVelocity = {};
-	Vec3 m_vAxisX = {};
-	Vec3 m_vAxisY = {};
-	Vec3 m_vAxisZ = {};
-	Vec3 m_vDragBasis = {};
-	Vec3 m_vAngularDragBasis = {};
-	float m_flDrag = 0.f;
-	float m_flMaxVelocity = 0.f;
-	float m_flGravity = 0.f;
-	float m_flStep = 0.f;
-	double m_flTime = 0.0;
-	double m_flNextStep = 0.0;
-	double m_flClock = 0.0;
-};
-
 class CProjectileSimulation
 {
 private:
 	bool GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, Vec3 vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge);
-	void RunFastTick();
-	void FastAdvance(double flDelta);
-	void FastUpdate();
 
 	const objectparams_t m_tPhysDefaultObjectParams = {
 		NULL,
@@ -278,12 +240,6 @@ public:
 	const SpecialProjectile_t* m_pSpecial = nullptr;
 
 	IPhysicsEnvironment* m_pEnv = nullptr;
-	float m_flEnvStep = 0.f;
-	float m_flEnvMaxVelocity = 0.f;
-	float m_flEnvMaxAngularVelocity = 0.f;
-	float m_flEnvGravity = 0.f;
-	bool m_bEnvParamsValid = false;
-	bool m_bEnvWarmed = false;
 
 	IPhysicsObject* m_pObj = nullptr;
 	IPhysicsObject* m_pObjBox = nullptr;
@@ -292,9 +248,7 @@ public:
 	float m_aSpecialDrag[ProjSpecialEnum::HeavyRock + 1] = {};
 	const CPhysCollide* m_aSpecialDragFor[ProjSpecialEnum::HeavyRock + 1] = {};
 	PhysicsObject_t m_tObj = {};
-	FastPhysics_t m_tFast = {};
 	bool m_bPhysics = false;
-	bool m_bFastPhysics = false;
 
 	ProjectileInfo* m_pCurrent = nullptr;
 };
