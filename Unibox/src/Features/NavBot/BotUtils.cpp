@@ -1491,10 +1491,13 @@ namespace NavRuntime
 		if (pLocal->m_fFlags() & FL_FROZEN)
 			return true;
 
+		if (pLocal->InCond(TF_COND_FREEZE_INPUT))
+			return true;
+
 		if (F::ZIController.IsSpawning(pLocal))
 			return true;
 
-		if (pLocal->InCond(TF_COND_STUNNED) && (pLocal->m_iStunFlags() & (TF_STUN_CONTROLS | TF_STUN_LOSER_STATE)))
+		if (pLocal->InCond(TF_COND_STUNNED) && (pLocal->m_iStunFlags() & TF_STUN_CONTROLS))
 			return true;
 
 		if (pLocal->IsTaunting() && !pLocal->m_bAllowMoveDuringTaunt())
@@ -1510,12 +1513,7 @@ namespace NavRuntime
 		if (pGameRules->m_bPlayingMannVsMachine())
 			return false;
 
-		if (pGameRules->m_bInWaitingForPlayers())
-			return true;
-
 		const int iRoundState = pGameRules->m_iRoundState();
-		if (iRoundState == GR_STATE_BETWEEN_RNDS)
-			return true;
 		if (iRoundState == GR_STATE_PREROUND && !Vars::Misc::Movement::NavEngine::PathInSetup.Value)
 			return true;
 

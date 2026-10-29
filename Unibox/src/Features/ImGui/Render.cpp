@@ -61,6 +61,8 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	const bool bDrawGame = !bAntiObs || bUnsupported;
 	const bool bTransient = bAntiObs && !bPrivate && !bUnsupported;
 
+	F::Menu.m_bInputReady = !bAntiObs || bPrivate || bUnsupported;
+
 	F::Menu.Render();
 
 	if (I::EngineClient->IsInGame() && !bTransient && (bPrivate || bDrawGame && !SDK::TakingScreenshot()))
@@ -89,7 +91,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui::EndFrame();
 	ImGui::Render();
 
-	if (bAntiObs)
+	if (bPrivate)
 		F::CaptureOverlay.Present(pDevice, ImGui::GetDrawData());
 	else if (bDrawGame)
 		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());

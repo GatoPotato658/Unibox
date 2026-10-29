@@ -1184,6 +1184,7 @@ static void MiscBots()
 			FToggle(NavEngine::VischeckEnabled);
 			FSlider(NavEngine::VischeckTime);
 			FSlider(NavEngine::VischeckCacheTime);
+			FToggle(NavEngine::HullCheck);
 		}
 		PopTransparent();
 	} EndSection();
@@ -1242,7 +1243,6 @@ static void MiscBots()
 				FSlider(Vars::Misc::Movement::NavBot::StickyDangerRange);
 				FSlider(Vars::Misc::Movement::NavBot::ProjectileDangerRange);
 				FToggle(Vars::Misc::Movement::NavEngine::OffPathRepath);
-				FToggle(Vars::Misc::Movement::NavEngine::HullCheck);
 
 				EndPopup();
 			}

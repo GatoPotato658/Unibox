@@ -134,6 +134,10 @@ private:
 	Timer m_tVischeck = {};
 	Timer m_tBlacklistCheck = {};
 	Timer m_tRestartTimer = {};
+	Timer m_tNavRetry = {};
+	std::string m_sNavLevel = "";
+	std::string m_sNavInstallPath = "";
+	bool m_bNavLoadAttempted = false;
 	bool m_bWasEnabled = false;
 
 	std::array<Vector, 2> m_aPayloadPos = {};
@@ -213,6 +217,7 @@ public:
 	bool IsUnstucking() const { return m_bUnstucking; }
 	bool IsNavMeshLoaded() const { return m_pMap && m_pMap->m_eState == NavStateEnum::Active; }
 	std::string GetNavFilePath() const { return m_pMap ? m_pMap->m_sMapName : ""; }
+	std::string GetNavInstallPath();
 	bool HasRespawnRooms() const { return !m_vRespawnRooms.empty(); }
 
 	void ClearRespawnRooms() { m_vRespawnRooms.clear(); m_vRespawnRoomExitAreas.clear(); m_bUpdatedRespawnRooms = false; }
@@ -231,6 +236,7 @@ public:
 	const std::vector<PathHullSegment_t>& GetHullDebug() const { return m_vHullDebug; }
 
 	bool IsReady();
+	bool EnsureMapLoaded(bool bForced = false);
 	void CancelPath();
 
 	bool NavTo(const Vector& vDestination, PriorityListEnum::PriorityListEnum ePriority = PriorityListEnum::Forced, bool bShouldRepath = true, bool bIgnoreTraces = false);

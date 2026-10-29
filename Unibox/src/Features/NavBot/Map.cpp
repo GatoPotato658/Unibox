@@ -1097,7 +1097,7 @@ bool CNavFile::Load(const char* szLevelname)
 		return false;
 
 	uint32_t uSubVersion = 0;
-	if (!Read(uSubVersion) || uSubVersion != 2)
+	if (!Read(uSubVersion) || uSubVersion > 2)
 		return false;
 
 	uint32_t uBspSize = 0;
@@ -1245,7 +1245,11 @@ bool CNavFile::Load(const char* szLevelname)
 			tArea.m_vPotentiallyVisibleAreas.push_back(tInfo);
 		}
 
-		if (!Read(tArea.m_uInheritVisibilityFrom) || !Read(tArea.m_iTFAttributeFlags))
+		if (!Read(tArea.m_uInheritVisibilityFrom))
+			return false;
+		if (uSubVersion < 2)
+			tArea.m_iTFAttributeFlags = 0;
+		else if (!Read(tArea.m_iTFAttributeFlags))
 			return false;
 
 		vAreas.push_back(std::move(tArea));

@@ -868,7 +868,7 @@ NAMESPACE_BEGIN(Vars)
 				CVar(StuckExpireTime, "Stuck expire time", 20, SLIDER_MIN, 1, 300, 1, "%is");
 				CVar(StuckTime, "Stuck time", 0.2f, SLIDER_MIN, 0.1f, 0.9f, 0.05f, "%gs");
 				CVar(OffPathRepath, "Off-path repath", false, NOSAVE | DEBUGVAR);
-				CVar(HullCheck, "Path hull check", false, NOSAVE | DEBUGVAR);
+				CVar(HullCheck, "Path hull check", true);
 
 				CVar(VischeckEnabled, "Vischeck enabled", true);
 				CVar(VischeckTime, "Vischeck time", 2.f, SLIDER_MIN, 0.5f, 3.f, 0.5f, "%gs");

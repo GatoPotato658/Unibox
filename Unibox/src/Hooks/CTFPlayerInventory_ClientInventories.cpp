@@ -30,11 +30,22 @@ MAKE_HOOK(CInventoryManager_UpdateInventoryEquippedState, S::CInventoryManager_U
 
 	if (F::SkinChanger.ClientInventoryActive())
 	{
+		if (!F::SkinChanger.IsClientItem(uItemID) && iSlot <= 2)
+			CALL_ORIGINAL(rcx, pInventory, uItemID, iClass, iSlot);
 		F::SkinChanger.ApplyLocalLoadout(uItemID, iClass, iSlot);
 		return;
 	}
 
 	CALL_ORIGINAL(rcx, pInventory, uItemID, iClass, iSlot);
+}
+
+void EquipOwnedInventoryWeapon(CTFPlayerInventory* pInventory, uint64_t uItemID, int iClass, int iSlot)
+{
+	if (!pInventory || !uItemID || F::SkinChanger.IsClientItem(uItemID))
+		return;
+	using namespace Hooks::CInventoryManager_UpdateInventoryEquippedState;
+	if (Hook.m_pOriginal)
+		Hook.As<FN>()(I::TFInventoryManager(), pInventory, uItemID, uint16_t(iClass), uint16_t(iSlot));
 }
 
 MAKE_HOOK(CInventoryManager_UpdateInventoryPosition, S::CInventoryManager_UpdateInventoryPosition(), void,

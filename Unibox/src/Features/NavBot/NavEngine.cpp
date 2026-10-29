@@ -144,8 +144,7 @@ bool CNavEngine::IsSetupTime()
 	}
 
 	const bool bSetupState = pGameRules->m_bInSetup()
-		|| pGameRules->m_iRoundState() == GR_STATE_PREROUND
-		|| pGameRules->m_bInWaitingForPlayers();
+		|| pGameRules->m_iRoundState() == GR_STATE_PREROUND;
 	if (!bSetupState)
 	{
 		m_bSetupTime = false;
@@ -1023,27 +1022,8 @@ void CNavEngine::Reset(bool bForced)
 	if (m_pPathWorker) m_pPathWorker->CancelAll();
 	NavPolicy::Reset();
 
-	if (std::string sLevelName = I::EngineClient->GetLevelName(); !sLevelName.empty())
-	{
-		if (m_pMap) m_pMap->Reset();
-
-		std::filesystem::path tNavPath = std::filesystem::current_path() / "tf" / sLevelName;
-		tNavPath.replace_extension(".nav");
-		const std::string sNavPath = tNavPath.string();
-		if (bForced || !m_pMap || m_pMap->m_sMapName != sNavPath || m_pMap->m_eState != NavStateEnum::Active)
-		{
-			if (m_pPathWorker) m_pPathWorker->Stop();
-			F::NavBotDanger.ResetSpawn();
-			F::Hazards.Reset();
-			if (Vars::Debug::Logging.Value)
-				SDK::Output("NavEngine", std::format("Nav File location: {}", sNavPath).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
-			m_pMap = std::make_unique<CMap>(sNavPath.c_str());
-			m_vRespawnRoomExitAreas.clear();
-			m_bUpdatedRespawnRooms = false;
-			if (m_pPathWorker && m_pMap->m_eState == NavStateEnum::Active)
-				m_pPathWorker->Start(m_pMap.get());
-		}
-	}
+	if (m_pMap) m_pMap->Reset();
+	EnsureMapLoaded(bForced);
 
 	m_bMapHasBlueSetupGate = false;
 	m_bMapHasRedSetupGate = false;
@@ -1061,6 +1041,100 @@ void CNavEngine::Reset(bool bForced)
 	}
 }
 
+bool CNavEngine::EnsureMapLoaded(bool bForced)
+{
+	const char* szLevelName = I::EngineClient ? I::EngineClient->GetLevelName() : nullptr;
+	const std::string_view sLevelName = szLevelName ? szLevelName : "";
+	if (sLevelName.empty())
+		return false;
+
+	const bool bLevelChanged = sLevelName != m_sNavLevel;
+	if (!bLevelChanged)
+	{
+		if (m_pMap && m_pMap->m_eState == NavStateEnum::Active)
+			return true;
+		if (!bForced && m_bNavLoadAttempted && !m_tNavRetry.Check(1.f))
+			return false;
+	}
+
+	m_sNavLevel = sLevelName;
+
+	std::filesystem::path tLevelPath(sLevelName);
+	std::string sMapName = tLevelPath.filename().replace_extension().string();
+	if (sMapName.empty())
+		return false;
+
+	const std::filesystem::path tWorkingDirectory = std::filesystem::current_path();
+	std::filesystem::path tGameDirectory = I::EngineClient->GetGameDirectory() ? I::EngineClient->GetGameDirectory() : "";
+	if (tGameDirectory.is_relative())
+		tGameDirectory = tWorkingDirectory / tGameDirectory;
+
+	const std::filesystem::path tInstallPath = (tGameDirectory / "maps" / (sMapName + ".nav")).lexically_normal();
+	m_sNavInstallPath = tInstallPath.string();
+
+	std::vector<std::filesystem::path> vCandidates = {
+		tInstallPath,
+		tWorkingDirectory / "tf" / "maps" / (sMapName + ".nav"),
+		tWorkingDirectory / "maps" / (sMapName + ".nav"),
+		tWorkingDirectory / "tf" / sLevelName,
+		tWorkingDirectory / "tf" / (sMapName + ".nav"),
+		tWorkingDirectory / "unibox" / "Nav" / (sMapName + ".nav")
+	};
+
+	std::error_code tError;
+	std::filesystem::path tNavPath = tInstallPath;
+	for (auto& tCandidate : vCandidates)
+	{
+		tCandidate.replace_extension(".nav");
+		if (!tCandidate.has_extension() || !std::filesystem::exists(tCandidate, tError))
+			continue;
+		tNavPath = tCandidate;
+		break;
+	}
+
+	const std::string sNavPath = tNavPath.lexically_normal().string();
+	if (!bForced && m_pMap && m_pMap->m_sMapName == sNavPath)
+	{
+		m_sNavLevel = sLevelName;
+		m_bNavLoadAttempted = true;
+		return m_pMap->m_eState == NavStateEnum::Active;
+	}
+
+	if (m_pPathWorker) m_pPathWorker->Stop();
+	if (m_pMap && m_pMap->m_eState == NavStateEnum::Active)
+	{
+		F::NavBotDanger.ResetSpawn();
+		F::Hazards.Reset();
+	}
+	if (Vars::Debug::Logging.Value)
+		SDK::Output("NavEngine", std::format("Nav File location: {}", sNavPath).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
+	m_pMap = std::make_unique<CMap>(sNavPath.c_str());
+	m_vRespawnRoomExitAreas.clear();
+	m_bUpdatedRespawnRooms = false;
+	if (m_pPathWorker && m_pMap->m_eState == NavStateEnum::Active)
+		m_pPathWorker->Start(m_pMap.get());
+
+	m_sNavLevel = sLevelName;
+	m_bNavLoadAttempted = true;
+	m_tNavRetry.Update();
+	return m_pMap->m_eState == NavStateEnum::Active;
+}
+
+std::string CNavEngine::GetNavInstallPath()
+{
+	if (m_sNavInstallPath.empty())
+	{
+		const char* szLevelName = I::EngineClient ? I::EngineClient->GetLevelName() : nullptr;
+		std::filesystem::path tMapName = std::filesystem::path(szLevelName ? szLevelName : "").filename();
+		std::filesystem::path tGameDirectory = I::EngineClient && I::EngineClient->GetGameDirectory() ? I::EngineClient->GetGameDirectory() : "tf";
+		if (tGameDirectory.is_relative())
+			tGameDirectory = std::filesystem::current_path() / tGameDirectory;
+		tMapName.replace_extension(".nav");
+		m_sNavInstallPath = (tGameDirectory / "maps" / tMapName).lexically_normal().string();
+	}
+	return m_sNavInstallPath;
+}
+
 void CNavEngine::Shutdown()
 {
 	if (m_pPathWorker) m_pPathWorker->Stop();
@@ -1071,8 +1145,7 @@ bool CNavEngine::IsReady()
 	if (!Vars::Misc::Movement::NavEngine::Enabled.Value) { m_tRestartTimer.Update(); return false; }
 	if (!m_tRestartTimer.Check(0.5f))                       return false;
 	if (!I::EngineClient->IsInGame())                     return false;
-	if (!m_pMap || m_pMap->m_eState != NavStateEnum::Active) return false;
-	return true;
+	return m_pMap && m_pMap->m_eState == NavStateEnum::Active;
 }
 
 void CNavEngine::ClearPathState()
@@ -1865,6 +1938,8 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		return;
 	}
 
+	EnsureMapLoaded();
+
 	if (NavRuntime::IsMovementLocked(pLocal))
 	{
 		CancelPath();
@@ -1937,6 +2012,16 @@ StuckPhase CNavEngine::TickStuckSample(const Vector& vLocalOrigin, const Vector&
 	auto pLocal = H::Entities.GetLocal();
 	if (!pLocal)
 		return StuckPhase::Idle;
+
+	if (pLocal->m_flMaxspeed() <= 1.f)
+	{
+		m_vLastStuckSamplePos = vLocalOrigin;
+		m_flLastDistToCrumb = (vCrumbTarget - vLocalOrigin).Length();
+		m_iStuckJumps = 0;
+		m_tStuckSampleTimer.Update();
+		m_tLastProgressTimer.Update();
+		return StuckPhase::Idle;
+	}
 
 	if (!pLocal->OnSolid())
 	{
@@ -2354,6 +2439,12 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 
 	if (m_tCurrentCrumb.m_bRequiresLadder)
 	{
+		if (pLocal->m_flMaxspeed() <= 1.f)
+		{
+			m_flLadderLastZ = vLocalOrigin.z;
+			m_tLadderProgressTimer.Update();
+		}
+
 		if (std::fabs(vLocalOrigin.z - m_flLadderLastZ) > 8.f)
 		{
 			m_flLadderLastZ = vLocalOrigin.z;

@@ -496,7 +496,48 @@ static std::wstring BuildJobLabel()
 
 void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 {
-	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) || !pLocal || !pLocal->IsAlive())
+	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot))
+	{
+		m_tDrawCache.Set({});
+		return;
+	}
+
+	if (Vars::Misc::Movement::NavBot::Enabled.Value && !Vars::Misc::Movement::NavEngine::Enabled.Value && I::EngineClient->IsInGame())
+	{
+		std::vector<NavIndicatorLine_t> vDisabled = {};
+		vDisabled.push_back({ "NAV ENGINE DISABLED", Vars::Menu::Theme::Active.Value });
+		m_tDrawCache.Set(std::move(vDisabled));
+		return;
+	}
+
+	const char* szLevelName = I::EngineClient->GetLevelName();
+	if (Vars::Misc::Movement::NavEngine::Enabled.Value && I::EngineClient->IsInGame() && szLevelName && *szLevelName
+		&& !F::NavEngine.IsNavMeshLoaded() && !F::FollowBot.m_bActive)
+	{
+		std::vector<NavIndicatorLine_t> vMissing = {};
+		vMissing.push_back({ "INSTALL/GENERATE A NAVMESH FOR THIS", Vars::Menu::Theme::Active.Value });
+		vMissing.push_back({ "MAP, INTO PATH:", Vars::Menu::Theme::Active.Value });
+
+		const std::string sPath = F::NavEngine.GetNavInstallPath();
+		if (sPath.empty())
+			vMissing.push_back({ "tf/maps/<map>.nav", Vars::Menu::Theme::Active.Value });
+		else
+		{
+			const size_t uSlash = sPath.find_last_of("/\\");
+			if (uSlash == std::string::npos)
+				vMissing.push_back({ sPath, Vars::Menu::Theme::Active.Value });
+			else
+			{
+				vMissing.push_back({ sPath.substr(0, uSlash + 1), Vars::Menu::Theme::Active.Value });
+				vMissing.push_back({ sPath.substr(uSlash + 1), Vars::Menu::Theme::Active.Value });
+			}
+		}
+
+		m_tDrawCache.Set(std::move(vMissing));
+		return;
+	}
+
+	if (!pLocal || !pLocal->IsAlive())
 	{
 		m_tDrawCache.Set({});
 		return;
