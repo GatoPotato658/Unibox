@@ -116,7 +116,7 @@ static bool IsIdleNudgeAllowed()
 		return true;
 
 	const int iRoundState = pGameRules->m_iRoundState();
-	return (iRoundState == GR_STATE_RND_RUNNING || iRoundState == GR_STATE_STALEMATE) && !pGameRules->m_bInWaitingForPlayers();
+	return iRoundState == GR_STATE_RND_RUNNING || iRoundState == GR_STATE_STALEMATE;
 }
 
 void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
