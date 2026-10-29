@@ -219,7 +219,6 @@ public:
 
 ADD_FEATURE(CSkinChanger, SkinChanger);
 
-// Uses the vanilla equip implementation with a real, owned item ID only.
 void EquipOwnedInventoryWeapon(CTFPlayerInventory* pInventory, uint64_t uItemID, int iClass, int iSlot);
 void RefreshInventoryHudModel();
 void ResetInventoryHudModel();

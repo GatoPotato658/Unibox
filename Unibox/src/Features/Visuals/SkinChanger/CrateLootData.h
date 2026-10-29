@@ -4,8 +4,6 @@
 
 namespace CrateLootData
 {
-// Retired client-hidden lists, verified against the historical crate contents.
-// https://www.trade.tf/crates (content membership only; not official GC odds).
 	inline constexpr uint16_t kSeries6[] = { 339, 316, 315, 337, 338, 342, 319, 324, 341, 314, 340, 322, 330, 321, 323, 313, 329, 317, 331, 326, 327 };
 	inline constexpr uint16_t kSeries22[] = { 483, 479, 485, 478, 480, 484, 481, 482, 457 };
 	inline constexpr uint16_t kSeries35[] = { 658, 669, 663, 664, 654, 662, 665, 661, 659, 660 };

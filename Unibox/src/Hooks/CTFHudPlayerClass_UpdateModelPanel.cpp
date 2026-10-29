@@ -34,8 +34,6 @@ MAKE_HOOK(CTFPlayerModelPanel_AddCarriedItem, S::CTFPlayerModelPanel_AddCarriedI
 	void* rcx, CEconItemView* pItem)
 {
 	DEBUG_RETURN(CTFPlayerModelPanel_AddCarriedItem, rcx, pItem);
-	// The HUD enumerates every wearable, including EF_NODRAW entities. Filter
-	// only its original, replaced items; other model panels retain vanilla behavior.
 	if (s_bBuildingHudClassModel && pItem && F::SkinChanger.IsReplacedWearableItem(pItem->UUID()))
 		return -1;
 	return CALL_ORIGINAL(rcx, pItem);

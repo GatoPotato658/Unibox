@@ -144,36 +144,27 @@ namespace
 	{
 		switch (iDef)
 		{
-		case 160: case 294: return 209; // Lugermorph -> Pistol
-		case 161: return 210; // Big Kill -> Revolver
-		case 169: return 197; // Golden Wrench -> Wrench
-		case 298: return 202; // Iron Curtain -> Minigun
-		case 452: return 190; // Three-Rune Blade -> Bat
-		case 466: return 192; // Maul -> Fire Axe
-		case 513: return 205; // Original -> Rocket Launcher
-		case 638: case 727: return 194; // Sharp Dresser / Black Rose -> Knife
-		case 851: return 201; // AWPer Hand -> Sniper Rifle
-		case 30666: return 209; // C.A.P.P.E.R -> Pistol (also before the catalogue loads)
+		case 160: case 294: return 209;
+		case 161: return 210;
+		case 169: return 197;
+		case 298: return 202;
+		case 452: return 190;
+		case 466: return 192;
+		case 513: return 205;
+		case 638: case 727: return 194;
+		case 851: return 201;
+		case 30666: return 209;
 		}
 		if (const auto* pBase = FindPaintBase(iDef))
 			return RedirectIndex(pBase->iBaseDef);
 		return RedirectIndex(iDef);
 	}
 
-	int WeaponType(int iDef)
-	{
-		if (iDef >= 0 && iDef < int(s_aSchemaWeaponTypes.size()) && s_aSchemaWeaponTypes[iDef])
-			return s_aSchemaWeaponTypes[iDef];
-		return StaticWeaponType(iDef);
-	}
-
-	void BuildWeaponTypeCache(const std::unordered_map<std::string, uint16_t>& mNames, const std::vector<std::pair<uint16_t, std::string>>& vBases)
+	bool BuildWeaponTypes(const std::unordered_map<std::string, uint16_t>& mNames, const std::vector<std::pair<uint16_t, std::string>>& vBases)
 	{
 		s_aSchemaWeaponTypes.fill(0);
 		for (const auto& [sName, iDef] : mNames)
 			s_aSchemaWeaponTypes[iDef] = uint16_t(StaticWeaponType(iDef));
-		// Resolve explicit schema relationships, not just a shared entity class:
-		// e.g. Shooting Star inherits Machina, while C.A.P.P.E.R inherits Pistol.
 		for (int iPass = 0; iPass < 8; iPass++)
 		{
 			bool bChanged = false;
@@ -192,11 +183,18 @@ namespace
 			if (!bChanged)
 				break;
 		}
+		return std::any_of(s_aSchemaWeaponTypes.begin(), s_aSchemaWeaponTypes.end(), [](uint16_t iType) { return iType != 0; });
+	}
+
+	int WeaponType(int iDef)
+	{
+		if (iDef >= 0 && iDef < int(s_aSchemaWeaponTypes.size()) && s_aSchemaWeaponTypes[iDef])
+			return s_aSchemaWeaponTypes[iDef];
+		return StaticWeaponType(iDef);
 	}
 
 	int StockWeaponForSlot(int iClass, int iSlot)
 	{
-		// TF2 class IDs; columns are primary, secondary, melee.
 		static constexpr int aStock[10][3] = {
 			{ -1, -1, -1 }, { 13, 23, 0 }, { 14, 16, 3 }, { 18, 10, 6 },
 			{ 19, 20, 1 }, { 17, 29, 8 }, { 15, 11, 5 }, { 21, 12, 2 },
@@ -308,10 +306,8 @@ namespace
 
 	std::unordered_map<int, void*> s_mAttrDefs;
 
-	void* ResolveAttrDef(int iIndex)
+	void* ResolveUncachedAttrDef(int iIndex)
 	{
-		if (const auto it = s_mAttrDefs.find(iIndex); it != s_mAttrDefs.end())
-			return it->second;
 		void* pDef = nullptr;
 		__try
 		{
@@ -322,6 +318,14 @@ namespace
 		{
 			pDef = nullptr;
 		}
+		return pDef;
+	}
+
+	void* ResolveAttrDef(int iIndex)
+	{
+		if (const auto it = s_mAttrDefs.find(iIndex); it != s_mAttrDefs.end())
+			return it->second;
+		void* pDef = ResolveUncachedAttrDef(iIndex);
 		if (pDef)
 			s_mAttrDefs[iIndex] = pDef;
 		return pDef;
@@ -359,14 +363,13 @@ namespace
 
 		void RemoveAttribute(uint16_t iIndex)
 		{
-			// CAttributeList::m_Attributes, CUtlVector<CEconItemAttribute> on TF2 x64.
 			auto* pData = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(this) + 8);
 			auto& iCount = *reinterpret_cast<int*>(reinterpret_cast<uint8_t*>(this) + 24);
 			for (int i = 0; pData && i < iCount; i++)
 			{
 				if (*reinterpret_cast<uint16_t*>(pData + size_t(i) * 24 + 8) != iIndex)
 					continue;
-				memmove(pData + size_t(i) * 24, pData + size_t(i + 1) * 24, size_t(iCount - i - 1) * 24);
+				std::memmove(pData + size_t(i) * 24, pData + size_t(i + 1) * 24, size_t(iCount - i - 1) * 24);
 				iCount--;
 				return;
 			}
@@ -704,8 +707,6 @@ void CSkinChanger::RunFrame()
 		mTracked[iHandle] = { pWeapon, iOriginal, iTarget };
 	}
 	m_mTracked = std::move(mTracked);
-	// Attribute queries can reach GetClientSOCData, which takes m_tMutex.
-	// Refresh the native particle cache after releasing it.
 	tLock.unlock();
 	for (size_t i = 0; i < uRefreshCount; i++)
 		S::CEconEntity_InitializeAttributes.Call<void>(aRefreshParticles[i]);
@@ -754,8 +755,8 @@ void CSkinChanger::Service()
 	}
 
 	SyncInventory();
-	UpdateWeaponVisuals(bInGame ? H::Entities.GetLocal() : nullptr);
 	RunFrame();
+	UpdateWeaponVisuals(bInGame ? H::Entities.GetLocal() : nullptr);
 	UpdateWearables(bInGame ? H::Entities.GetLocal() : nullptr);
 }
 
@@ -979,8 +980,6 @@ namespace
 		else
 			pList->RemoveAttribute(kAttrItemTint2);
 
-		// CEconItemView x64: invalidate cached primary/alternate RGB and paint
-		// override values. These are the same fields reset by operator=.
 		Field<uint16_t>(pView, 0xA0) = 0;
 		auto*& pDescription = Field<void*>(pView, 0xD8);
 		if (pDescription)
@@ -1005,6 +1004,7 @@ namespace
 	constexpr int kEconEntityClientside = 0xE21;
 	constexpr int kMaxWearables = 8;
 	constexpr int kRenderGroupOpaqueEntity = 2;
+	constexpr int kRenderGroupViewModelOpaque = 10;
 	constexpr float kClientThinkAlways = -1293.f;
 	constexpr size_t kTFWearableSize = 0xEE0;
 
@@ -1122,9 +1122,6 @@ namespace
 		}
 	}
 
-	// Valve's CCrateLootListWrapper resolves instance attributes before static
-	// attributes, then tries a named loot list and per-item line drops.
-	// CEconItemView's IEconItemInterface subobject is at +0x18 on TF2 x64.
 	struct CrateLootList_t
 	{
 		void* pList = nullptr;
@@ -1213,8 +1210,6 @@ namespace
 						Visit(pList, vItems, uDepth + 1);
 					continue;
 				}
-				// Only collection structure is traversed generically. Jobs, bonus
-				// drops and metadata are not guaranteed primary rewards.
 				if (!strcmp(sName, "items") || !strcmp(sName, "common") || !strcmp(sName, "uncommon")
 					|| !strcmp(sName, "rare") || !strcmp(sName, "mythical") || !strcmp(sName, "legendary") || !strcmp(sName, "ancient"))
 					Visit(pKey, vItems, uDepth + 1);
@@ -1335,7 +1330,7 @@ namespace
 			if (tFile)
 				MoveFileExW(tTemp.c_str(), tPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
 		}
-		catch (...) {} // Cache I/O must never disable native opening.
+		catch (...) {}
 	}
 
 	void BuildCrateProfiles(const std::unordered_map<std::string, uint16_t>& mNames, const std::unordered_map<uint16_t, KeyValues*>& mDefinitions)
@@ -1407,7 +1402,6 @@ namespace
 						break;
 					}
 				}
-				// Expired event keys were converted into ordinary keys by Valve.
 				if (!tProfile.iKeyDef)
 				{
 					tProfile.iKeyDef = CrateLootData::RetiredKey(iDef);
@@ -1438,8 +1432,6 @@ namespace
 			pList->SetAttribute(187, float(tProfile.iSeries));
 		if (tProfile.vItems.empty() || std::bit_cast<uint32_t>(pList->GetValue(2037, 0.f)) != 0u)
 			return;
-		// Stable per-instance line items support retired and hidden collections
-		// in the vanilla UI, too. Actual opening retains the complete pool.
 		uint32_t uSeed = uint32_t(ViewItemID(pView) ^ (ViewItemID(pView) >> 32));
 		const size_t uCount = std::min<size_t>(4, tProfile.vItems.size());
 		std::array<size_t, 4> aChosen = {};
@@ -1466,8 +1458,6 @@ namespace
 		if (!tLoot.pList)
 			return false;
 
-		// Both static and per-instance lists implement IEconLootList. Nested
-		// lists are content groups, not an indication that every drop is rare.
 		LootItemIterator tIterator(vItems);
 		using Enumerate_t = void(__fastcall*)(void*, LootItemIterator*);
 		(*reinterpret_cast<Enumerate_t**>(tLoot.pList))[5](tLoot.pList, &tIterator);
@@ -1529,9 +1519,9 @@ bool CSkinChanger::OnSendMessage(void* pMessage)
 	if (!ReadMessage(pMessage, uType, uSize, uKey, uCrate))
 		return false;
 	if (uType == kMsgUnlockCrate && !IsClientItem(uKey) && !IsClientItem(uCrate))
-		return false; // Real transactions keep their native GC behavior.
+		return false;
 	if (uType == kMsgPaintItem && !IsClientItem(uKey) && !IsClientItem(uCrate))
-		return false; // Real paint + real item retain the vanilla GC transaction.
+		return false;
 
 	std::lock_guard tLock(m_tMutex);
 	if (uType == kMsgPaintItem)
@@ -1728,7 +1718,6 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 	auto* pView = FindItemView(pInventory, uID);
 	if (!pView)
 	{
-		// Do not consume the inputs if the inventory listeners rejected the item.
 		ApplyLocalDelete(uID);
 		return false;
 	}
@@ -1932,7 +1921,8 @@ void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
 			continue;
 
 		auto& uSlot = Field<uint64_t>(pInventory, kInventoryLoadout + size_t(iIndex) * sizeof(uint64_t));
-		if (iClass <= 9 && iSlot >= 0 && iSlot <= 2 && IsClientItem(uItemID))
+		const bool bWeaponSlot = iSlot >= 0 && iSlot <= 2;
+		if (bWeaponSlot && IsClientItem(uItemID))
 		{
 			auto& tChoice = s_aServerWeaponChoices[iIndex];
 			const int iCount = Field<int>(pInventory, kInventoryItemsCount);
@@ -1946,7 +1936,7 @@ void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
 					const int iStock = StockWeaponForSlot(iClass, iSlot);
 					auto* pSelected = FindItemView(pInventory, uItemID);
 					if (iStock >= 0 && pSelected && WeaponType(iStock) == WeaponType(Field<uint16_t>(pSelected, kViewDefIndex)))
-						tChoice.uOwnedID = ~0ull; // Vanilla unequip selects this slot's always-available stock item.
+						tChoice.uOwnedID = ~0ull;
 				}
 				if (tChoice.uOwnedID && (tChoice.uOwnedID != uPreviousOwned || uPreviousClient != uItemID))
 					EquipOwnedInventoryWeapon(pInventory, tChoice.uOwnedID, iClass, iSlot);
@@ -1954,6 +1944,8 @@ void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
 					SDK::Output("Inventory changer", "No owned weapon of this type was found. The server loadout was kept.", {}, OUTPUT_CONSOLE | OUTPUT_TOAST);
 			}
 		}
+		else if (bWeaponSlot)
+			s_aServerWeaponChoices[iIndex] = {};
 		if (uSlot == uItemID)
 			continue;
 
@@ -2182,14 +2174,16 @@ namespace
 	uintptr_t WearableVMConstructor()
 	{
 		static uintptr_t uConstructor = 0;
+		static bool bResolved = false;
+		if (bResolved)
+			return uConstructor;
+		bResolved = true;
 		if (uConstructor || !I::Client)
 			return uConstructor;
 		for (auto* pClass = I::Client->GetAllClasses(); pClass; pClass = pClass->m_pNext)
 		{
 			if (strcmp(pClass->GetName(), "CTFWearableVM") || !pClass->m_pCreateFn)
 				continue;
-			// Resolve the constructor from the registered factory instead of
-			// identifying its otherwise identical derived-class prologue.
 			auto* pFactory = reinterpret_cast<uint8_t*>(pClass->m_pCreateFn);
 			if (!IsReadableMemory(pFactory, 80))
 				return 0;
@@ -2220,24 +2214,17 @@ namespace
 		if (!pMemory)
 			return nullptr;
 		auto* pWearable = reinterpret_cast<CEconWearable*(__fastcall*)(void*)>(uConstructor)(pMemory);
-		// Match native extra wearables: their own item view stays uninitialized.
-		// Skin and visibility come from the associated weapon. Copying its item
-		// here would duplicate the main model and fail extra-model validation.
-		// Keep a valid static definition for native material queries, without
-		// setting the initialized flag or copying the weapon's attributes/ID.
 		Field<uint16_t>(pWearable, kEconEntityAttrManager + kAttrContainerItem + kViewDefIndex) = iDef;
 		Field<uint8_t>(pWearable, kEconEntityClientside) = 1;
 		S::CBaseEntity_SetOwnerEntity.Call<void>(pWearable, pLocal);
 		Field<EHANDLE>(pWearable, iAssociatedOffset).Set(pWeapon);
-		if (!pWearable->InitializeAsClientEntity(sModel.c_str(), bViewModel ? 10 : kRenderGroupOpaqueEntity))
+		if (!pWearable->InitializeAsClientEntity(sModel.c_str(), bViewModel ? kRenderGroupViewModelOpaque : kRenderGroupOpaqueEntity))
 		{
 			pWearable->ReleaseClientEntity();
 			return nullptr;
 		}
 		pWearable->Spawn();
 		pWearable->Equip(pLocal);
-		// Spawn uses model_player. Extra wearables need their separate model,
-		// then DATA_UPDATE_CREATED caches that final model for validation.
 		I::ModelInfoClient->RegisterDynamicModel(sModel.c_str(), true);
 		S::Inventory_CBaseEntity_SetModel.Call<bool>(pWearable, sModel.c_str());
 		pWearable->GetClientNetworkable()->OnDataChanged(DATA_UPDATE_CREATED);
@@ -2272,11 +2259,11 @@ namespace
 
 	void RefreshWeaponVisual(CTFWeaponBase* pWeapon)
 	{
-		// Native UpdateAttachmentModels keeps an existing viewmodel attachment
-		// even if the item definition changed. Recreate it for the new reskin.
-		auto& hAttachment = Field<EHANDLE>(pWeapon, 0xE50);
+		auto& hAttachment = Field<CHandle<CBaseAnimating>>(pWeapon, 0xE50);
 		if (auto* pAttachment = hAttachment.Get())
+		{
 			U::Memory.CallVirtual<1, void>(uintptr_t(pAttachment) + 0x10);
+		}
 		hAttachment.Term();
 		S::CEconEntity_InitializeAttributes.Call<void>(pWeapon);
 		pWeapon->GetClientNetworkable()->OnDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
@@ -2285,44 +2272,49 @@ namespace
 		pWeapon->InvalidateBoneCache();
 	}
 
+	void RestoreExtraWearable(CHandle<CEconWearable>* pHandle)
+	{
+		if (!pHandle->IsValid())
+			return;
+		if (auto* pExtra = pHandle->Get())
+		{
+			if (auto* pOwner = pExtra->GetOwnerEntity(); pOwner && pOwner->IsPlayer())
+				pExtra->UnEquip(reinterpret_cast<CBasePlayer*>(pOwner));
+			pExtra->ReleaseClientEntity();
+		}
+		pHandle->Term();
+	}
+
 	void ResetWeaponVisual(WeaponVisual_t& tVisual)
 	{
-		if (auto* pWeapon = tVisual.hEntity.Get())
+		auto* pWeapon = tVisual.hEntity.Get();
+		if (pWeapon)
 		{
-			if (pWeapon->m_hExtraWearable().Get() == tVisual.hExtraWorld.Get())
-				pWeapon->m_hExtraWearable() = tVisual.hOriginalExtraWorld;
-			if (pWeapon->m_hExtraWearableViewModel().Get() == tVisual.hExtraVM.Get())
+			if (pWeapon->m_hExtraWearableViewModel().ToInt() == tVisual.hExtraVM.ToInt())
 				pWeapon->m_hExtraWearableViewModel() = tVisual.hOriginalExtraVM;
+			if (pWeapon->m_hExtraWearable().ToInt() == tVisual.hExtraWorld.ToInt())
+				pWeapon->m_hExtraWearable() = tVisual.hOriginalExtraWorld;
 		}
-		for (auto* pExtra : { tVisual.hExtraVM.Get(), tVisual.hExtraWorld.Get() })
-		{
-			if (pExtra)
-			{
-				if (auto* pOwner = pExtra->GetOwnerEntity())
-					pExtra->UnEquip(reinterpret_cast<CBasePlayer*>(pOwner));
-				pExtra->ReleaseClientEntity();
-			}
-		}
-		tVisual.hExtraVM.Term();
-		tVisual.hExtraWorld.Term();
+		RestoreExtraWearable(&tVisual.hExtraVM);
+		RestoreExtraWearable(&tVisual.hExtraWorld);
 		tVisual.iStyle = -1;
 		tVisual.uNextExtraAttempt = 0;
-		if (tVisual.bConstructed)
+		if (auto* pWeapon = tVisual.bConstructed ? tVisual.hEntity.Get() : nullptr)
 		{
-			if (auto* pWeapon = tVisual.hEntity.Get())
+			auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + kEconEntityAttrManager + kAttrContainerItem);
+			if (ViewItemID(pView) == tVisual.uClientID)
 			{
-				auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + kEconEntityAttrManager + kAttrContainerItem);
-				if (ViewItemID(pView) == tVisual.uClientID)
-				{
-					AssignItemView(pView, reinterpret_cast<CEconItemView*>(tVisual.aOriginal));
-					RefreshWeaponVisual(pWeapon);
-				}
+				AssignItemView(pView, reinterpret_cast<CEconItemView*>(tVisual.aOriginal));
+				RefreshWeaponVisual(pWeapon);
 			}
-			DestroyItemView(tVisual.aOriginal);
 		}
+		if (tVisual.bConstructed)
+			DestroyItemView(tVisual.aOriginal);
 		tVisual.hEntity.Term();
 		tVisual.uClientID = 0;
 		tVisual.bConstructed = false;
+		tVisual.hOriginalExtraWorld.Term();
+		tVisual.hOriginalExtraVM.Term();
 	}
 }
 
@@ -2348,10 +2340,16 @@ void CSkinChanger::UpdateWeaponVisuals(CTFPlayer* pLocal)
 	}
 	const int iClass = pLocal->m_iClass();
 	if (iClass < 1 || iClass > 9)
+	{
+		RestoreWeaponVisuals();
 		return;
+	}
 	auto* pInventory = GetLocalInventory();
 	if (!pInventory)
+	{
+		RestoreWeaponVisuals();
 		return;
+	}
 	std::array<uint64_t, 3> aSelected = {};
 	{
 		std::lock_guard tLock(m_tMutex);
@@ -2371,9 +2369,8 @@ void CSkinChanger::UpdateWeaponVisuals(CTFPlayer* pLocal)
 		const uint64_t uSelected = iSlot >= 0 && iSlot < 3 ? aSelected[iSlot] : 0;
 		auto* pSelected = uSelected ? FindItemView(pInventory, uSelected) : nullptr;
 		auto* pView = pWeapon ? reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + kEconEntityAttrManager + kAttrContainerItem) : nullptr;
-		if (tVisual.bConstructed && (tVisual.hEntity.Get() != pWeapon || tVisual.uClientID != uSelected
-			|| !pView || ViewItemID(pView) != tVisual.uClientID
-			|| (pSelected && int(reinterpret_cast<CAttributeList*>(uintptr_t(pSelected) + kItemViewAttributeList)->GetValue(kAttrStyleOverride)) != tVisual.iStyle)))
+		const bool bConstructed = tVisual.bConstructed && tVisual.hEntity.Get() == pWeapon;
+		if (tVisual.bConstructed && !bConstructed)
 		{
 			{
 				std::lock_guard tLock(m_tMutex);
@@ -2381,12 +2378,20 @@ void CSkinChanger::UpdateWeaponVisuals(CTFPlayer* pLocal)
 			}
 			ResetWeaponVisual(tVisual);
 		}
-		if (!pView || !pSelected)
+		if (bConstructed && (tVisual.uClientID != uSelected || !pView || ViewItemID(pView) != tVisual.uClientID
+			|| !pSelected || ViewItemID(pSelected) != uSelected
+			|| int(reinterpret_cast<CAttributeList*>(uintptr_t(pSelected) + kItemViewAttributeList)->GetValue(kAttrStyleOverride)) != tVisual.iStyle))
+		{
+			{
+				std::lock_guard tLock(m_tMutex);
+				m_mTracked.erase(tVisual.hEntity.ToInt());
+			}
+			ResetWeaponVisual(tVisual);
+		}
+		if (!pWeapon || !pView || !pSelected)
 			continue;
 		const uint16_t iSelectedDef = Field<uint16_t>(pSelected, kViewDefIndex);
-		const uint16_t iOriginalDef = Field<uint16_t>(tVisual.bConstructed ? reinterpret_cast<CEconItemView*>(tVisual.aOriginal) : pView, kViewDefIndex);
-		// Keep prediction and server behavior tied to the same base weapon.
-		// A Black Box must never become a Rocket Jumper just because both are launchers.
+		const uint16_t iOriginalDef = Field<uint16_t>(pView, kViewDefIndex);
 		if (WeaponType(iSelectedDef) != WeaponType(iOriginalDef))
 			continue;
 		if (tVisual.bConstructed && ViewItemID(pView) == uSelected)
@@ -2479,8 +2484,6 @@ CEconWearable* CSkinChanger::CreateWearable(CTFPlayer* pLocal, CEconItemView* pV
 
 	pWearable->Spawn();
 	pWearable->Equip(pLocal);
-	// Client-created entities do not receive the network creation callback.
-	// It initializes attachment/particle state after the final item and owner.
 	pWearable->GetClientNetworkable()->OnDataChanged(DATA_UPDATE_CREATED);
 	pWearable->SetNextClientThink(kClientThinkAlways);
 	return pWearable;
@@ -2930,8 +2933,6 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 				mToolTargets[iDef] = iTarget;
 			if (const char* sOffset = pRawDefinition->GetString("static_attrs/tool_target_item_icon_offset"); sOffset && *sOffset)
 				sscanf_s(sOffset, "%f %f %f", &tItem.flToolIconX, &tItem.flToolIconY, &tItem.flToolIconScale);
-			// KeyValues x64 peer/sub pointers match the SDK declaration (40/48).
-			// Walk actual style keys rather than probing hundreds of absent indices.
 			if (auto* pStyles = pRawDefinition->FindKey("visuals/styles"))
 			{
 				for (auto* pStyle = Field<KeyValues*>(pStyles, 48); pStyle; pStyle = Field<KeyValues*>(pStyle, 40))
@@ -2968,7 +2969,7 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 		s_vItems.push_back(std::move(tItem));
 	}
 
-	BuildWeaponTypeCache(mWeaponNames, vWeaponBases);
+	BuildWeaponTypes(mWeaponNames, vWeaponBases);
 	BuildCrateProfiles(mItemNames, mDefinitions);
 	for (auto& tItem : s_vItems)
 	{
@@ -2979,7 +2980,6 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 		if (pTarget != s_vItems.end())
 		{
 			tItem.sToolTargetImage = pTarget->sImage;
-			// Native tool names include a target; a bare localized tool token does not.
 			if (tItem.sName.find(pTarget->sName) == std::string::npos)
 				tItem.sName = pTarget->sName + " " + tItem.sName;
 		}
