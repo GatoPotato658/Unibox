@@ -168,12 +168,19 @@ bool CCaptureOverlay::SelectMode(IDirect3DDevice9* pDevice)
 		&& GetSystemDirectoryW(sSystem, MAX_PATH)
 		&& _wcsnicmp(sDevice, sSystem, wcslen(sSystem)) == 0;
 
+	if (!bNative)
+	{
+		m_bUnsupported = true;
+		NotifyUnavailable("the Vulkan backend (DXVK) does not support overlays outside the game swapchain");
+		return false;
+	}
+
 	IDirect3DDevice9Ex* pEx = nullptr;
 	const bool bEx = SUCCEEDED(pDevice->QueryInterface(__uuidof(IDirect3DDevice9Ex), reinterpret_cast<void**>(&pEx))) && pEx;
 	if (pEx)
 		pEx->Release();
 
-	m_eMode = bNative && bEx ? Mode_t::Alpha : Mode_t::Opaque;
+	m_eMode = bEx ? Mode_t::Alpha : Mode_t::Opaque;
 	return true;
 }
 

@@ -45,7 +45,7 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 
 LONG __stdcall WndProc::Func(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (F::Menu.m_bIsOpen)
+	if (F::Menu.m_bIsOpen && F::Menu.m_bInputReady)
 	{
 		ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam);
 		if ((ImGui::GetIO().WantTextInput || F::Menu.m_bInKeybind) && WM_KEYFIRST <= uMsg && uMsg <= WM_KEYLAST)
