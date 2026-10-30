@@ -69,6 +69,10 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	{
 		ImDrawList* pBackground = ImGui::GetBackgroundDrawList();
 
+		F::SpectatorList.Draw();
+
+		ImGui::PushFont(F::Render.FontRegular, F::Render.FontRegular->LegacySize / Vars::Menu::Scale.Value * Vars::Menu::IndicatorScale.Value);
+
 		F::CritHack.Draw();
 		F::Ticks.Draw();
 #ifdef DEBUG_VACCINATOR
@@ -77,12 +81,13 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 		F::NoSpreadHitscan.Draw();
 		F::PlayerConditions.Draw();
 		F::Backtrack.Draw();
-		F::SpectatorList.Draw();
 		F::NavRender.DrawIndicators();
 
 		F::ESP.Draw(pBackground);
 		F::Aimbot.Draw(pBackground);
 		F::Visuals.DrawBestAimPos(pBackground);
+
+		ImGui::PopFont();
 	}
 	if (!bPrivate)
 		F::CaptureOverlay.Hide();

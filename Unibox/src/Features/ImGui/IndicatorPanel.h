@@ -191,7 +191,7 @@ static inline void DrawIndicatorText(ImDrawList* pDrawList, float x, float y, co
 		if (tOutlineColor.a)
 		{
 			const ImU32 uOutline = ColorToU32(tOutlineColor);
-			const float flOutline = H::Draw.Scale(1.f);
+			const float flOutline = H::Draw.IndicatorScale(1.f);
 			pDrawList->AddText({ vPos.x - flOutline, vPos.y }, uOutline, sText);
 			pDrawList->AddText({ vPos.x, vPos.y - flOutline }, uOutline, sText);
 			pDrawList->AddText({ vPos.x + flOutline, vPos.y }, uOutline, sText);
@@ -225,7 +225,7 @@ static inline void DrawIndicatorPanel(
 	bool bDrawFooter = false,
 	const char* sFooterText = "Not Ready")
 {
-	const float flBarHeight = H::Draw.Scale(3.f);
+	const float flBarHeight = H::Draw.IndicatorScale(3.f);
 	const float flTextBoxHeight = flPanelHeight - flBarHeight;
 	const ImVec2 vPanelSize = { flPanelWidth, flPanelHeight };
 	const ImU32 uBackground = ColorToU32(Color_t(0, 0, 0, 180));
@@ -234,12 +234,12 @@ static inline void DrawIndicatorPanel(
 	const ImU32 uRight = ColorToU32(tRightColor);
 	const ImU32 uBar = ColorToU32(tBarColor);
 
-	pDrawList->AddRectFilled(vPanelPos, ImVec2(vPanelPos.x + vPanelSize.x, vPanelPos.y + vPanelSize.y), uBackground, H::Draw.Scale(3.f));
+	pDrawList->AddRectFilled(vPanelPos, ImVec2(vPanelPos.x + vPanelSize.x, vPanelPos.y + vPanelSize.y), uBackground, H::Draw.IndicatorScale(3.f));
 	pDrawList->AddRectFilled(
 		ImVec2(vPanelPos.x, vPanelPos.y + flTextBoxHeight),
 		ImVec2(vPanelPos.x + flPanelWidth, vPanelPos.y + flPanelHeight),
 		uBarBackground,
-		H::Draw.Scale(3.f));
+		H::Draw.IndicatorScale(3.f));
 
 	float flClampedProgress = std::clamp(flProgress, 0.f, 1.f);
 	int iBarWidth = static_cast<int>(std::ceil(flPanelWidth * flClampedProgress));
@@ -266,13 +266,13 @@ static inline void DrawIndicatorPanel(
 
 	const float flFontSize = ImGui::GetFontSize();
 	const float flLeftTextY = vPanelPos.y + ((flTextBoxHeight - flFontSize) * 0.5f);
-	const float flLeftTextX = vPanelPos.x + H::Draw.Scale(5.f);
+	const float flLeftTextX = vPanelPos.x + H::Draw.IndicatorScale(5.f);
 	pDrawList->AddText(ImVec2(flLeftTextX, flLeftTextY), uLeft, sLeftText);
 
 	if (sRightText && sRightText[0] != '\0')
 	{
 		ImVec2 vRightTextSize = ImGui::CalcTextSize(sRightText);
-		const float flRightTextX = vPanelPos.x + flPanelWidth - H::Draw.Scale(5.f) - vRightTextSize.x;
+		const float flRightTextX = vPanelPos.x + flPanelWidth - H::Draw.IndicatorScale(5.f) - vRightTextSize.x;
 		pDrawList->AddText(ImVec2(flRightTextX, flLeftTextY), uRight, sRightText);
 	}
 
@@ -280,6 +280,6 @@ static inline void DrawIndicatorPanel(
 	{
 		ImVec2 vFooterTextSize = ImGui::CalcTextSize(sFooterText);
 		const float flFooterTextX = vPanelPos.x + (flPanelWidth - vFooterTextSize.x) * 0.5f;
-		pDrawList->AddText(ImVec2(flFooterTextX, vPanelPos.y + flPanelHeight + H::Draw.Scale(2.f)), uLeft, sFooterText);
+		pDrawList->AddText(ImVec2(flFooterTextX, vPanelPos.y + flPanelHeight + H::Draw.IndicatorScale(2.f)), uLeft, sFooterText);
 	}
 }

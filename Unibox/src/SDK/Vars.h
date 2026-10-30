@@ -195,7 +195,8 @@ NAMESPACE_BEGIN(Vars)
 		CVar(SeedPredictionDisplay, "Seed prediction display", DragBox_t(), VISUAL | NOBIND);
 		CVar(NavBotDisplay, "Navbot display", DragBox_t(), VISUAL | NOBIND);
 
-		CVar(Scale, "Scale", 1.f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
+		CVar(Scale, "Menu scale", 1.25f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
+		CVar(IndicatorScale, "Indicator scale", 1.f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
 		CVar(CheapText, "Cheap text", false, NOBIND);
 		CVar(CustomFont, "Custom font", std::string(), NOBIND | NOSAVE | DEBUGVAR);
 

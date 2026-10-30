@@ -189,8 +189,8 @@ void CAimbot::Draw(ImDrawList* pDrawList)
 		return;
 
 	const ImVec2 vCenter = { tCache.m_flX, tCache.m_flY };
-	pDrawList->AddCircle(vCenter, tCache.m_flRadius + 1.f, ColorToU32(Color_t(0, 0, 0, byte(tCache.m_tColor.a * 0.5f))), 72, std::max(H::Draw.Scale(1.4f), 1.f));
-	pDrawList->AddCircle(vCenter, tCache.m_flRadius, ColorToU32(tCache.m_tColor), 72, std::max(H::Draw.Scale(1.2f), 1.f));
+	pDrawList->AddCircle(vCenter, tCache.m_flRadius + 1.f, ColorToU32(Color_t(0, 0, 0, byte(tCache.m_tColor.a * 0.5f))), 72, std::max(H::Draw.IndicatorScale(1.4f), 1.f));
+	pDrawList->AddCircle(vCenter, tCache.m_flRadius, ColorToU32(tCache.m_tColor), 72, std::max(H::Draw.IndicatorScale(1.2f), 1.f));
 }
 
 void CAimbot::Store(CBaseEntity* pEntity, size_t iSize)

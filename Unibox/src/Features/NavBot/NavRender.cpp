@@ -629,18 +629,18 @@ void CNavRender::DrawIndicators()
 	int x = Vars::Menu::NavBotDisplay.Value.x;
 	const int y = Vars::Menu::NavBotDisplay.Value.y + 8;
 	const auto& tFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = tFont.m_nTall + H::Draw.Scale(1);
+	const int nTall = tFont.m_nTall + H::Draw.IndicatorScale(1);
 	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 
 	EAlign eAlign = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
+	if (x <= 100 + H::Draw.IndicatorScale(50, Scale_Round))
 	{
-		x -= H::Draw.Scale(42, Scale_Round);
+		x -= H::Draw.IndicatorScale(42, Scale_Round);
 		eAlign = ALIGN_TOPLEFT;
 	}
-	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
+	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.IndicatorScale(50, Scale_Round))
 	{
-		x += H::Draw.Scale(42, Scale_Round);
+		x += H::Draw.IndicatorScale(42, Scale_Round);
 		eAlign = ALIGN_TOPRIGHT;
 	}
 

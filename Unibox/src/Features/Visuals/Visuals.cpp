@@ -806,8 +806,8 @@ void CVisuals::DrawBestAimPos(ImDrawList* pDrawList)
 		return;
 
 	const Color_t tColor = Vars::Colors::AimPosColor.Value;
-	const float flSize = H::Draw.Scale(Vars::Visuals::Prediction::AimPosSize.Value);
-	const float flThickness = std::max(roundf(H::Draw.Scale(Vars::Visuals::Prediction::AimPosThickness.Value)), 1.f);
+	const float flSize = H::Draw.IndicatorScale(Vars::Visuals::Prediction::AimPosSize.Value);
+	const float flThickness = std::max(roundf(H::Draw.IndicatorScale(Vars::Visuals::Prediction::AimPosThickness.Value)), 1.f);
 	const float flOffset = fmodf(flThickness, 2.f) ? 0.5f : 0.f;
 	const float flX = roundf(tCache.m_flX) + flOffset, flY = roundf(tCache.m_flY) + flOffset;
 	const auto fnPoint = [&](float flDX, float flDY) -> ImVec2 { return { flX + flDX, flY + flDY }; };
@@ -852,7 +852,7 @@ void CVisuals::DrawBestAimPos(ImDrawList* pDrawList)
 	};
 
 	if (Vars::Visuals::Prediction::AimPosOutline.Value)
-		fnShape(ColorToU32(Color_t(0, 0, 0, byte(tColor.a * 0.8f))), std::max(roundf(H::Draw.Scale(2.f)), 2.f));
+		fnShape(ColorToU32(Color_t(0, 0, 0, byte(tColor.a * 0.8f))), std::max(roundf(H::Draw.IndicatorScale(2.f)), 2.f));
 	fnShape(ColorToU32(tColor), 0.f);
 }
 

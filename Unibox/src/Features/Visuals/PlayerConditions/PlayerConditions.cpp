@@ -421,18 +421,18 @@ void CPlayerConditions::Draw()
 	int x = Vars::Menu::ConditionsDisplay.Value.x;
 	int y = Vars::Menu::ConditionsDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	const int nTall = fFont.m_nTall + H::Draw.IndicatorScale(1);
 	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 
 	EAlign align = ALIGN_TOP;
-	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
+	if (x <= 100 + H::Draw.IndicatorScale(50, Scale_Round))
 	{
-		x -= H::Draw.Scale(42, Scale_Round);
+		x -= H::Draw.IndicatorScale(42, Scale_Round);
 		align = ALIGN_TOPLEFT;
 	}
-	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
+	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.IndicatorScale(50, Scale_Round))
 	{
-		x += H::Draw.Scale(42, Scale_Round);
+		x += H::Draw.IndicatorScale(42, Scale_Round);
 		align = ALIGN_TOPRIGHT;
 	}
 

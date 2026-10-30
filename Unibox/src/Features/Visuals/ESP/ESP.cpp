@@ -1183,7 +1183,7 @@ static void DrawSolidBox(ImDrawList* pDrawList, float x, float y, float w, float
 	if (w <= 1.f || h <= 1.f)
 		return;
 
-	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
+	const float flThickness = std::max(roundf(H::Draw.IndicatorScale(1.f)), 1.f);
 	x += 0.5f, y += 0.5f;
 	pDrawList->AddRect({ x, y }, { x + w, y + h }, ColorToU32(FadeColor(tColor, flAlpha)), 0.f, 0, flThickness);
 }
@@ -1193,7 +1193,7 @@ static void DrawOutlineBox(ImDrawList* pDrawList, float x, float y, float w, flo
 	if (w <= 1.f || h <= 1.f)
 		return;
 
-	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
+	const float flThickness = std::max(roundf(H::Draw.IndicatorScale(1.f)), 1.f);
 	const ImU32 uBlack = ColorToU32(FadeColor(Color_t(0, 0, 0, 255), flAlpha));
 	const ImU32 uMain = ColorToU32(FadeColor(tColor, flAlpha));
 	x += 0.5f, y += 0.5f;
@@ -1208,8 +1208,8 @@ static void DrawRoundedBox(ImDrawList* pDrawList, float x, float y, float w, flo
 	if (w <= 1.f || h <= 1.f)
 		return;
 
-	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
-	const float flRound = std::clamp(std::min(w, h) * 0.15f, H::Draw.Scale(3.f), H::Draw.Scale(10.f));
+	const float flThickness = std::max(roundf(H::Draw.IndicatorScale(1.f)), 1.f);
+	const float flRound = std::clamp(std::min(w, h) * 0.15f, H::Draw.IndicatorScale(3.f), H::Draw.IndicatorScale(10.f));
 	x += 0.5f, y += 0.5f;
 	pDrawList->AddRect({ x + 1.f, y + 1.f }, { x + w + 1.f, y + h + 1.f }, ColorToU32(FadeColor(Color_t(0, 0, 0, 180), flAlpha)), flRound, 0, flThickness);
 	pDrawList->AddRect({ x, y }, { x + w, y + h }, ColorToU32(FadeColor(tColor, flAlpha)), flRound, 0, flThickness);
@@ -1220,8 +1220,8 @@ static void DrawCornerBox(ImDrawList* pDrawList, float x, float y, float w, floa
 	if (w <= 1.f || h <= 1.f)
 		return;
 
-	const float flThickness = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
-	const float flLen = std::max(std::min(w, h) * 0.26f, H::Draw.Scale(4.f)) * flGrow;
+	const float flThickness = std::max(roundf(H::Draw.IndicatorScale(1.f)), 1.f);
+	const float flLen = std::max(std::min(w, h) * 0.26f, H::Draw.IndicatorScale(4.f)) * flGrow;
 	const ImU32 uShadow = ColorToU32(FadeColor(Color_t(0, 0, 0, 190), flAlpha));
 	const ImU32 uMain = ColorToU32(FadeColor(tColor, flAlpha));
 
@@ -1242,7 +1242,7 @@ static void DrawCornerBox(ImDrawList* pDrawList, float x, float y, float w, floa
 	}
 
 	if (bAccent)
-		pDrawList->AddRect({ x, y }, { x + w, y + h }, ColorToU32(FadeColor(tColor, flAlpha * 0.22f)), H::Draw.Scale(2.f), 0, flThickness * 0.75f);
+		pDrawList->AddRect({ x, y }, { x + w, y + h }, ColorToU32(FadeColor(tColor, flAlpha * 0.22f)), H::Draw.IndicatorScale(2.f), 0, flThickness * 0.75f);
 }
 
 static void DrawVerticalBar(ImDrawList* pDrawList, float x, float y, float w, float h,
@@ -1320,7 +1320,7 @@ static void DrawShadowText(ImDrawList* pDrawList, float x, float y, Color_t tCol
 
 	ImVec2 vPos = GetIndicatorTextPos(x, y, sText, eAlign);
 	vPos = { floorf(vPos.x), floorf(vPos.y) };
-	const float flOffset = std::max(roundf(H::Draw.Scale(1.f)), 1.f);
+	const float flOffset = std::max(roundf(H::Draw.IndicatorScale(1.f)), 1.f);
 	Color_t tShadowColor = tShadow;
 	tShadowColor.a = std::min<byte>(tShadowColor.a, 200);
 	pDrawList->AddText({ vPos.x + flOffset, vPos.y + flOffset }, ColorToU32(FadeColor(tShadowColor, flAlpha)), sText);
@@ -1335,10 +1335,10 @@ static void DrawTextPill(ImDrawList* pDrawList, float x, float y, Color_t tColor
 	ImVec2 vPos = GetIndicatorTextPos(x, y, sText, eAlign);
 	vPos = { floorf(vPos.x), floorf(vPos.y) };
 	const ImVec2 vSize = ImGui::CalcTextSize(sText);
-	const float flPadX = H::Draw.Scale(4.f), flPadY = H::Draw.Scale(1.f);
+	const float flPadX = H::Draw.IndicatorScale(4.f), flPadY = H::Draw.IndicatorScale(1.f);
 
 	pDrawList->AddRectFilled({ vPos.x - flPadX, vPos.y - flPadY }, { vPos.x + vSize.x + flPadX, vPos.y + vSize.y + flPadY },
-		ColorToU32(FadeColor(tBackground, flAlpha)), H::Draw.Scale(3.f));
+		ColorToU32(FadeColor(tBackground, flAlpha)), H::Draw.IndicatorScale(3.f));
 	pDrawList->AddText(vPos, ColorToU32(FadeColor(tColor, flAlpha)), sText);
 }
 
@@ -2004,7 +2004,7 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 		return;
 
 	const float flDelta = std::clamp(ImGui::GetIO().DeltaTime, 0.f, 0.1f);
-	const float nTall = ImGui::GetTextLineHeight() + H::Draw.Scale(2.f);
+	const float nTall = ImGui::GetTextLineHeight() + H::Draw.IndicatorScale(2.f);
 
 	for (const auto& tEntity : vEntities)
 	{
@@ -2016,21 +2016,21 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 		if (flAlpha <= 0.004f)
 			continue;
 
-		const float flInset = (1.f - flEase) * H::Draw.Scale(10.f);
+		const float flInset = (1.f - flEase) * H::Draw.IndicatorScale(10.f);
 		const float x = roundf(tEntity.m_flX + flInset);
 		const float y = roundf(tEntity.m_flY + flInset);
 		const float w = std::max(roundf(tEntity.m_flW - flInset * 2.f), 1.f);
 		const float h = std::max(roundf(tEntity.m_flH - flInset * 2.f), 1.f);
 
-		const float l = x - roundf(H::Draw.Scale(6.f)), r = x + w + roundf(H::Draw.Scale(6.f)), m = floorf(x + w / 2.f);
-		const float t = y - roundf(H::Draw.Scale(5.f)), b = y + h + roundf(H::Draw.Scale(5.f));
+		const float l = x - roundf(H::Draw.IndicatorScale(6.f)), r = x + w + roundf(H::Draw.IndicatorScale(6.f)), m = floorf(x + w / 2.f);
+		const float t = y - roundf(H::Draw.IndicatorScale(5.f)), b = y + h + roundf(H::Draw.IndicatorScale(5.f));
 		float lOffset = 0.f, rOffset = 0.f, bOffset = 0.f, tOffset = 0.f;
 
 		if (tEntity.m_vBones.size())
 		{
 			const ImU32 uBone = ColorToU32(FadeColor(tEntity.m_tColor, flAlpha * 0.9f));
 			const ImU32 uBoneShadow = ColorToU32(FadeColor(Color_t(0, 0, 0, 160), flAlpha));
-			const float flBoneThickness = std::max(H::Draw.Scale(1.2f), 1.f);
+			const float flBoneThickness = std::max(H::Draw.IndicatorScale(1.2f), 1.f);
 			for (const auto& [vFrom, vTo] : tEntity.m_vBones)
 			{
 				pDrawList->AddLine({ vFrom.x + 1.f, vFrom.y + 1.f }, { vTo.x + 1.f, vTo.y + 1.f }, uBoneShadow, flBoneThickness);
@@ -2052,8 +2052,8 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 
 		float flHealthForText = std::min(tEntity.m_flHealth, 1.f);
 
-		const float flSpace = roundf(H::Draw.Scale(4.f));
-		const float flThickness = std::max(roundf(H::Draw.Scale(3.f)), 2.f);
+		const float flSpace = roundf(H::Draw.IndicatorScale(4.f));
+		const float flThickness = std::max(roundf(H::Draw.IndicatorScale(3.f)), 2.f);
 		if (tAnim.m_vBars.size() < tEntity.m_vBars.size())
 			tAnim.m_vBars.resize(tEntity.m_vBars.size(), -1.f);
 
@@ -2118,10 +2118,10 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 				bOffset += nTall;
 				break;
 			case ALIGN_LEFT:
-				DrawShadowText(pDrawList, l - lOffset, y - H::Draw.Scale(2.f) + h - h * flHealthForText, tColor, tOutline, ALIGN_TOPRIGHT, sText.c_str(), flAlpha);
+				DrawShadowText(pDrawList, l - lOffset, y - H::Draw.IndicatorScale(2.f) + h - h * flHealthForText, tColor, tOutline, ALIGN_TOPRIGHT, sText.c_str(), flAlpha);
 				break;
 			case ALIGN_TOPRIGHT:
-				DrawShadowText(pDrawList, r, y - H::Draw.Scale(2.f) + rOffset, tColor, tOutline, ALIGN_TOPLEFT, sText.c_str(), flAlpha);
+				DrawShadowText(pDrawList, r, y - H::Draw.IndicatorScale(2.f) + rOffset, tColor, tOutline, ALIGN_TOPLEFT, sText.c_str(), flAlpha);
 				rOffset += nTall;
 				break;
 			case ALIGN_BOTTOMRIGHT:
@@ -2145,7 +2145,7 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 				const ImU32 uTint = ColorToU32(FadeColor(tBadge.m_tColor, flAlpha));
 				if (tBadge.m_eType == EESPBadge::Class)
 				{
-					const float flSize = roundf(H::Draw.Scale(18.f));
+					const float flSize = roundf(H::Draw.IndicatorScale(18.f));
 					const float flTop = t - tOffset - flSize;
 					pDrawList->AddImage(pImage, { floorf(m - flSize / 2.f), flTop },
 						{ floorf(m - flSize / 2.f) + flSize, flTop + flSize }, vUV0, vUV1, uTint);
@@ -2153,7 +2153,7 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 				}
 				else if (tBadge.m_eType == EESPBadge::Weapon)
 				{
-					const float flScale = H::Draw.Scale(std::min((w + 40.f) / 2.f, 80.f) / std::max(tBadge.m_flW, tBadge.m_flH * 2.f));
+					const float flScale = H::Draw.IndicatorScale(std::min((w + 40.f) / 2.f, 80.f) / std::max(tBadge.m_flW, tBadge.m_flH * 2.f));
 					const float flW = tBadge.m_flW * flScale, flH = tBadge.m_flH * flScale;
 					const float flLeft = floorf(m - flW / 2.f), flTop = b + bOffset;
 					pDrawList->AddImage(pImage, { flLeft, flTop }, { flLeft + flW, flTop + flH }, vUV0, vUV1, uTint);

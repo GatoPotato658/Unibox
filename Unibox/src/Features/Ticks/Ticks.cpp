@@ -551,8 +551,8 @@ void CTicks::Draw()
 	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 
 	const DragBox_t dtPos = Vars::Menu::TicksDisplay.Value;
-	const float flPanelWidth = H::Draw.Scale(180.f);
-	const float flPanelHeight = H::Draw.Scale(29.f);
+	const float flPanelWidth = H::Draw.IndicatorScale(180.f);
+	const float flPanelHeight = H::Draw.IndicatorScale(29.f);
 	const ImVec2 vPanelPos =
 	{
 		static_cast<float>(dtPos.x) - flPanelWidth / 2.f,

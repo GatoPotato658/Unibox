@@ -12,12 +12,65 @@
 #define MENU_PROFILE_STALKER
 #endif
 
+#include <atomic>
+#include <filesystem>
+
+#pragma comment(lib, "comdlg32.lib")
+
 using namespace ImGui;
 
 static bool DebugRow(const char* sLabel)
 {
 	FLabel(sLabel);
 	return FPopupButton(sLabel);
+}
+
+static std::atomic<bool> s_bFontDialogOpen = false, s_bFontDialogReady = false;
+static std::string s_sFontDialogPath;
+
+static DWORD WINAPI FontDialogThread(LPVOID pOwner)
+{
+	char sFile[MAX_PATH] = {};
+	OPENFILENAMEA tOpen = {};
+	tOpen.lStructSize = sizeof(tOpen);
+	tOpen.hwndOwner = static_cast<HWND>(pOwner);
+	tOpen.lpstrFilter = "Font files (*.ttf;*.otf)\0*.ttf;*.otf\0All files (*.*)\0*.*\0";
+	tOpen.lpstrFile = sFile;
+	tOpen.nMaxFile = MAX_PATH;
+	tOpen.lpstrTitle = "Select font file";
+	tOpen.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_HIDEREADONLY;
+	if (GetOpenFileNameA(&tOpen))
+	{
+		s_sFontDialogPath = sFile;
+		s_bFontDialogReady = true;
+	}
+	s_bFontDialogOpen = false;
+	return 0;
+}
+
+static void FontPicker()
+{
+	if (s_bFontDialogReady.exchange(false))
+		Vars::Menu::CustomFont.Value = s_sFontDialogPath;
+
+	const bool bOpen = s_bFontDialogOpen;
+	const bool bSet = !Vars::Menu::CustomFont.Value.empty();
+	const std::string sLabel = bOpen ? "Choosing..." : bSet
+		? std::format("Font: {}", TruncateText(std::filesystem::path(Vars::Menu::CustomFont.Value).filename().string(), int(GetWindowWidth() / 3)))
+		: "Choose custom font";
+
+	PushTransparent(bOpen);
+	if (FButton((sLabel + "##CustomFont").c_str(), bSet ? FButtonEnum::Left : FButtonEnum::None) && !bOpen)
+	{
+		s_bFontDialogOpen = true;
+		if (const HANDLE hThread = CreateThread(nullptr, 0, FontDialogThread, GetMainViewport()->PlatformHandleRaw, 0, nullptr))
+			CloseHandle(hThread);
+		else
+			s_bFontDialogOpen = false;
+	}
+	PopTransparent();
+	if (bSet && FButton("Reset font", FButtonEnum::Right))
+		Vars::Menu::CustomFont.Value.clear();
 }
 
 static void AimbotGeneral()
@@ -743,6 +796,7 @@ static void VisualsMenu()
 	{
 		FSDropdown(Vars::Menu::CheatTitle);
 		FSDropdown(Vars::Menu::CheatTag);
+		FSlider(Vars::Menu::Scale);
 		FKeybind(Vars::Menu::PrimaryKey, FButtonEnum::None, { Vars::Menu::SecondaryKey[DEFAULT_BIND], VK_LBUTTON, VK_RBUTTON });
 		FKeybind(Vars::Menu::SecondaryKey, FButtonEnum::None, { Vars::Menu::PrimaryKey[DEFAULT_BIND], VK_LBUTTON, VK_RBUTTON });
 	} EndSection();
@@ -751,7 +805,7 @@ static void VisualsMenu()
 	if (Section("Indicators"))
 	{
 		FDropdown(Vars::Menu::Indicators);
-		if (FSlider(Vars::Menu::Scale))
+		if (FSlider(Vars::Menu::IndicatorScale))
 			H::Fonts.Reload();
 		if (FToggle(Vars::Menu::CheapText))
 			H::Fonts.Reload();
@@ -760,7 +814,7 @@ static void VisualsMenu()
 	{
 		if (Section("Debug##Menu"))
 		{
-			FSDropdown(Vars::Menu::CustomFont);
+			FontPicker();
 			if (DebugRow("Indicator colors"))
 			{
 				FColorPicker(Vars::Colors::IndicatorGood, FColorPickerEnum::Left);

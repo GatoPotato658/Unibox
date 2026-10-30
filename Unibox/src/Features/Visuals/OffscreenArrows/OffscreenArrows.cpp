@@ -25,7 +25,7 @@ void COffscreenArrows::DrawArrowTo(const Vec3& vFromPos, const Vec3& vToPos, Col
 	const float flSin = sin(flDeg);
 
 	float flOffset = -iOffset;
-	float flScale = H::Draw.Scale(25);
+	float flScale = H::Draw.IndicatorScale(25);
 
 	Vec2 vPos = { flOffset * flCos, flOffset * flSin };
 	if (fabs(vPos.x) > vCenter.x - flScale || fabs(vPos.y) > vCenter.y - flScale)

@@ -58,6 +58,11 @@ public:
 		return flN;
 	}
 
+	inline float IndicatorScale(float flN = 1.f, int iFlags = Scale_None)
+	{
+		return Scale(flN, iFlags, Vars::Menu::IndicatorScale.Value);
+	}
+
 	void Start(bool bBadFontCheck = false);
 	void End();
 

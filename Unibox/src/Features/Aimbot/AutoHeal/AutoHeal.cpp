@@ -884,7 +884,7 @@ void CAutoHeal::Draw(CTFPlayer* pLocal)
 
 	int x = H::Draw.m_nScreenW / 2, y = 100;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
-	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	const int nTall = fFont.m_nTall + H::Draw.IndicatorScale(1);
 	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 	y -= nTall;
 

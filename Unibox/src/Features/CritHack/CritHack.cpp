@@ -775,11 +775,11 @@ void CCritHack::Draw()
 
 	const ImVec2 vPanelPos =
 	{
-		static_cast<float>(Vars::Menu::CritsDisplay.Value.x) - H::Draw.Scale(180.f) / 2.f,
+		static_cast<float>(Vars::Menu::CritsDisplay.Value.x) - H::Draw.IndicatorScale(180.f) / 2.f,
 		static_cast<float>(Vars::Menu::CritsDisplay.Value.y)
 	};
-	const float flPanelWidth = H::Draw.Scale(180.f);
-	const float flPanelHeight = H::Draw.Scale(29.f);
+	const float flPanelWidth = H::Draw.IndicatorScale(180.f);
+	const float flPanelHeight = H::Draw.IndicatorScale(29.f);
 
 	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
 	const int iVtxStart = pDrawList->VtxBuffer.Size;
