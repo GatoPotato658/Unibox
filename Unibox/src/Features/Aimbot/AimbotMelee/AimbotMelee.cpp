@@ -345,6 +345,13 @@ bool CAimbotMelee::CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, Vec3 vEy
 		}
 	}
 
+	if (const auto gr = I::TFGameRules(); gr && gr->m_bPlayingMannVsMachine() && pTarget->m_iTeamNum() == TF_TEAM_PVE_INVADERS)
+	{
+		const auto pl = pTarget->As<CTFPlayer>();
+		if (pl->InCond(TF_COND_MVM_BOT_STUN_RADIOWAVE) || pl->InCond(TF_COND_SAPPED))
+			return true;
+	}
+
 	Vec3 vEyePos = m_vEyePos;
 	const float flCompDist = PLAYER_ORIGIN_COMPRESSION / 2;
 	const float flSqCompDist = 0.0884f;
