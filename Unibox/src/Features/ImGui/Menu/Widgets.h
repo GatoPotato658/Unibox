@@ -227,40 +227,6 @@ namespace ImGui
 		ImVec2 vDrawPos = GetDrawPos();
 		GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + vSize, uBackground, flRounding);
 	}
-	inline void DrawFrameBorder(ImDrawList* pDrawList, ImVec2 vMin, ImVec2 vMax, float flHover, float flFocus = 0.f, float flRounding = H::Draw.Scale(4))
-	{
-		const float flHalf = H::Draw.Scale() / 2;
-		ImVec4 tBorder = ImLerp(F::Render.Active.Value, F::Render.Accent.Value, flFocus);
-		tBorder.w = ImLerp(0.06f + 0.06f * flHover, 0.7f, flFocus);
-		pDrawList->AddRect(vMin + ImVec2(flHalf, flHalf), vMax - ImVec2(flHalf, flHalf), FadeColor(tBorder), flRounding, ImDrawFlags_None, flHalf * 2);
-	}
-	inline void DrawFrame(ImDrawList* pDrawList, ImVec2 vMin, ImVec2 vMax, float flHover, float flFocus = 0.f, float flRounding = H::Draw.Scale(4))
-	{
-		pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, flHover)), flRounding);
-		DrawFrameBorder(pDrawList, vMin, vMax, flHover, flFocus, flRounding);
-	}
-	inline void RenderGlass(ImDrawList* pDrawList, const ImVec2& vMin, const ImVec2& vMax, const ImVec4& tTint, float flRounding, float flClarity = 0.f, float flShadow = 0.06f)
-	{
-		const ImVec4 tGlass = { tTint.x, tTint.y, tTint.z, std::min(tTint.w, F::Render.Background1.Value.w + 0.04f) };
-		if (!F::Backdrop.Pane(pDrawList, vMin, vMax, flRounding, tGlass, 1.f, flClarity, flShadow, 1.f))
-			pDrawList->AddRectFilled(vMin, vMax, ColorConvertFloat4ToU32(tTint), flRounding);
-		const float flHalf = H::Draw.Scale() / 2;
-		pDrawList->AddRect(vMin + ImVec2(flHalf, flHalf), vMax - ImVec2(flHalf, flHalf), ColorConvertFloat4ToU32({ F::Render.Active.Value.x, F::Render.Active.Value.y, F::Render.Active.Value.z, 0.07f }), flRounding, ImDrawFlags_None, flHalf * 2);
-	}
-	inline void RenderPopup(ImDrawList* pDrawList, const ImVec2& vMin, const ImVec2& vMax, float flRounding)
-	{
-		ImVec4 tSurface = MixColor(F::Render.Popup, F::Render.Active, 0.035f);
-		tSurface.w = 1.f;
-		if (!F::Backdrop.Pane(pDrawList, vMin, vMax, flRounding, tSurface, 1.f, 0.f, 0.18f, 0.f))
-			pDrawList->AddRectFilled(vMin, vMax, ColorConvertFloat4ToU32(tSurface), flRounding);
-		const float flHalf = H::Draw.Scale() / 2;
-		pDrawList->AddRect(vMin + ImVec2(flHalf, flHalf), vMax - ImVec2(flHalf, flHalf), ColorConvertFloat4ToU32({ F::Render.Active.Value.x, F::Render.Active.Value.y, F::Render.Active.Value.z, 0.1f }), flRounding, ImDrawFlags_None, flHalf * 2);
-	}
-	inline void RenderPopupBackground(float flRounding = H::Draw.Scale(6))
-	{
-		const ImVec2 vPos = GetWindowPos();
-		RenderPopup(GetWindowDrawList(), vPos, vPos + GetWindowSize(), flRounding);
-	}
 	inline void RenderTitledBackground(float flTitleHeight, const char* sTitle = nullptr, bool bSolid = false)
 	{
 		const ImVec2 vSize = GetWindowSize();
@@ -271,7 +237,6 @@ namespace ImGui
 		if (bSolid)
 			pDrawList->AddRectFilled(vDrawPos, vDrawPos + vSize, F::Render.Background1, flRounding);
 		pDrawList->AddRectFilled(vDrawPos, vDrawPos + vSize, F::Render.Background0p5, flRounding);
-		DrawFrameBorder(pDrawList, vDrawPos, vDrawPos + vSize, 0.f, 0.f, flRounding);
 		if (sTitle)
 		{
 			ImFont* pFont = F::Render.FontBold;
@@ -285,7 +250,7 @@ namespace ImGui
 		ImDrawList* pDrawList = GetWindowDrawList();
 		const float flRounding = H::Draw.Scale(8);
 
-		RenderGlass(pDrawList, vDrawPos, vDrawPos + vSize, F::Render.Background1.Value, flRounding, 0.35f, 0.06f);
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + vSize, F::Render.Background1, flRounding);
 		if (flHeaderHeight <= 0.f)
 			return;
 
@@ -483,7 +448,7 @@ namespace ImGui
 		vPos.x = std::clamp(vPos.x, H::Draw.Scale(4), std::max(H::Draw.Scale(4), vDisplay.x - vBox.x - H::Draw.Scale(4)));
 		vPos = { floorf(vPos.x), floorf(vPos.y) };
 
-		RenderPopup(pDrawList, vPos, vPos + vBox, H::Draw.Scale(5));
+		pDrawList->AddRectFilled(vPos, vPos + vBox, F::Render.Popup, H::Draw.Scale(5));
 		for (size_t i = 0; i < vWraps.size(); i++)
 			pDrawList->AddText(vPos + ImVec2(flPadX, flPadY + flLine * i), F::Render.Active, vWraps[i].c_str());
 
@@ -535,10 +500,6 @@ namespace ImGui
 
 		bool bReturn = InputText(std::format("##{}", sLabel).c_str(), &sText, iFlags | ImGuiInputTextFlags_NoKeyboardNavigate, fCallback);
 		const bool bHovered = IsItemHovered();
-		{
-			const ImGuiID uID = GetItemID();
-			DrawFrameBorder(GetWindowDrawList(), GetItemRectMin(), GetItemRectMax(), Anim(uID, 0, bHovered ? 1.f : 0.f), Anim(uID, 1, IsItemActive() ? 1.f : 0.f, 22.f));
-		}
 		if (sText.empty() && !IsItemActive())
 			GetWindowDrawList()->AddText(GetItemRectMin() + GetStyle().FramePadding, FadeColor(F::Render.Inactive), sDisplay.c_str());
 		if (!Disabled && bHovered)
@@ -682,7 +643,7 @@ namespace ImGui
 
 		if (bReturn)
 		{
-			RenderPopupBackground();
+			RenderBackground(F::Render.Popup);
 
 			if (flOffset)
 				SetCursorPosY(GetCursorPosY() + H::Draw.Scale(flOffset));
@@ -699,7 +660,7 @@ namespace ImGui
 
 		if (bReturn)
 		{
-			RenderPopupBackground(H::Draw.Scale(8));
+			RenderBackground(F::Render.Popup, H::Draw.Scale(8));
 
 			if (flOffset)
 				SetCursorPosY(GetCursorPosY() + H::Draw.Scale(flOffset));
@@ -871,7 +832,7 @@ namespace ImGui
 		if (bReturn)
 		{
 			GetCurrentWindow()->Flags |= ImGuiWindowFlags_NoScrollbar;
-			RenderPopupBackground();
+			RenderBackground(F::Render.Popup);
 		}
 		return bReturn;
 	}
@@ -1037,13 +998,6 @@ namespace ImGui
 			tText = F::Render.Active;
 		}
 		pDrawList->AddRectFilled(vMin, vMax, FadeColor(tFill), H::Draw.Scale(4));
-		if (iFlags & FButtonEnum::Danger)
-		{
-			const float flHalf = H::Draw.Scale() / 2;
-			pDrawList->AddRect(vMin + ImVec2(flHalf, flHalf), vMax - ImVec2(flHalf, flHalf), FadeColor(F::Render.Danger, 0.22f + 0.15f * flHover), H::Draw.Scale(4), ImDrawFlags_None, flHalf * 2);
-		}
-		else if (!(iFlags & FButtonEnum::Primary))
-			DrawFrameBorder(pDrawList, vMin, vMax, flHover);
 		const std::string sText = StripDoubleHash(sLabel);
 		const ImVec2 vText = CalcTextSize(sText.c_str());
 		pDrawList->AddText({ floorf((vMin.x + vMax.x - vText.x) / 2), floorf((vMin.y + vMax.y - vText.y) / 2) }, FadeColor(tText), sText.c_str());
@@ -1437,15 +1391,11 @@ namespace ImGui
 		if (flFillMax - flFillMin > 0.5f)
 			pDrawList->AddRectFilled(vDrawPos + ImVec2(flFillMin, vMins.y), vDrawPos + ImVec2(flFillMax, vMaxs.y), FadeColor(tFillColor), flRounding);
 
-		const ImU32 uKnob = FadeColor(F::Render.Active), uRing = FadeColor(F::Render.Background0);
+		const ImU32 uKnob = FadeColor(F::Render.Active);
 		const float flRadius = H::Draw.Scale(4.5f + 1.f * std::max(flHover, bDragging ? 1.f : 0.f));
-		for (const float flPos : { flPos1, flPos2 })
-		{
-			pDrawList->AddCircleFilled(vDrawPos + ImVec2(flPos, flCenterY), flRadius + H::Draw.Scale(), uRing, 20);
-			pDrawList->AddCircleFilled(vDrawPos + ImVec2(flPos, flCenterY), flRadius, uKnob, 20);
-			if (!bRange)
-				break;
-		}
+		pDrawList->AddCircleFilled(vDrawPos + ImVec2(flPos1, flCenterY), flRadius, uKnob, 20);
+		if (bRange)
+			pDrawList->AddCircleFilled(vDrawPos + ImVec2(flPos2, flCenterY), flRadius, uKnob, 20);
 	}
 
 	inline float StepValue(float flValue, int iDir, float flStep, float flMin, float flMax)
@@ -1827,13 +1777,10 @@ namespace ImGui
 	{
 		GetWindowDrawList()->AddText({ tRow.m_vMin.x + flX, tRow.m_vMin.y + floorf((tRow.m_vMax.y - tRow.m_vMin.y - GetTextLineHeight()) / 2) }, uColor, sText);
 	}
-	inline void FOptionCheck(const OptionRow_t& tRow)
+	inline ImU32 OptionColor(const OptionRow_t& tRow, bool bSelected, bool bAccent)
 	{
-		ImFont* pIcon = F::Render.IconFont;
-		GetWindowDrawList()->AddText(pIcon, pIcon->LegacySize, { tRow.m_vMax.x - H::Draw.Scale(12) - pIcon->LegacySize, floorf((tRow.m_vMin.y + tRow.m_vMax.y - pIcon->LegacySize) / 2) }, FadeColor(F::Render.Accent), ICON_MD_CHECK);
-	}
-	inline ImU32 OptionColor(const OptionRow_t& tRow, bool bSelected)
-	{
+		if (bSelected && bAccent)
+			return FadeColor(F::Render.Accent);
 		return FadeColor(bSelected || tRow.m_bHovered ? F::Render.Active.Value : MixColor(F::Render.Inactive, F::Render.Active, 0.5f));
 	}
 	inline bool FOption(const char* sID, const char* sText, bool bSelected, bool bMulti, ImGuiSelectableFlags iFlags = ImGuiSelectableFlags_None)
@@ -1841,9 +1788,7 @@ namespace ImGui
 		auto tRow = FOptionRow(sID, bSelected, iFlags);
 		if (bMulti)
 			FCheckboxIcon({ tRow.m_vMin.x + H::Draw.Scale(12), floorf((tRow.m_vMin.y + tRow.m_vMax.y) / 2 - H::Draw.Scale(7)) }, bSelected);
-		else if (bSelected)
-			FOptionCheck(tRow);
-		FOptionText(tRow, sText, H::Draw.Scale(bMulti ? 34 : 12), OptionColor(tRow, bSelected));
+		FOptionText(tRow, sText, H::Draw.Scale(bMulti ? 34 : 12), OptionColor(tRow, bSelected, !bMulti));
 		return tRow.m_bClicked;
 	}
 	inline void FOptionDivider()
@@ -1867,7 +1812,7 @@ namespace ImGui
 	{
 		ImDrawList* pDrawList = GetWindowDrawList();
 		const float flPad = H::Draw.Scale(10);
-		DrawFrame(pDrawList, vMin, vMax, std::max(flHover, flOpen), std::max(flOpen, bTyping ? 1.f : 0.f));
+		pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, std::max(flHover, flOpen))), H::Draw.Scale(4));
 
 		const float flTextWidth = vMax.x - vMin.x - flPad * 2 - (bChevron ? H::Draw.Scale(14) : 0.f);
 		ImFont* pFont = GetFont();
@@ -1930,21 +1875,15 @@ namespace ImGui
 		PopID();
 		return tRow;
 	}
-	inline bool BeginFieldPopup(FieldRow_t& tRow, bool bBackground = true)
+	inline bool BeginFieldPopup(FieldRow_t& tRow)
 	{
 		PushStyleVar(ImGuiStyleVar_FramePadding, { 0, 0 });
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, H::Draw.Scale(4) });
 		PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.f);
-		PushStyleColor(ImGuiCol_PopupBg, {});
 		tRow.m_bOpen = BeginComboPopup(tRow.m_uPopup, ImRect(tRow.m_vFieldMin, tRow.m_vFieldMax + ImVec2(0, H::Draw.Scale(4))), ImGuiComboFlags_HeightLarge);
-		PopStyleColor();
 		PopStyleVar(3);
 		if (tRow.m_bOpen)
-		{
-			if (bBackground)
-				RenderPopupBackground(GetStyle().PopupRounding);
 			PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
-		}
 		return tRow.m_bOpen;
 	}
 	inline void EndFieldPopup()
@@ -2088,9 +2027,7 @@ namespace ImGui
 					auto tOption = FOptionRow(std::format("##{}{}", sEntry, i).c_str(), bSelected);
 					if (tOption.m_bClicked)
 						*pVar = vValues[i], bReturn = true;
-					if (bSelected)
-						FOptionCheck(tOption);
-					FOptionText(tOption, sStripped.c_str(), H::Draw.Scale(bModifiable ? 36 : 12), OptionColor(tOption, bSelected));
+					FOptionText(tOption, sStripped.c_str(), H::Draw.Scale(bModifiable ? 36 : 12), OptionColor(tOption, bSelected, true));
 				}
 				i++;
 			}
@@ -2132,7 +2069,11 @@ namespace ImGui
 
 		static std::string sPreview = "", sInput = "", sTab = "\n";
 		static unsigned int uActiveHash = 0;
-		const bool bOpen = BeginFieldPopup(tRow, !bFree);
+		if (bFree)
+			PushStyleColor(ImGuiCol_PopupBg, {});
+		const bool bOpen = BeginFieldPopup(tRow);
+		if (bFree)
+			PopStyleColor();
 		if (bOpen)
 		{
 			if (!ActiveMap[uHash] || uActiveHash != uHash)
@@ -2494,9 +2435,9 @@ namespace ImGui
 		DrawFieldLabel(sLabel, tLayout, vRowMin, std::max(flHover, flListen));
 
 		ImDrawList* pDrawList = GetWindowDrawList();
-		DrawFrame(pDrawList, vFieldMin, vFieldMax, flHover, flListen);
+		pDrawList->AddRectFilled(vFieldMin, vFieldMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, flHover)), H::Draw.Scale(4));
 		if (flListen > 0.01f)
-			pDrawList->AddRectFilled(vFieldMin, vFieldMax, FadeColor(F::Render.AccentDim, flListen * 0.6f), H::Draw.Scale(4));
+			pDrawList->AddRectFilled(vFieldMin, vFieldMax, FadeColor(F::Render.AccentDim, flListen), H::Draw.Scale(4));
 		const ImVec2 vText = CalcTextSize(sKey.c_str());
 		const float flTextX = vSize.x ? floorf((vFieldMin.x + vFieldMax.x - vText.x) / 2) : vFieldMin.x + H::Draw.Scale(10);
 		pDrawList->AddText({ flTextX, floorf((vFieldMin.y + vFieldMax.y - vText.y) / 2) }, FadeColor(ImLerp(F::Render.Active.Value, F::Render.Accent.Value, flListen)), sKey.c_str());

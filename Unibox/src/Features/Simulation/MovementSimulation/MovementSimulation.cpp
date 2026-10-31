@@ -262,6 +262,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 	}
 
 	tMoveStorage.m_vPath = { tMoveStorage.m_MoveData.m_vecAbsOrigin };
+	tMoveStorage.m_vPath.reserve(256);
 	if (bPredict)
 	{
 		for (int i = 0; i < H::Entities.GetChoke(pPlayer->entindex()); i++)

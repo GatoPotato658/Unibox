@@ -18,14 +18,12 @@
 #include "../Visuals/Visuals.h"
 #include "../Aimbot/Aimbot.h"
 #include "Overlay/CaptureOverlay.h"
-#include "Overlay/Backdrop.h"
 
 void CRender::Render(IDirect3DDevice9* pDevice)
 {
 	if (m_pDevice && pDevice != m_pDevice && m_bLoaded)
 	{
 		F::CaptureOverlay.ReleaseDeviceObjects();
-		F::Backdrop.ReleaseDeviceObjects();
 		ImGui_ImplDX9_Shutdown();
 		ImGui_ImplDX9_Init(pDevice);
 	}
@@ -97,7 +95,6 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui::CloseStalePopups();
 	ImGui::EndFrame();
 	ImGui::Render();
-	F::Backdrop.Capture(pDevice);
 
 	if (bPrivate)
 		F::CaptureOverlay.Present(pDevice, ImGui::GetDrawData());

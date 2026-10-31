@@ -5,7 +5,6 @@
 #include "../Features/ImGui/Render.h"
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/ImGui/Overlay/CaptureOverlay.h"
-#include "../Features/ImGui/Overlay/Backdrop.h"
 #include "../Features/Visuals/ESP/ESP.h"
 #include "../Features/Players/SteamProfileCache.h"
 
@@ -24,7 +23,6 @@ MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), H
 	else
 	{
 		F::CaptureOverlay.ReleaseDeviceObjects();
-		F::Backdrop.ReleaseDeviceObjects();
 		F::SteamProfileCache.ReleaseTextures();
 	}
 
@@ -37,7 +35,6 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 	DEBUG_RETURN(Direct3DDevice9_Reset, pDevice, pPresentationParameters);
 
 	F::CaptureOverlay.ReleaseDeviceObjects();
-	F::Backdrop.ReleaseTextures();
 	InvalidateESPIconTextures();
 	F::SteamProfileCache.ReleaseTextures();
 	ImGui_ImplDX9_InvalidateDeviceObjects();

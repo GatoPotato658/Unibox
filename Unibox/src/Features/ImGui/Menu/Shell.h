@@ -50,14 +50,6 @@ namespace Shell
 
 		for (auto& cmd : pDrawList->CmdBuffer)
 		{
-			if (GlassPane_t* pPane = CBackdrop::GetPane(pDrawList, cmd))
-			{
-				pPane->m_vMin = vCenter + (pPane->m_vMin - vCenter) * vScale;
-				pPane->m_vMax = vCenter + (pPane->m_vMax - vCenter) * vScale;
-				pPane->m_flRounding *= std::min(vScale.x, vScale.y);
-				pPane->m_flAlpha *= flAlpha;
-			}
-
 			float x1 = std::clamp(vCenter.x + (cmd.ClipRect.x - vCenter.x) * vScale.x, 0.f, vDisplay.x);
 			float y1 = std::clamp(vCenter.y + (cmd.ClipRect.y - vCenter.y) * vScale.y, 0.f, vDisplay.y);
 			float x2 = std::clamp(vCenter.x + (cmd.ClipRect.z - vCenter.x) * vScale.x, 0.f, vDisplay.x);
@@ -99,13 +91,10 @@ namespace Shell
 			FTooltip(tPage.m_sLabel, bHovered);
 
 		const float flRounding = H::Draw.Scale(6);
-		if (flHover > 0.01f)
-			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Active, 0.04f * flHover), flRounding);
+		if (flHover > 0.01f && flActive < 1.f)
+			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Active, 0.04f * flHover * (1.f - flActive)), flRounding);
 		if (flActive > 0.01f)
-		{
-			const float flLine = H::Draw.Scale(2);
-			pDrawList->AddRectFilled({ vMin.x + flPad, vMax.y - flLine }, { vMax.x - flPad, vMax.y }, FadeColor(F::Render.Accent, flActive), flLine / 2);
-		}
+			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.AccentDim, flActive), flRounding);
 
 		const float flIcon = F::Render.IconFont->LegacySize;
 		if (iStyle != TabStyleLabel)
@@ -159,7 +148,7 @@ namespace Shell
 		const ImGuiID uID = GetID("##Search");
 		const bool bHovered = IsWindowHovered() && IsMouseWithin(vMin.x, vMin.y, flWidth, flHeight);
 		const float flHover = Anim(uID, 0, bHovered || GetActiveID() == uID ? 1.f : 0.f);
-		DrawFrame(pDrawList, vMin, vMax, flHover, Anim(uID, 1, GetActiveID() == uID ? 1.f : 0.f, 22.f), H::Draw.Scale(6));
+		pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, flHover)), H::Draw.Scale(6));
 		const float flIcon = F::Render.IconFont->LegacySize;
 		pDrawList->AddText(F::Render.IconFont, flIcon, { vMin.x + H::Draw.Scale(9), floorf(vMin.y + (flHeight - flIcon) / 2) }, FadeColor(F::Render.Inactive), ICON_MD_SEARCH);
 
@@ -286,7 +275,7 @@ namespace Shell
 			sSearch.clear();
 		};
 
-		RenderGlass(pDrawList, vDrawPos, vDrawPos + vWindowSize, F::Render.Background1.Value, flRounding, 0.35f, 0.06f);
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + vWindowSize, F::Render.Background1, flRounding);
 		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(vWindowSize.x, flTopHeight), F::Render.Background0, flRounding, ImDrawFlags_RoundCornersTop);
 		pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flTopHeight), vDrawPos + ImVec2(flSideWidth, flBodyBottom), F::Render.Sidebar);
 		pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flBodyBottom), vDrawPos + vWindowSize, F::Render.Background0, flRounding, ImDrawFlags_RoundCornersBottom);
@@ -409,9 +398,25 @@ namespace Shell
 		if (tShell.m_flAnim < 1.0f)
 		{
 			const float flT = std::clamp(tShell.m_flAnim, 0.0f, 1.0f);
-			const float flEase = tShell.m_bIsOpen ? Ease::OutCubic(flT) : Ease::InCubic(flT);
-			const float flScaleX = 0.97f + 0.03f * flEase, flScaleY = flScaleX;
-			const float flAlpha = flEase;
+			float flScaleX = 0.f, flScaleY = 0.f;
+			if (tShell.m_bIsOpen)
+			{
+				const float flEaseY = Ease::OutCubic(flT);
+				const float flEaseX = Ease::OutCubic(powf(flT, 1.35f));
+				const float flPop = 0.04f * sinf(flT * 3.14159265f);
+				flScaleY = flEaseY * (1.0f + flPop);
+				flScaleX = flEaseX * (1.0f + flPop);
+			}
+			else
+			{
+				const float flEaseY = Ease::InCubic(flT);
+				const float flEaseX = Ease::InCubic(powf(flT, 1.35f));
+				flScaleY = flEaseY;
+				flScaleX = flEaseX;
+			}
+			flScaleX = std::max(0.0001f, flScaleX);
+			flScaleY = std::max(0.0001f, flScaleY);
+			const float flAlpha = std::clamp(flT * (tShell.m_bIsOpen ? 1.5f : 1.2f), 0.0f, 1.0f);
 
 			const ImVec2 vCenter = vDrawPos + vWindowSize * 0.5f;
 			if (ImGuiWindow* pMainWindow = FindWindowByName("Main"))

@@ -83,13 +83,13 @@ void CNotifications::Draw()
 
 	ImDrawList* pDrawList = GetForegroundDrawList();
 
-	float h = H::Draw.Scale(36);
+	float h = H::Draw.Scale(40);
 	float y = ShouldReverseY() ? GetIO().DisplaySize.y - H::Draw.Scale(8) - h : H::Draw.Scale(8);
 	for (auto& tNotification : m_vNotifications)
 	{
 		bool bIcon = tNotification.m_sIcon;
 
-		float w = CalcTextSize(tNotification.m_sText.c_str()).x + H::Draw.Scale(bIcon ? 50 : 28);
+		float w = CalcTextSize(tNotification.m_sText.c_str()).x + H::Draw.Scale(bIcon ? 54 : 30);
 		float x = ShouldReverseX() ? GetIO().DisplaySize.x - H::Draw.Scale(8) - w : H::Draw.Scale(8);
 
 		float flEaseX = 1.f, flEaseY = 1.f;
@@ -106,21 +106,32 @@ void CNotifications::Draw()
 			if (float flDelta = flCreate + flLife + flPan - flTime; flDelta < flPan)
 				flEaseY = EASE_Y(Math::RemapVal(flDelta, 0.f, flPan, 0.f, 1.f));
 		}
+		flLife = Math::RemapVal(flCreate + flLife - flPan - flTime, 0.f, flLife, 0.f, 1.f);
 
 		x -= (w + H::Draw.Scale(8)) * (1.f - flEaseX) * X();
 
-		const ImVec4 tAccent = ColorByteToVec(tNotification.m_tColor.Alpha(255));
-		const ImVec2 vMin = { floorf(x), floorf(y) }, vMax = vMin + ImVec2(floorf(w), h);
-		const float flRounding = H::Draw.Scale(6);
+		ImU32 uBackground = F::Render.Popup;
+		ImU32 uActive = F::Render.Active;
+		ImU32 uAccentOpaque = ColorByteToInt(tNotification.m_tColor.Alpha(255));
+		ImU32 uAccentTransparent = ColorByteToInt(tNotification.m_tColor.Alpha(50));
 
-		RenderGlass(pDrawList, vMin, vMax, F::Render.Popup.Value, flRounding, 0.3f);
+		ImVec2 vDrawPos = { x, y };
+		ImVec2 vSize = { w, h };
+		float flInset = H::Draw.Scale();
 
-		const float flTextX = vMin.x + H::Draw.Scale(bIcon ? 36 : 14);
-		pDrawList->AddText({ flTextX, floorf(vMin.y + (h - GetFontSize()) / 2) }, F::Render.Active, tNotification.m_sText.c_str());
-		if (bIcon)
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uBackground, H::Draw.Scale(3));
+		pDrawList->PushClipRect(vDrawPos + ImVec2(flInset, h - flInset - H::Draw.Scale(2)), vDrawPos + ImVec2(w - flInset, h - flInset), false);
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uAccentTransparent, H::Draw.Scale(3));
+		pDrawList->PopClipRect();
+		pDrawList->PushClipRect(vDrawPos + ImVec2(flInset, h - flInset - H::Draw.Scale(2)), vDrawPos + ImVec2((w - flInset) * flLife, h - flInset), false);
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uAccentOpaque, H::Draw.Scale(3));
+		pDrawList->PopClipRect();
+		if (!bIcon)
+			pDrawList->AddText(vDrawPos + ImVec2(H::Draw.Scale(15), H::Draw.Scale(13)), uActive, tNotification.m_sText.c_str());
+		else
 		{
-			const float flIcon = F::Render.IconFont->LegacySize;
-			pDrawList->AddText(F::Render.IconFont, flIcon, { vMin.x + H::Draw.Scale(12), floorf(vMin.y + (h - flIcon) / 2) }, ColorConvertFloat4ToU32(ImLerp(tAccent, F::Render.Active.Value, 0.15f)), tNotification.m_sIcon);
+			pDrawList->AddText(vDrawPos + ImVec2(H::Draw.Scale(39), H::Draw.Scale(13)), uActive, tNotification.m_sText.c_str());
+			pDrawList->AddText(F::Render.IconFont, F::Render.IconFont->LegacySize, vDrawPos + ImVec2(H::Draw.Scale(12), H::Draw.Scale(12)), uAccentOpaque, tNotification.m_sIcon);
 		}
 
 		y += (h + H::Draw.Scale(8, Scale_Round)) * (flEaseY) * Y();

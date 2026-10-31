@@ -814,7 +814,7 @@ void CAimbotProjectile::SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& v
 #endif
 }
 
-std::vector<Point_t> CAimbotProjectile::GetSplashPoints(Vec3 vOrigin, std::vector<Setup_t>& vSplashPoints, int iSimTime, uint8_t iFlags, bool bFirst)
+std::vector<Point_t> CAimbotProjectile::GetSplashPoints(Vec3 vOrigin, std::vector<Point_t>& vSplashPoints, int iSimTime, uint8_t iFlags, bool bFirst)
 {
 	PROJ_ZONE(SplashPoints);
 
@@ -822,7 +822,6 @@ std::vector<Point_t> CAimbotProjectile::GetSplashPoints(Vec3 vOrigin, std::vecto
 
 	iSimTime -= m_tInfo.m_iLaunchDelay;
 	m_tInfo.m_pTarget->m_vPos = vOrigin;
-	Vec3 vTargetEye = vOrigin + m_tInfo.m_vTargetEye;
 	float flRadiusSqr = powf(m_tInfo.m_flRadius, 2), flRadiusAirSqr = flRadiusSqr;
 	if (Vars::Aimbot::Projectile::Modifiers.Value & Vars::Aimbot::Projectile::ModifiersEnum::AirSplash && !m_tInfo.m_pProjectile && m_tInfo.m_pWeapon->GetWeaponID() == TF_WEAPON_PIPEBOMBLAUNCHER)
 	{
@@ -841,24 +840,15 @@ std::vector<Point_t> CAimbotProjectile::GetSplashPoints(Vec3 vOrigin, std::vecto
 
 	for (auto it = vSplashPoints.begin(); it != vSplashPoints.end();)
 	{
-		Point_t tPoint = { it->m_vPoint, {}, it->m_iType };
-
-		CalculateAngle(m_tInfo.m_vLocalEye, tPoint.m_vPoint, iSimTime, tPoint.m_tSolution, iFlags, iTolerance);
-		if (tPoint.m_tSolution.m_iCalculated != CalculateResultEnum::Good)
+		int iTimeTo = ceilf(it->m_flFirstTime / TICK_INTERVAL);
+		bool bReachable = iTolerance != -1 ? abs(iTimeTo - iSimTime) <= iTolerance : iTimeTo <= iSimTime;
+		if (!bReachable)
 		{
-			if (tPoint.m_tSolution.m_iCalculated == CalculateResultEnum::Bad)
-				it = vSplashPoints.erase(it);
-			else
-				++it;
-			continue;
-		}
-		else if (tPoint.m_iType == PointTypeEnum::Air && tPoint.m_tSolution.m_flTime < TICKS_TO_TIME(m_tInfo.m_iArmTime))
-		{
-			it = vSplashPoints.erase(it);
+			++it;
 			continue;
 		}
 
-		vPoints.push_back(tPoint);
+		vPoints.push_back(*it);
 		it = vSplashPoints.erase(it);
 		if (!bSort && vPoints.size() == iLimit)
 			break;
@@ -880,13 +870,9 @@ std::vector<Point_t> CAimbotProjectile::GetSplashPoints(Vec3 vOrigin, std::vecto
 	for (auto it = vPoints.begin(); it != vPoints.end();)
 	{
 		auto& tPoint = *it;
-		bool bValid = tPoint.m_tSolution.m_iCalculated != CalculateResultEnum::Pending;
-		if (bValid)
-		{
-			Vec3 vPos = {}; m_tInfo.m_pTarget->m_pEntity->m_Collision()->CalcNearestPoint(tPoint.m_vPoint, &vPos);
-			float flRadiusSqrCheck = tPoint.m_iType == PointTypeEnum::Geometry ? flRadiusSqr : flRadiusAirSqr;
-			bValid = tPoint.m_vPoint.DistToSqr(vPos) < flRadiusSqrCheck;
-		}
+		Vec3 vPos = {}; m_tInfo.m_pTarget->m_pEntity->m_Collision()->CalcNearestPoint(tPoint.m_vPoint, &vPos);
+		float flRadiusSqrCheck = tPoint.m_iType == PointTypeEnum::Geometry ? flRadiusSqr : flRadiusAirSqr;
+		bool bValid = tPoint.m_vPoint.DistToSqr(vPos) < flRadiusSqrCheck;
 
 		if (bValid)
 			++it;
@@ -1275,6 +1261,35 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 }
 
 
+
+std::vector<Point_t> CAimbotProjectile::SolveSplashPoints(Vec3 vOrigin, std::vector<Setup_t>& vSplashPoints, uint8_t iFlags)
+{
+	PROJ_ZONE(SplashPoints);
+
+	m_tInfo.m_pTarget->m_vPos = vOrigin;
+
+	std::vector<Point_t> vPoints = {};
+	vPoints.reserve(vSplashPoints.size());
+	for (auto& tSetup : vSplashPoints)
+	{
+		Point_t tPoint = { tSetup.m_vPoint, {}, tSetup.m_iType };
+
+		float flPitch = 0.f, flYaw = 0.f, flTime = 0.f;
+		if (!GetAngle(m_tInfo.m_vLocalEye, tPoint.m_vPoint, iFlags, m_tInfo, flPitch, flYaw, flTime))
+			continue;
+		tPoint.m_flFirstTime = flTime - m_tInfo.m_flOffsetTime;
+
+		CalculateAngle(m_tInfo.m_vLocalEye, tPoint.m_vPoint, 0, tPoint.m_tSolution, iFlags, std::numeric_limits<int>::max());
+		if (tPoint.m_tSolution.m_iCalculated != CalculateResultEnum::Good)
+			continue;
+		if (tPoint.m_iType == PointTypeEnum::Air && tPoint.m_tSolution.m_flTime < TICKS_TO_TIME(m_tInfo.m_iArmTime))
+			continue;
+
+		vPoints.push_back(tPoint);
+	}
+
+	return vPoints;
+}
 
 bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest)
 {
@@ -1722,12 +1737,14 @@ bool CAimbotProjectile::HandleSplash(SplashHistory_t& mSplashHistory)
 	if (!m_vSplashPoints.empty())
 	{
 		iFlags |= CalculateFlagsEnum::Accuracy;
+		std::vector<Point_t> vSolvedPoints = SolveSplashPoints(vSplashHistory.front().m_vOrigin, m_vSplashPoints, iFlags);
+		std::vector<Point_t> vSplashCandidates = {};
+		vSplashCandidates.reserve(vSolvedPoints.size());
 		float flLowestDistance = std::numeric_limits<float>::max(); bool bFirst = true;
 		for (auto& tHistory : vSplashHistory)
 		{
-			std::vector<Setup_t> vSplashCandidates = m_vSplashPoints;
-			std::vector<Point_t> vSplashPoints = {};
-			vSplashPoints = GetSplashPoints(tHistory.m_vOrigin, vSplashCandidates, tHistory.m_iSimtime, iFlags, bFirst); bFirst = false;
+			vSplashCandidates.assign(vSolvedPoints.begin(), vSolvedPoints.end());
+			std::vector<Point_t> vSplashPoints = GetSplashPoints(tHistory.m_vOrigin, vSplashCandidates, tHistory.m_iSimtime, iFlags, bFirst); bFirst = false;
 			PROJ_COUNT_N(SplashPointsGenerated, int64_t(vSplashPoints.size()));
 
 			for (auto& tPoint : vSplashPoints)
@@ -1835,7 +1852,8 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	int iMaxTime = TIME_TO_TICKS(std::min(m_tProjInfo.m_flLifetime, flMaxSimTime)) + m_tInfo.m_iLaunchDelay;
 	const int iDirectOffsets = int(mDirects.size()), iSplashModes = int(vSplashes.size());
 	int iLastTick = 0;
-	for (int i = 1 - TIME_TO_TICKS(m_tInfo.m_flLatency); i <= iMaxTime; i++)
+	const int iPreRoll = std::clamp(TIME_TO_TICKS(m_tInfo.m_flLatency), 0, iMaxTime);
+	for (int i = 1 - iPreRoll; i <= iMaxTime; i++)
 	{
 		iLastTick = i;
 		if (!m_tMoveStorage.m_bFailed)
@@ -3060,7 +3078,8 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 	SplashHistory_t mSplashHistory = {};
 
 	int iMaxTime = TIME_TO_TICKS(Vars::Aimbot::Projectile::MaxSimulationTime.Value);
-	for (int i = 1 - TIME_TO_TICKS(m_tInfo.m_flLatency); i <= iMaxTime; i++)
+	const int iPreRoll = std::clamp(TIME_TO_TICKS(m_tInfo.m_flLatency), 0, iMaxTime);
+	for (int i = 1 - iPreRoll; i <= iMaxTime; i++)
 	{
 		if (!m_tMoveStorage.m_bFailed)
 		{

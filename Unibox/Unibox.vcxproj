@@ -517,7 +517,6 @@
     <ClCompile Include="src\Features\EnginePrediction\EnginePrediction.cpp" />
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
     <ClCompile Include="src\Features\ImGui\Overlay\CaptureOverlay.cpp" />
-    <ClCompile Include="src\Features\ImGui\Overlay\Backdrop.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Menu.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Pages.cpp" />
     <ClCompile Include="src\Features\ImGui\Theme.cpp" />
@@ -938,7 +937,6 @@
     <ClInclude Include="src\Features\ImGui\Theme.h" />
     <ClInclude Include="src\Features\ImGui\IndicatorCache.h" />
     <ClInclude Include="src\Features\ImGui\Overlay\CaptureOverlay.h" />
-    <ClInclude Include="src\Features\ImGui\Overlay\Backdrop.h" />
     <ClInclude Include="src\Features\ImGui\RenderSync.h" />
     <ClInclude Include="src\Features\ImGui\IndicatorPanel.h" />
     <ClInclude Include="src\Features\ImGui\Menu\Components.h" />
