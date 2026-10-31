@@ -345,10 +345,10 @@ bool CAimbotMelee::CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, Vec3 vEy
 		}
 	}
 
-	if (const auto gr = I::TFGameRules(); gr && gr->m_bPlayingMannVsMachine() && pTarget->m_iTeamNum() == TF_TEAM_PVE_INVADERS)
+	if (auto pGameRules = I::TFGameRules(); pGameRules && pGameRules->m_bPlayingMannVsMachine() && pTarget->m_iTeamNum() == TF_TEAM_PVE_INVADERS)
 	{
-		const auto pl = pTarget->As<CTFPlayer>();
-		if (pl->InCond(TF_COND_MVM_BOT_STUN_RADIOWAVE) || pl->InCond(TF_COND_SAPPED))
+		auto pPlayer = pTarget->As<CTFPlayer>();
+		if (pPlayer->InCond(TF_COND_MVM_BOT_STUN_RADIOWAVE) || (pPlayer->InCond(TF_COND_SAPPED) && !pPlayer->m_bIsMiniBoss()))
 			return true;
 	}
 
