@@ -883,11 +883,7 @@ namespace ImGui
 		const ImVec4 tOn = bPlain ? F::Render.Active.Value : F::Render.Accent.Value;
 
 		if (flOn < 1.f)
-		{
-			const float flHalf = H::Draw.Scale() / 2;
-			pDrawList->AddRectFilled(vMin, vMax, FadeColor(F::Render.Background0, 1.f - flOn), flRounding);
-			pDrawList->AddRect(vMin + ImVec2(flHalf, flHalf), vMax - ImVec2(flHalf, flHalf), FadeColor(F::Render.Active, (0.22f + 0.16f * flHover) * (1.f - flOn)), flRounding, ImDrawFlags_None, flHalf * 2);
-		}
+			pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Track, F::Render.Background1p5L, flHover), 1.f - flOn), flRounding);
 		if (flOn > 0.f)
 			pDrawList->AddRectFilled(vMin, vMax, FadeColor(tOn, flOn), flRounding);
 		if (flOn > 0.01f)
