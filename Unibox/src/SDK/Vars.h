@@ -205,7 +205,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(Background, "Background color", Color_t(21, 14, 16, 255), VISUAL);
 			CVar(Active, "Active color", Color_t(240, 231, 232, 255), VISUAL);
 			CVar(Inactive, "Inactive color", Color_t(146, 124, 128, 255), VISUAL);
-			CVar(Opacity, "Opacity", 96, VISUAL | NOBIND | SLIDER_CLAMP, 40, 100, 1, "%i%%");
+			CVar(Opacity, "Opacity", 85, VISUAL | NOBIND | SLIDER_CLAMP, 40, 100, 1, "%i%%");
 		NAMESPACE_END(Theme)
 	NAMESPACE_END(Menu)
 
