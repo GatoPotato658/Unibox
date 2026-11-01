@@ -224,7 +224,8 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 	{
 		const bool bNetworked = bAccountPing && tTarget.m_pEntity->IsPlayer();
 		const Vec3 vTargetOrigin = bNetworked ? GetLastNetworkedOrigin(tTarget.m_pEntity) : tTarget.m_pEntity->m_vecOrigin();
-		F::MoveSim.Initialize(tTarget.m_pEntity, mMoveStorage[tTarget.m_pEntity->entindex()], false, true, false, bNetworked ? &vTargetOrigin : nullptr);
+		const bool bPredict = !tTarget.m_pEntity->IsPlayer() || bAccountPing;
+		F::MoveSim.Initialize(tTarget.m_pEntity, mMoveStorage[tTarget.m_pEntity->entindex()], false, true, bPredict, bNetworked ? &vTargetOrigin : nullptr);
 	}
 
 	auto fStepTarget = [&](const Target_t& tTarget)

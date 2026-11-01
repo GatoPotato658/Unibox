@@ -25,6 +25,13 @@ static std::map<std::string, int> s_mTraceCount = {};
 //#include "../../Debug/Debug.h"
 #endif
 
+static inline Vec3 GetLastNetworkedOrigin(CBaseEntity* pEntity)
+{
+	if (pEntity->m_iv_vecOrigin().m_LastNetworkedValue)
+		return *pEntity->m_iv_vecOrigin().m_LastNetworkedValue;
+	return pEntity->m_vecOrigin();
+}
+
 static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	std::vector<Target_t> vTargets;
@@ -1273,6 +1280,7 @@ std::vector<Point_t> CAimbotProjectile::SolveSplashPoints(Vec3 vOrigin, std::vec
 	for (auto& tSetup : vSplashPoints)
 	{
 		Point_t tPoint = { tSetup.m_vPoint, {}, tSetup.m_iType };
+		tPoint.m_iIndex = int(vPoints.size());
 
 		float flPitch = 0.f, flYaw = 0.f, flTime = 0.f;
 		if (!GetAngle(m_tInfo.m_vLocalEye, tPoint.m_vPoint, iFlags, m_tInfo, flPitch, flYaw, flTime))
@@ -1294,6 +1302,13 @@ std::vector<Point_t> CAimbotProjectile::SolveSplashPoints(Vec3 vOrigin, std::vec
 bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest)
 {
 	PROJ_ZONE(TestAngle);
+	PROJ_COUNT(TestAngles);
+
+	return TestAngle(vPoint, vAngles, iSimTime, iType, iFlags, bSecondTest, nullptr);
+}
+
+bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest, Point_t* pCache)
+{
 	PROJ_COUNT(TestAngles);
 
 	auto pLocal = m_tInfo.m_pLocal;
@@ -1389,6 +1404,63 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	tTarget.m_pEntity->SetAbsOrigin(tTarget.m_vPos);
 	tTarget.m_pEntity->m_vecMins() = { std::clamp(tTarget.m_pEntity->m_vecMins().x, -24.f, 0.f), std::clamp(tTarget.m_pEntity->m_vecMins().y, -24.f, 0.f), tTarget.m_pEntity->m_vecMins().z };
 	tTarget.m_pEntity->m_vecMaxs() = { std::clamp(tTarget.m_pEntity->m_vecMaxs().x, 0.f, 24.f), std::clamp(tTarget.m_pEntity->m_vecMaxs().y, 0.f, 24.f), tTarget.m_pEntity->m_vecMaxs().z };
+
+	if (pCache && pCache->m_bPathSet && iType != PointTypeEnum::Direct && iSimTime <= int(pCache->m_vPath.size()))
+	{
+		bool bValid = false;
+		const int iCached = int(pCache->m_vPath.size());
+		for (int n = 1; n <= iSimTime && n < iCached; n++)
+		{
+			if (iTraceInterval != 1 && n % iTraceInterval && n != iSimTime)
+				continue;
+
+			Vec3 vOld = n > 1 ? pCache->m_vPath[n - 2] : vNew;
+			vNew = pCache->m_vPath[n - 1];
+			SDK::TraceHull(vOld, vNew, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
+
+			if (!trace.DidHit())
+				continue;
+
+			bValid = trace.endpos.DistToSqr(vPoint) < flRadiusSqr;
+			if (bValid)
+			{
+				CGameTrace trace2 = {};
+				SDK::Trace(trace.endpos + trace.plane.normal * m_tInfo.m_flNormalOffset, tTarget.m_vPos + m_tInfo.m_vTargetEye, MASK_SHOT, &filter, &trace2);
+				bValid = trace2.fraction == 1.f;
+			}
+
+			if (bValid)
+				break;
+		}
+
+		if (bValid && Vars::Aimbot::Projectile::IntervalRetest.Value && iTraceInterval != 1)
+		{
+			CGameTrace trace2 = {}; Vec3 vOld, vNew;
+			int iTicks = iCached;
+			if (m_tInfo.m_flGravity)
+				iTicks -= iTimingTolerance;
+
+			for (int i = 1; i < iTicks; i++)
+			{
+				vOld = pCache->m_vPath[i - 1], vNew = pCache->m_vPath[i];
+				SDK::TraceHull(vOld, vNew, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace2);
+				bValid = !trace2.DidHit();
+				if (!bValid)
+					break;
+			}
+		}
+
+		bDidHit = bValid;
+
+		tTarget.m_pEntity->SetAbsOrigin(tOriginal.m_vOrigin);
+		tTarget.m_pEntity->m_vecMins() = tOriginal.m_vMins;
+		tTarget.m_pEntity->m_vecMaxs() = tOriginal.m_vMaxs;
+		m_tProjInfo.m_vPath = pCache->m_vPath;
+		m_tProjInfo.m_vPath.push_back(trace.endpos);
+
+		return bDidHit;
+	}
+
 	for (int n = 1; n <= iSimTime; n++)
 	{
 		F::ProjSim.RunTick(m_tProjInfo);
@@ -1548,6 +1620,11 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	tTarget.m_pEntity->SetAbsOrigin(tOriginal.m_vOrigin);
 	tTarget.m_pEntity->m_vecMins() = tOriginal.m_vMins;
 	tTarget.m_pEntity->m_vecMaxs() = tOriginal.m_vMaxs;
+	if (pCache && !pCache->m_bPathSet && iType != PointTypeEnum::Direct)
+	{
+		pCache->m_vPath = m_tProjInfo.m_vPath;
+		pCache->m_bPathSet = true;
+	}
 	m_tProjInfo.m_vPath.push_back(trace.endpos);
 
 	if (bDidHit)
@@ -1558,7 +1635,7 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	return bDidHit;
 }
 
-bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType, uint8_t iFlags)
+bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType, uint8_t iFlags, Point_t* pCache)
 {
 	PROJ_ZONE(HandlePoint);
 	PROJ_COUNT(HandlePoints);
@@ -1596,7 +1673,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 	}
 
 	if (!m_tInfo.m_pProjectile
-		? TestAngle(vPoint, vAngles, iSimTime, iType, iFlags)
+		? TestAngle(vPoint, vAngles, iSimTime, iType, iFlags, false, pCache)
 		: TestAngle(m_tInfo.m_pProjectile, m_tInfo.m_vLocalEye, vPoint, vAngles, iSimTime, iType, iFlags))
 	{
 		bReturn = bTested = true;
@@ -1753,7 +1830,10 @@ bool CAimbotProjectile::HandleSplash(SplashHistory_t& mSplashHistory)
 				if (flDistance > flLowestDistance)
 					continue;
 
-				if (HandlePoint(tHistory.m_vOrigin, tHistory.m_iSimtime, tPoint.m_tSolution.m_flPitch, tPoint.m_tSolution.m_flYaw, tPoint.m_tSolution.m_flTime, tPoint.m_vPoint, tPoint.m_iType, iType))
+				Point_t* pCache = tPoint.m_iIndex >= 0 && tPoint.m_iIndex < int(vSolvedPoints.size())
+					? &vSolvedPoints[size_t(tPoint.m_iIndex)] : nullptr;
+
+				if (HandlePoint(tHistory.m_vOrigin, tHistory.m_iSimtime, tPoint.m_tSolution.m_flPitch, tPoint.m_tSolution.m_flYaw, tPoint.m_tSolution.m_flTime, tPoint.m_vPoint, tPoint.m_iType, iType, pCache))
 				{
 					bReturn = true;
 					flLowestDistance = flDistance;
@@ -1774,11 +1854,16 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	PROJ_ZONE(CanHit);
 	PROJ_COUNT(CanHits);
 
+	const bool bAccountPing = Vars::Aimbot::Projectile::AccountPing.Value;
+	const bool bPlayerTarget = tTarget.m_pEntity->IsPlayer();
+	const Vec3 vTargetOrigin = bAccountPing && bPlayerTarget ? GetLastNetworkedOrigin(tTarget.m_pEntity) : tTarget.m_pEntity->m_vecOrigin();
+
 	//if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Unsimulated && H::Entities.GetChoke(tTarget.m_pEntity->entindex()) > Vars::Aimbot::General::TickTolerance.Value)
 	//	return false;
 
 	m_tMoveStorage = {};
-	if (!F::MoveSim.Initialize(tTarget.m_pEntity, m_tMoveStorage) && tTarget.m_iTargetType == TargetEnum::Player)
+	if (!F::MoveSim.Initialize(tTarget.m_pEntity, m_tMoveStorage, true, true, !bPlayerTarget || bAccountPing, bAccountPing && bPlayerTarget ? &vTargetOrigin : nullptr)
+		&& tTarget.m_iTargetType == TargetEnum::Player)
 	{
 		F::MoveSim.Restore(m_tMoveStorage);
 		return false;
@@ -1797,8 +1882,8 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	// The sentrygun's rocket firing position is fixed based on its current angles, so its not quite correct when testing with different angles
 	m_tInfo.m_vLocalEye = m_iWeaponID == TF_WEAPON_LASER_POINTER ? m_tProjInfo.m_vPos : m_vShootPos;
 	m_tInfo.m_vTargetEye = tTarget.m_pEntity->As<CTFPlayer>()->GetViewOffset();
-	m_tInfo.m_flLatency = Vars::Aimbot::Projectile::AccountPing.Value ? F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke()) : 0.f;
-	tTarget.m_vPos = tTarget.m_pEntity->m_vecOrigin();
+	m_tInfo.m_flLatency = bAccountPing ? F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke()) : 0.f;
+	tTarget.m_vPos = vTargetOrigin;
 
 	Vec3 vVelocity = F::ProjSim.GetVelocity();
 	m_tInfo.m_flVelocity = vVelocity.Length();
@@ -3022,8 +3107,13 @@ bool CAimbotProjectile::TestAngle(CBaseEntity* pProjectile, const Vec3& vOrigin,
 
 bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pProjectile)
 {
+	const bool bAccountPing = Vars::Aimbot::Projectile::AccountPing.Value;
+	const bool bPlayerTarget = tTarget.m_pEntity->IsPlayer();
+	const Vec3 vTargetOrigin = bAccountPing && bPlayerTarget ? GetLastNetworkedOrigin(tTarget.m_pEntity) : tTarget.m_pEntity->m_vecOrigin();
+
 	m_tMoveStorage = {};
-	if (!F::MoveSim.Initialize(tTarget.m_pEntity, m_tMoveStorage) && tTarget.m_iTargetType == TargetEnum::Player)
+	if (!F::MoveSim.Initialize(tTarget.m_pEntity, m_tMoveStorage, true, true, !bPlayerTarget || bAccountPing, bAccountPing && bPlayerTarget ? &vTargetOrigin : nullptr)
+		&& tTarget.m_iTargetType == TargetEnum::Player)
 	{
 		F::MoveSim.Restore(m_tMoveStorage);
 		return false;
@@ -3031,6 +3121,8 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 
 	m_tProjInfo = {};
 	F::ProjSim.GetInfo(pProjectile, m_tProjInfo);
+	if (bAccountPing)
+		m_tProjInfo.m_vPos = GetLastNetworkedOrigin(pProjectile);
 	if (!F::ProjSim.Initialize(m_tProjInfo, false, true))
 	{
 		F::MoveSim.Restore(m_tMoveStorage);
@@ -3038,13 +3130,15 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 	}
 
 	m_tInfo = { pLocal, m_tProjInfo.m_pWeapon, &tTarget, pProjectile };
-	m_tInfo.m_flLatency = Vars::Aimbot::Projectile::AccountPing.Value ? F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke()) : 0.f;
+	m_tInfo.m_flLatency = bAccountPing ? F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke()) : 0.f;
 	m_tInfo.m_vHull = pProjectile->m_vecMaxs().Min(3);
 	{
 		CGameTrace trace = {};
 		CTraceFilterWorldAndPropsOnly filter = {};
 
-		for (int i = TIME_TO_TICKS(m_tInfo.m_flLatency); i > 0; i--)
+		const int iProjectileLead = bAccountPing
+			? std::max(pLocal->m_nTickBase() - TIME_TO_TICKS(pProjectile->m_flSimulationTime()), 0) : 0;
+		for (int i = iProjectileLead; i > 0; i--)
 		{
 			Vec3 vOld = F::ProjSim.GetOrigin();
 			F::ProjSim.RunTick(m_tProjInfo);
@@ -3056,7 +3150,7 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 		m_tInfo.m_vLocalEye = m_tProjInfo.m_vPos; // just assume from the projectile without any offset, check validity later
 	}
 	m_tInfo.m_vTargetEye = tTarget.m_pEntity->As<CTFPlayer>()->GetViewOffset();
-	tTarget.m_vPos = tTarget.m_pEntity->m_vecOrigin();
+	tTarget.m_vPos = vTargetOrigin;
 
 	m_tInfo.m_flVelocity = m_tProjInfo.m_flVelocity;
 

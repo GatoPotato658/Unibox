@@ -70,6 +70,10 @@ struct Point_t
 	Solution_t m_tSolution = {};
 	uint8_t m_iType = PointTypeEnum::Direct;
 	float m_flFirstTime = 0.f;
+	std::vector<Vec3> m_vPath = {};
+	Vec3 m_vVelocity = {};
+	int m_iIndex = -1;
+	bool m_bPathSet = false;
 };
 
 struct Offset_t
@@ -125,8 +129,9 @@ private:
 
 	void CalculateAngle(const Vec3& vLocalPos, const Vec3& vTargetPos, int iSimTime, Solution_t& tOut, uint8_t iFlags = CalculateFlagsEnum::Accuracy, int iTolerance = -1);
 	bool TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest = false);
+	bool TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest, Point_t* pCache);
 
-	bool HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType = PointTypeEnum::Direct, uint8_t iFlags = PointFlagsEnum::Regular);
+	bool HandlePoint(const Vec3& vOrigin, int iSimTime, float flPitch, float flYaw, float flTime, const Vec3& vPoint, uint8_t iType = PointTypeEnum::Direct, uint8_t iFlags = PointFlagsEnum::Regular, Point_t* pCache = nullptr);
 	bool HandleDirect(DirectHistory_t& vDirectHistory);
 	bool HandleSplash(SplashHistory_t& vSplashHistory);
 
