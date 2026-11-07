@@ -272,6 +272,7 @@ void CCore::Unload()
 	if (auto pSwayScale = H::ConVars.FindVar("cl_wpn_sway_scale"))
 		pSwayScale->SetValue(0.f);
 	F::Visuals.RestoreWorldModulation();
+	H::Entities.RemovePrecipitation();
 	if (auto pLocal = H::Entities.GetLocal())
 	{
 		if (F::Spectate.HasTarget())

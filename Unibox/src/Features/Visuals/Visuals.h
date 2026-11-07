@@ -101,6 +101,7 @@ public:
 
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void LocalAnimations(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	void Precipitation();
 };
 
 ADD_FEATURE(CVisuals, Visuals);

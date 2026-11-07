@@ -1530,6 +1530,28 @@ void CVisuals::LocalAnimations(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserC
 	F::FakeAngle.Run(pLocal);
 }
 
+void CVisuals::Precipitation()
+{
+	if (!Vars::Visuals::World::Precipitation.Value)
+	{
+		H::Entities.RemovePrecipitation();
+		return;
+	}
+
+	CClient_Precipitation* pPrecipitation = H::Entities.GetPrecipitation();
+	if (!pPrecipitation)
+		return;
+
+	auto pNetworkable = pPrecipitation->GetClientNetworkable();
+	pNetworkable->PreDataUpdate(DATA_UPDATE_CREATED);
+	pNetworkable->OnPreDataChanged(DATA_UPDATE_CREATED);
+	pPrecipitation->m_nPrecipType() = Vars::Visuals::World::Precipitation.Value - 1;
+	Vec3 vBounds = Vec3(16384.0f, 16384.0f, 16384.0f);
+	pPrecipitation->m_Collision()->SetCollisionBounds(-vBounds, vBounds);
+	pNetworkable->OnDataChanged(DATA_UPDATE_CREATED);
+	pNetworkable->PostDataUpdate(DATA_UPDATE_CREATED);
+}
+
 #ifdef DEBUG_UNI
 void CVisuals::RemoveUni()
 {

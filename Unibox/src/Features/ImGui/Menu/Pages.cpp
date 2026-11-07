@@ -716,6 +716,7 @@ static void VisualsWorld()
 		FSDropdown(SkyboxChanger);
 		FToggle(NearPropFade);
 		FToggle(NoPropFade);
+		FDropdown(Precipitation);
 
 		Subheader("Modulation");
 		FDropdown(Modulations);

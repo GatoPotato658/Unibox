@@ -399,6 +399,7 @@ void CEntities::Clear(bool bShutdown)
 	m_pLocalLaserDot = nullptr;
 	m_pPlayerResource = nullptr;
 	m_pObjectiveResource = nullptr;
+	m_pPrecipitation = nullptr;
 	m_aGroups = {};
 
 	if (bShutdown)
@@ -592,6 +593,56 @@ CTFWeaponBase* CEntities::GetWeapon() { return m_pLocalWeapon; }
 CSniperDot* CEntities::GetLaserDot() { return m_pLocalLaserDot; }
 CTFPlayerResource* CEntities::GetResource() { return m_pPlayerResource; }
 CBaseTeamObjectiveResource* CEntities::GetObjectiveResource( ) { return m_pObjectiveResource; }
+
+CClient_Precipitation* CEntities::GetPrecipitation()
+{
+	static ClientClass* pPrecipitationClass = nullptr;
+	if (!pPrecipitationClass)
+	{
+		for (auto pClass = I::Client->GetAllClasses(); pClass; pClass = pClass->m_pNext)
+		{
+			if (pClass->m_ClassID == (int)ETFClassID::CPrecipitation)
+			{
+				pPrecipitationClass = pClass;
+				break;
+			}
+		}
+	}
+
+	if (!GetLocal())
+		return nullptr;
+
+	if (!m_pPrecipitation && !m_bPrecipitationCreated && pPrecipitationClass)
+	{
+		if (I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1) != nullptr)
+		{
+			if (Vars::Debug::Logging.Value)
+				SDK::Output(__FUNCTION__, "Couldn't create CPrecipitation entity, MAX_EDICTS - 1 is already taken.");
+			return nullptr;
+		}
+		pPrecipitationClass->m_pCreateFn(MAX_EDICTS - 1, 0);
+		m_bPrecipitationCreated = true;
+	}
+
+	if (m_bPrecipitationCreated)
+		m_pPrecipitation = I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1)->As<CClient_Precipitation>();
+
+	return m_pPrecipitation;
+}
+
+void CEntities::RemovePrecipitation()
+{
+	if (m_bPrecipitationCreated)
+	{
+		if (m_pPrecipitation || ((m_pPrecipitation = I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1)->As<CClient_Precipitation>()) &&
+			m_pPrecipitation->GetClassID() == ETFClassID::CPrecipitation))
+		{
+			m_pPrecipitation->GetClientNetworkable()->Release();
+			m_pPrecipitation = nullptr;
+		}
+		m_bPrecipitationCreated = false;
+	}
+}
 
 const std::vector<CBaseEntity*>& CEntities::GetGroup(uint8_t iGroup) { return m_aGroups[iGroup]; }
 

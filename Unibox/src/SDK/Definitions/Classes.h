@@ -7,6 +7,7 @@
 #include "Main/CFuncPasstimeGoal.h"
 #include "Main/CFuncRespawnRoom.h"
 #include "Main/CBaseTeamObjectiveResource.h"
+#include "Main/CClient_Precipitation.h"
 #include "Main/CBaseFlex.h"
 #include "Main/CBaseHandle.h"
 #include "Main/CBaseObject.h"

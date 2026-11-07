@@ -815,6 +815,7 @@
     <ClInclude Include="src\SDK\Definitions\Interfaces\IInput.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\IKeyValuesSystem.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\ILocalize.h" />
+    <ClInclude Include="src\SDK\Definitions\Main\CClient_Precipitation.h" />
     <ClInclude Include="src\SDK\Definitions\Misc\IMDLCache.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\IMemAlloc.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\IPanel.h" />

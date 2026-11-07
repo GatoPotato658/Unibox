@@ -104,6 +104,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 			F::NavRender.CacheIndicators(pLocal);
 			F::SkinChanger.CacheMenuInfo(H::Entities.GetWeapon());
 			F::SkinChanger.Service();
+			if (pLocal) F::Visuals.Precipitation();
 		}
 #endif
 #ifdef TEXTMODE

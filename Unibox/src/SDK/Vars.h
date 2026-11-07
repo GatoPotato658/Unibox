@@ -719,6 +719,8 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(ShowTriggers, "Show triggers", 0b00000, VISUAL | DROPDOWN_MULTI, nullptr,
 				VA_LIST("Hurt", "Ignite", "Push", "Regenerate", "Respawn room", "Capture area", "Catapult", "Apply impulse", "##Divider", "Show angles", "Show surface centers", "Ignore Z"),
 				Hurt = 1 << 0, Ignite = 1 << 1, Push = 1 << 2, Regenerate = 1 << 3, RespawnRoom = 1 << 4, CaptureArea = 1 << 5, Catapult = 1 << 6, ApplyImpulse = 1 << 7, ShowAngles = 1 << 8, ShowSurfaceCenters = 1 << 9, IgnoreZ = 1 << 10);
+			CVarValues(Precipitation, "Precipitation", 0, VISUAL, nullptr,
+				"Off", "Rain", "Snow (WIP)", "Ash (WIP)", "Snowfall (WIP)");
 		NAMESPACE_END(World)
 
 		NAMESPACE_BEGIN(Beams)
