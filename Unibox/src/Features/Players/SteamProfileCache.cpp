@@ -17,6 +17,7 @@ static constexpr Color_t ErrorColor = { 255, 150, 150, 255 };
 static constexpr auto AvatarRefreshAge = std::chrono::days(7);
 static constexpr uint32_t MaxAvatarDimension = 1024;
 static constexpr double AvatarRequestTimeout = 8.0;
+static constexpr double SteamRequestInterval = 1.0;
 
 static double NowSeconds()
 {
@@ -261,7 +262,7 @@ void CSteamProfileCache::Refresh(uint32_t uAccountID)
 	auto& tEntry = m_mEntries[uAccountID];
 	LoadAvatarFromDisk(uAccountID, tEntry);
 	tEntry.m_bNameRequested = false;
-	RequestName(uAccountID, tEntry);
+	RequestName(uAccountID, tEntry, true);
 	RequestAvatar(uAccountID, tEntry, true);
 }
 
@@ -332,6 +333,8 @@ void CSteamProfileCache::Pump()
 		SaveAvatarToDisk(uAccountID, *pPixels, uWidth, uHeight, nullptr, false);
 	for (const auto& [uAccountID, iImage] : vPendingImages)
 		CaptureSteamAvatar(uAccountID, iImage);
+
+	DispatchSteamRequest();
 }
 
 bool CSteamProfileCache::IsAvatarPending(uint32_t uAccountID)
@@ -346,7 +349,7 @@ bool CSteamProfileCache::IsAvatarPending(uint32_t uAccountID)
 		return false;
 
 	auto& tEntry = it->second;
-	if (tEntry.m_bAvatarRequested && !tEntry.m_bAvatarUnavailable
+	if (tEntry.m_bAvatarRequested && !tEntry.m_bAvatarQueued && !tEntry.m_bAvatarUnavailable
 		&& NowSeconds() - tEntry.m_flAvatarRequestedAt > AvatarRequestTimeout)
 	{
 		tEntry.m_bAvatarRequested = false;
@@ -399,33 +402,122 @@ void CSteamProfileCache::CaptureNativeAvatar(uint64_t uSteamID, const uint8_t* p
 	StoreAvatar(tSteamID.GetAccountID(), std::move(vBgra), uWidth, uHeight, true);
 }
 
-void CSteamProfileCache::RequestName(uint32_t uAccountID, Entry_t& tEntry)
+void CSteamProfileCache::DispatchSteamRequest()
 {
-	if (tEntry.m_bNameRequested || !I::SteamFriends)
+	if (!I::SteamFriends)
 		return;
-	I::SteamFriends->RequestUserInformation(CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual), true);
+
+	uint32_t uAccountID = 0;
+	bool bAvatar = false;
+	{
+		std::lock_guard tLock(m_mutex);
+		const double flNow = NowSeconds();
+		if (flNow < m_flNextSteamRequest)
+			return;
+
+		while (!m_vAvatarRequests.empty())
+		{
+			const uint32_t uCandidate = m_vAvatarRequests.front();
+			m_vAvatarRequests.pop_front();
+			const auto it = m_mEntries.find(uCandidate);
+			if (it == m_mEntries.end())
+				continue;
+
+			auto& tEntry = it->second;
+			tEntry.m_bAvatarQueued = false;
+			if (!tEntry.m_bAvatarRequested || tEntry.m_pAvatarPixels)
+			{
+				if (tEntry.m_pAvatarPixels)
+					tEntry.m_bAvatarRequested = false;
+				continue;
+			}
+
+			uAccountID = uCandidate;
+			bAvatar = true;
+			tEntry.m_flAvatarRequestedAt = flNow;
+			break;
+		}
+
+		if (!uAccountID)
+		{
+			while (!m_vNameRequests.empty())
+			{
+				const uint32_t uCandidate = m_vNameRequests.front();
+				m_vNameRequests.pop_front();
+				const auto it = m_mEntries.find(uCandidate);
+				if (it == m_mEntries.end())
+					continue;
+
+				auto& tEntry = it->second;
+				tEntry.m_bNameQueued = false;
+				if (!tEntry.m_bNameRequested || !tEntry.m_sPersonaName.empty())
+				{
+					if (!tEntry.m_sPersonaName.empty())
+						tEntry.m_bNameRequested = false;
+					continue;
+				}
+
+				uAccountID = uCandidate;
+				break;
+			}
+		}
+
+		if (!uAccountID)
+			return;
+		m_flNextSteamRequest = flNow + SteamRequestInterval;
+	}
+
+	const CSteamID tSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual);
+	I::SteamFriends->RequestUserInformation(tSteamID, !bAvatar);
+
+	const char* pszName = I::SteamFriends->GetFriendPersonaName(tSteamID);
+	const int iImage = bAvatar ? I::SteamFriends->GetLargeFriendAvatar(tSteamID) : 0;
+	std::lock_guard tLock(m_mutex);
+	const auto it = m_mEntries.find(uAccountID);
+	if (it == m_mEntries.end())
+		return;
+
+	auto& tEntry = it->second;
+	if (pszName && *pszName && std::strcmp(pszName, "Unknown") != 0)
+	{
+		tEntry.m_sPersonaName = pszName;
+		tEntry.m_bNameRequested = false;
+	}
+	if (iImage > 0)
+		tEntry.m_iPendingImage = iImage;
+}
+
+void CSteamProfileCache::RequestName(uint32_t uAccountID, Entry_t& tEntry, bool bForce)
+{
+	if (tEntry.m_bNameRequested || tEntry.m_bNameQueued || !I::SteamFriends)
+		return;
+	if (!bForce && !tEntry.m_sPersonaName.empty())
+		return;
+
 	tEntry.m_bNameRequested = true;
+	tEntry.m_bNameQueued = true;
+	m_vNameRequests.push_back(uAccountID);
 }
 
 void CSteamProfileCache::RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, bool bForce)
 {
 	if (!I::SteamFriends)
 		return;
+	if (tEntry.m_bAvatarQueued || tEntry.m_bAvatarRequested)
+		return;
 	if (!bForce)
 	{
 		const bool bFresh = tEntry.m_pAvatarPixels && tEntry.m_tAvatarTimestamp.time_since_epoch().count()
 			&& std::filesystem::file_time_type::clock::now() - tEntry.m_tAvatarTimestamp < AvatarRefreshAge;
-		if (bFresh || tEntry.m_bAvatarRequested || tEntry.m_bAvatarUnavailable)
+		if (bFresh || tEntry.m_bAvatarUnavailable)
 			return;
 	}
 
-	const CSteamID tSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual);
-	I::SteamFriends->RequestUserInformation(tSteamID, false);
 	tEntry.m_bAvatarRequested = true;
+	tEntry.m_bAvatarQueued = true;
 	tEntry.m_bAvatarUnavailable = false;
-	tEntry.m_flAvatarRequestedAt = NowSeconds();
-	if (const int iImage = I::SteamFriends->GetLargeFriendAvatar(tSteamID); iImage > 0)
-		tEntry.m_iPendingImage = iImage;
+	tEntry.m_flAvatarRequestedAt = 0.0;
+	m_vAvatarRequests.push_back(uAccountID);
 }
 
 bool CSteamProfileCache::ReadAvatarFile(uint32_t uAccountID, std::vector<uint8_t>& vPixels, uint32_t& uWidth, uint32_t& uHeight, std::filesystem::file_time_type& tTimestamp)
@@ -516,7 +608,10 @@ void CSteamProfileCache::HandlePersonaStateChange(const PersonaStateChange_t& tC
 	if (tCallback.m_nChangeFlags & k_EPersonaChangeName)
 	{
 		if (const char* pszName = I::SteamFriends ? I::SteamFriends->GetFriendPersonaName(tSteamID) : nullptr; pszName && *pszName)
+		{
 			tEntry.m_sPersonaName = pszName;
+			tEntry.m_bNameRequested = false;
+		}
 	}
 	if (tCallback.m_nChangeFlags & k_EPersonaChangeAvatar)
 		RequestAvatar(uAccountID, tEntry, true);

@@ -27,6 +27,21 @@ public:
 		return reinterpret_cast<void*>(uData + iIndex * 24);
 	}
 
+	inline bool IsCosmeticUnusualEffect(int iEffect) const
+	{
+		const auto* pVector = reinterpret_cast<const uint8_t*>(this) + 0x540;
+		const auto* pEffects = *reinterpret_cast<const int* const*>(pVector);
+		const int iCount = *reinterpret_cast<const int*>(pVector + 0x10);
+		if (!pEffects || iCount <= 0)
+			return false;
+		for (int i = 0; i < iCount; i++)
+		{
+			if (pEffects[i] == iEffect)
+				return true;
+		}
+		return false;
+	}
+
 	static CEconItemSchema* GetInstance()
 	{
 		return S::TFItemSystem_GetItemSchema.Call<CEconItemSchema*>();

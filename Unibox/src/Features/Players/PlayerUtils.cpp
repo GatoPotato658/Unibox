@@ -587,17 +587,8 @@ std::string CPlayerlistUtils::ResolveAccountName(uint32_t uAccountID, const std:
 		}
 	}
 
-	if (I::SteamFriends)
-	{
-		const CSteamID steamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual);
-		if (const char* persona = I::SteamFriends->GetFriendPersonaName(steamID); persona && *persona && std::strcmp(persona, "Unknown") != 0)
-			return persona;
-	}
-
 	if (auto sRemote = F::SteamProfileCache.GetPersonaName(uAccountID); !sRemote.empty())
 		return sRemote;
-
-	F::SteamProfileCache.Touch(uAccountID);
 
 	return std::format("{}", CSteamID(uAccountID, k_EUniversePublic, k_EAccountTypeIndividual).ConvertToUint64());
 }

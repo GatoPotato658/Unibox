@@ -304,6 +304,12 @@ namespace
 		}
 	}
 
+	int ValidUnusualEffect(int iUnusual)
+	{
+		const auto* pSchema = CEconItemSchema::GetInstance();
+		return pSchema && pSchema->IsCosmeticUnusualEffect(iUnusual) ? iUnusual : 0;
+	}
+
 	std::unordered_map<int, void*> s_mAttrDefs;
 
 	void* ResolveUncachedAttrDef(int iIndex)
@@ -958,8 +964,7 @@ namespace
 	void ApplyUnusual(CEconItemView* pView, void* pItem, int iUnusual)
 	{
 		const uint16_t iDef = Field<uint16_t>(pView, kViewDefIndex);
-		if (!IsWearableDef(iDef))
-			iUnusual = 0;
+		iUnusual = IsWearableDef(iDef) ? ValidUnusualEffect(iUnusual) : 0;
 		const int iQuality = iUnusual > 0 ? kQualityUnusual : kQualityUnique;
 		if (pItem)
 			Field<uint8_t>(pItem, kItemQuality) = uint8_t(iQuality);
@@ -1473,10 +1478,13 @@ namespace
 	int RandomUnusualEffect()
 	{
 		static std::vector<int> s_vEffects = {};
-		if (s_vEffects.empty() && I::Localize)
+		const auto* pSchema = CEconItemSchema::GetInstance();
+		if (s_vEffects.empty() && I::Localize && pSchema)
 		{
 			for (int i = 1; i <= 3242; i++)
 			{
+				if (!pSchema->IsCosmeticUnusualEffect(i))
+					continue;
 				const char* sName = I::Localize->FindAsUTF8(std::format("#Attrib_Particle{}", i).c_str());
 				if (!sName || !sName[0])
 					continue;
@@ -2054,7 +2062,7 @@ void CSkinChanger::SyncInventory()
 
 		const uint16_t iDef = tItem.iDef;
 		const uint64_t uID = ClientItemID(tItem.uSerial, iDef);
-		const int iUnusual = std::max(tItem.iUnusual, 0);
+		const int iUnusual = ValidUnusualEffect(tItem.iUnusual);
 
 		void* pItem = GetClientSOCData(uID);
 		if (tPresent.contains(uID))
@@ -3031,9 +3039,10 @@ void CSkinChanger::AddToBackpack(uint16_t iDef, int iUnusual, int iStyle)
 	if (!iDef || iUnusual > 0xFFFF)
 		return;
 
+	iUnusual = ValidUnusualEffect(iUnusual);
 	std::lock_guard tLock(m_tMutex);
 	if (const uint32_t uSerial = NextSerial())
-		m_vBackpack.push_back({ uSerial, iDef, std::max(iUnusual, 0), -1, -1, std::max(iStyle, 0) });
+		m_vBackpack.push_back({ uSerial, iDef, iUnusual, -1, -1, std::max(iStyle, 0) });
 }
 
 void CSkinChanger::SetBackpackStyle(uint32_t uSerial, int iStyle)
@@ -3084,7 +3093,7 @@ int CSkinChanger::GetItemUnusual(uint64_t uItemID)
 	std::lock_guard tLock(m_tMutex);
 	const uint32_t uSerial = ClientItemSerial(uItemID);
 	const auto it = std::find_if(m_vBackpack.begin(), m_vBackpack.end(), [uSerial](const BackpackItem_t& tItem) { return tItem.uSerial == uSerial; });
-	return it != m_vBackpack.end() ? it->iUnusual : 0;
+	return it != m_vBackpack.end() ? ValidUnusualEffect(it->iUnusual) : 0;
 }
 
 void CSkinChanger::OnLevelShutdown()

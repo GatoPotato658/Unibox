@@ -2,6 +2,7 @@
 
 #include "../../SDK/SDK.h"
 
+#include <deque>
 #include <filesystem>
 #include <mutex>
 
@@ -54,7 +55,9 @@ private:
 		bool m_bDiskChecked = false;
 		bool m_bDiskLoadQueued = false;
 		bool m_bNameRequested = false;
+		bool m_bNameQueued = false;
 		bool m_bAvatarRequested = false;
+		bool m_bAvatarQueued = false;
 		bool m_bAvatarUnavailable = false;
 		double m_flAvatarRequestedAt = 0.0;
 		bool m_bSavePending = false;
@@ -63,11 +66,15 @@ private:
 
 	std::mutex m_mutex;
 	std::unordered_map<uint32_t, Entry_t> m_mEntries;
+	std::deque<uint32_t> m_vNameRequests;
+	std::deque<uint32_t> m_vAvatarRequests;
+	double m_flNextSteamRequest = 0.0;
 	bool m_bCallbacksRegistered = false;
 	void(__cdecl* m_pUnregisterCallback)(CCallbackBase*) = nullptr;
 
 	void EnsureCallbacksRegistered();
-	void RequestName(uint32_t uAccountID, Entry_t& tEntry);
+	void DispatchSteamRequest();
+	void RequestName(uint32_t uAccountID, Entry_t& tEntry, bool bForce = false);
 	void RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, bool bForce);
 	void LoadAvatarFromDisk(uint32_t uAccountID, Entry_t& tEntry);
 	static bool ReadAvatarFile(uint32_t uAccountID, std::vector<uint8_t>& vPixels, uint32_t& uWidth, uint32_t& uHeight, std::filesystem::file_time_type& tTimestamp);

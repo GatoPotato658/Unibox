@@ -2113,11 +2113,14 @@ namespace
 	{
 		static std::vector<std::pair<int, std::string>> s_vEffects = {};
 		static bool s_bBuilt = false;
-		if (!s_bBuilt && I::Localize)
+		const auto* pSchema = CEconItemSchema::GetInstance();
+		if (!s_bBuilt && I::Localize && pSchema)
 		{
 			std::unordered_set<std::string> tSeen = {};
 			for (int i = 1; i <= 3242; i++)
 			{
+				if (!pSchema->IsCosmeticUnusualEffect(i))
+					continue;
 				const char* sName = I::Localize->FindAsUTF8(std::format("#Attrib_Particle{}", i).c_str());
 				if (!sName || !sName[0])
 					continue;
