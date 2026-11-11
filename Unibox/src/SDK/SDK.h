@@ -79,6 +79,16 @@
 #define ERROR_COLOR			Color_t(255, 50, 50, 255)
 #define INFO_COLOR			Color_t(50, 150, 255, 255)
 
+struct FireSetup_t
+{
+	Vec3 m_vShootPos = {};
+	Vec3 m_vOffset = {};
+	float m_flForward = 0.f;
+	float m_flCutoff = 0.f;
+	float m_flHeight = 0.f;
+	bool m_bValid = false;
+};
+
 namespace SDK
 {
 	void Output(const char* sFunction, const char* sLog = nullptr, Color_t tColor = { 255, 255, 255, 255 },
@@ -156,7 +166,8 @@ namespace SDK
 	void WalkTo(CUserCmd* pCmd, CTFPlayer* pLocal, const Vec3& vFrom, const Vec3& vTo, float flScale = 1.f);
 	void WalkTo(CUserCmd* pCmd, CTFPlayer* pLocal, Vec3 vTo, float flScale = 1.f);
 
-	void GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vOffset, Vec3& vPosOut, Vec3& vAngOut, float flForward = 0.f, float flCutoff = 0.1f, bool bInterp = false, bool bAllowFlip = true);
+	void GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vOffset, Vec3& vPosOut, Vec3& vAngOut, float flForward = 0.f, float flCutoff = 0.1f, bool bInterp = false, bool bAllowFlip = true, FireSetup_t* pSetup = nullptr);
+	void ApplyProjectileFireSetup(CTFPlayer* pPlayer, const FireSetup_t& tSetup, const Vec3& vAngIn, Vec3& vPosOut, Vec3& vAngOut);
 
 	float CalculateSplashRadiusDamageFalloff(CTFWeaponBase* pWeapon, CTFPlayer* pAttacker, CTFWeaponBaseGrenadeProj* pProjectile, float flRadius);
 	float CalculateSplashRadiusDamage(CTFWeaponBase* pWeapon, CTFPlayer* pAttacker, CTFWeaponBaseGrenadeProj* pProjectile, float flRadius, float flDist, float& flDamageNoBuffs, bool bSelf = false);

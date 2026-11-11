@@ -35,6 +35,7 @@ public:
 
 	void AskForPlayerPerf();
 	bool ParsePlayerPerf(const std::string& sMsg);
+	bool IsWaitingForPlayerPerf() const { return m_bWaitingForPlayerPerf; }
 
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void CacheDrawInfo(CTFPlayer* pLocal);

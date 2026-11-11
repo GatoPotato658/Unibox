@@ -64,6 +64,8 @@ public:
 	virtual ConnectionStatus_t GetConnectionState() = 0;
 	virtual const netadr_t& GetRemoteAddress(void) const = 0;
 
+	OFFSET_EMBED(m_ReceiveList, dataFragments_t*, 0x168);
+
 	ConnectionStatus_t m_ConnectionState;
 	int m_nOutSequenceNr;
 	int m_nInSequenceNr;

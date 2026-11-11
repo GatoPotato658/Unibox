@@ -382,23 +382,8 @@ NAMESPACE_BEGIN(Vars)
 			CVar(GrapplingHookAim, "Grappling hook aim", false);
 			CVar(AutoSCMetalAmount, "Auto short circuit min metal", 0, SLIDER_CLAMP, 0, 195, 65);
 
-			CVar(GroundSamples, "Samples", 33, NOSAVE | DEBUGVAR, 3, 66);
-			CVar(GroundStraightFuzzyValue, "Straight fuzzy value", 100.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 500.f, 25.f);
-			CVar(GroundLowMinimumSamples, "Low min samples", 16, NOSAVE | DEBUGVAR, 3, 66);
-			CVar(GroundHighMinimumSamples, "High min samples", 33, NOSAVE | DEBUGVAR, 3, 66);
-			CVar(GroundLowMinimumDistance, "Low min distance", 0.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 2500.f, 100.f);
-			CVar(GroundHighMinimumDistance, "High min distance", 1000.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 2500.f, 100.f);
-			CVar(GroundMaxChanges, "Max changes", 0, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0, 5);
-			CVar(GroundMaxChangeTime, "Max change time", 0, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0, 66);
-
-			CVar(AirSamples, "Samples", 33, NOSAVE | DEBUGVAR, 3, 66);
-			CVar(AirStraightFuzzyValue, "Straight fuzzy value", 0.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 500.f, 25.f);
-			CVar(AirLowMinimumSamples, "Low min samples", 16, NOSAVE | DEBUGVAR, 3, 66);
-			CVar(AirHighMinimumSamples, "High min samples", 16, NOSAVE | DEBUGVAR, 3, 66);
-			CVar(AirLowMinimumDistance, "Low min distance", 100000.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 2500.f, 100.f);
-			CVar(AirHighMinimumDistance, "High min distance", 100000.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 2500.f, 100.f);
-			CVar(AirMaxChanges, "Max changes", 2, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0, 5);
-			CVar(AirMaxChangeTime, "Max change time", 16, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0, 66);
+			CVar(GroundSamples, "Ground samples", 33, NOSAVE | DEBUGVAR, 3, 66);
+			CVar(AirSamples, "Air samples", 33, NOSAVE | DEBUGVAR, 3, 66);
 
 			CVar(VelocityAverageCount, "Velocity average count", 5, NOSAVE | DEBUGVAR, 1, 10);
 			CVar(VerticalShift, "Vertical shift", 5.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f, 0.5f);
@@ -433,9 +418,6 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(DeltaMode, "Delta mode", 0, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("Average", "Max"),
 				Average, Max);
-			CVarEnum(MovesimFrictionFlags, "Movesim friction flags", 0b01, NOSAVE | DEBUGVAR | DROPDOWN_MULTI, nullptr,
-				VA_LIST("Run reduce", "Calculate increase"),
-				RunReduce = 1 << 0, CalculateIncrease = 1 << 1);
 			CVar(AccountPing, "Account for ping", true, DEBUGVAR);
 			CVar(AutodetAccountPing, "Auto detonate account for ping", true, DEBUGVAR);
 
@@ -833,10 +815,9 @@ NAMESPACE_BEGIN(Vars)
 
 		NAMESPACE_BEGIN(Movement)
 			CVarEnum(AutoStrafe, "Auto strafe", 0, NONE, nullptr,
-				VA_LIST("Off", "Legit", "Directional"),
-				Off, Legit, Directional);
-			CVar(AutoStrafeTurnScale, VA_LIST("Turn scale", "Auto strafe turn scale"), 0.5f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 1.f, 0.1f);
-			CVar(AutoStrafeMaxDelta, VA_LIST("Max delta", "Auto strafe max delta"), 180.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 180.f, 5.f);
+				VA_LIST("Off", "Viewangles", "WASD"),
+				Off, Viewangles, WASD);
+			CVar(AutoStrafeRetrack, VA_LIST("Retrack", "Auto strafe retrack"), 50.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(Bunnyhop, "Bunnyhop", false);
 			CVar(EdgeJump, "Edge jump", false);
 			CVar(BreakJump, "Break jump", false);
@@ -1408,18 +1389,7 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_END(Logging)
 
 	NAMESPACE_BEGIN(CheatDetection, Cheat Detection)
-		CVarEnum(Methods, "Detection methods", 0b000000, DROPDOWN_MULTI, nullptr,
-			VA_LIST("Invalid pitch", "Packet choking", "Aim flicking", "Duck Speed", "Lagcomp abuse", "Critbucket"),
-			InvalidPitch = 1 << 0, PacketChoking = 1 << 1, AimFlicking = 1 << 2, DuckSpeed = 1 << 3, LagCompAbuse = 1 << 4, CritManipulation = 1 << 5);
-		CVar(DetectionsRequired, "Detections required", 10, SLIDER_MIN, 0, 50);
-		CVar(MinChoking, "Min choking", 8, SLIDER_MIN, 4, 22);
-		CVar(MinFlick, "Min flick angle", 20.f, SLIDER_PRECISION, 10.f, 30.f);
-		CVar(MaxNoise, "Max flick noise", 1.f, SLIDER_PRECISION, 1.f, 10.f);
-		CVar(LagCompMinimumDelta, "Lag burst delta", 3, SLIDER_MIN, 2, 8);
-		CVar(LagCompWindow, "Lag burst window", 1.f, SLIDER_PRECISION, 0.25f, 2.f, 0.05f);
-		CVar(LagCompBurstCount, "Lag burst count", 3, SLIDER_MIN, 1, 6);
-		CVar(CritWindow, "Crit window size", 12, SLIDER_MIN, 6, 30);
-		CVar(CritThreshold, "Crit rate threshold", 85.f, SLIDER_PRECISION, 50.f, 100.f, 5.f);
+		CVar(Enabled, "Enabled", false);
 	NAMESPACE_END(CheatDetection)
 
 	NAMESPACE_BEGIN(Debug)

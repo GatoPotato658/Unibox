@@ -24,6 +24,7 @@
     <ClCompile Include="src\Utils\NetVars\NetVars.cpp" />
     <ClCompile Include="src\Utils\Signatures\Signatures.cpp" />
     <ClCompile Include="src\Utils\Timer\Timer.cpp" />
+    <ClCompile Include="src\Utils\ThreadPool\ThreadPool.cpp" />
     <ClCompile Include="src\DllMain.cpp" />
     <ClCompile Include="include\MinHook\hde\hde32.c" />
     <ClCompile Include="include\MinHook\hde\hde64.c" />
@@ -118,6 +119,8 @@
     <ClCompile Include="src\Hooks\CL_ReadPackets.cpp" />
     <ClCompile Include="src\Hooks\ClientModeTFNormal_BIsFriendOrPartyMember.cpp" />
     <ClCompile Include="src\Hooks\CMatchInviteNotification_OnTick.cpp" />
+    <ClCompile Include="src\Hooks\CNetChannel_ProcessPacket.cpp" />
+    <ClCompile Include="src\Hooks\CNetChannel_ReadSubChannelData.cpp" />
     <ClCompile Include="src\Hooks\CNetChannel_SendDatagram.cpp" />
     <ClCompile Include="src\Hooks\CNetChannel_SendNetMsg.cpp" />
     <ClCompile Include="src\Hooks\COPRenderSprites_Render.cpp" />
@@ -395,6 +398,7 @@
     <ClInclude Include="src\Utils\NetVars\NetVars.h" />
     <ClInclude Include="src\Utils\Signatures\Signatures.h" />
     <ClInclude Include="src\Utils\Timer\Timer.h" />
+    <ClInclude Include="src\Utils\ThreadPool\ThreadPool.h" />
     <ClInclude Include="include\MinHook\hde\hde32.h" />
     <ClInclude Include="include\MinHook\hde\hde64.h" />
     <ClInclude Include="include\MinHook\hde\pstdint.h" />

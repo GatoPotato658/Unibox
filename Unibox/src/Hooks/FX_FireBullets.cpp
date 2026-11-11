@@ -1,6 +1,7 @@
 #include "../SDK/SDK.h"
 
 #include "../Features/Backtrack/Backtrack.h"
+#include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
 #include "../Features/Resolver/Resolver.h"
 
@@ -16,7 +17,10 @@ MAKE_HOOK(FX_FireBullets, S::FX_FireBullets(), void,
 	const auto dwDesired = S::CTFWeaponBaseGun_FireBullet_FireBullets_Call();
 
 	if (iPlayer != I::EngineClient->GetLocalPlayer())
+	{
 		F::Backtrack.ReportShot(iPlayer);
+		F::CheatDetection.OnFireBullets(iPlayer);
+	}
 	else if (Vars::Aimbot::General::NoSpread.Value && dwRetAddr == dwDesired)
 		iSeed = F::NoSpreadHitscan.m_iSeed;
 

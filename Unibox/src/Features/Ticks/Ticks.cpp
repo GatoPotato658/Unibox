@@ -18,6 +18,232 @@ void CTicks::Reset()
 {
 	m_bDoubletap = m_bRecharge = m_bWarp = false;
 	m_iShiftedTicks = m_iShiftedGoal = 0;
+
+	m_aFixes = {};
+	m_aBatches = {};
+	m_iSendTick = 0;
+	m_iLastSendTick = -1;
+	m_dSendClock = m_dLastSendClock = 0.0;
+	m_iServerTick = m_iServerAck = -1;
+	m_dOffsetLow = m_dOffsetHigh = 0.0;
+	m_bOffsetKnown = false;
+}
+
+int TickbaseFix_t::AdjustedTick(int iTickBase) const
+{
+	if (!m_bMultiplayer)
+		return m_iServerTick - m_iSimulationTicks + m_iFrameTicks;
+
+	const int iIdeal = m_iServerTick + m_iCorrectionTicks;
+	const int iEstimated = iTickBase + m_iSimulationTicks;
+	if (iEstimated > iIdeal + m_iCorrectionTicks || iEstimated < iIdeal - m_iCorrectionTicks)
+		return iIdeal - m_iSimulationTicks + m_iFrameTicks;
+
+	return iTickBase;
+}
+
+bool TickbaseFix_t::SameFrame(const TickbaseFix_t& tOther) const
+{
+	return m_iServerTick == tOther.m_iServerTick && m_iFrameTicks == tOther.m_iFrameTicks
+		&& m_iCorrectionTicks == tOther.m_iCorrectionTicks && m_bMultiplayer == tOther.m_bMultiplayer;
+}
+
+double CTicks::PacketTime(bool bLoopback)
+{
+	if (bLoopback)
+		return *reinterpret_cast<double*>(U::Memory.RelToAbs(S::net_time(), 4));
+
+	static auto Plat_FloatTime = U::Memory.GetModuleExport<double(*)()>("tier0.dll", "Plat_FloatTime");
+	return Plat_FloatTime();
+}
+
+double CTicks::ClockNow()
+{
+	auto pNetChan = I::ClientState->m_NetChannel;
+	if (!pNetChan || pNetChan->IsLoopback())
+		return double(m_iSendTick);
+
+	return PacketTime(false) / TICK_INTERVAL;
+}
+
+int CTicks::ArrivalTick(double dClock)
+{
+	const double dLands = dClock + (m_dOffsetLow + m_dOffsetHigh) * 0.5;
+	const int iTick = int(dLands);
+	return iTick < dLands ? iTick + 1 : iTick;
+}
+
+int CTicks::ProcessTickLimit()
+{
+	static auto sv_maxusrcmdprocessticks = H::ConVars.FindVar("sv_maxusrcmdprocessticks");
+	const int iLimit = sv_maxusrcmdprocessticks->GetInt();
+	return iLimit > 0 && I::GlobalVars->maxClients > 1 ? iLimit : std::numeric_limits<int>::max();
+}
+
+void CTicks::LocateOffset()
+{
+	bool bKnown = false;
+	double dLow = 0.0, dHigh = 0.0;
+
+	const int iOldest = std::max(m_iServerAck - MULTIPLAYER_BACKUP, 0);
+	for (int iCommand = m_iServerAck; iCommand > iOldest; iCommand--)
+	{
+		auto& tBatch = m_aBatches[iCommand % MULTIPLAYER_BACKUP];
+		if (tBatch.m_iLastCommand != iCommand || tBatch.m_iBy < 0)
+			continue;
+
+		const double dEarliest = tBatch.m_iAfter - tBatch.m_dSent;
+		const double dLatest = tBatch.m_iBy - tBatch.m_dSent;
+		if (bKnown && (dEarliest >= dHigh || dLatest <= dLow))
+			break;
+
+		dLow = bKnown ? std::max(dLow, dEarliest) : dEarliest;
+		dHigh = bKnown ? std::min(dHigh, dLatest) : dLatest;
+		bKnown = true;
+	}
+
+	m_dOffsetLow = dLow;
+	m_dOffsetHigh = dHigh;
+	m_bOffsetKnown = bKnown;
+}
+
+void CTicks::ObserveServerTick()
+{
+	const int iTick = I::ClientState->m_ClockDriftMgr.m_nServerTick;
+	if (iTick == m_iServerTick)
+		return;
+
+	const int iAck = I::ClientState->command_ack;
+	if (m_iServerTick >= 0 && iTick > m_iServerTick && iAck > m_iServerAck)
+	{
+		const int iOldest = std::max(m_iServerAck, iAck - MULTIPLAYER_BACKUP);
+		for (int iCommand = iAck; iCommand > iOldest; iCommand--)
+		{
+			auto& tBatch = m_aBatches[iCommand % MULTIPLAYER_BACKUP];
+			if (tBatch.m_iLastCommand == iCommand)
+				tBatch.m_iAfter = m_iServerTick, tBatch.m_iBy = iTick;
+		}
+	}
+
+	m_iServerTick = iTick;
+	m_iServerAck = iAck;
+	LocateOffset();
+}
+
+bool CTicks::RecordFix(int iCommand, int iCommands)
+{
+	if (!m_bOffsetKnown || iCommand < 0 || iCommands <= 0)
+		return false;
+
+	static auto sv_clockcorrection_msecs = H::ConVars.FindVar("sv_clockcorrection_msecs");
+	const float flCorrection = sv_clockcorrection_msecs ? sv_clockcorrection_msecs->GetFloat() : 60.f;
+	const bool bLoopback = I::ClientState->m_NetChannel && I::ClientState->m_NetChannel->IsLoopback();
+
+	const TickbaseFix_t tPlan = {
+		iCommand,
+		std::min(iCommands, ProcessTickLimit()),
+		ArrivalTick(m_dSendClock),
+		bLoopback ? std::max(I::GlobalVars->simTicksThisFrame, 1) : 1,
+		TIME_TO_TICKS(std::clamp(flCorrection / 1000.f, 0.f, 1.f)),
+		I::GlobalVars->maxClients > 1
+	};
+
+	auto& tSlot = m_aFixes[iCommand % MULTIPLAYER_BACKUP];
+	bool bChanged = tSlot.m_iCommand != tPlan.m_iCommand || tSlot.m_iSimulationTicks != tPlan.m_iSimulationTicks || !tSlot.SameFrame(tPlan);
+	if (bChanged)
+		tSlot = tPlan;
+
+	for (int i = iCommand + 1; i < iCommand + iCommands; i++)
+	{
+		auto& tInterior = m_aFixes[i % MULTIPLAYER_BACKUP];
+		if (tInterior.m_iCommand == i)
+		{
+			tInterior = {};
+			bChanged = true;
+		}
+	}
+
+	return bChanged;
+}
+
+int CTicks::GroupStart(int iCommand)
+{
+	auto& tCurrent = m_aFixes[iCommand % MULTIPLAYER_BACKUP];
+	if (!tCurrent.m_bSent)
+		return iCommand;
+
+	const int iLimit = ProcessTickLimit();
+	const TickbaseFix_t* pHead = &tCurrent;
+	int iFirst = iCommand, iEnd = iCommand, iCommands = 0;
+
+	for (int i = std::max(I::ClientState->last_command_ack + 1, iCommand - MULTIPLAYER_BACKUP + 1); i <= iCommand; i++)
+	{
+		auto& tPacket = m_aFixes[i % MULTIPLAYER_BACKUP];
+		if (tPacket.m_iCommand != i || !tPacket.m_bSent)
+			continue;
+
+		if (i != iEnd || !tPacket.SameFrame(*pHead) || iCommands + tPacket.m_iSimulationTicks > iLimit)
+			pHead = &tPacket, iFirst = i, iCommands = 0;
+
+		iCommands += tPacket.m_iSimulationTicks;
+		iEnd = i + tPacket.m_iSimulationTicks;
+	}
+
+	return iFirst;
+}
+
+bool CTicks::AdjustTickbase(CTFPlayer* pPlayer, int iCommand)
+{
+	if (iCommand < 0)
+		return false;
+
+	auto& tFix = m_aFixes[iCommand % MULTIPLAYER_BACKUP];
+	if (tFix.m_iCommand != iCommand || GroupStart(iCommand) < iCommand)
+		return false;
+
+	TickbaseFix_t tGroup = tFix;
+	if (tGroup.m_bSent)
+	{
+		const int iLimit = ProcessTickLimit();
+		for (int iNext = iCommand + tGroup.m_iSimulationTicks; tGroup.m_iSimulationTicks < iLimit;)
+		{
+			auto& tFollowing = m_aFixes[iNext % MULTIPLAYER_BACKUP];
+			if (tFollowing.m_iCommand != iNext || !tFollowing.m_bSent || tFollowing.m_iSimulationTicks <= 0
+				|| !tFollowing.SameFrame(tGroup) || tGroup.m_iSimulationTicks + tFollowing.m_iSimulationTicks > iLimit)
+				break;
+
+			tGroup.m_iSimulationTicks += tFollowing.m_iSimulationTicks;
+			iNext += tFollowing.m_iSimulationTicks;
+		}
+	}
+
+	const int iBefore = pPlayer->m_nTickBase();
+	const int iAfter = tGroup.AdjustedTick(iBefore);
+	pPlayer->m_nTickBase() = iAfter;
+	return iAfter != iBefore;
+}
+
+void CTicks::OnMoveSent(int iCommand, int iCommands)
+{
+	if (iCommands <= 0 || iCommand < iCommands)
+		return;
+
+	m_dSendClock = m_dLastSendClock = ClockNow();
+	m_iLastSendTick = m_iSendTick;
+	m_aBatches[iCommand % MULTIPLAYER_BACKUP] = { iCommand, m_dSendClock };
+
+	auto pLocal = H::Entities.GetLocal();
+	if (!pLocal || !pLocal->IsAlive())
+		return;
+
+	const int iFirst = iCommand - iCommands + 1;
+	const bool bChanged = RecordFix(iFirst, iCommands);
+	auto& tSent = m_aFixes[iFirst % MULTIPLAYER_BACKUP];
+	if (tSent.m_iCommand == iFirst)
+		tSent.m_bSent = true;
+
+	if (bChanged || GroupStart(iFirst) < iFirst)
+		I::Prediction->m_nCommandsPredicted = 0;
 }
 
 void CTicks::Recharge(CTFPlayer* pLocal)
@@ -228,6 +454,8 @@ void CTicks::MoveFunc(float accumulated_extra_samples, bool bFinalTick)
 	if (I::ClientState->m_nSignonState == SIGNONSTATE_FULL)
 	{
 		int nNextCommandNr = I::ClientState->lastoutgoingcommand + I::ClientState->chokedcommands + 1;
+		if (RecordFix(I::ClientState->lastoutgoingcommand + 1, I::ClientState->chokedcommands + 1) && I::ClientState->chokedcommands)
+			I::Prediction->m_nCommandsPredicted = 0;
 		F::CreateMove.Run(nNextCommandNr, TICK_INTERVAL - accumulated_extra_samples);
 
 		if (I::DemoRecorder->IsRecording())
@@ -279,8 +507,11 @@ void CTicks::MoveFunc(float accumulated_extra_samples, bool bFinalTick)
 		I::ClientState->m_NetChannel->SendNetMsg(tickMsg);
 	}
 
+	const int iCommands = I::ClientState->chokedcommands + 1;
 	I::ClientState->lastoutgoingcommand = I::ClientState->m_NetChannel->SendDatagram(NULL);
 	I::ClientState->chokedcommands = 0;
+	if (I::ClientState->m_nSignonState == SIGNONSTATE_FULL)
+		OnMoveSent(I::ClientState->lastoutgoingcommand, iCommands);
 
 	static auto cl_cmdrate = H::ConVars.FindVar("cl_cmdrate");
 	if (I::ClientState->m_nSignonState == SIGNONSTATE_FULL)
@@ -296,6 +527,9 @@ void CTicks::MoveFunc(float accumulated_extra_samples, bool bFinalTick)
 
 void CTicks::Move(float accumulated_extra_samples, bool bFinalTick)
 {
+	m_iSendTick++;
+	m_dSendClock = m_iLastSendTick < 0 ? ClockNow() : m_dLastSendClock + (m_iSendTick - m_iLastSendTick);
+
 	MoveManage();
 
 	while (m_iShiftedTicks > m_iMaxShift)
@@ -310,11 +544,11 @@ void CTicks::Move(float accumulated_extra_samples, bool bFinalTick)
 
 		while (m_iShiftedTicks > m_iShiftedGoal)
 		{
-			m_bShifting = m_bShifted |= m_iShiftedTicks - 1 != m_iShiftedGoal;
+			m_bShifted |= m_iShiftedTicks - 1 != m_iShiftedGoal;
 			MoveFunc(accumulated_extra_samples, m_iShiftedTicks - 1 == m_iShiftedGoal);
 		}
 
-		m_bShifting = m_bAntiWarp = m_bTimingUnsure = false;
+		m_bAntiWarp = m_bTimingUnsure = false;
 		if (m_bWarp)
 			m_iDeficit = 0;
 

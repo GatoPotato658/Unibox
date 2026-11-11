@@ -10,12 +10,7 @@ void CBacktrack::Reset()
 {
 	m_mRecords.clear();
 	m_mDidShoot.clear();
-	m_dSequences.clear();
-	m_iLastInSequence = 0;
-	m_nOldInSequenceNr = 0;
-	m_nOldInReliableState = 0;
-	m_nLastInSequenceNr = 0;
-	m_nOldTickBase = 0;
+	m_tLatency = {};
 	m_flMaxUnlag = 1.f;
 	m_flFakeLatency = 0.f;
 	m_flFakeInterp = 0.015f;
@@ -127,25 +122,6 @@ void CBacktrack::SendLerp()
 void CBacktrack::SetLerp()
 {
 	m_flFakeInterp = m_flSentInterp;
-}
-
-void CBacktrack::UpdateDatagram()
-{
-	auto pNetChan = reinterpret_cast<CNetChannel*>(I::EngineClient->GetNetChannelInfo());
-	if (!pNetChan)
-		return;
-
-	if (auto pLocal = H::Entities.GetLocal())
-		m_nOldTickBase = pLocal->m_nTickBase();
-
-	if (pNetChan->m_nInSequenceNr > m_iLastInSequence)
-	{
-		m_iLastInSequence = pNetChan->m_nInSequenceNr;
-		m_dSequences.emplace_front(pNetChan->m_nInReliableState, pNetChan->m_nInSequenceNr, I::GlobalVars->realtime);
-	}
-
-	if (m_dSequences.size() > 67)
-		m_dSequences.pop_back();
 }
 
 bool CBacktrack::GetRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn)
@@ -348,7 +324,6 @@ void CBacktrack::CleanRecords()
 
 void CBacktrack::Store()
 {
-	UpdateDatagram();
 	if (!I::EngineClient->IsInGame())
 		return;
 
@@ -382,58 +357,316 @@ void CBacktrack::ReportShot(int iIndex)
 	m_mDidShoot[pEntity->entindex()] = true;
 }
 
-void CBacktrack::AdjustPing(CNetChannel* pNetChan)
+static constexpr int LATENCY_RING_ROOM = 58;
+static constexpr double LATENCY_FILTER_GRACE = 1.5;
+static constexpr int LATENCY_MAX_BLOCK_BYTES = 65536;
+static constexpr int LATENCY_COPY_LIMIT = 32;
+
+void CBacktrack::SyncLatency(CNetChannel* pNetChan)
 {
-	m_nOldInSequenceNr = pNetChan->m_nInSequenceNr, m_nOldInReliableState = pNetChan->m_nInReliableState;
-
-	auto fSet = [&]()
+	if (pNetChan != m_tLatency.m_pNetChan)
 	{
-		if (!Vars::Backtrack::Latency.Value)
-			return 0.f;
-
-		auto pLocal = H::Entities.GetLocal();
-		if (!pLocal || !pLocal->m_iClass())
-			return 0.f;
-
-		static auto host_timescale = H::ConVars.FindVar("host_timescale");
-		float flTimescale = host_timescale->GetFloat();
-
-		static float flStaticReal = 0.f;
-		float flFake = GetWishFake(), flReal = TICKS_TO_TIME(pLocal->m_nTickBase() - m_nOldTickBase);
-		flStaticReal += (flReal + 5 * TICK_INTERVAL - flStaticReal) * 0.1f;
-
-		int nInReliableState = pNetChan->m_nInReliableState, nInSequenceNr = pNetChan->m_nInSequenceNr; float flLatency = 0.f;
-		for (auto& cSequence : m_dSequences)
-		{
-			nInReliableState = cSequence.m_nInReliableState;
-			nInSequenceNr = cSequence.m_nSequenceNr;
-			flLatency = (I::GlobalVars->realtime - cSequence.m_flTime) * flTimescale - TICK_INTERVAL;
-
-			if (flLatency > flFake || m_nLastInSequenceNr >= cSequence.m_nSequenceNr || flLatency > m_flMaxUnlag - flStaticReal)
-				break;
-		}
-		if (flLatency > 1.f)
-			return 0.f;
-
-		pNetChan->m_nInReliableState = nInReliableState;
-		pNetChan->m_nInSequenceNr = nInSequenceNr;
-		return flLatency;
-	};
-
-	auto flLatency = fSet();
-	m_nLastInSequenceNr = pNetChan->m_nInSequenceNr;
-
-	if (Vars::Backtrack::Latency.Value || m_flFakeLatency)
-	{
-		m_flFakeLatency = std::clamp(m_flFakeLatency + (flLatency - m_flFakeLatency) * 0.1f, m_flFakeLatency - TICK_INTERVAL, m_flFakeLatency + TICK_INTERVAL);
-		if (!flLatency && m_flFakeLatency < TICK_INTERVAL)
-			m_flFakeLatency = 0.f;
+		m_tLatency = {};
+		m_tLatency.m_pNetChan = pNetChan;
+		m_flFakeLatency = 0.f;
 	}
 }
 
-void CBacktrack::RestorePing(CNetChannel* pNetChan)
+float CBacktrack::GetFakeTarget(CNetChannel* pNetChan)
 {
-	pNetChan->m_nInSequenceNr = m_nOldInSequenceNr, pNetChan->m_nInReliableState = m_nOldInReliableState;
+	if (!Vars::Backtrack::Latency.Value || I::EngineClient->IsPlayingDemo())
+		return 0.f;
+
+	auto pLocal = H::Entities.GetLocal();
+	if (!pLocal || !pLocal->IsAlive())
+		return 0.f;
+
+	static auto cl_updaterate = H::ConVars.FindVar("cl_updaterate");
+	static auto sv_maxupdaterate = H::ConVars.FindVar("sv_maxupdaterate");
+	float flUpdateRate = cl_updaterate->GetFloat();
+	if (sv_maxupdaterate->GetFloat() > 0.f)
+		flUpdateRate = std::min(flUpdateRate, sv_maxupdaterate->GetFloat());
+
+	const float flUnlagRoom = m_flMaxUnlag - pNetChan->GetLatency(FLOW_OUTGOING) - ROUND_TO_TICKS(GetFakeInterp()) - 2 * TICK_INTERVAL;
+	const float flRingRoom = LATENCY_RING_ROOM / std::max(flUpdateRate, 1.f);
+	return std::clamp(GetWishFake(), 0.f, std::min(flUnlagRoom, flRingRoom));
+}
+
+const PacketRecord_t* CBacktrack::ChoosePacket(double dNow, float flTarget)
+{
+	if (m_tLatency.m_dPackets.empty())
+		return nullptr;
+
+	const int nNewest = m_tLatency.m_dPackets.front().m_nSequenceNr;
+	const PacketRecord_t* pChosen = nullptr;
+	for (auto& tRecord : m_tLatency.m_dPackets)
+	{
+		if (nNewest - tRecord.m_nSequenceNr > LATENCY_RING_ROOM || tRecord.m_nSequenceNr < m_tLatency.m_nPresentedSequenceNr)
+			break;
+
+		pChosen = &tRecord;
+		if (dNow - tRecord.m_dTime >= flTarget)
+			break;
+	}
+
+	return pChosen;
+}
+
+void CBacktrack::PushLatencySample(double dDelay)
+{
+	auto& dSamples = m_tLatency.m_dSamples;
+	dSamples.push_front(dDelay);
+	if (dSamples.size() > 64)
+		dSamples.pop_back();
+
+	double dSum = 0.0;
+	for (double dSample : dSamples)
+		dSum += dSample;
+	m_flFakeLatency = float(dSum / dSamples.size());
+}
+
+void CBacktrack::AdjustPing(CNetChannel* pNetChan)
+{
+	m_tLatency.m_nRealInSequenceNr = pNetChan->m_nInSequenceNr;
+	m_tLatency.m_bFaked = false;
+
+	SyncLatency(pNetChan);
+	m_tLatency.m_nSendingSequenceNr = pNetChan->m_nOutSequenceNr;
+
+	const double dNow = F::Ticks.PacketTime(pNetChan->IsLoopback());
+	const float flTarget = GetFakeTarget(pNetChan);
+	const bool bTransfer = pNetChan->m_ReceiveList()[FRAG_NORMAL_STREAM].buffer || pNetChan->m_ReceiveList()[FRAG_FILE_STREAM].buffer;
+
+	auto pRecord = flTarget > 0.f && !bTransfer ? ChoosePacket(dNow, flTarget) : nullptr;
+	if (!pRecord)
+	{
+		m_tLatency.m_nPresentedSequenceNr = -1;
+		PushLatencySample(0.0);
+		return;
+	}
+
+	m_tLatency.m_nPresentedSequenceNr = pRecord->m_nSequenceNr;
+	m_tLatency.m_dLastFaked = dNow;
+	PushLatencySample(dNow - pRecord->m_dTime);
+
+	pNetChan->m_nInSequenceNr = pRecord->m_nSequenceNr + NET_FRAMES_BACKUP;
+	m_tLatency.m_bFaked = true;
+}
+
+void CBacktrack::RestorePing(CNetChannel* pNetChan, bool bSent)
+{
+	if (m_tLatency.m_bFaked)
+		pNetChan->m_nInSequenceNr = m_tLatency.m_nRealInSequenceNr;
+
+	if (!bSent)
+		return;
+
+	for (auto& tState : m_tLatency.m_aSubChannels)
+	{
+		if (!tState.m_bFlipPending)
+			continue;
+
+		tState.m_bFlipPending = false;
+		tState.m_nFlipSequenceNr = m_tLatency.m_nSendingSequenceNr;
+		tState.m_nPreviousSequenceNr = m_tLatency.m_nLastSentSequenceNr;
+	}
+
+	m_tLatency.m_nLastSentSequenceNr = m_tLatency.m_nSendingSequenceNr;
+}
+
+void CBacktrack::PacketStart(CNetChannel* pNetChan, bool bHasHeader)
+{
+	SyncLatency(pNetChan);
+
+	m_tLatency.m_bPacketHeader = bHasHeader;
+	m_tLatency.m_bPacketOpen = true;
+	m_tLatency.m_bPacketCopy = false;
+	m_tLatency.m_iPacketIndex = -1;
+	m_tLatency.m_nReliableBefore = pNetChan->m_nInReliableState;
+	m_tLatency.m_nPreviousAck = pNetChan->m_nOutSequenceNrAck;
+	m_tLatency.m_aPeeks = {};
+}
+
+void CBacktrack::PacketEnd(CNetChannel* pNetChan, double dReceived)
+{
+	m_tLatency.m_bPacketOpen = false;
+
+	if (m_tLatency.m_bPacketCopy && m_tLatency.m_iPacketIndex >= 0
+		&& pNetChan->m_nInReliableState == (m_tLatency.m_nReliableBefore ^ (1 << m_tLatency.m_iPacketIndex)))
+		pNetChan->m_nInReliableState = m_tLatency.m_nReliableBefore;
+	m_tLatency.m_bPacketCopy = false;
+
+	if (!m_tLatency.m_bPacketHeader)
+		return;
+
+	auto& dPackets = m_tLatency.m_dPackets;
+	const int nSequenceNr = pNetChan->m_nInSequenceNr;
+	if (!dPackets.empty() && dPackets.front().m_nSequenceNr >= nSequenceNr)
+		return;
+
+	dPackets.push_front({ nSequenceNr, dReceived });
+	if (dPackets.size() > 128)
+		dPackets.pop_back();
+}
+
+bool CBacktrack::IsFiltering(CNetChannel* pNetChan)
+{
+	if (pNetChan != m_tLatency.m_pNetChan || m_tLatency.m_dLastFaked < 0.0)
+		return false;
+
+	return F::Ticks.PacketTime(pNetChan->IsLoopback()) - m_tLatency.m_dLastFaked < LATENCY_FILTER_GRACE;
+}
+
+bool CBacktrack::PeekBlock(CNetChannel* pNetChan, bf_read& tBuffer, int iStream, BlockPeek_t& tOut)
+{
+	const int iBegin = tBuffer.m_iCurBit;
+	const bool bSingle = tBuffer.ReadOneBit() == 0;
+
+	int iStart = 0, iNum = 0;
+	if (!bSingle)
+	{
+		iStart = int(tBuffer.ReadUBitLong(MAX_FILE_SIZE_BITS - FRAGMENT_BITS));
+		iNum = int(tBuffer.ReadUBitLong(3));
+	}
+
+	unsigned int uBytes = 0;
+	int iFragments = 0;
+	if (bSingle || !iStart)
+	{
+		if (bSingle)
+		{
+			if (tBuffer.ReadOneBit())
+				tBuffer.ReadUBitLong(MAX_FILE_SIZE_BITS);
+			uBytes = tBuffer.ReadVarInt32();
+		}
+		else
+		{
+			if (tBuffer.ReadOneBit())
+			{
+				tBuffer.ReadUBitLong(32);
+				char sFilename[MAX_OSPATH] = {};
+				tBuffer.ReadString(sFilename, sizeof(sFilename));
+			}
+			if (tBuffer.ReadOneBit())
+				tBuffer.ReadUBitLong(MAX_FILE_SIZE_BITS);
+			uBytes = tBuffer.ReadUBitLong(MAX_FILE_SIZE_BITS);
+		}
+
+		iFragments = int((uBytes + FRAGMENT_SIZE - 1) / FRAGMENT_SIZE);
+		if (bSingle)
+			iStart = 0, iNum = iFragments;
+	}
+	else
+	{
+		auto& tTransfer = pNetChan->m_ReceiveList()[iStream];
+		uBytes = tTransfer.bytes;
+		iFragments = tTransfer.numFragments;
+	}
+
+	int iLength = iNum * FRAGMENT_SIZE;
+	if (iStart + iNum == iFragments)
+	{
+		const int iRest = FRAGMENT_SIZE - int(uBytes % FRAGMENT_SIZE);
+		if (iRest < FRAGMENT_SIZE)
+			iLength -= iRest;
+	}
+
+	if (tBuffer.m_bOverflow || iLength <= 0 || iLength > LATENCY_MAX_BLOCK_BYTES)
+		return false;
+
+	uint64_t uHash = FNV1A::uHash64;
+	for (int i = 0; i < iLength; i++)
+	{
+		uHash ^= uint64_t(tBuffer.ReadUBitLong(8));
+		uHash *= 0x100000001b3ull;
+	}
+	if (tBuffer.m_bOverflow)
+		return false;
+
+	tOut = { true, tBuffer.m_iCurBit - iBegin, { uHash, iStart, iNum, iLength, true } };
+	return true;
+}
+
+bool CBacktrack::IsCopy(CNetChannel* pNetChan, SubChannel_t& tState)
+{
+	const int nAck = pNetChan->m_nOutSequenceNrAck;
+	if (nAck < tState.m_nFlipSequenceNr)
+		return true;
+
+	const bool bCrossing = m_tLatency.m_nPreviousAck < tState.m_nFlipSequenceNr && tState.m_nFlipSequenceNr <= nAck;
+	const bool bQueued = m_tLatency.m_nPreviousAck < tState.m_nPreviousSequenceNr;
+	return bCrossing && bQueued;
+}
+
+bool CBacktrack::PeekPacket(CNetChannel* pNetChan, bf_read& tBuffer, int iFirstStream)
+{
+	const int iSaved = tBuffer.m_iCurBit;
+	bool bIdentical = true, bPresent = false;
+
+	auto& tState = m_tLatency.m_aSubChannels[m_tLatency.m_iPacketIndex];
+	for (int iStream = iFirstStream; iStream < MAX_STREAMS; iStream++)
+	{
+		if (iStream != iFirstStream && !tBuffer.ReadOneBit())
+			continue;
+
+		auto& tPeek = m_tLatency.m_aPeeks[iStream];
+		if (!PeekBlock(pNetChan, tBuffer, iStream, tPeek))
+		{
+			bIdentical = false;
+			break;
+		}
+
+		bPresent = true;
+		bIdentical = bIdentical && tPeek.m_tBlock == tState.m_aStreams[iStream];
+	}
+
+	tBuffer.m_iCurBit = iSaved;
+	tBuffer.m_bOverflow = false;
+
+	if (!bPresent || !bIdentical || !IsCopy(pNetChan, tState))
+		return false;
+
+	if (++tState.m_iCopies > LATENCY_COPY_LIMIT)
+	{
+		tState.m_iCopies = 0;
+		return false;
+	}
+
+	return true;
+}
+
+bool CBacktrack::SkipBlock(CNetChannel* pNetChan, bf_read& tBuffer, int iStream)
+{
+	if (m_tLatency.m_bPacketOpen)
+	{
+		m_tLatency.m_bPacketOpen = false;
+
+		const int iSaved = tBuffer.m_iCurBit;
+		tBuffer.Seek(iSaved - 3 - (iStream + 1));
+		m_tLatency.m_iPacketIndex = int(tBuffer.ReadUBitLong(3));
+		tBuffer.Seek(iSaved);
+
+		m_tLatency.m_bPacketCopy = PeekPacket(pNetChan, tBuffer, iStream);
+	}
+
+	if (!m_tLatency.m_bPacketCopy || !m_tLatency.m_aPeeks[iStream].m_bPresent)
+		return false;
+
+	tBuffer.Seek(tBuffer.m_iCurBit + m_tLatency.m_aPeeks[iStream].m_iBits);
+	return true;
+}
+
+void CBacktrack::AcceptBlock(int iStream)
+{
+	if (m_tLatency.m_iPacketIndex < 0 || !m_tLatency.m_aPeeks[iStream].m_bPresent)
+		return;
+
+	auto& tState = m_tLatency.m_aSubChannels[m_tLatency.m_iPacketIndex];
+	tState.m_aStreams[iStream] = m_tLatency.m_aPeeks[iStream].m_tBlock;
+	tState.m_bFlipPending = true;
+	tState.m_nFlipSequenceNr = std::numeric_limits<int>::max();
+	tState.m_nPreviousSequenceNr = -1;
+	tState.m_iCopies = 0;
 }
 
 void CBacktrack::CacheDrawInfo(CTFPlayer* pLocal)

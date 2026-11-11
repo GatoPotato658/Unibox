@@ -2,6 +2,28 @@
 #include "../../SDK/SDK.h"
 #include "../ImGui/IndicatorCache.h"
 
+struct TickbaseFix_t
+{
+	int m_iCommand = -1;
+	int m_iSimulationTicks = 0;
+	int m_iServerTick = 0;
+	int m_iFrameTicks = 1;
+	int m_iCorrectionTicks = 0;
+	bool m_bMultiplayer = false;
+	bool m_bSent = false;
+
+	int AdjustedTick(int iTickBase) const;
+	bool SameFrame(const TickbaseFix_t& tOther) const;
+};
+
+struct SentBatch_t
+{
+	int m_iLastCommand = -1;
+	double m_dSent = 0.0;
+	int m_iAfter = -1;
+	int m_iBy = -1;
+};
+
 class CTicks
 {
 private:
@@ -32,6 +54,26 @@ private:
 	bool m_bPredictAntiwarp = false;
 	bool m_bTimingUnsure = false; // we aren't sure when we'll actually fire, hold aim
 
+	double ClockNow();
+	int ArrivalTick(double dClock);
+	void LocateOffset();
+	int ProcessTickLimit();
+	bool RecordFix(int iCommand, int iCommands);
+	int GroupStart(int iCommand);
+	void OnMoveSent(int iCommand, int iCommands);
+
+	std::array<TickbaseFix_t, MULTIPLAYER_BACKUP> m_aFixes = {};
+	std::array<SentBatch_t, MULTIPLAYER_BACKUP> m_aBatches = {};
+	int m_iSendTick = 0;
+	int m_iLastSendTick = -1;
+	double m_dSendClock = 0.0;
+	double m_dLastSendClock = 0.0;
+	int m_iServerTick = -1;
+	int m_iServerAck = -1;
+	double m_dOffsetLow = 0.0;
+	double m_dOffsetHigh = 0.0;
+	bool m_bOffsetKnown = false;
+
 public:
 	void Move(float accumulated_extra_samples, bool bFinalTick);
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -57,6 +99,10 @@ public:
 	Vec3* GetShootAngle();
 	bool IsTimingUnsure();
 
+	static double PacketTime(bool bLoopback);
+	void ObserveServerTick();
+	bool AdjustTickbase(CTFPlayer* pPlayer, int iCommand);
+
 	bool m_bDoubletap = false;
 	bool m_bWarp = false;
 	bool m_bRecharge = false;
@@ -66,7 +112,6 @@ public:
 	int m_iShiftedTicks = 0;
 	int m_iShiftedGoal = 0;
 	int m_iShiftStart = 0;
-	bool m_bShifting = false;
 	bool m_bShifted = false;
 
 	int m_iWait = 0;

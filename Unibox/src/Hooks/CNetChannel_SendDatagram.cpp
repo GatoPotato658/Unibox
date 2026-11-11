@@ -14,6 +14,6 @@ MAKE_HOOK(CNetChannel_SendDatagram, S::CNetChannel_SendDatagram(), int,
 
 	F::Backtrack.AdjustPing(pNetChan);
 	const int iReturn = CALL_ORIGINAL(pNetChan, datagram);
-	F::Backtrack.RestorePing(pNetChan);
+	F::Backtrack.RestorePing(pNetChan, iReturn > 0);
 	return iReturn;
 }

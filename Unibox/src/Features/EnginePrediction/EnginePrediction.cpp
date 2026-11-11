@@ -79,10 +79,6 @@ void CEnginePrediction::Start(CTFPlayer* pLocal, CUserCmd* pCmd)
 	m_flOldCurrentTime = I::GlobalVars->curtime;
 	m_flOldFrameTime = I::GlobalVars->frametime;
 
-	I::GlobalVars->tickcount = pLocal->m_nTickBase();
-	I::GlobalVars->curtime = TICKS_TO_TIME(I::GlobalVars->tickcount);
-	I::GlobalVars->frametime = I::Prediction->m_bEnginePaused ? 0.f : TICK_INTERVAL;
-
 	size_t iSize = pLocal->GetIntermediateDataSize();
 	if (!m_tLocal.m_pData) 
 	{
@@ -97,6 +93,12 @@ void CEnginePrediction::Start(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 	CPredictionCopy copy = { PC_EVERYTHING, m_tLocal.m_pData, PC_DATA_PACKED, pLocal, PC_DATA_NORMAL };
 	copy.TransferData("EnginePredictionStart", pLocal->entindex(), pMap);
+
+	F::Ticks.AdjustTickbase(pLocal, pCmd->command_number);
+
+	I::GlobalVars->tickcount = pLocal->m_nTickBase();
+	I::GlobalVars->curtime = TICKS_TO_TIME(I::GlobalVars->tickcount);
+	I::GlobalVars->frametime = I::Prediction->m_bEnginePaused ? 0.f : TICK_INTERVAL;
 
 	Simulate(pLocal, pCmd);
 }

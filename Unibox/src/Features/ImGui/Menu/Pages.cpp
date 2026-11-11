@@ -270,29 +270,10 @@ static void AimbotWeapons()
 
 				EndPopup();
 			}
-			if (DebugRow("Ground"))
+			if (DebugRow("Strafe"))
 			{
 				FSlider(Vars::Aimbot::Projectile::GroundSamples);
-				FSlider(Vars::Aimbot::Projectile::GroundStraightFuzzyValue);
-				FSlider(Vars::Aimbot::Projectile::GroundLowMinimumSamples);
-				FSlider(Vars::Aimbot::Projectile::GroundHighMinimumSamples);
-				FSlider(Vars::Aimbot::Projectile::GroundLowMinimumDistance);
-				FSlider(Vars::Aimbot::Projectile::GroundHighMinimumDistance);
-				FSlider(Vars::Aimbot::Projectile::GroundMaxChanges);
-				FSlider(Vars::Aimbot::Projectile::GroundMaxChangeTime);
-
-				EndPopup();
-			}
-			if (DebugRow("Air"))
-			{
 				FSlider(Vars::Aimbot::Projectile::AirSamples);
-				FSlider(Vars::Aimbot::Projectile::AirStraightFuzzyValue);
-				FSlider(Vars::Aimbot::Projectile::AirLowMinimumSamples);
-				FSlider(Vars::Aimbot::Projectile::AirHighMinimumSamples);
-				FSlider(Vars::Aimbot::Projectile::AirLowMinimumDistance);
-				FSlider(Vars::Aimbot::Projectile::AirHighMinimumDistance);
-				FSlider(Vars::Aimbot::Projectile::AirMaxChanges);
-				FSlider(Vars::Aimbot::Projectile::AirMaxChangeTime);
 
 				EndPopup();
 			}
@@ -300,7 +281,6 @@ static void AimbotWeapons()
 			{
 				FSlider(Vars::Aimbot::Projectile::DeltaCount);
 				FDropdown(Vars::Aimbot::Projectile::DeltaMode);
-				FDropdown(Vars::Aimbot::Projectile::MovesimFrictionFlags);
 				FToggle(Vars::Aimbot::Projectile::AccountPing);
 				FToggle(Vars::Aimbot::Projectile::AutodetAccountPing);
 
@@ -987,10 +967,9 @@ static void MiscMain()
 	{
 		using namespace Vars::Misc::Movement;
 		FDropdown(AutoStrafe);
-		PushTransparent(AutoStrafe.Value != AutoStrafeEnum::Directional);
+		PushTransparent(AutoStrafe.Value == AutoStrafeEnum::Off);
 		{
-			FSlider(AutoStrafeTurnScale);
-			FSlider(AutoStrafeMaxDelta);
+			FSlider(AutoStrafeRetrack);
 		}
 		PopTransparent();
 		FDropdown(AutoEdgebug, FDropdownEnum::None, -28);
@@ -1493,46 +1472,7 @@ static void AnticheatDetection()
 	TableNextColumn();
 	if (Section("Detection"))
 	{
-		FDropdown(Methods);
-		PushTransparent(!DetectionsRequired.Value);
-		{
-			FSlider(DetectionsRequired);
-		}
-		PopTransparent();
-		Subheader("Packet choking");
-		PushTransparent(!(Methods.Value & MethodsEnum::PacketChoking));
-		{
-			FSlider(MinChoking);
-		}
-		PopTransparent();
-		Subheader("Crit manipulation");
-		PushTransparent(!(Methods.Value & MethodsEnum::CritManipulation));
-		{
-			FSlider(CritWindow);
-			FSlider(CritThreshold);
-		}
-		PopTransparent();
-	} EndSection();
-
-	TableNextColumn();
-	if (Section("Aim flicking"))
-	{
-		PushTransparent(!(Methods.Value & MethodsEnum::AimFlicking));
-		{
-			FSlider(MinFlick);
-			FSlider(MaxNoise);
-		}
-		PopTransparent();
-	} EndSection();
-	if (Section("Lag compensation"))
-	{
-		PushTransparent(!(Methods.Value & MethodsEnum::LagCompAbuse));
-		{
-			FSlider(LagCompMinimumDelta);
-			FSlider(LagCompBurstCount);
-			FSlider(LagCompWindow);
-		}
-		PopTransparent();
+		FToggle(Enabled);
 	} EndSection();
 
 	EndTable();

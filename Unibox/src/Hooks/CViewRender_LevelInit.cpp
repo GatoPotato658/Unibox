@@ -4,6 +4,7 @@
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Ticks/Ticks.h"
+#include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
 #include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/Resolver/Resolver.h"
@@ -30,6 +31,7 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 #endif
 
 	F::Backtrack.Reset();
+	F::NetworkFix.Reset();
 	F::Ticks.Reset();
 	F::NoSpreadHitscan.Reset();
 	F::CheatDetection.Reset();

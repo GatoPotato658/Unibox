@@ -2,6 +2,7 @@
 
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
+#include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/Visuals/Chams/Chams.h"
 #include "../Features/NavBot/NavEngine.h"
@@ -18,6 +19,7 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	DEBUG_RETURN(CHLClient_LevelShutdown, rcx);
 
 	F::Backtrack.Reset();
+	F::NetworkFix.Reset();
 	F::Chams.Reset();
 	H::Entities.RemovePrecipitation();
 	H::Entities.Clear(true);

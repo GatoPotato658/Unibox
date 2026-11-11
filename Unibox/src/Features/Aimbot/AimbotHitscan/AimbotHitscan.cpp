@@ -169,7 +169,6 @@ std::vector<HitscanHitbox_t> CAimbotHitscan::GetHitboxes(CTFPlayer* pLocal, CTFW
 					vOrigin = tMoveStorage.m_vPredictedOrigin;
 				}
 			}
-			F::MoveSim.Restore(tMoveStorage);
 		}
 		if (!SDK::VisPosWorld(nullptr, pTarget, pSentry->m_vecOrigin() + pSentry->GetOffset() / 2 * pSentry->m_flModelScale(), vOrigin + pTarget->GetOffset() / 2))
 			return vHitboxes;
@@ -412,10 +411,7 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 
 	MoveStorage tMoveStorage;
 	if (!F::MoveSim.Initialize(pTarget, tMoveStorage, false, true, false, &pBaseRecord->m_vOrigin) || tMoveStorage.m_bFailed)
-	{
-		F::MoveSim.Restore(tMoveStorage);
 		return;
-	}
 
 	const Vec3 vBaseOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
 	const size_t uStart = m_vForwardRecords.size();
@@ -443,8 +439,6 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 			predRecord.m_aBones[b][2][3] += vDelta.z;
 		}
 	}
-
-	F::MoveSim.Restore(tMoveStorage);
 
 	if (m_vForwardRecords.size() == uStart)
 		return;

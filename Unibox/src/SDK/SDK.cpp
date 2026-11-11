@@ -1152,28 +1152,36 @@ void SDK::WalkTo(CUserCmd* pCmd, CTFPlayer* pLocal, Vec3 vTo, float flScale)
 	WalkTo(pCmd, pLocal, vLocalPos, vTo, flScale);
 }
 
-void SDK::GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vOffset, Vec3& vPosOut, Vec3& vAngOut, float flForward, float flCutoff, bool bInterp, bool bAllowFlip)
+void SDK::GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vOffset, Vec3& vPosOut, Vec3& vAngOut, float flForward, float flCutoff, bool bInterp, bool bAllowFlip, FireSetup_t* pSetup)
 {
 	static auto cl_flipviewmodels = H::ConVars.FindVar("cl_flipviewmodels");
 	if (bAllowFlip && cl_flipviewmodels->GetBool())
 		vOffset.y *= -1.f;
 
-	const Vec3 vShootPos = bInterp ? pPlayer->GetEyePosition() : pPlayer->GetShootPos();
+	const FireSetup_t tSetup = { bInterp ? pPlayer->GetEyePosition() : pPlayer->GetShootPos(), vOffset, flForward, flCutoff, 0.f, true };
+	ApplyProjectileFireSetup(pPlayer, tSetup, vAngIn, vPosOut, vAngOut);
+	if (pSetup)
+		*pSetup = tSetup;
+}
+
+void SDK::ApplyProjectileFireSetup(CTFPlayer* pPlayer, const FireSetup_t& tSetup, const Vec3& vAngIn, Vec3& vPosOut, Vec3& vAngOut)
+{
+	const Vec3& vShootPos = tSetup.m_vShootPos;
 
 	Vec3 vForward, vRight, vUp; Math::AngleVectors(vAngIn, &vForward, &vRight, &vUp);
-	vPosOut = vShootPos + (vForward * vOffset.x) + (vRight * vOffset.y) + (vUp * vOffset.z);
+	vPosOut = vShootPos + (vForward * tSetup.m_vOffset.x) + (vRight * tSetup.m_vOffset.y) + (vUp * tSetup.m_vOffset.z);
 
-	if (flForward)
+	if (tSetup.m_flForward)
 	{
-		Vec3 vEndPos = vShootPos + vForward * flForward;
+		Vec3 vEndPos = vShootPos + vForward * tSetup.m_flForward;
 
-		if (flCutoff < 1.f)
+		if (tSetup.m_flCutoff < 1.f)
 		{
 			CGameTrace trace = {};
 			CTraceFilterCollideable filter(pPlayer);
 			filter.m_iType = SKIP_CHECK;
 			Trace(vShootPos, vEndPos, MASK_SOLID, &filter, &trace);
-			if (trace.DidHit() && trace.fraction > flCutoff)
+			if (trace.DidHit() && trace.fraction > tSetup.m_flCutoff)
 				vEndPos = trace.endpos;
 		}
 
@@ -1181,6 +1189,8 @@ void SDK::GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vO
 	}
 	else
 		vAngOut = vAngIn;
+
+	vPosOut.z += tSetup.m_flHeight;
 }
 
 //Pasted from somewhere in the valves tf2 server code

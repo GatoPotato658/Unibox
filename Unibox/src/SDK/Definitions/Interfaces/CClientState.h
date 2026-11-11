@@ -35,6 +35,18 @@ private:
 	unsigned int m_nShouldCheckCreationTick : 1;
 };
 
+class CEventInfo
+{
+public:
+	short classID;
+	float fire_delay;
+	byte pad8[88];
+	CEventInfo* prev;
+	CEventInfo* next;
+};
+static_assert(offsetof(CEventInfo, fire_delay) == 0x4);
+static_assert(offsetof(CEventInfo, next) == 0x68);
+
 struct CClockDriftMgr
 {
 	float m_ClockOffsets[16];

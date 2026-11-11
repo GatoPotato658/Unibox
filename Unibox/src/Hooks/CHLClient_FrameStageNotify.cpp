@@ -5,6 +5,7 @@
 #include "../Features/Binds/Binds.h"
 #include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/CritHack/CritHack.h"
+#include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Players/PlayerUtils.h"
 #include "../Features/Resolver/Resolver.h"
 #include "../Features/Simulation/MovementSimulation/MovementSimulation.h"
@@ -38,6 +39,8 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 	if (curStage == FRAME_NET_UPDATE_POSTDATAUPDATE_START)
 		F::SkinChanger.Apply();
 #endif
+	if (curStage == FRAME_NET_UPDATE_POSTDATAUPDATE_END && !G::Unload)
+		F::NetworkFix.RestoreCompressed();
 
 	CALL_ORIGINAL(rcx, curStage);
 

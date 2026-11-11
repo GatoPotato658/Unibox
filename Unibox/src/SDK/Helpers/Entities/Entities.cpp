@@ -4,7 +4,6 @@
 #include "../../../Utils/Hash/FNV1A.h"
 #include "../../../Features/Players/PlayerUtils.h"
 #include "../../../Features/Backtrack/Backtrack.h"
-#include "../../../Features/CheatDetection/CheatDetection.h"
 #include "../../../Features/Resolver/Resolver.h"
 #include "../../../Features/Misc/AutoVote/AutoVote.h"
 #include "../../../Features/Configs/Configs.h"
@@ -26,8 +25,6 @@ bool CEntities::UpdatePlayerDetails(int n, CTFPlayer* pPlayer, int iLag)
 			if (m_aOrigins[n].size() > (size_t)Vars::Aimbot::Projectile::VelocityAverageCount.Value)
 				m_aOrigins[n].pop_back();
 
-			if (pPlayer->IsAlive())
-				F::CheatDetection.ReportPacket(pPlayer, m_aChokes[n], TIME_TO_TICKS(flSimTime - flOldSimTime));
 			m_aOldAngles[n] = m_aEyeAngles[n], m_aEyeAngles[n] = pPlayer->GetEyeAngles();
 		}
 	}

@@ -24,6 +24,7 @@
 #include "../Features/Misc/NamedPipe/NamedPipe.h"
 #endif
 #include "../Utils/Hash/FNV1A.h"
+#include "../Utils/ThreadPool/ThreadPool.h"
 
 #include <Psapi.h>
 #include <TlHelp32.h>
@@ -263,6 +264,7 @@ void CCore::Unload()
 	U::BytePatches.Unload();
 	H::Events.Unload();
 	F::NavEngine.Shutdown();
+	U::ThreadPool.Shutdown();
 	F::TelemetryBlocker.Unload();
 
 	if (F::Menu.m_bIsOpen)

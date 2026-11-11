@@ -1351,10 +1351,7 @@ void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 		{
 			F::MoveSim.Initialize(pEnemy, tStorage, false);
 			if (tStorage.m_bFailed)
-			{
-				F::MoveSim.Restore(tStorage);
 				continue;
-			}
 
 			for (int i = 0; i < iMaxTicks; i++)
 				F::MoveSim.RunTick(tStorage);
@@ -1374,8 +1371,6 @@ void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 			vTo.z += PLAYER_JUMP_HEIGHT;
 			bResult = CheckVisibility(vTo, iEntIndex);
 		}
-		if (!bSimple)
-			F::MoveSim.Restore(tStorage);
 
 		if (bResult)
 			break;
@@ -1454,10 +1449,7 @@ void CBotUtils::AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 		auto pEnemyPlayer = pEntity->As<CTFPlayer>();
 		F::MoveSim.Initialize(pEnemyPlayer, tStorage, false);
 		if (tStorage.m_bFailed)
-		{
-			F::MoveSim.Restore(tStorage);
 			continue;
-		}
 
 		for (int i = 0; i < iMaxTicks; i++)
 			F::MoveSim.RunTick(tStorage);
@@ -1474,7 +1466,6 @@ void CBotUtils::AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 			vTo.z += PLAYER_JUMP_HEIGHT;
 			bResult = CheckVisibility(vTo, iEntIndex);
 		}
-		F::MoveSim.Restore(tStorage);
 
 		if (bResult)
 			break;

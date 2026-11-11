@@ -31,6 +31,27 @@ enum
 #define PACKET_FLAG_RELIABLE (1<<0)
 #define PACKET_FLAG_CHOKED (1<<1)
 
+#define MAX_SUBCHANNELS 8
+#define NET_FRAMES_BACKUP 64
+
+struct dataFragments_t
+{
+	void* file;
+	char filename[260];
+	char* buffer;
+	unsigned int bytes;
+	unsigned int bits;
+	unsigned int transferID;
+	bool isCompressed;
+	unsigned int nUncompressedSize;
+	int numFragments;
+	int ackedFragments;
+	int pendingFragments;
+};
+static_assert(sizeof(dataFragments_t) == 312);
+static_assert(offsetof(dataFragments_t, buffer) == 272);
+static_assert(offsetof(dataFragments_t, numFragments) == 300);
+
 class CUDPSocket;
 class CUtlBuffer;
 class CNetPacket;

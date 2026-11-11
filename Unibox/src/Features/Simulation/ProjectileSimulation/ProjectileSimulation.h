@@ -65,6 +65,8 @@ class CProjectileSimulation
 private:
 	bool GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, Vec3 vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge);
 
+	FireSetup_t m_tFireSetup = {};
+
 	const objectparams_t m_tPhysDefaultObjectParams = {
 		NULL,
 		1.0, //mass
@@ -82,6 +84,7 @@ private:
 public:
 	bool GetInfo(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const Vec3& vAngles, ProjectileInfo& tProjInfo, int iFlags = ProjSimEnum::Redirect | ProjSimEnum::InitCheck, float flAutoCharge = -1.f);
 	void SetupTrace(CTraceFilterCollideable& filter, int& nMask, CTFWeaponBase* pWeapon, int nTick = 0, bool bInterp = false);
+	bool GetFireSetup(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, int iFlags, FireSetup_t& tSetup);
 
 	void GetInfo(CBaseEntity* pProjectile, ProjectileInfo& tProjInfo);
 	void SetupTrace(CTraceFilterCollideable& filter, int& nMask, CBaseEntity* pProjectile);

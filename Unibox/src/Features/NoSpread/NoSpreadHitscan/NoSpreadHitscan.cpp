@@ -2,6 +2,7 @@
 
 #include "../SpreadMath.h"
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
+#include "../../CheatDetection/CheatDetection.h"
 #include "../../ImGui/IndicatorPanel.h"
 #include <regex>
 #include <numeric>
@@ -88,7 +89,7 @@ void CNoSpreadHitscan::AskForPlayerPerf()
 	if (!ShouldRun())
 		return Reset();
 
-	if (G::Choking)
+	if (G::Choking || F::CheatDetection.IsWaitingForPlayerPerf())
 		return;
 
 	static Timer tTimer = {};

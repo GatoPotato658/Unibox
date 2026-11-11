@@ -3,6 +3,7 @@
 #include "../Features/Misc/Misc.h"
 #include "../Features/Output/Output.h"
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
+#include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
 #include "../Features/Aimbot/AutoHeal/AutoHeal.h"
 #include "../Features/Commands/Commands.h"
@@ -87,6 +88,9 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 	}
 	case TextMsg:
 	{
+		if (F::CheatDetection.ParsePlayerPerf(msgData))
+			return true;
+
 		char rawMsg[256]; msgData.ReadString(rawMsg, sizeof(rawMsg), true);
 		msgData.Reset();
 		std::string sMsg = rawMsg;

@@ -6,11 +6,16 @@ MAKE_SIGNATURE(TFInventoryManager, "client.dll", "48 8D 05 ? ? ? ? C3 CC CC CC C
 MAKE_SIGNATURE(CTFPlayerInventory_GetFirstItemOfItemDef, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B FA 0F B7 E9", 0x0);
 MAKE_SIGNATURE(CEconItemView_GetStaticData, "client.dll", "40 53 48 83 EC ? 0F B7 59 48 E8 ? ? ? ? 48 8B C8 8B D3 E8 ? ? ? ? 4C 8D 0D ? ? ? ? C7 44 24 ? ? ? ? ? 4C 8D 05 ? ? ? ? 33 D2 48 8B C8 E8 ? ? ? ? 48 83 C4 ? 5B C3 CC 48 83 C1", 0x0);
 MAKE_SIGNATURE(TFItemSystem_GetItemSchema, "client.dll", "48 83 EC 28 E8 ?? ?? ?? ?? 48 83 C0 08 48 83 C4 28 C3", 0x0);
+MAKE_SIGNATURE(CEconItemSchema_GetItemDefinition, "client.dll", "89 54 24 ? 53 48 83 EC 20 48 8B D9 48 8D 54 24 ? 48 81 C1 00 01 00 00", 0x0);
 MAKE_SIGNATURE(GetMvmTourBadgeMask, "client.dll", "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 81 EC 80 00 00 00 45 33 FF 8B D9 44 89 3A 4D 8B E0 45 89 38", 0x0);
+
+class CTFItemDefinition;
 
 class CEconItemSchema
 {
 public:
+	SIGNATURE_ARGS(GetItemDefinition, CTFItemDefinition*, CEconItemSchema, (int iItemIndex), this, iItemIndex);
+
 	OFFSET(m_pMvMMissions, void*, 2320);
 	OFFSET(m_iMvMMissionCount, int, 2336);
 	OFFSET(m_pMvMTours, void*, 2352);
@@ -69,6 +74,7 @@ public:
 	OFFSET(m_pszItemName, const char*, 0x58);
 	OFFSET(m_pszItemClass, const char*, 0x168);
 	OFFSET(m_pszName, const char*, 0x180);
+	OFFSET(m_uEquipRegionMask, uint32_t, 0x20C);
 
 	inline uint16 GetDefinitionIndex()
 	{

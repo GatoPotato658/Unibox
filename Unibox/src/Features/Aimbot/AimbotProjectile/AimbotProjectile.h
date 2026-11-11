@@ -128,6 +128,8 @@ private:
 	std::vector<Point_t> GetSplashPoints(Vec3 vOrigin, std::vector<Point_t>& vSplashPoints, int iSimTime, uint8_t iFlags = CalculateFlagsEnum::Accuracy, bool bFirst = false);
 
 	void CalculateAngle(const Vec3& vLocalPos, const Vec3& vTargetPos, int iSimTime, Solution_t& tOut, uint8_t iFlags = CalculateFlagsEnum::Accuracy, int iTolerance = -1);
+	const FireSetup_t& GetFireSetup(uint8_t iFlags);
+	bool PrepareParallel(uint8_t iFlags);
 	bool TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest = false);
 	bool TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest, Point_t* pCache);
 
@@ -153,6 +155,8 @@ private:
 	MoveStorage m_tMoveStorage = {};
 	ProjectileInfo m_tProjInfo = {};
 	std::vector<Setup_t> m_vSplashPoints = {};
+	FireSetup_t m_aFireSetup[2] = {};
+	bool m_aFireSetupPrimed[2] = {};
 
 	bool m_bLastTickHeld = false;
 

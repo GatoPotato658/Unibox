@@ -7,6 +7,8 @@ Enum(EBStage, Normal = 0, NormalInverted, Random, RandomInverted);
 class CMisc
 {
 private:
+	bool JumpReleased(CTFPlayer* pLocal);
+	bool CanGroundJump(CTFPlayer* pLocal);
 	void AutoJump(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AutoJumpbug(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd);
@@ -57,6 +59,9 @@ private:
 	bool m_bEdgeBug = false;
 	bool m_bDuckSpeedActive = false;
 	std::vector<Vec3> m_vEdgebugPath;
+
+	bool m_bJumpHeld = false;
+	bool m_bJumpValid = false;
 
 	bool m_bPeekPlaced = false;
 	Vec3 m_vPeekReturnPos = {};

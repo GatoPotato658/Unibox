@@ -66,7 +66,6 @@ bool CAutoRocketJump::SetAngles(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 				break;
 			}
 		}
-		F::MoveSim.Restore(tMoveStorage);
 		if (bShouldReturn)
 			return false;
 	}
@@ -218,7 +217,6 @@ void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 					//	break;
 				}
 			}
-			F::MoveSim.Restore(tMoveStorage);
 		}
 
 		if (bWillHit)

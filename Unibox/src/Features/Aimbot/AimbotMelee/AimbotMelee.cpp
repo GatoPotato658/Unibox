@@ -324,9 +324,6 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			}
 		}
 	}
-
-	for (auto& tMoveStorage : mMoveStorage | std::views::values)
-		F::MoveSim.Restore(tMoveStorage);
 }
 
 bool CAimbotMelee::CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, Vec3 vEyeAngles)

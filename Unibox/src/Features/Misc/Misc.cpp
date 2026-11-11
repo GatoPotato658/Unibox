@@ -104,31 +104,47 @@ void CMisc::AutoCrouchNavbot(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 
 
+bool CMisc::JumpReleased(CTFPlayer* pLocal)
+{
+	return !((pLocal->m_nButtons() | G::LastUserCmd->buttons) & IN_JUMP);
+}
+
+bool CMisc::CanGroundJump(CTFPlayer* pLocal)
+{
+	return pLocal->m_hGroundEntity() && !pLocal->IsDucking() && pLocal->m_flDuckJumpTime() <= 0.f && JumpReleased(pLocal);
+}
+
 void CMisc::AutoJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
+	const bool bHeld = pCmd->buttons & IN_JUMP;
+	const bool bPressed = bHeld && !m_bJumpHeld;
+	m_bJumpHeld = bHeld;
+
 	if (!Vars::Misc::Movement::Bunnyhop.Value)
 		return;
 
 	if (auto pWeapon = H::Entities.GetWeapon(); pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_GRAPPLINGHOOK && pWeapon->As<CTFGrapplingHook>()->m_hProjectile())
 		return;
 
-	static bool bStaticAttempted = false, bStaticValid = false;
-	bool bLastAttempted = bStaticAttempted, bLastValid = bStaticValid;
-	bool bCurrAttempted = bStaticAttempted = G::OriginalCmd.buttons & IN_JUMP, bCurrValid = bStaticValid = pLocal->m_hGroundEntity() && !pLocal->IsDucking();
-	if (!bCurrValid || bCurrValid && G::LastUserCmd->buttons & IN_JUMP)
-		pCmd->buttons &= ~IN_JUMP;
+	const bool bOnGround = pLocal->m_hGroundEntity();
+	const bool bValid = bOnGround && !pLocal->IsDucking();
+	const bool bLastValid = m_bJumpValid;
+	m_bJumpValid = bValid;
 
-	static float flLastAttempt = 0.f;
-	bool bPressed = bCurrAttempted && !bLastAttempted;
-	bool bParachute = SDK::AttribHookValue(0, "parachute_attribute", pLocal) && !pLocal->InCond(TF_COND_PARACHUTE_ACTIVE);
-	bool bAllow = !bParachute || G::OriginalCmd.buttons & IN_DUCK; // evil we don't want to manual
-	bool bManual = bAllow && (bPressed || bParachute && I::GlobalVars->curtime < flLastAttempt + 0.1f);
-	if (bPressed && !bCurrValid)
-		flLastAttempt = I::GlobalVars->curtime;
-	if (bManual)
-		pCmd->buttons |= IN_JUMP;
+	if (bHeld)
+	{
+		bool bKeep = bOnGround && CanGroundJump(pLocal);
+		if (!bOnGround && bPressed)
+		{
+			const bool bParachute = SDK::AttribHookValue(0, "parachute_attribute", pLocal)
+				&& (pLocal->InCond(TF_COND_PARACHUTE_ACTIVE) || pCmd->buttons & IN_DUCK);
+			bKeep = pLocal->m_iClass() == TF_CLASS_SCOUT || bParachute;
+		}
+		if (!bKeep)
+			pCmd->buttons &= ~IN_JUMP;
+	}
 
-	F::AntiCheatCompatibility.BunnyHop(pCmd, bCurrValid, bLastValid);
+	F::AntiCheatCompatibility.BunnyHop(pCmd, bValid, bLastValid);
 }
 
 void CMisc::AutoJumpbug(CTFPlayer* pLocal, CUserCmd* pCmd)
@@ -394,47 +410,59 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CMisc::AutoStrafe(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (!Vars::Misc::Movement::AutoStrafe.Value || pLocal->m_hGroundEntity() || !(pLocal->m_afButtonLast() & IN_JUMP) && (pCmd->buttons & IN_JUMP))
+	if (!Vars::Misc::Movement::AutoStrafe.Value || pLocal->InCond(TF_COND_GRAPPLINGHOOK))
 		return;
 
-	switch (Vars::Misc::Movement::AutoStrafe.Value)
+	if (pLocal->m_hGroundEntity())
 	{
-	case Vars::Misc::Movement::AutoStrafeEnum::Legit:
+		if (!(pCmd->buttons & IN_JUMP) || !CanGroundJump(pLocal))
+			return;
+	}
+	else if (pCmd->buttons & IN_JUMP && JumpReleased(pLocal))
+		return;
+
+	float flWishYaw = pCmd->viewangles.y;
+	if (Vars::Misc::Movement::AutoStrafe.Value == Vars::Misc::Movement::AutoStrafeEnum::WASD)
 	{
-		static auto cl_sidespeed = H::ConVars.FindVar("cl_sidespeed");
-		const float flSideSpeed = cl_sidespeed->GetFloat();
-
-		if (pCmd->mousedx)
-		{
-			pCmd->forwardmove = 0.f;
-			pCmd->sidemove = pCmd->mousedx > 0 ? flSideSpeed : -flSideSpeed;
-		}
-		break;
+		if (!pCmd->forwardmove && !pCmd->sidemove)
+			return;
+		flWishYaw += Math::Rad2Deg(atan2f(-pCmd->sidemove, pCmd->forwardmove));
 	}
-	case Vars::Misc::Movement::AutoStrafeEnum::Directional:
+
+	const Vec3 vVelocity = pLocal->m_vecVelocity();
+	const float flSpeed = vVelocity.Length2D();
+	if (flSpeed < 1.f)
+		return;
+
+	static auto sv_airaccelerate = H::ConVars.FindVar("sv_airaccelerate");
+	constexpr float flAirCap = 30.f;
+	const float flAccel = sv_airaccelerate->GetFloat() * std::min(450.f, pLocal->m_flMaxspeed()) * TICK_INTERVAL * pLocal->m_surfaceFriction();
+	if (flAccel <= 0.f)
+		return;
+
+	auto fTurnRate = [&](float flAngle)
 	{
-		// credits: KGB
-		if (!(pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT)))
-			break;
+		const float flRad = Math::Deg2Rad(flAngle);
+		const float flAdd = std::clamp(flAirCap - flSpeed * cosf(flRad), 0.f, flAccel);
+		return Math::Rad2Deg(atan2f(flAdd * sinf(flRad), flSpeed + flAdd * cosf(flRad)));
+	};
 
-		float flForward = pCmd->forwardmove, flSide = pCmd->sidemove;
-		Vec3 vForward, vRight; Math::AngleVectors(pCmd->viewangles, &vForward, &vRight, nullptr);
-		vForward.Normalize2D(), vRight.Normalize2D();
+	const float flGainAngle = Math::Rad2Deg(acosf(std::clamp(std::max(flAirCap - flAccel, 0.f) / flSpeed, 0.f, 1.f)));
+	const float flTurnAngle = Math::Rad2Deg(acosf(std::clamp(-flAccel / flSpeed, -1.f, 1.f)));
+	const float flVelocityYaw = Math::Rad2Deg(atan2f(vVelocity.y, vVelocity.x));
+	const float flDelta = Math::NormalizeAngle(flWishYaw - flVelocityYaw);
 
-		Vec3 vWishDir = Math::VectorAngles({ vForward.x * flForward + vRight.x * flSide, vForward.y * flForward + vRight.y * flSide, 0.f });
-		Vec3 vCurDir = Math::VectorAngles(pLocal->m_vecVelocity());
-		float flDirDelta = Math::NormalizeAngle(vWishDir.y - vCurDir.y);
-		if (fabsf(flDirDelta) > Vars::Misc::Movement::AutoStrafeMaxDelta.Value)
-			break;
-
-		float flTurnScale = Math::RemapVal(Vars::Misc::Movement::AutoStrafeTurnScale.Value, 0.f, 1.f, 0.9f, 1.f);
-		float flRotation = Math::Deg2Rad((flDirDelta > 0.f ? -90.f : 90.f) + flDirDelta * flTurnScale);
-		float flCosRot = cosf(flRotation), flSinRot = sinf(flRotation);
-
-		pCmd->forwardmove = flCosRot * flForward - flSinRot * flSide;
-		pCmd->sidemove = flSinRot * flForward + flCosRot * flSide;
+	float flAngle = flGainAngle;
+	if (fabsf(flDelta) > fTurnRate(flGainAngle))
+	{
+		const float flRetrack = flGainAngle + (flTurnAngle - flGainAngle) * Vars::Misc::Movement::AutoStrafeRetrack.Value / 100.f;
+		if (fTurnRate(flRetrack) <= fabsf(flDelta))
+			flAngle = flRetrack;
 	}
-	}
+
+	const float flMove = Math::Deg2Rad(Math::NormalizeAngle(flVelocityYaw + (flDelta < 0.f ? -flAngle : flAngle) - pCmd->viewangles.y));
+	pCmd->forwardmove = 450.f * cosf(flMove);
+	pCmd->sidemove = -450.f * sinf(flMove);
 }
 
 void CMisc::AutoFaNJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
