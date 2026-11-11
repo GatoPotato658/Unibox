@@ -2197,10 +2197,14 @@ void CMenu::MenuSkins(int iTab)
 			else if (iSelectedWeapon < 0)
 			{
 				if (const char* sName = CSkinChanger::WeaponName(iKey))
-					FNote(std::format("Holding {}", sName).c_str());
+					FNote(std::format("Editing held: {}", sName).c_str());
 				else
-					FNote(std::format("Holding item #{}", iKey).c_str());
+					FNote(std::format("Editing held item #{}", iKey).c_str());
 			}
+			else if (const char* sName = CSkinChanger::WeaponName(iKey))
+				FNote(std::format("Editing {}", sName).c_str());
+			else
+				FNote(std::format("Editing item #{}", iKey).c_str());
 
 			PushDisabled(!bValid);
 			Skin_t tSkin = bValid ? F::SkinChanger.Get(iKey) : Skin_t{};
@@ -2223,9 +2227,13 @@ void CMenu::MenuSkins(int iTab)
 				vKitNames.push_back(sKit.c_str());
 
 			Subheader("Warpaint");
+			PushDisabled(tSkin.bAustralium || !CSkinChanger::CanPaint(iKey, bAllowUnsupported));
 			FDropdown("Paint kit", &tSkin.iPaintKit, vKitNames, vKitIds);
+			PopDisabled();
 			if (bValid && !CSkinChanger::CanPaint(iKey, false))
 				FNote(bAllowUnsupported ? "Not supported on this weapon" : "No warpaints for this weapon");
+			else if (tSkin.bAustralium)
+				FNote("Australium replaces the warpaint");
 
 			static const std::vector<const char*> vWear = { "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle Scarred" };
 			static const std::vector<const char*> vQualityNames = { "Default", "Normal", "Unique", "Vintage", "Genuine", "Strange", "Unusual", "Haunted", "Collector's", "Decorated", "Community", "Self-Made", "Valve" };
@@ -2248,12 +2256,14 @@ void CMenu::MenuSkins(int iTab)
 			FSlider("StatTrak kills", &tSkin.iStatTrak, -1, 100000, 1, tSkin.iStatTrak < 0 ? "Off" : "%i", FSliderEnum::Clamp);
 			if (tSkin.iStatTrak >= 0)
 				FNote("StatTrak forces Strange quality");
-			PushDisabled(!CSkinChanger::CanBotkiller(iKey));
+			PushDisabled(tSkin.bAustralium || !CSkinChanger::CanBotkiller(iKey));
 			{
 				static const std::vector<const char*> vBotkiller = { "Off", "Silver Mk.I", "Gold Mk.I", "Rust Mk.I", "Blood Mk.I", "Carbonado Mk.I", "Diamond Mk.I", "Silver Mk.II", "Gold Mk.II" };
 				FDropdown("Botkiller", &tSkin.iBotkiller, vBotkiller, {});
 			}
 			PopDisabled();
+			if (tSkin.bAustralium)
+				FNote("Australium replaces the botkiller model");
 
 			if (bValid && !(tSkin == F::SkinChanger.Get(iKey)))
 				F::SkinChanger.Set(iKey, tSkin);
@@ -2269,14 +2279,25 @@ void CMenu::MenuSkins(int iTab)
 			{
 				PushDisabled(!CSkinChanger::CanAustralium(iKey));
 				{
-					FToggle(CSkinChanger::IsGoldenPan(iKey) ? "Golden" : "Australium", &tSkin.bAustralium);
+					if (FToggle(CSkinChanger::IsGoldenPan(iKey) ? "Golden finish" : "Australium finish", &tSkin.bAustralium) && tSkin.bAustralium)
+					{
+						tSkin.iPaintKit = -1;
+						tSkin.iWear = 0;
+						tSkin.iSeed = 0;
+						tSkin.iBotkiller = 0;
+						tSkin.bFestive = false;
+					}
 				}
 				PopDisabled();
-				PushDisabled(!CSkinChanger::CanFestive(iKey));
+				if (bValid && !CSkinChanger::CanAustralium(iKey))
+					FNote("No gold style for this weapon");
+				PushDisabled(tSkin.bAustralium || !CSkinChanger::CanFestive(iKey));
 				{
 					FToggle("Festivizer", &tSkin.bFestive);
 				}
 				PopDisabled();
+				if (tSkin.bAustralium)
+					FNote("Gold finish uses the game's style model");
 
 				bool bPaintColor = tSkin.iPaintColor >= 0;
 				const bool bOldPaintColor = bPaintColor;

@@ -260,7 +260,9 @@ void CBacktrack::MakeRecords()
 		pPlayer->InvalidateBoneCache();
 
 		m_bSettingUpBones = true;
+		G::SpyBoneSnapshot = true;
 		bool bSetup = pPlayer->SetupBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+		G::SpyBoneSnapshot = false;
 		m_bSettingUpBones = false;
 
 		pPlayer->SetAbsOrigin(vOldAbsOrigin);

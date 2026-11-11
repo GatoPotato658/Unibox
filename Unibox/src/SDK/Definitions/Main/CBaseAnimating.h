@@ -38,6 +38,7 @@ public:
 	}
 
 	NETVAR_OFF(m_pStudioHdr, CStudioHdr*, "CBaseAnimating", "m_nMuzzleFlashParity", 16);
+	NETVAR_OFF(m_hStudioHdr, unsigned short, "CBaseAnimating", "m_nMuzzleFlashParity", 24);
 	NETVAR_OFF(m_CachedBoneData, CUtlVector<matrix3x4>, "CBaseAnimating", "m_hLightingOrigin", -88);
 	NETVAR_OFF(m_bSequenceLoops, bool, "CBaseAnimating", "m_flFadeScale", 13);
 

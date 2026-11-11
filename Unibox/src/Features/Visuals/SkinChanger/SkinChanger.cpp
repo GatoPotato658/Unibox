@@ -432,7 +432,7 @@ namespace
 		if (!pList)
 			return iTarget;
 
-		if (tSkin.iPaintKit >= 0)
+		if (tSkin.iPaintKit >= 0 && !tSkin.bAustralium)
 		{
 			const auto tPlan = PlanPaint(iKey, tSkin.iPaintKit, bAllowUnsupported);
 			if (tPlan.bListed)
@@ -448,11 +448,17 @@ namespace
 			}
 		}
 
-		if (const int iBotkiller = BotkillerTargetDef(iKey, tSkin.iBotkiller))
+		if (const int iBotkiller = BotkillerTargetDef(iKey, tSkin.bAustralium ? 0 : tSkin.iBotkiller))
 			iTarget = iBotkiller;
 
 		if (tSkin.bAustralium)
 		{
+			pList->RemoveAttribute(kAttrPaintkit);
+			pList->RemoveAttribute(kAttrWear);
+			pList->RemoveAttribute(kAttrInspect);
+			pList->RemoveAttribute(kAttrSeedLo);
+			pList->RemoveAttribute(kAttrSeedHi);
+			pList->RemoveAttribute(kAttrFestive);
 			if (CSkinChanger::IsGoldenPan(iKey))
 				iTarget = Misc_t_GoldFryingPan;
 			else if (CSkinChanger::CanAustralium(iKey))
@@ -463,7 +469,7 @@ namespace
 			}
 		}
 
-		if (tSkin.bFestive)
+		if (tSkin.bFestive && !tSkin.bAustralium)
 			pList->SetAttribute(kAttrFestive, 1.f);
 
 		if (tSkin.iKillstreak)

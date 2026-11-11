@@ -170,6 +170,7 @@ namespace G
 
 	inline bool UpdatingAnims = false;
 	inline bool FlipViewmodels = false;
+	inline bool SpyBoneSnapshot = false;
 
 	inline std::vector<DrawLine_t> LineStorage = {};
 	inline std::vector<DrawPath_t> PathStorage = {};

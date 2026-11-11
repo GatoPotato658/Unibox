@@ -2,9 +2,24 @@
 
 #include "../../SDK.h"
 
+static studiohdr_t* GetSpyStudiomodel()
+{
+	auto pModel = I::ModelInfoClient->GetModel(I::ModelInfoClient->GetModelIndex("models/player/spy.mdl"));
+	if (!pModel)
+		return nullptr;
+
+	return I::ModelInfoClient->GetStudiomodel(pModel);
+}
+
 mstudiohitboxset_t* CBaseAnimating::GetHitboxSet()
 {
 	auto pHDR = GetStudiomodel();
+	if (IsPlayer() && As<CTFPlayer>()->m_iClass() == TF_CLASS_SPY)
+	{
+		auto pSpyHDR = GetSpyStudiomodel();
+		if (pSpyHDR)
+			pHDR = pSpyHDR;
+	}
 	if (!pHDR)
 		return nullptr;
 
