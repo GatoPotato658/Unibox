@@ -6,6 +6,7 @@
 #include "../../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../Misc/AutoQueue/MvmQueue.h"
+#include "../../Misc/Radio/Radio.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #if __has_include("../../Misc/ProfileStalker/ProfileStalker.h")
 #include "../../Misc/ProfileStalker/ProfileStalker.h"
@@ -1062,6 +1063,34 @@ static void MiscMain()
 		FToggle(Vars::Misc::Sound::HitsoundAlways);
 		FToggle(Vars::Misc::Sound::RemoveDSP);
 		FToggle(Vars::Misc::Sound::GiantWeaponSounds);
+	} EndSection();
+	if (Section("Radio"))
+	{
+		using namespace Vars::Misc::Radio;
+		FToggle(Enabled);
+		FDropdown(Station);
+		FSlider(Volume);
+		FToggle(ScaleToGameVolume);
+		FToggle(MuteUnfocused);
+		FSlider(Crossfade);
+		FLabel(std::format("{} | {}", F::Radio.NowPlaying(), F::Radio.Status()).c_str());
+		if (FButton(F::Radio.Paused() ? "Resume" : "Pause"))
+			F::Radio.TogglePaused();
+		Subheader("Voice mixing");
+		FToggle(DuckOnVoice);
+		PushTransparent(!DuckOnVoice.Value);
+		{
+			FToggle(DuckOnSelf);
+			FToggle(DuckOnOthers);
+			FSlider(DuckLevel);
+		}
+		PopTransparent();
+		Subheader("Binds");
+		FKeybind(Key);
+		FKeybind(NextKey);
+		FKeybind(PreviousKey);
+		FKeybind(LouderKey);
+		FKeybind(QuieterKey);
 	} EndSection();
 
 	EndTable();

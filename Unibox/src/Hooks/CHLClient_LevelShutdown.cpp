@@ -9,6 +9,7 @@
 #include "../Features/NavBot/Hazards.h"
 #include "../Features/NavBot/Jobs/NavBotJobs.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
+#include "../Features/Misc/Radio/Radio.h"
 #ifndef TEXTMODE
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
 #endif
@@ -19,6 +20,7 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	DEBUG_RETURN(CHLClient_LevelShutdown, rcx);
 
 	F::Backtrack.Reset();
+	F::Radio.OnLevelShutdown();
 	F::NetworkFix.Reset();
 	F::Chams.Reset();
 	H::Entities.RemovePrecipitation();

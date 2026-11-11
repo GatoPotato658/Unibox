@@ -1334,6 +1334,25 @@ NAMESPACE_BEGIN(Vars)
 			CVar(RemoveDSP, "Remove DSP", false);
 			CVar(GiantWeaponSounds, "Giant weapon sounds", false);
 		NAMESPACE_END(Sound)
+
+		NAMESPACE_BEGIN(Radio)
+			CVar(Enabled, "Enable radio", false);
+			CVarValues(Station, "Station", 0, NONE, nullptr,
+				"Drum and bass", "Jungle", "Liquid DnB", "Hardcore", "Techno", "Classic rap", "Vaporwave", "NonStop FM", "Tekk", "Underground", "The Beat 102.7");
+			CVar(Volume, "Volume", 50, SLIDER_CLAMP, 0, 100, 1, "%i%%");
+			CVar(ScaleToGameVolume, "Follow game volume", false);
+			CVar(DuckOnVoice, "Duck on voice chat", false);
+			CVar(DuckOnSelf, "When you talk", false);
+			CVar(DuckOnOthers, "When others talk", true);
+			CVar(DuckLevel, "Duck to", 25, SLIDER_CLAMP, 0, 100, 1, "%i%%");
+			CVar(MuteUnfocused, "Mute when unfocused", true);
+			CVar(Crossfade, "Crossfade", 500, SLIDER_CLAMP, 0, 2000, 50, "%ims");
+			CVar(Key, "Toggle key", 0, NOBIND);
+			CVar(NextKey, "Next station key", 0, NOBIND);
+			CVar(PreviousKey, "Previous station key", 0, NOBIND);
+			CVar(LouderKey, "Volume up key", 0, NOBIND);
+			CVar(QuieterKey, "Volume down key", 0, NOBIND);
+		NAMESPACE_END(Radio)
 	NAMESPACE_END(Misc)
 
 	NAMESPACE_BEGIN(Logging)

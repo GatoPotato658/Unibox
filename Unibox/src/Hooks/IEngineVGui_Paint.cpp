@@ -12,6 +12,7 @@
 #include "../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../Features/NavBot/NavRender.h"
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
+#include "../Features/Misc/Radio/Radio.h"
 #if __has_include("../Features/Misc/ProfileStalker/ProfileStalker.h")
 #include "../Features/Misc/ProfileStalker/ProfileStalker.h"
 #endif
@@ -30,6 +31,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		return CALL_ORIGINAL(rcx, iMode);
 
 	F::AutoQueue.Run();
+	F::Radio.OnFrame();
 #if __has_include("../Features/Misc/ProfileStalker/ProfileStalker.h")
 	F::ProfileStalker.Run();
 #endif

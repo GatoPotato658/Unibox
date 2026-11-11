@@ -2,6 +2,7 @@
 
 #include "../Features/Players/SteamProfileCache.h"
 #include "../Features/Misc/TelemetryBlocker/TelemetryBlocker.h"
+#include "../Features/Misc/Radio/Radio.h"
 
 #include "../SDK/SDK.h"
 #include "../BytePatches/BytePatches.h"
@@ -213,6 +214,8 @@ void CCore::Load()
 			F::Configs.LoadVisual(sVisualConfig, false);
 	}
 	F::TelemetryBlocker.Initialize();
+	if (!F::Radio.Startup())
+		SDK::Output("Radio", "Failed to initialize audio output", WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG, ICON_MD_WARNING);
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
 	SDK::Output("unibox", std::format("Loaded (dxlevel {})", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 }
@@ -248,6 +251,7 @@ void CCore::Unload()
 
 	SDK::ShutdownSteamScreenshotHook();
 	F::SteamProfileCache.Shutdown();
+	F::Radio.Shutdown();
 
 #ifndef TEXTMODE
 	F::Materials.RequestUnload();

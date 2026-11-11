@@ -522,6 +522,7 @@
     <ClCompile Include="src\Features\ImGui\Theme.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
+    <ClCompile Include="src\Features\Misc\Radio\Radio.cpp" />
     <ClCompile Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.cpp" />
     <ClCompile Include="src\Features\NetworkFix\NetworkFix.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpread.cpp" />
@@ -655,6 +656,7 @@
     <ClCompile Include="src\Hooks\CHLClient_DispatchUserMessage.cpp" />
     <ClCompile Include="src\Hooks\CHLClient_FrameStageNotify.cpp" />
     <ClCompile Include="src\Hooks\CHLClient_LevelShutdown.cpp" />
+    <ClCompile Include="src\Hooks\CHLClient_VoiceStatus.cpp" />
     <ClCompile Include="src\Hooks\IEngineVGui_Paint.cpp" />
     <ClCompile Include="src\Hooks\CInput_GetUserCmd.cpp" />
     <ClCompile Include="src\Hooks\IMaterialSystem_FindTexture.cpp" />
@@ -707,6 +709,10 @@
     <ClCompile Include="src\Utils\Signatures\Signatures.cpp" />
     <ClCompile Include="src\Utils\Timer\Timer.cpp" />
     <ClCompile Include="src\Utils\ThreadPool\ThreadPool.cpp" />
+    <ClCompile Include="src\Utils\Audio\AudioDevice.cpp" />
+    <ClCompile Include="src\Utils\Audio\AudioStream.cpp" />
+    <ClCompile Include="src\Utils\Audio\minimp3_impl.cpp" />
+    <ClCompile Include="src\Utils\Audio\Vendor\stb_vorbis.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ImGui\imconfig.h" />
@@ -774,6 +780,7 @@
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\MaterialIcons.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
     <ClInclude Include="src\Features\Misc\Misc.h" />
+    <ClInclude Include="src\Features\Misc\Radio\Radio.h" />
     <ClInclude Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.h" />
     <ClInclude Include="src\Features\NetworkFix\NetworkFix.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpread.h" />
@@ -1072,6 +1079,10 @@
     <ClInclude Include="src\Utils\Signatures\Signatures.h" />
     <ClInclude Include="src\Utils\Timer\Timer.h" />
     <ClInclude Include="src\Utils\ThreadPool\ThreadPool.h" />
+    <ClInclude Include="src\Utils\Audio\AudioDevice.h" />
+    <ClInclude Include="src\Utils\Audio\AudioStream.h" />
+    <ClInclude Include="src\Utils\Audio\Vendor\minimp3.h" />
+    <ClInclude Include="src\Utils\Audio\Vendor\stb_vorbis.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

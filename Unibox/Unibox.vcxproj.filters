@@ -25,6 +25,10 @@
     <ClCompile Include="src\Utils\Signatures\Signatures.cpp" />
     <ClCompile Include="src\Utils\Timer\Timer.cpp" />
     <ClCompile Include="src\Utils\ThreadPool\ThreadPool.cpp" />
+    <ClCompile Include="src\Utils\Audio\AudioDevice.cpp" />
+    <ClCompile Include="src\Utils\Audio\AudioStream.cpp" />
+    <ClCompile Include="src\Utils\Audio\minimp3_impl.cpp" />
+    <ClCompile Include="src\Utils\Audio\Vendor\stb_vorbis.c" />
     <ClCompile Include="src\DllMain.cpp" />
     <ClCompile Include="include\MinHook\hde\hde32.c" />
     <ClCompile Include="include\MinHook\hde\hde64.c" />
@@ -57,6 +61,7 @@
     <ClCompile Include="src\Features\CritHack\CritHack.cpp" />
     <ClCompile Include="src\Features\EnginePrediction\EnginePrediction.cpp" />
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
+    <ClCompile Include="src\Features\Misc\Radio\Radio.cpp" />
     <ClCompile Include="src\Features\NetworkFix\NetworkFix.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpread.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpreadHitscan\NoSpreadHitscan.cpp" />
@@ -167,6 +172,7 @@
     <ClCompile Include="src\Hooks\HostState_Shutdown.cpp" />
     <ClCompile Include="src\Hooks\CHLClient_DispatchUserMessage.cpp" />
     <ClCompile Include="src\Hooks\CHLClient_LevelShutdown.cpp" />
+    <ClCompile Include="src\Hooks\CHLClient_VoiceStatus.cpp" />
     <ClCompile Include="src\Hooks\IEngineVGui_Paint.cpp" />
     <ClCompile Include="src\Hooks\CInput_GetUserCmd.cpp" />
     <ClCompile Include="src\Hooks\IPanel_PaintTraverse.cpp" />
@@ -399,6 +405,10 @@
     <ClInclude Include="src\Utils\Signatures\Signatures.h" />
     <ClInclude Include="src\Utils\Timer\Timer.h" />
     <ClInclude Include="src\Utils\ThreadPool\ThreadPool.h" />
+    <ClInclude Include="src\Utils\Audio\AudioDevice.h" />
+    <ClInclude Include="src\Utils\Audio\AudioStream.h" />
+    <ClInclude Include="src\Utils\Audio\Vendor\minimp3.h" />
+    <ClInclude Include="src\Utils\Audio\Vendor\stb_vorbis.c" />
     <ClInclude Include="include\MinHook\hde\hde32.h" />
     <ClInclude Include="include\MinHook\hde\hde64.h" />
     <ClInclude Include="include\MinHook\hde\pstdint.h" />
@@ -467,6 +477,7 @@
     <ClInclude Include="src\Features\CritHack\CritHack.h" />
     <ClInclude Include="src\Features\EnginePrediction\EnginePrediction.h" />
     <ClInclude Include="src\Features\Misc\Misc.h" />
+    <ClInclude Include="src\Features\Misc\Radio\Radio.h" />
     <ClInclude Include="src\Features\NetworkFix\NetworkFix.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpread.h" />
     <ClInclude Include="src\Features\NoSpread\SpreadMath.h" />
