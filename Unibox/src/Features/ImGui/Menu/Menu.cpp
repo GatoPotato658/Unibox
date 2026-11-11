@@ -3988,6 +3988,8 @@ void CMenu::Render()
 		AddDraggable("Conditions", Vars::Menu::ConditionsDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Conditions));
 		AddDraggable("Seed prediction", Vars::Menu::SeedPredictionDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::SeedPrediction));
 		AddDraggable("Nav bot", Vars::Menu::NavBotDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::NavBot));
+		AddDraggable("Radio", Vars::Menu::RadioDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Radio),
+			{ H::Draw.IndicatorScale(180.f), H::Draw.IndicatorScale(29.f) });
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, m_bIsOpen && FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
 
 		DrawMenu();

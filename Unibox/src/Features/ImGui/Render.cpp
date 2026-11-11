@@ -17,6 +17,7 @@
 #include "../Visuals/ESP/ESP.h"
 #include "../Visuals/Visuals.h"
 #include "../Aimbot/Aimbot.h"
+#include "../Misc/Radio/Radio.h"
 #include "Overlay/CaptureOverlay.h"
 
 void CRender::Render(IDirect3DDevice9* pDevice)
@@ -55,6 +56,8 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
+	F::Radio.OnFrame();
+
 	const bool bAntiObs = SDK::AntiObs();
 	const bool bPrivate = bAntiObs && F::CaptureOverlay.Prepare(pDevice);
 	const bool bUnsupported = bAntiObs && !bPrivate && F::CaptureOverlay.Unsupported();
@@ -82,6 +85,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 		F::PlayerConditions.Draw();
 		F::Backtrack.Draw();
 		F::NavRender.DrawIndicators();
+		F::Radio.Draw();
 
 		F::ESP.Draw(pBackground);
 		F::Aimbot.Draw(pBackground);

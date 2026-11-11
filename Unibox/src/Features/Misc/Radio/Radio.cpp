@@ -1,7 +1,12 @@
 #include "Radio.h"
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
+
+#ifndef TEXTMODE
+#include "../../ImGui/IndicatorPanel.h"
+#endif
 
 static constexpr int RadioVolumeStep = 5;
 static constexpr uint64_t RadioRetryDelay = 3000;
@@ -495,3 +500,112 @@ std::string CRadio::Status() const
 		return "Off";
 	}
 }
+
+#ifndef TEXTMODE
+void CRadio::Draw()
+{
+	struct DrawCache_t
+	{
+		std::string m_sStatus;
+		std::string m_sTitle;
+		Color_t m_tStatusColor;
+		float m_flProgress = 0.f;
+		bool m_bValid = false;
+	};
+
+	static IndicatorAnim_t tAnim;
+	static float flCurrentProgress = 0.f;
+	static DrawCache_t s_tLastValidCache;
+
+	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Radio) && Vars::Misc::Radio::Enabled.Value;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame();
+
+	bool bOpening = true;
+	const float flAnim = tAnim.Update(bVisible, bOpening);
+	if (!tAnim.ShouldDraw(bVisible))
+	{
+		flCurrentProgress = 0.f;
+		return;
+	}
+
+	DrawCache_t tDraw;
+	if (bVisible)
+	{
+		const int iPhase = Phase();
+		const bool bDucked = iPhase == RadioPhaseEnum::Playing && Ducking();
+
+		char sTitle[AudioTitleCapacity] = {};
+		Title(sTitle, sizeof(sTitle));
+		tDraw.m_sTitle = sTitle[0] ? sTitle : NowPlaying();
+		tDraw.m_tStatusColor = Vars::Menu::Theme::Inactive.Value;
+
+		switch (iPhase)
+		{
+		case RadioPhaseEnum::Playing:
+			tDraw.m_sStatus = bDucked ? "Ducked" : "Playing";
+			tDraw.m_tStatusColor = bDucked ? Vars::Colors::IndicatorMid.Value : Vars::Colors::IndicatorGood.Value;
+			tDraw.m_flProgress = 1.f;
+			break;
+		case RadioPhaseEnum::Buffering:
+		{
+			const int iBuffer = std::clamp(BufferPercent(), 0, 100);
+			tDraw.m_sStatus = std::format("Buffering {}%", iBuffer);
+			tDraw.m_tStatusColor = Vars::Colors::IndicatorMid.Value;
+			tDraw.m_flProgress = static_cast<float>(iBuffer) / 100.f;
+			break;
+		}
+		case RadioPhaseEnum::Paused:
+			tDraw.m_sStatus = "Paused";
+			break;
+		case RadioPhaseEnum::Failed:
+			tDraw.m_sStatus = "Stream lost";
+			tDraw.m_tStatusColor = Vars::Colors::IndicatorBad.Value;
+			break;
+		case RadioPhaseEnum::Connecting:
+			tDraw.m_sStatus = "Connecting";
+			tDraw.m_tStatusColor = Vars::Colors::IndicatorMid.Value;
+			break;
+		default:
+			tDraw.m_sStatus = "Off";
+			break;
+		}
+
+		tDraw.m_bValid = true;
+		s_tLastValidCache = tDraw;
+	}
+	else
+	{
+		if (!s_tLastValidCache.m_bValid)
+			return;
+		tDraw = s_tLastValidCache;
+	}
+
+	flCurrentProgress = std::lerp(flCurrentProgress, tDraw.m_flProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
+
+	const float flPanelWidth = H::Draw.IndicatorScale(180.f);
+	const float flPanelHeight = H::Draw.IndicatorScale(29.f);
+	const ImVec2 vPanelPos =
+	{
+		static_cast<float>(Vars::Menu::RadioDisplay.Value.x) - flPanelWidth / 2.f,
+		static_cast<float>(Vars::Menu::RadioDisplay.Value.y)
+	};
+
+	const float flTextRoom = flPanelWidth - H::Draw.IndicatorScale(18.f) - ImGui::CalcTextSize(tDraw.m_sStatus.c_str()).x;
+	if (flTextRoom <= 0.f)
+		tDraw.m_sTitle.clear();
+	else if (ImGui::CalcTextSize(tDraw.m_sTitle.c_str()).x > flTextRoom)
+	{
+		while (!tDraw.m_sTitle.empty() && ImGui::CalcTextSize((tDraw.m_sTitle + "...").c_str()).x > flTextRoom)
+			tDraw.m_sTitle.pop_back();
+		tDraw.m_sTitle += "...";
+	}
+
+	ImDrawList* pDrawList = ImGui::GetBackgroundDrawList();
+	const int iVtxStart = pDrawList->VtxBuffer.Size;
+	const int iCmdStart = pDrawList->CmdBuffer.Size;
+
+	DrawIndicatorPanel(pDrawList, vPanelPos, flPanelWidth, flPanelHeight, tDraw.m_sStatus.c_str(), tDraw.m_sTitle.c_str(), tDraw.m_tStatusColor, Vars::Menu::Theme::Active.Value, tDraw.m_tStatusColor, flCurrentProgress);
+
+	TransformIndicatorVertices(pDrawList, iVtxStart, pDrawList->VtxBuffer.Size, iCmdStart, pDrawList->CmdBuffer.Size, flAnim, bOpening, ImGui::GetIO().DisplaySize);
+}
+#endif

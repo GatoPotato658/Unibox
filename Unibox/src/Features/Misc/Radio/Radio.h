@@ -88,6 +88,9 @@ public:
 	void OnFrame();
 	void OnVoiceStatus(int iEntity, bool bTalking);
 	void OnLevelShutdown();
+#ifndef TEXTMODE
+	void Draw();
+#endif
 
 	void StepStation(int iDelta);
 	void TogglePaused();

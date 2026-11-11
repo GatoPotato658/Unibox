@@ -183,8 +183,8 @@ NAMESPACE_BEGIN(Vars)
 		CVar(MenuShowsBinds, "Menu shows binds", false, NOBIND);
 
 		CVarEnum(Indicators, "Indicators", 0b00000, VISUAL | DROPDOWN_MULTI, nullptr,
-			VA_LIST("Ticks", "Crit hack", "Spectators", "Ping", "Conditions", "Seed prediction", "Navbot"),
-			Ticks = 1 << 0, CritHack = 1 << 1, Spectators = 1 << 2, Ping = 1 << 3, Conditions = 1 << 4, SeedPrediction = 1 << 5, NavBot = 1 << 6);
+			VA_LIST("Ticks", "Crit hack", "Spectators", "Ping", "Conditions", "Seed prediction", "Navbot", "Radio"),
+			Ticks = 1 << 0, CritHack = 1 << 1, Spectators = 1 << 2, Ping = 1 << 3, Conditions = 1 << 4, SeedPrediction = 1 << 5, NavBot = 1 << 6, Radio = 1 << 7);
 
 		CVar(BindsDisplay, "Binds display", DragBox_t(100, 100), VISUAL | NOBIND);
 		CVar(TicksDisplay, "Ticks display", DragBox_t(), VISUAL | NOBIND);
@@ -194,6 +194,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(ConditionsDisplay, "Conditions display", DragBox_t(), VISUAL | NOBIND);
 		CVar(SeedPredictionDisplay, "Seed prediction display", DragBox_t(), VISUAL | NOBIND);
 		CVar(NavBotDisplay, "Navbot display", DragBox_t(), VISUAL | NOBIND);
+		CVar(RadioDisplay, "Radio display", DragBox_t(), VISUAL | NOBIND);
 
 		CVar(Scale, "Menu scale", 1.25f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
 		CVar(IndicatorScale, "Indicator scale", 1.f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
