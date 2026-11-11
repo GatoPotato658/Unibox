@@ -77,6 +77,10 @@ struct TickRecord
 	Vec3 m_vMaxs = {};
 	bool m_bOnShot = false;
 	bool m_bInvalid = false;
+	Vec3 m_vAngles = {};
+	Vec3 m_vVelocity = {};
+	float m_flCycle = 0.f;
+	float m_flPlaybackRate = 1.f;
 	matrix3x4 m_aBones[MAXSTUDIOBONES];
 };
 

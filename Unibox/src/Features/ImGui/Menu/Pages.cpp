@@ -698,6 +698,13 @@ static void VisualsWorld()
 		FToggle(NearPropFade);
 		FToggle(NoPropFade);
 		FDropdown(Precipitation);
+		PushTransparent(!Precipitation.Value);
+		{
+			FSlider(PrecipitationIntensity);
+			FSlider(PrecipitationWindSpeed);
+			FSlider(PrecipitationWindDirection);
+		}
+		PopTransparent();
 
 		Subheader("Modulation");
 		FDropdown(Modulations);

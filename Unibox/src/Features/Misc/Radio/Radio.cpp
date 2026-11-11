@@ -420,9 +420,9 @@ void CRadio::OnFrame()
 	if (Pressed(BindPrevious, Vars::Misc::Radio::PreviousKey.Value))
 		StepStation(-1);
 	if (Pressed(BindLouder, Vars::Misc::Radio::LouderKey.Value))
-		Vars::Misc::Radio::Volume.Value = std::min(Vars::Misc::Radio::Volume.Value + RadioVolumeStep, 100);
+		Vars::Misc::Radio::Volume.Value = (std::min)(Vars::Misc::Radio::Volume.Value + RadioVolumeStep, 100);
 	if (Pressed(BindQuieter, Vars::Misc::Radio::QuieterKey.Value))
-		Vars::Misc::Radio::Volume.Value = std::max(Vars::Misc::Radio::Volume.Value - RadioVolumeStep, 0);
+		Vars::Misc::Radio::Volume.Value = (std::max)(Vars::Misc::Radio::Volume.Value - RadioVolumeStep, 0);
 }
 
 bool CRadio::Pressed(int iSlot, int iKey)

@@ -236,9 +236,7 @@ void CBacktrack::MakeRecords()
 		pPlayer->InvalidateBoneCache();
 
 		m_bSettingUpBones = true;
-		G::SpyBoneSnapshot = true;
-		bool bSetup = pPlayer->SetupBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
-		G::SpyBoneSnapshot = false;
+		bool bSetup = pPlayer->SetupAimBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
 		m_bSettingUpBones = false;
 
 		pPlayer->SetAbsOrigin(vOldAbsOrigin);
@@ -254,6 +252,10 @@ void CBacktrack::MakeRecords()
 			pPlayer->m_vecMaxs(),
 			m_mDidShoot[pPlayer->entindex()]
 		};
+		tCurRecord.m_vAngles = pPlayer->m_angRotation();
+		tCurRecord.m_vVelocity = pPlayer->m_vecVelocity();
+		tCurRecord.m_flCycle = pPlayer->m_flCycle();
+		tCurRecord.m_flPlaybackRate = pPlayer->m_flPlaybackRate();
 		memcpy(tCurRecord.m_aBones, s_aBones, sizeof(tCurRecord.m_aBones));
 		const bool bHasLastRecord = !vRecords.empty();
 		const Vec3 vLastOrigin = bHasLastRecord ? vRecords.front().m_vOrigin : Vec3();

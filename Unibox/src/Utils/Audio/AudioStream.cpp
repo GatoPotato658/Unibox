@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-#define FAR
 #include <WinHttp.h>
-#undef FAR
 
 #define STB_VORBIS_HEADER_ONLY
 #define STB_VORBIS_NO_PULLDATA_API
@@ -47,7 +45,7 @@ static void CopyString(char* sOut, size_t uCapacity, const char* sIn, size_t uLe
 	if (!uCapacity)
 		return;
 
-	uLength = std::min(uLength, uCapacity - 1);
+	uLength = (std::min)(uLength, uCapacity - 1);
 	memcpy(sOut, sIn, uLength);
 	sOut[uLength] = '\0';
 }
@@ -258,7 +256,7 @@ AudioStreamError_t CAudioStream::Filter(const uint8_t* pData, uint32_t uSize)
 	{
 		if (m_uAudioLeft)
 		{
-			const uint32_t uTake = std::min(uSize, m_uAudioLeft);
+			const uint32_t uTake = (std::min)(uSize, m_uAudioLeft);
 			if (const AudioStreamError_t iError = Decode(pData, uTake); iError != AudioStreamError_t::None)
 				return iError;
 
@@ -279,7 +277,7 @@ AudioStreamError_t CAudioStream::Filter(const uint8_t* pData, uint32_t uSize)
 			continue;
 		}
 
-		const uint32_t uTake = std::min(uSize, m_uMetaLeft);
+		const uint32_t uTake = (std::min)(uSize, m_uMetaLeft);
 		memcpy(m_sMeta + m_uMetaSize, pData, uTake);
 		m_uMetaSize += uTake;
 		m_uMetaLeft -= uTake;
@@ -456,7 +454,7 @@ void CAudioStream::Render(float* pOut, uint32_t uFrames)
 			m_bStalled.store(false);
 	}
 
-	const uint32_t uCount = std::min(uAvailable, uFrames);
+	const uint32_t uCount = (std::min)(uAvailable, uFrames);
 	for (uint32_t i = 0; i < uCount; i++)
 	{
 		const float* pSlot = m_pRing + ((uReadValue + i) & (m_uCapacity - 1)) * AudioChannels;

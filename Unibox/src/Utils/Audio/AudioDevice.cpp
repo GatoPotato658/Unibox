@@ -3,12 +3,8 @@
 #include <algorithm>
 #include <chrono>
 
-#define FAR
-#define NEAR
 #include <audioclient.h>
 #include <mmdeviceapi.h>
-#undef FAR
-#undef NEAR
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "uuid.lib")
@@ -307,7 +303,7 @@ void CAudioDevice::Service(Voice_t& tVoice)
 			if (tVoice.m_uSerial != tVoice.m_uApplied)
 			{
 				tVoice.m_uApplied = tVoice.m_uSerial;
-				tVoice.m_uStepsLeft = std::max(tVoice.m_uRamp, AudioMinRamp) * tVoice.m_uRate / 1000;
+				tVoice.m_uStepsLeft = (std::max)(tVoice.m_uRamp, AudioMinRamp) * tVoice.m_uRate / 1000;
 				tVoice.m_flStep = (tVoice.m_flTarget - tVoice.m_flGain) / float(tVoice.m_uStepsLeft);
 				tVoice.m_flGoal = tVoice.m_flTarget;
 			}

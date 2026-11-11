@@ -183,7 +183,7 @@ std::vector<HitscanHitbox_t> CAimbotHitscan::GetHitboxes(CTFPlayer* pLocal, CTFW
 		return vHitboxes;
 	}
 
-	if (auto pSet = pTarget->As<CBaseAnimating>()->GetHitboxSet())
+	if (auto pSet = pTarget->As<CBaseAnimating>()->GetAimHitboxSet())
 	{
 		std::vector<std::tuple<const mstudiobbox_t*, int, int>> vBones;
 		for (int nHitbox = 0; nHitbox < pSet->numhitboxes; nHitbox++)
@@ -413,8 +413,16 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 	if (!F::MoveSim.Initialize(pTarget, tMoveStorage, false, true, false, &pBaseRecord->m_vOrigin) || tMoveStorage.m_bFailed)
 		return;
 
+	const Vec3 vOldAbsOrigin = pTarget->GetAbsOrigin();
+	const Vec3 vOldAbsAngles = pTarget->GetAbsAngles();
+	const Vec3 vOldOrigin = pTarget->m_vecOrigin();
+	const Vec3 vOldAngles = pTarget->m_angRotation();
+	const float flOldCycle = pTarget->m_flCycle();
+	const bool bOldSettingUpBones = F::Backtrack.IsSettingUpBones();
 	const Vec3 vBaseOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
 	const size_t uStart = m_vForwardRecords.size();
+
+	F::Backtrack.SetSettingUpBones(true);
 
 	for (int tick = 1; tick <= iLead; tick++)
 	{
@@ -429,16 +437,58 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 		predRecord.m_vMaxs = pBaseRecord->m_vMaxs;
 		predRecord.m_bOnShot = false;
 		predRecord.m_bInvalid = false;
+		predRecord.m_vAngles = pBaseRecord->m_vAngles;
+		predRecord.m_vVelocity = tMoveStorage.m_MoveData.m_vecVelocity;
+		predRecord.m_flPlaybackRate = pBaseRecord->m_flPlaybackRate;
 
-		const Vec3 vDelta = predRecord.m_vOrigin - vBaseOrigin;
-		for (int b = 0; b < MAXSTUDIOBONES; b++)
+		const float flSeconds = TICKS_TO_TIME(tick);
+		const float flDuration = pTarget->SequenceDuration(pTarget->m_nSequence());
+		if (flDuration > 0.f && std::isfinite(pBaseRecord->m_flPlaybackRate))
 		{
-			memcpy(predRecord.m_aBones[b], pBaseRecord->m_aBones[b], sizeof(matrix3x4));
-			predRecord.m_aBones[b][0][3] += vDelta.x;
-			predRecord.m_aBones[b][1][3] += vDelta.y;
-			predRecord.m_aBones[b][2][3] += vDelta.z;
+			float flCycle = pBaseRecord->m_flCycle + pBaseRecord->m_flPlaybackRate * flSeconds / flDuration;
+			if (pTarget->m_bSequenceLoops())
+				flCycle -= floorf(flCycle);
+			predRecord.m_flCycle = std::clamp(flCycle, 0.f, 1.f);
+		}
+		else
+			predRecord.m_flCycle = pBaseRecord->m_flCycle;
+
+		if (pBaseRecord->m_vVelocity.Length2DSqr() > 1.f && predRecord.m_vVelocity.Length2DSqr() > 1.f)
+		{
+			const float flInitialYaw = Math::VectorAngles(pBaseRecord->m_vVelocity).y;
+			const float flPredictedYaw = Math::VectorAngles(predRecord.m_vVelocity).y;
+			predRecord.m_vAngles.y = Math::NormalizeAngle(predRecord.m_vAngles.y + flPredictedYaw - flInitialYaw);
+		}
+
+		pTarget->m_vecOrigin() = predRecord.m_vOrigin;
+		pTarget->m_angRotation() = predRecord.m_vAngles;
+		pTarget->SetAbsOrigin(predRecord.m_vOrigin);
+		pTarget->SetAbsAngles(predRecord.m_vAngles);
+		pTarget->m_flCycle() = predRecord.m_flCycle;
+		pTarget->InvalidateBoneCache();
+
+		if (!pTarget->SetupAimBones(predRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING,
+			predRecord.m_flSimTime))
+		{
+			const Vec3 vDelta = predRecord.m_vOrigin - vBaseOrigin;
+			for (int b = 0; b < MAXSTUDIOBONES; b++)
+			{
+				memcpy(predRecord.m_aBones[b], pBaseRecord->m_aBones[b], sizeof(matrix3x4));
+				predRecord.m_aBones[b][0][3] += vDelta.x;
+				predRecord.m_aBones[b][1][3] += vDelta.y;
+				predRecord.m_aBones[b][2][3] += vDelta.z;
+			}
 		}
 	}
+
+	F::Backtrack.SetSettingUpBones(bOldSettingUpBones);
+
+	pTarget->m_vecOrigin() = vOldOrigin;
+	pTarget->m_angRotation() = vOldAngles;
+	pTarget->m_flCycle() = flOldCycle;
+	pTarget->SetAbsOrigin(vOldAbsOrigin);
+	pTarget->SetAbsAngles(vOldAbsAngles);
+	pTarget->InvalidateBoneCache();
 
 	if (m_vForwardRecords.size() == uStart)
 		return;
@@ -497,10 +547,12 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 		pEntity->InvalidateBoneCache();
 
 		F::Backtrack.m_tRecord = { pEntity->m_flSimulationTime(), pEntity->m_vecOrigin(), pEntity->m_vecMins(), pEntity->m_vecMaxs() };
+		F::Backtrack.m_tRecord.m_vAngles = pEntity->m_angRotation();
+		F::Backtrack.m_tRecord.m_vVelocity = pEntity->As<CTFPlayer>()->m_vecVelocity();
+		F::Backtrack.m_tRecord.m_flCycle = pEntity->As<CBaseAnimating>()->m_flCycle();
+		F::Backtrack.m_tRecord.m_flPlaybackRate = pEntity->As<CBaseAnimating>()->m_flPlaybackRate();
 		F::Backtrack.SetSettingUpBones(true);
-		G::SpyBoneSnapshot = true;
-		bool bSetup = pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pEntity->m_flSimulationTime());
-		G::SpyBoneSnapshot = false;
+		bool bSetup = pEntity->As<CBaseAnimating>()->SetupAimBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pEntity->m_flSimulationTime());
 		F::Backtrack.SetSettingUpBones(false);
 
 		pEntity->SetAbsOrigin(vOldAbsOrigin);
@@ -876,7 +928,7 @@ void CAimbotHitscan::BacktrackToCrosshair(CUserCmd* pCmd)
 			|| pEntity->As<CTFPlayer>()->IsInvulnerable())
 			continue;
 
-		const mstudiohitboxset_t* pSet = pEntity->As<CBaseAnimating>()->GetHitboxSet();
+		const mstudiohitboxset_t* pSet = pEntity->As<CBaseAnimating>()->GetAimHitboxSet();
 		if (!pSet) continue;
 
 		std::vector<TickRecord*> vRecords;

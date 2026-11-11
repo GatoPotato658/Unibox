@@ -150,13 +150,22 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 	if (!aBones)
 		return false;
 
+	auto pSet = pTarget->As<CBaseAnimating>()->GetAimHitboxSet();
+	if (!pSet)
+		return false;
+
 	float flMinFOV = std::numeric_limits<float>::max();
-	for (int nHitbox = 0; nHitbox < pTarget->GetNumOfHitboxes(); nHitbox++)
+	for (int nHitbox = 0; nHitbox < pSet->numhitboxes; nHitbox++)
 	{
 		if (!IsHitboxValid(pTarget, nHitbox, iHitboxes))
 			continue;
 
-		Vec3 vCurPos = pTarget->GetHitboxCenter(aBones, nHitbox);
+		auto pBox = pSet->pHitbox(nHitbox);
+		if (!pBox)
+			continue;
+
+		Vec3 vCurPos;
+		Math::VectorTransform((pBox->bbmin + pBox->bbmax) / 2, aBones[pBox->bone], vCurPos);
 		Vec3 vCurAngleTo = Math::CalcAngle(vLocalPos, vCurPos);
 		float flCurFOVTo = Math::CalcFov(vLocalAngles, vCurAngleTo);
 

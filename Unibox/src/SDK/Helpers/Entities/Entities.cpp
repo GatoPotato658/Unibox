@@ -10,6 +10,92 @@
 
 static std::unordered_map<unsigned short, DormantData> s_mDormancy = {};
 
+struct PrecipitationLook_t
+{
+	float m_flSpeed;
+	float m_flWidth;
+	float m_flLength;
+};
+
+struct PrecipitationConVars_t
+{
+	ConVar* m_pWindSpeed = nullptr;
+	ConVar* m_pWindDirection = nullptr;
+	ConVar* m_pRainSpeed = nullptr;
+	ConVar* m_pRainWidth = nullptr;
+	ConVar* m_pRainLength = nullptr;
+	float m_flWindSpeed = 0.f;
+	float m_flWindDirection = 0.f;
+	float m_flRainSpeed = 0.f;
+	float m_flRainWidth = 0.f;
+	float m_flRainLength = 0.f;
+	bool m_bSaved = false;
+};
+
+static PrecipitationConVars_t s_tPrecipitationConVars = {};
+
+static PrecipitationLook_t GetPrecipitationLook(int iType)
+{
+	if (iType == 1 || iType == 3)
+		return { 80.f, 0.7f, 0.1f };
+	return { 600.f, 0.5f, 0.1f };
+}
+
+static byte GetPrecipitationAlpha(int iType, int iIntensity)
+{
+	const float flCeiling = std::clamp(255.f * GetPrecipitationLook(iType).m_flSpeed / 600.f, 0.f, 255.f);
+	return static_cast<byte>(std::clamp(iIntensity, 0, 100) * flCeiling / 100.f);
+}
+
+static void ApplyPrecipitationConVars(int iType)
+{
+	auto& t = s_tPrecipitationConVars;
+	if (!t.m_pWindSpeed)
+	{
+		t.m_pWindSpeed = H::ConVars.FindVar("cl_windspeed");
+		t.m_pWindDirection = H::ConVars.FindVar("cl_winddir");
+		t.m_pRainSpeed = H::ConVars.FindVar("r_rainspeed");
+		t.m_pRainWidth = H::ConVars.FindVar("r_rainwidth");
+		t.m_pRainLength = H::ConVars.FindVar("r_rainlength");
+	}
+
+	if (!t.m_bSaved && t.m_pWindSpeed && t.m_pWindDirection && t.m_pRainSpeed && t.m_pRainWidth && t.m_pRainLength)
+	{
+		t.m_flWindSpeed = t.m_pWindSpeed->GetFloat();
+		t.m_flWindDirection = t.m_pWindDirection->GetFloat();
+		t.m_flRainSpeed = t.m_pRainSpeed->GetFloat();
+		t.m_flRainWidth = t.m_pRainWidth->GetFloat();
+		t.m_flRainLength = t.m_pRainLength->GetFloat();
+		t.m_bSaved = true;
+	}
+
+	const PrecipitationLook_t tLook = GetPrecipitationLook(iType);
+	if (t.m_pWindSpeed)
+		t.m_pWindSpeed->SetValue(float(Vars::Visuals::World::PrecipitationWindSpeed.Value));
+	if (t.m_pWindDirection)
+		t.m_pWindDirection->SetValue(float(Vars::Visuals::World::PrecipitationWindDirection.Value));
+	if (t.m_pRainSpeed)
+		t.m_pRainSpeed->SetValue(tLook.m_flSpeed);
+	if (t.m_pRainWidth)
+		t.m_pRainWidth->SetValue(tLook.m_flWidth);
+	if (t.m_pRainLength)
+		t.m_pRainLength->SetValue(tLook.m_flLength);
+}
+
+static void RestorePrecipitationConVars()
+{
+	auto& t = s_tPrecipitationConVars;
+	if (!t.m_bSaved)
+		return;
+
+	t.m_pWindSpeed->SetValue(t.m_flWindSpeed);
+	t.m_pWindDirection->SetValue(t.m_flWindDirection);
+	t.m_pRainSpeed->SetValue(t.m_flRainSpeed);
+	t.m_pRainWidth->SetValue(t.m_flRainWidth);
+	t.m_pRainLength->SetValue(t.m_flRainLength);
+	t.m_bSaved = false;
+}
+
 bool CEntities::UpdatePlayerDetails(int n, CTFPlayer* pPlayer, int iLag)
 {
 	bool bDormant = ManageDormancy(n, pPlayer);
@@ -396,7 +482,6 @@ void CEntities::Clear(bool bShutdown)
 	m_pLocalLaserDot = nullptr;
 	m_pPlayerResource = nullptr;
 	m_pObjectiveResource = nullptr;
-	m_pPrecipitation = nullptr;
 	m_aGroups = {};
 
 	if (bShutdown)
@@ -591,8 +676,10 @@ CSniperDot* CEntities::GetLaserDot() { return m_pLocalLaserDot; }
 CTFPlayerResource* CEntities::GetResource() { return m_pPlayerResource; }
 CBaseTeamObjectiveResource* CEntities::GetObjectiveResource( ) { return m_pObjectiveResource; }
 
-CClient_Precipitation* CEntities::GetPrecipitation()
+CClient_Precipitation* CEntities::GetPrecipitation(int iType, int iIntensity)
 {
+	const byte uAlpha = GetPrecipitationAlpha(iType, iIntensity);
+
 	static ClientClass* pPrecipitationClass = nullptr;
 	if (!pPrecipitationClass)
 	{
@@ -609,36 +696,71 @@ CClient_Precipitation* CEntities::GetPrecipitation()
 	if (!GetLocal())
 		return nullptr;
 
-	if (!m_pPrecipitation && !m_bPrecipitationCreated && pPrecipitationClass)
+	if (m_pPrecipitation && m_iPrecipitationType == iType)
 	{
-		if (I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1) != nullptr)
+		if (m_uPrecipitationAlpha != uAlpha)
 		{
-			if (Vars::Debug::Logging.Value)
-				SDK::Output(__FUNCTION__, "Couldn't create CPrecipitation entity, MAX_EDICTS - 1 is already taken.");
-			return nullptr;
+			m_pPrecipitationNetworkable->PreDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
+			m_pPrecipitationNetworkable->OnPreDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
+			m_pPrecipitation->m_clrRender().a = uAlpha;
+			m_pPrecipitationNetworkable->OnDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
+			m_pPrecipitationNetworkable->PostDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
+			m_uPrecipitationAlpha = uAlpha;
 		}
-		pPrecipitationClass->m_pCreateFn(MAX_EDICTS - 1, 0);
-		m_bPrecipitationCreated = true;
+		ApplyPrecipitationConVars(iType);
+		return m_pPrecipitation;
 	}
 
-	if (m_bPrecipitationCreated)
-		m_pPrecipitation = I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1)->As<CClient_Precipitation>();
+	RemovePrecipitation();
 
+	if (!pPrecipitationClass)
+		return nullptr;
+
+	m_pPrecipitationNetworkable = pPrecipitationClass->m_pCreateFn(MAX_EDICTS - 1, 0);
+	if (!m_pPrecipitationNetworkable)
+		return nullptr;
+
+	IClientUnknown* pUnknown = m_pPrecipitationNetworkable->GetIClientUnknown();
+	m_pPrecipitation = pUnknown ? static_cast<CClient_Precipitation*>(pUnknown->GetBaseEntity()) : nullptr;
+	if (!m_pPrecipitation)
+	{
+		m_pPrecipitationNetworkable->Release();
+		m_pPrecipitationNetworkable = nullptr;
+		return nullptr;
+	}
+
+	m_pPrecipitationNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_START);
+	m_pPrecipitationNetworkable->PreDataUpdate(DATA_UPDATE_CREATED);
+	m_pPrecipitationNetworkable->OnPreDataChanged(DATA_UPDATE_CREATED);
+
+	m_pPrecipitation->m_vecOrigin() = {};
+	m_pPrecipitation->SetAbsOrigin({});
+	m_pPrecipitation->m_clrRender().a = uAlpha;
+	m_pPrecipitation->m_nPrecipType() = iType;
+
+	const Vec3 vBounds = Vec3(16384.f, 16384.f, 16384.f);
+	m_pPrecipitation->m_Collision()->SetCollisionBounds(-vBounds, vBounds);
+
+	m_pPrecipitationNetworkable->OnDataChanged(DATA_UPDATE_CREATED);
+	m_pPrecipitationNetworkable->PostDataUpdate(DATA_UPDATE_CREATED);
+	m_iPrecipitationType = iType;
+	m_uPrecipitationAlpha = uAlpha;
+	ApplyPrecipitationConVars(iType);
 	return m_pPrecipitation;
 }
 
 void CEntities::RemovePrecipitation()
 {
-	if (m_bPrecipitationCreated)
+	if (m_pPrecipitationNetworkable)
 	{
-		if (m_pPrecipitation || ((m_pPrecipitation = I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1)->As<CClient_Precipitation>()) &&
-			m_pPrecipitation->GetClassID() == ETFClassID::CPrecipitation))
-		{
-			m_pPrecipitation->GetClientNetworkable()->Release();
-			m_pPrecipitation = nullptr;
-		}
-		m_bPrecipitationCreated = false;
+		m_pPrecipitationNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_END);
+		m_pPrecipitationNetworkable->Release();
 	}
+	m_pPrecipitationNetworkable = nullptr;
+	m_pPrecipitation = nullptr;
+	m_iPrecipitationType = -1;
+	m_uPrecipitationAlpha = 0;
+	RestorePrecipitationConVars();
 }
 
 const std::vector<CBaseEntity*>& CEntities::GetGroup(uint8_t iGroup) { return m_aGroups[iGroup]; }

@@ -1538,18 +1538,10 @@ void CVisuals::Precipitation()
 		return;
 	}
 
-	CClient_Precipitation* pPrecipitation = H::Entities.GetPrecipitation();
+	const int iType = Vars::Visuals::World::Precipitation.Value - 1;
+	CClient_Precipitation* pPrecipitation = H::Entities.GetPrecipitation(iType, Vars::Visuals::World::PrecipitationIntensity.Value);
 	if (!pPrecipitation)
 		return;
-
-	auto pNetworkable = pPrecipitation->GetClientNetworkable();
-	pNetworkable->PreDataUpdate(DATA_UPDATE_CREATED);
-	pNetworkable->OnPreDataChanged(DATA_UPDATE_CREATED);
-	pPrecipitation->m_nPrecipType() = Vars::Visuals::World::Precipitation.Value - 1;
-	Vec3 vBounds = Vec3(16384.0f, 16384.0f, 16384.0f);
-	pPrecipitation->m_Collision()->SetCollisionBounds(-vBounds, vBounds);
-	pNetworkable->OnDataChanged(DATA_UPDATE_CREATED);
-	pNetworkable->PostDataUpdate(DATA_UPDATE_CREATED);
 }
 
 #ifdef DEBUG_UNI
