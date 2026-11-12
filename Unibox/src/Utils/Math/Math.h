@@ -292,7 +292,7 @@ namespace Math
 			return false;
 
 		const Vec3 vRayDirection = vDirection / flDirectionLength;
-		const Vec3 vDelta = Vec3(mMatrix[0][3], mMatrix[1][3], mMatrix[2][3]) - vOrigin;
+		const Vec3 vDelta = vOrigin - Vec3(mMatrix[0][3], mMatrix[1][3], mMatrix[2][3]);
 		float flTMin = -FLT_MAX, flTMax = FLT_MAX;
 
 		for (int i = 0; i < 3; i++)
