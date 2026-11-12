@@ -6,15 +6,9 @@
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Aimbot/Aimbot.h"
-#include "../Features/Visuals/ESP/ESP.h"
-#include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
-#include "../Features/Visuals/CameraWindow/CameraWindow.h"
 #include "../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../Features/NavBot/NavRender.h"
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
-#if __has_include("../Features/Misc/ProfileStalker/ProfileStalker.h")
-#include "../Features/Misc/ProfileStalker/ProfileStalker.h"
-#endif
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Debug/Debug.h"
 #ifndef TEXTMODE
@@ -30,9 +24,6 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		return CALL_ORIGINAL(rcx, iMode);
 
 	F::AutoQueue.Run();
-#if __has_include("../Features/Misc/ProfileStalker/ProfileStalker.h")
-	F::ProfileStalker.Run();
-#endif
 
 #ifndef TEXTMODE
 	if ((iMode & PAINT_UIPANELS) && I::EngineClient && !I::EngineClient->IsInGame())
@@ -42,9 +33,6 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	if (iMode & PAINT_UIPANELS)
 	{
 		H::Draw.UpdateKeyStrings();
-#ifdef DEBUG_UNI
-		F::Visuals.DrawUni();
-#endif
 	}
 	else if (iMode & PAINT_INGAMEPANELS)
 	{

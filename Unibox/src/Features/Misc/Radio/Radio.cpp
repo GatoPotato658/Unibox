@@ -10,7 +10,7 @@
 
 static constexpr int RadioVolumeStep = 5;
 static constexpr uint64_t RadioRetryDelay = 3000;
-static constexpr int RadioBufferReady = 75;
+static constexpr int RadioBufferReady = 15;
 static constexpr int RadioVoiceMaxPlayers = 64;
 
 static const char* RadioStationUrl(size_t uStation)
@@ -19,11 +19,11 @@ static const char* RadioStationUrl(size_t uStation)
 	{
 	case RadioStationEnum::DnB: return "https://sc2.dubplate.fm/radio/8030/dnb/uhifi";
 	case RadioStationEnum::Jungle: return "https://energy1058.radioca.st/stream";
-	case RadioStationEnum::LiquidDnB: return "https://radiorecord.hostingradio.ru/liquidfunk96.aacp";
+	case RadioStationEnum::LiquidDnB: return "https://antares.dribbcast.com/proxy/dave1/stream/";
 	case RadioStationEnum::Hardcore: return "https://stream.hardcoreradio.nl:9000/hcr.ogg";
 	case RadioStationEnum::Techno: return "https://schranz.in/schranz";
-	case RadioStationEnum::ClassicRap: return "https://radiorecord.hostingradio.ru/rapclassics96.aacp";
-	case RadioStationEnum::Vaporwave: return "https://radio.plaza.one/ogg";
+	case RadioStationEnum::ClassicRap: return "https://radio.thisisarealdomain.com/THE-CRIB";
+	case RadioStationEnum::Vaporwave: return "https://radio.plaza.one/mp3";
 	case RadioStationEnum::NonStopFm: return "https://stream.zeno.fm/hace1hc4vwzuv";
 	case RadioStationEnum::Tekk: return "https://stream.zeno.fm/oj65ts503spvv";
 	case RadioStationEnum::Underground: return "https://54house.fm:9013/stream";
@@ -73,7 +73,16 @@ bool CRadio::Startup()
 	m_pGameVolume = H::ConVars.FindVar("volume");
 	m_bStop.store(false);
 	m_bStarted = true;
-	m_tThread = std::thread(&CRadio::Run, this);
+	try
+	{
+		m_tThread = std::thread(&CRadio::Run, this);
+	}
+	catch (...)
+	{
+		m_bStarted = false;
+		U::Audio.Shutdown();
+		return false;
+	}
 	return true;
 }
 
@@ -83,9 +92,11 @@ void CRadio::Shutdown()
 		return;
 
 	m_bStop.store(true);
+	CancelConnect();
 	if (m_tThread.joinable())
 		m_tThread.join();
 
+	CancelConnect();
 	if (m_tConnectThread.joinable())
 		m_tConnectThread.join();
 
@@ -127,11 +138,12 @@ void CRadio::Run()
 			{
 				m_uAttempted = uWanted;
 				m_uRetryAt = 0;
+				if (m_bConnectPending)
+					CancelConnect();
 			}
 
 			PollConnect();
-			const bool bSuperseded = m_bConnectPending && m_uConnectStation != uWanted;
-			if (m_uStation != uWanted && (!m_bConnectPending || bSuperseded) && GetTickCount64() >= m_uRetryAt)
+			if (m_uStation.load() != uWanted && !m_bConnectPending && GetTickCount64() >= m_uRetryAt)
 				StartConnect(uWanted);
 
 			ApplyVolume();
@@ -174,17 +186,23 @@ void CRadio::StartConnect(size_t uStation)
 	catch (...)
 	{
 		m_bConnectPending = false;
-		m_uRetryAt = GetTickCount64() + RadioRetryDelay;
-		SetPhase(RadioPhaseEnum::Failed);
+		FailStream();
 	}
 }
 
 void CRadio::Connect(int iGeneration, size_t uStation)
 {
+	m_pConnectThread.store(GetCurrentThread());
+	struct ThreadHandleScope_t
+	{
+		std::atomic<void*>& m_pHandle;
+		~ThreadHandleScope_t() { m_pHandle.store(nullptr); }
+	} tHandleScope{ m_pConnectThread };
+
 	const char* sUrl = RadioStationUrl(uStation);
 
 	AudioStreamError_t iError = AudioStreamError_t::Url;
-	CAudioStream* pStream = sUrl ? CAudioStream::Open(sUrl, iError) : nullptr;
+	CAudioStream* pStream = sUrl ? CAudioStream::Open(sUrl, iError, &m_bStop) : nullptr;
 
 	std::lock_guard tLock(m_tConnectMutex);
 	if (m_iConnectGeneration != iGeneration)
@@ -215,8 +233,16 @@ bool CRadio::PollConnect()
 	m_bConnectPending = false;
 	if (!pStream)
 	{
-		m_uRetryAt = GetTickCount64() + RadioRetryDelay;
-		SetPhase(RadioPhaseEnum::Failed);
+		FailStream();
+		return true;
+	}
+
+	const size_t uWanted = std::clamp<size_t>(Vars::Misc::Radio::Station.Value, 0, RadioStationEnum::Count - 1);
+	if (m_uConnectStation != uWanted)
+	{
+		pStream->Release();
+		m_uRetryAt = 0;
+		SetPhase(RadioPhaseEnum::Connecting);
 		return true;
 	}
 
@@ -232,7 +258,7 @@ bool CRadio::PollConnect()
 		m_pStream->Release();
 
 	m_pStream = pStream;
-	m_uStation = m_uConnectStation;
+	m_uStation.store(m_uConnectStation);
 	m_bPlaying = false;
 	SetTitle("");
 	m_pStream->Slide(iCrossfade > 0 ? 0.f : WantedVolume(), 0);
@@ -241,6 +267,7 @@ bool CRadio::PollConnect()
 
 void CRadio::Silence()
 {
+	CancelConnect();
 	{
 		std::lock_guard tLock(m_tConnectMutex);
 		++m_iConnectGeneration;
@@ -264,9 +291,32 @@ void CRadio::Silence()
 
 	m_pStream->Release();
 	m_pStream = nullptr;
-	m_uStation = RadioStationEnum::Count;
+	m_uStation.store(RadioStationEnum::Count);
 	m_bPlaying = false;
 	SetTitle("");
+}
+
+void CRadio::CancelConnect()
+{
+	if (void* pThread = m_pConnectThread.load())
+		CancelSynchronousIo(static_cast<HANDLE>(pThread));
+}
+
+void CRadio::FailStream()
+{
+	RetireFade(true);
+	if (m_pStream)
+	{
+		m_pStream->Release();
+		m_pStream = nullptr;
+	}
+
+	m_uStation.store(RadioStationEnum::Count);
+	m_bPlaying = false;
+	m_iBuffer.store(0);
+	SetTitle("");
+	m_uRetryAt = GetTickCount64() + RadioRetryDelay;
+	SetPhase(RadioPhaseEnum::Failed);
 }
 
 void CRadio::Pump()
@@ -274,36 +324,37 @@ void CRadio::Pump()
 	if (!m_pStream || m_bConnectPending)
 		return;
 
+	if (!m_bPlaying && !m_pStream->Connected())
+	{
+		FailStream();
+		return;
+	}
+
 	if (m_bPlaying)
 	{
 		const AudioStreamState_t iState = m_pStream->State();
+		if (iState == AudioStreamState_t::Stopped)
+		{
+			FailStream();
+			return;
+		}
+
 		if (iState == AudioStreamState_t::Stalled)
 		{
 			SetPhase(RadioPhaseEnum::Buffering);
 			m_iBuffer.store(std::clamp(m_pStream->BufferPercent(), 0, 100));
-			return;
 		}
-
-		if (iState == AudioStreamState_t::Stopped)
+		else
 		{
-			m_pStream->Release();
-			m_pStream = nullptr;
-			m_uStation = RadioStationEnum::Count;
-			m_bPlaying = false;
-			m_iBuffer.store(0);
-			SetTitle("");
-			SetPhase(RadioPhaseEnum::Connecting);
-			return;
+			SetPhase(RadioPhaseEnum::Playing);
+			m_iBuffer.store(100);
 		}
-
-		SetPhase(RadioPhaseEnum::Playing);
-		m_iBuffer.store(100);
 		PollTitle();
 		return;
 	}
 
 	const int iFilled = m_pStream->BufferPercent();
-	if (iFilled <= RadioBufferReady && m_pStream->Connected())
+	if (iFilled < RadioBufferReady && m_pStream->Connected())
 	{
 		SetPhase(RadioPhaseEnum::Buffering);
 		m_iBuffer.store(iFilled);
@@ -311,6 +362,11 @@ void CRadio::Pump()
 	}
 
 	m_pStream->Play();
+	if (!m_pStream->Playing())
+	{
+		m_iBuffer.store(std::clamp(iFilled, 0, 100));
+		return;
+	}
 	m_bPlaying = true;
 	if (const int iCrossfade = Vars::Misc::Radio::Crossfade.Value; iCrossfade > 0)
 	{
@@ -473,7 +529,7 @@ const char* CRadio::NowPlaying() const
 {
 	if (Phase() == RadioPhaseEnum::Off)
 		return RadioStationName(RadioStationEnum::Count);
-	return RadioStationName(size_t(Vars::Misc::Radio::Station.Value));
+	return RadioStationName(m_uStation.load());
 }
 
 void CRadio::Title(char* sOut, size_t uCapacity) const

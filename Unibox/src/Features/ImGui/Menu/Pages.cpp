@@ -1623,7 +1623,7 @@ void Pages::Search(const std::string& sSearch)
 		std::transform(sSearch2.begin(), sSearch2.end(), sSearch2.begin(), ::tolower);
 
 		vVars.clear();
-		for (auto& pBase : G::Vars)
+		for (auto& pBase : G::Vars())
 		{
 			if (!Vars::Debug::Options[DEFAULT_BIND] && pBase->m_iFlags & DEBUGVAR)
 				continue;

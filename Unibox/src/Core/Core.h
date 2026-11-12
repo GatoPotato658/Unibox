@@ -7,6 +7,13 @@
 
 class CCore
 {
+public:
+	enum class UnloadResult_t
+	{
+		Unloaded,
+		Retain
+	};
+
 private:
 	bool m_bFailed = false;
 	bool m_bFailed2 = false;
@@ -15,7 +22,7 @@ private:
 public:
 	void Load();
 	void Loop();
-	void Unload();
+	UnloadResult_t Unload();
 
 	void AppendFailText(const char* sMessage);
 	void LogFailText();

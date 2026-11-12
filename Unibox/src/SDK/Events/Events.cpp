@@ -20,6 +20,7 @@
 
 bool CEventListener::Initialize()
 {
+	m_bFailed = false;
 	std::vector<const char*> vEvents = {
 		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify", "party_chat"
 	};

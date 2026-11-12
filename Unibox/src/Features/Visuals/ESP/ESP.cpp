@@ -2,12 +2,12 @@
 
 #include "../Groups/Groups.h"
 #include "../../Players/PlayerUtils.h"
+#include "../PlayerConditions/PlayerConditions.h"
 #include "../../Spectate/Spectate.h"
 #include "../../Simulation/MovementSimulation/MovementSimulation.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include "../../ImGui/IndicatorPanel.h"
 #include "../../ImGui/Render.h"
-#include "../../ImGui/RenderSync.h"
 #ifndef TEXTMODE
 #include <wrl/client.h>
 #include <cstring>
@@ -49,6 +49,19 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 	float flAlpha;
 	if (!GetDistanceThing(pPlayer->m_vecOrigin(), pLocal->m_vecOrigin(), pGroup, flAlpha)) 
 		return;
+
+	PlayerConditionState_t tConditions = {};
+	if (pGroup->m_tESP.Draw & (ESPEnum::Buffs | ESPEnum::Debuffs | ESPEnum::Flags))
+	{
+		uint8_t uConditionGroups = 0;
+		if (pGroup->m_tESP.Draw & ESPEnum::Buffs)
+			uConditionGroups |= PLAYER_CONDITION_BUFFS;
+		if (pGroup->m_tESP.Draw & ESPEnum::Debuffs)
+			uConditionGroups |= PLAYER_CONDITION_DEBUFFS;
+		if (pGroup->m_tESP.Draw & ESPEnum::Flags)
+			uConditionGroups |= PLAYER_CONDITION_FLAGS;
+		tConditions = CPlayerConditions::Evaluate(pPlayer, uConditionGroups);
+	}
 
 	PlayerCache_t& tCache = mCache[pPlayer];
 	tCache.m_flAlpha = flAlpha;
@@ -255,113 +268,76 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 	// Buffs
 	if (pGroup->m_tESP.Draw & ESPEnum::Buffs)
 	{
-		if (pPlayer->InCond(TF_COND_INVULNERABLE) ||
-			pPlayer->InCond(TF_COND_INVULNERABLE_HIDE_UNLESS_DAMAGED) ||
-			pPlayer->InCond(TF_COND_INVULNERABLE_USER_BUFF) ||
-			pPlayer->InCond(TF_COND_INVULNERABLE_CARD_EFFECT))
+		if (tConditions.m_bInvulnerable)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Uber", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_MEGAHEAL))
+		else if (tConditions.m_bMegaHeal)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Megaheal", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_PHASE))
+		else if (tConditions.m_bPhase)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Bonk", Vars::Colors::IndicatorTextMid.Value, Vars::Menu::Theme::Background.Value);
 
-		bool bCrits = pPlayer->IsCritBoosted(), bMiniCrits = pPlayer->IsMiniCritBoosted();
-		if (pWeapon)
-		{
-			if (bMiniCrits && SDK::AttribHookValue(0, "minicrits_become_crits", pWeapon)
-				|| SDK::AttribHookValue(0, "crit_while_airborne", pWeapon) && pPlayer->InCond(TF_COND_BLASTJUMPING))
-				bCrits = true, bMiniCrits = false;
-			if (bCrits && SDK::AttribHookValue(0, "crits_become_minicrits", pWeapon))
-				bCrits = false, bMiniCrits = true;
-		}
-		if (bCrits)
+		if (tConditions.m_bCrits)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Crits", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		else if (bMiniCrits)
+		else if (tConditions.m_bMiniCrits)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Mini-crits", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
 
-		/* vaccinator effects */
-		if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST) || pPlayer->InCond(TF_COND_BULLET_IMMUNE))
+		if (tConditions.m_eBulletResist == EResistTier::Full)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Bullet+", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_MEDIGUN_SMALL_BULLET_RESIST))
+		else if (tConditions.m_eBulletResist == EResistTier::Small)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Bullet", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST) || pPlayer->InCond(TF_COND_BLAST_IMMUNE))
+		if (tConditions.m_eBlastResist == EResistTier::Full)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Blast+", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_MEDIGUN_SMALL_BLAST_RESIST))
+		else if (tConditions.m_eBlastResist == EResistTier::Small)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Blast", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST) || pPlayer->InCond(TF_COND_FIRE_IMMUNE))
+		if (tConditions.m_eFireResist == EResistTier::Full)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Fire+", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_MEDIGUN_SMALL_FIRE_RESIST))
+		else if (tConditions.m_eFireResist == EResistTier::Small)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Fire", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_OFFENSEBUFF))
+		if (tConditions.m_bOffenseBuff)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Banner", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_DEFENSEBUFF))
+		if (tConditions.m_eDefenseBuff == EDefenseBuffTier::Normal)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Battalions", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_REGENONDAMAGEBUFF))
+		if (tConditions.m_bRegenBuff)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Conch", Vars::Colors::IndicatorTextBad.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_RUNE_STRENGTH))
+		if (tConditions.m_bRuneStrength)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Strength", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_HASTE))
+		if (tConditions.m_bRuneHaste)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Haste", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_REGEN))
+		if (tConditions.m_bRuneRegen)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Regen", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_RESIST))
+		if (tConditions.m_bRuneResist)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Resistance", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_VAMPIRE))
+		if (tConditions.m_bRuneVampire)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Vampire", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_REFLECT))
+		if (tConditions.m_bRuneReflect)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Reflect", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_PRECISION))
+		if (tConditions.m_bRunePrecision)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Precision", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_AGILITY))
+		if (tConditions.m_bRuneAgility)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Agility", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_KNOCKOUT))
+		if (tConditions.m_bRuneKnockout)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Knockout", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_KING))
+		if (tConditions.m_bRuneKing)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "King", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_PLAGUE))
+		if (tConditions.m_bRunePlague)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Plague", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_RUNE_SUPERNOVA))
+		if (tConditions.m_bRuneSupernova)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Supernova", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		if (pPlayer->InCond(TF_COND_POWERUPMODE_DOMINANT))
+		if (tConditions.m_bPowerupDominant)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Dominant", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		for (int i = 0; i < MAX_WEAPONS; i++)
+		for (uint8_t i = 0; i < tConditions.m_uSpellCount; i++)
 		{
-			auto pWeapon = pPlayer->GetWeaponFromSlot(i)->As<CTFSpellBook>();
-			if (!pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_SPELLBOOK || !pWeapon->m_iSpellCharges())
+			const char* pSpell = CPlayerConditions::GetSpellName(tConditions.m_aSpells[i]);
+			if (!pSpell)
 				continue;
-
-			switch (pWeapon->m_iSelectedSpellIndex())
-			{
-			case 0: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Fireball", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 1: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Bats", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 2: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Heal", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 3: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Pumpkins", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 4: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Jump", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 5: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Stealth", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 6: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Teleport", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 7: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Lightning", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 8: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Minify", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 9: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Meteors", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 10: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Monoculus", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 11: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Skeletons", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 12: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Glove", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 13: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Parachute", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 14: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Heal", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			case 15: tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Bomb", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value); break;
-			}
+			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, pSpell, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 		}
 
-		if (pPlayer->InCond(TF_COND_RADIUSHEAL) ||
-			pPlayer->InCond(TF_COND_HEALTH_BUFF) ||
-			pPlayer->InCond(TF_COND_RADIUSHEAL_ON_DAMAGE) ||
-			pPlayer->InCond(TF_COND_HALLOWEEN_QUICK_HEAL) ||
-			pPlayer->InCond(TF_COND_HALLOWEEN_HELL_HEAL) ||
-			pPlayer->InCond(TF_COND_KING_BUFFED))
+		if (tConditions.m_bHeal || tConditions.m_bKingBuffed)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Heal", Vars::Colors::IndicatorTextGood.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_HEALTH_OVERHEALED))
+		else if (tConditions.m_bOverheal)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "HP+", Vars::Colors::IndicatorTextGood.Value, Vars::Menu::Theme::Background.Value);
 
 		//if (pPlayer->InCond(TF_COND_BLASTJUMPING))
@@ -371,42 +347,40 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 	// Debuffs
 	if (pGroup->m_tESP.Draw & ESPEnum::Debuffs)
 	{
-		if (pPlayer->InCond(TF_COND_MARKEDFORDEATH)
-			|| pPlayer->InCond(TF_COND_MARKEDFORDEATH_SILENT)
-			|| pPlayer->InCond(TF_COND_PASSTIME_PENALTY_DEBUFF))
+		if (tConditions.m_bMarked)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Marked", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_URINE))
+		if (tConditions.m_bUrine)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Jarate", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_MAD_MILK))
+		if (tConditions.m_bMilk)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Milk", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_STUNNED))
+		if (tConditions.m_bStunned)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Stun", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_BURNING))
+		if (tConditions.m_bBurning)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Burn", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_BLEEDING))
+		if (tConditions.m_bBleeding)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Bleed", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 	}
 
 	// Misc
 	if (pGroup->m_tESP.Draw & ESPEnum::Flags)
 	{
-		if (pPlayer->m_bFeignDeathReady())
+		if (tConditions.m_bFeignDeathReady)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "DR", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
-		else if (pPlayer->InCond(TF_COND_FEIGN_DEATH))
+		else if (tConditions.m_bFeignDeath)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Feign", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
 		if (float flInvis = pPlayer->GetEffectiveInvisibilityLevel())
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, std::format("Invis {:.0f}%", flInvis * 100), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_DISGUISED))
+		if (tConditions.m_bDisguised)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Disguise", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (pPlayer->InCond(TF_COND_AIMING) || pPlayer->InCond(TF_COND_ZOOMED))
+		if (tConditions.m_bAiming || tConditions.m_bZoomed)
 		{
 			switch (pWeapon ? pWeapon->GetWeaponID() : -1)
 			{
@@ -456,10 +430,10 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 			}
 		}
 
-		if (pPlayer->InCond(TF_COND_SHIELD_CHARGE))
+		if (tConditions.m_bShieldCharge)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Charging", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
-		if (Vars::Visuals::Removals::Taunts.Value && pPlayer->InCond(TF_COND_TAUNTING))
+		if (Vars::Visuals::Removals::Taunts.Value && tConditions.m_bTaunting)
 			tCache.m_vText.emplace_back(ALIGN_TOPRIGHT, "Taunt", Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 
 		if (Vars::Debug::Info.Value && !bLocal /*&& !pPlayer->IsDormant()*/)
@@ -900,7 +874,7 @@ void CESP::CacheDrawInfo(CTFPlayer* pLocal)
 	if (!pLocal)
 	{
 		m_mMotion.clear();
-		F::RenderSync.Set(m_tDrawCache, std::move(tCache));
+		m_tDrawCache.Set(std::move(tCache));
 		return;
 	}
 
@@ -1005,7 +979,7 @@ void CESP::CacheDrawInfo(CTFPlayer* pLocal)
 			++it;
 	}
 
-	F::RenderSync.Set(m_tDrawCache, std::move(tCache));
+	m_tDrawCache.Set(std::move(tCache));
 }
 
 void CESP::CacheBones(CTFPlayer* pPlayer, const Vec3& vOffset, ESPDrawEntity_t& tOut)
@@ -1036,16 +1010,22 @@ void CESP::CacheBones(CTFPlayer* pPlayer, const Vec3& vOffset, ESPDrawEntity_t& 
 	CacheBoneChain(pPlayer, s_aBones, { iPelvis, iRightThigh, iRightCalf, iRightFoot }, vOffset, tOut);
 }
 
-void CESP::CacheBoneChain(CTFPlayer* pPlayer, matrix3x4* aBones, const std::vector<int>& vBones, const Vec3& vOffset, ESPDrawEntity_t& tOut)
+void CESP::CacheBoneChain(CTFPlayer* pPlayer, matrix3x4* aBones, std::initializer_list<int> vBones, const Vec3& vOffset, ESPDrawEntity_t& tOut)
 {
-	for (size_t n = 1; n < vBones.size(); n++)
+	auto it = vBones.begin();
+	if (it == vBones.end())
+		return;
+
+	int iPrevious = *it++;
+	for (; it != vBones.end(); ++it)
 	{
-		const Vec3 vBone1 = pPlayer->GetHitboxCenter(aBones, vBones[n]) + vOffset;
-		const Vec3 vBone2 = pPlayer->GetHitboxCenter(aBones, vBones[n - 1]) + vOffset;
+		const Vec3 vBone1 = pPlayer->GetHitboxCenter(aBones, *it) + vOffset;
+		const Vec3 vBone2 = pPlayer->GetHitboxCenter(aBones, iPrevious) + vOffset;
 
 		Vec3 vScreen1, vScreen2;
 		if (SDK::W2S(vBone1, vScreen1) && SDK::W2S(vBone2, vScreen2))
 			tOut.m_vBones.emplace_back(Vec2(vScreen1.x, vScreen1.y), Vec2(vScreen2.x, vScreen2.y));
+		iPrevious = *it;
 	}
 }
 
@@ -1940,9 +1920,11 @@ static bool UploadIcon(IDirect3DDevice9* pDevice, ESPIcon_t& tIcon)
 			pTarget[x * 4 + 3] = pSource[x * 4 + 3];
 		}
 	}
-	pTexture->UnlockRect(0);
+	if (FAILED(pTexture->UnlockRect(0)))
+		return false;
 	tIcon.m_pTexture = std::move(pTexture);
-	return tIcon.m_pTexture != nullptr;
+	std::vector<byte>().swap(tIcon.m_vRgba);
+	return true;
 }
 
 static IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
@@ -1988,12 +1970,12 @@ void CESP::Draw(ImDrawList* pDrawList)
 	if (!pDrawList)
 		return;
 
-	const ESPDrawCache_t tCache = m_tDrawCache.Get();
+	const auto pCache = m_tDrawCache.Get();
 	m_flAnimTime += std::clamp(ImGui::GetIO().DeltaTime, 0.f, 0.1f);
 
-	DrawEntities(pDrawList, tCache.m_vWorld, false);
-	DrawEntities(pDrawList, tCache.m_vBuildings, false);
-	DrawEntities(pDrawList, tCache.m_vPlayers, true);
+	DrawEntities(pDrawList, pCache->m_vWorld, false);
+	DrawEntities(pDrawList, pCache->m_vBuildings, false);
+	DrawEntities(pDrawList, pCache->m_vPlayers, true);
 
 	CleanupAnims();
 }

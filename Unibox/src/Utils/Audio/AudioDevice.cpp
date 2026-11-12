@@ -21,6 +21,19 @@ bool CAudioDevice::Startup()
 
 	m_bStop.store(false);
 	m_iReady.store(0);
+	for (std::atomic<bool>& bReady : m_aVoiceReady)
+		bReady.store(false);
+	auto CloseEvents = [this]
+	{
+		for (Voice_t& tVoice : m_aVoices)
+		{
+			if (tVoice.m_hEvent)
+			{
+				CloseHandle(tVoice.m_hEvent);
+				tVoice.m_hEvent = nullptr;
+			}
+		}
+	};
 
 	for (Voice_t& tVoice : m_aVoices)
 	{
@@ -28,12 +41,22 @@ bool CAudioDevice::Startup()
 		tVoice.m_hEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
 		if (!tVoice.m_hEvent)
 		{
+			CloseEvents();
 			m_bStarted.store(false);
 			return false;
 		}
 	}
 
-	m_tThread = std::thread(&CAudioDevice::Run, this);
+	try
+	{
+		m_tThread = std::thread(&CAudioDevice::Run, this);
+	}
+	catch (...)
+	{
+		CloseEvents();
+		m_bStarted.store(false);
+		return false;
+	}
 	while (!m_iReady.load() && !m_bStop.load())
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
@@ -41,18 +64,26 @@ bool CAudioDevice::Startup()
 		return true;
 
 	m_bStop.store(true);
+	m_tClosed.notify_all();
 	if (m_tThread.joinable())
 		m_tThread.join();
+	CloseEvents();
 	m_bStarted.store(false);
 	return false;
 }
 
 void CAudioDevice::Run()
 {
-	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) ||
-		FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&m_pDevices))))
+	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)))
 	{
 		m_iReady.store(-1);
+		return;
+	}
+
+	if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&m_pDevices))))
+	{
+		m_iReady.store(-1);
+		CoUninitialize();
 		return;
 	}
 
@@ -80,9 +111,12 @@ void CAudioDevice::Run()
 
 	{
 		std::lock_guard tLock(m_tMutex);
-		for (Voice_t& tVoice : m_aVoices)
+		for (size_t i = 0; i < AudioVoiceCount; i++)
 		{
+			Voice_t& tVoice = m_aVoices[i];
+			m_aVoiceReady[i].store(false);
 			ReleaseClient(tVoice);
+			tVoice.m_iSlot = VoiceSlot_t::Free;
 			if (tVoice.m_hEvent)
 			{
 				CloseHandle(tVoice.m_hEvent);
@@ -96,6 +130,7 @@ void CAudioDevice::Run()
 			m_pDevices = nullptr;
 		}
 	}
+	m_tClosed.notify_all();
 
 	CoUninitialize();
 }
@@ -108,11 +143,16 @@ void CAudioDevice::Shutdown()
 	m_bStop.store(true);
 	if (m_tThread.joinable())
 		m_tThread.join();
+	for (std::atomic<bool>& bReady : m_aVoiceReady)
+		bReady.store(false);
 	m_iReady.store(0);
 }
 
 size_t CAudioDevice::OpenVoice(uint32_t uSampleRate, AudioRenderFunction fRender, void* pUser, float flVolume)
 {
+	if (!m_bStarted.load() || m_iReady.load() <= 0)
+		return AudioNoVoice;
+
 	std::lock_guard tLock(m_tMutex);
 	return OpenLocked(uSampleRate, fRender, pUser, flVolume);
 }
@@ -133,9 +173,15 @@ size_t CAudioDevice::OpenLocked(uint32_t uSampleRate, AudioRenderFunction fRende
 		tVoice.m_flTarget = flVolume;
 		tVoice.m_uRamp = 0;
 		++tVoice.m_uSerial;
+		m_aVoiceReady[i].store(false);
 		return i;
 	}
 	return AudioNoVoice;
+}
+
+bool CAudioDevice::VoiceReady(size_t uVoice) const
+{
+	return uVoice < AudioVoiceCount && m_aVoiceReady[uVoice].load();
 }
 
 void CAudioDevice::CloseVoice(size_t uVoice)
@@ -148,8 +194,9 @@ void CAudioDevice::CloseVoice(size_t uVoice)
 	if (tVoice.m_iSlot == VoiceSlot_t::Free)
 		return;
 
+	m_aVoiceReady[uVoice].store(false);
 	tVoice.m_iSlot = VoiceSlot_t::Closing;
-	m_tClosed.wait_for(tLock, std::chrono::seconds(2), [&] { return tVoice.m_iSlot == VoiceSlot_t::Free; });
+	m_tClosed.wait(tLock, [&] { return m_iReady.load() <= 0 || tVoice.m_iSlot == VoiceSlot_t::Free; });
 }
 
 void CAudioDevice::PauseVoice(size_t uVoice, bool bPaused)
@@ -229,6 +276,7 @@ void CAudioDevice::ReleaseClient(Voice_t& tVoice)
 
 void CAudioDevice::Service(Voice_t& tVoice)
 {
+	const size_t uVoice = size_t(&tVoice - m_aVoices);
 	VoiceSlot_t iSlot = VoiceSlot_t::Free;
 	bool bPaused = false;
 
@@ -243,6 +291,7 @@ void CAudioDevice::Service(Voice_t& tVoice)
 
 	if (iSlot == VoiceSlot_t::Closing)
 	{
+		m_aVoiceReady[uVoice].store(false);
 		ReleaseClient(tVoice);
 		tVoice.m_flGain = 0.f;
 		tVoice.m_uStepsLeft = 0;
@@ -261,6 +310,7 @@ void CAudioDevice::Service(Voice_t& tVoice)
 
 		if (!OpenClient(tVoice))
 		{
+			m_aVoiceReady[uVoice].store(false);
 			tVoice.m_uRetryAt = uNow + AudioRetryDelay;
 			return;
 		}
@@ -279,7 +329,9 @@ void CAudioDevice::Service(Voice_t& tVoice)
 	uint32_t uPadding = 0;
 	if (FAILED(tVoice.m_pClient->GetCurrentPadding(&uPadding)))
 	{
+		m_aVoiceReady[uVoice].store(false);
 		ReleaseClient(tVoice);
+		tVoice.m_uRetryAt = GetTickCount64() + AudioRetryDelay;
 		return;
 	}
 
@@ -288,7 +340,9 @@ void CAudioDevice::Service(Voice_t& tVoice)
 		BYTE* pBuffer = nullptr;
 		if (FAILED(tVoice.m_pOutput->GetBuffer(uFrames, &pBuffer)))
 		{
+			m_aVoiceReady[uVoice].store(false);
 			ReleaseClient(tVoice);
+			tVoice.m_uRetryAt = GetTickCount64() + AudioRetryDelay;
 			return;
 		}
 
@@ -299,14 +353,6 @@ void CAudioDevice::Service(Voice_t& tVoice)
 				memset(pOut, 0, uFrames * AudioChannels * sizeof(float));
 			else
 				tVoice.m_fRender(tVoice.m_pUser, pOut, uFrames);
-
-			if (tVoice.m_uSerial != tVoice.m_uApplied)
-			{
-				tVoice.m_uApplied = tVoice.m_uSerial;
-				tVoice.m_uStepsLeft = (std::max)(tVoice.m_uRamp, AudioMinRamp) * tVoice.m_uRate / 1000;
-				tVoice.m_flStep = (tVoice.m_flTarget - tVoice.m_flGain) / float(tVoice.m_uStepsLeft);
-				tVoice.m_flGoal = tVoice.m_flTarget;
-			}
 		}
 
 		Ramp(tVoice, pOut, uFrames);
@@ -315,19 +361,47 @@ void CAudioDevice::Service(Voice_t& tVoice)
 
 	if (!tVoice.m_bRunning)
 	{
-		tVoice.m_pClient->Start();
+		if (FAILED(tVoice.m_pClient->Start()))
+		{
+			m_aVoiceReady[uVoice].store(false);
+			ReleaseClient(tVoice);
+			tVoice.m_uRetryAt = GetTickCount64() + AudioRetryDelay;
+			return;
+		}
 		tVoice.m_bRunning = true;
 	}
+
+	m_aVoiceReady[uVoice].store(true);
 }
 
 void CAudioDevice::Ramp(Voice_t& tVoice, float* pOut, uint32_t uFrames)
 {
-	for (uint32_t i = 0; i < uFrames; i++)
+	std::lock_guard tLock(m_tMutex);
+	if (tVoice.m_uSerial != tVoice.m_uApplied)
 	{
-		if (tVoice.m_uStepsLeft)
-			tVoice.m_flGain = --tVoice.m_uStepsLeft ? tVoice.m_flGain + tVoice.m_flStep : tVoice.m_flGoal;
+		tVoice.m_uApplied = tVoice.m_uSerial;
+		tVoice.m_uStepsLeft = (std::max)(tVoice.m_uRamp, AudioMinRamp) * tVoice.m_uRate / 1000;
+		tVoice.m_flStep = (tVoice.m_flTarget - tVoice.m_flGain) / float(tVoice.m_uStepsLeft);
+		tVoice.m_flGoal = tVoice.m_flTarget;
+	}
 
+	const uint32_t uCount = (std::min)(tVoice.m_uStepsLeft, uFrames);
+	for (uint32_t i = 0; i < uCount; i++)
+	{
+		tVoice.m_flGain += tVoice.m_flStep;
+		if (i + 1 == tVoice.m_uStepsLeft)
+			tVoice.m_flGain = tVoice.m_flGoal;
 		pOut[i * AudioChannels] *= tVoice.m_flGain;
 		pOut[i * AudioChannels + 1] *= tVoice.m_flGain;
 	}
+
+	for (uint32_t i = uCount; i < uFrames; i++)
+	{
+		pOut[i * AudioChannels] *= tVoice.m_flGoal;
+		pOut[i * AudioChannels + 1] *= tVoice.m_flGoal;
+	}
+
+	tVoice.m_uStepsLeft -= uCount;
+	if (!tVoice.m_uStepsLeft)
+		tVoice.m_flGain = tVoice.m_flGoal;
 }

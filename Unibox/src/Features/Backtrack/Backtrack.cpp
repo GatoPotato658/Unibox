@@ -707,21 +707,21 @@ void CBacktrack::CacheDrawInfo(CTFPlayer* pLocal)
 void CBacktrack::Draw()
 {
 	static IndicatorAnim_t tAnim;
-	static DrawCache_t s_tLastValidCache;
+	static std::shared_ptr<const DrawCache_t> s_pLastValidCache;
 
-	const DrawCache_t tCache = m_tDrawCache.Get();
-	if (tCache.m_bValid)
-		s_tLastValidCache = tCache;
+	const auto pCache = m_tDrawCache.Get();
+	if (pCache->m_bValid)
+		s_pLastValidCache = pCache;
 
 	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ping) != 0;
-	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && tCache.m_bValid;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && pCache->m_bValid;
 
 	bool bOpening = true;
 	const float flAnim = tAnim.Update(bVisible, bOpening);
 	if (!tAnim.ShouldDraw(bVisible))
 		return;
 
-	const auto& tDraw = tCache.m_bValid ? tCache : s_tLastValidCache;
+	const auto& tDraw = pCache->m_bValid ? *pCache : *s_pLastValidCache;
 
 	int x = Vars::Menu::PingDisplay.Value.x;
 	int y = Vars::Menu::PingDisplay.Value.y + 8;

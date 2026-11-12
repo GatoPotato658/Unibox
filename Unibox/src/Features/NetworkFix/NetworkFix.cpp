@@ -25,7 +25,7 @@ void CNetworkFix::FixInputDelay(bool bFinalTick)
 
 	m_tBackup.Store();
 
-	static auto CL_ReadPackets = U::Hooks.m_mHooks["CL_ReadPackets"];
+	static auto CL_ReadPackets = U::Hooks.Get("CL_ReadPackets");
 	CL_ReadPackets->As<CLReadPacketsFn>()(bFinalTick);
 
 	m_tState.Store();

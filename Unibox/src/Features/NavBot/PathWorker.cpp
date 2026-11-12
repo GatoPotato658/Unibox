@@ -7,13 +7,26 @@ namespace PathWorker
 		Stop();
 	}
 
-	void CPathWorker::Start(CMap* pMap)
+	bool CPathWorker::Start(CMap* pMap)
 	{
 		Stop();
 
+		if (!pMap)
+			return false;
+
 		m_pMap = pMap;
 		m_bRunning.store(true, std::memory_order_release);
-		m_tWorker = std::thread(&CPathWorker::WorkerMain, this);
+		try
+		{
+			m_tWorker = std::thread(&CPathWorker::WorkerMain, this);
+		}
+		catch (...)
+		{
+			m_bRunning.store(false, std::memory_order_release);
+			m_pMap = nullptr;
+			return false;
+		}
+		return true;
 	}
 
 	void CPathWorker::Stop()
@@ -40,18 +53,21 @@ namespace PathWorker
 		m_pMap = nullptr;
 	}
 
-	void CPathWorker::Submit(PathRequest tRequest)
+	bool CPathWorker::Submit(PathRequest tRequest)
 	{
 		tRequest.m_tToken.m_pCancelled = std::make_shared<std::atomic_bool>(false);
 
 		{
 			std::lock_guard lock(m_mPending);
+			if (!m_bRunning.load(std::memory_order_acquire))
+				return false;
 			tRequest.m_uGeneration = m_uNextGeneration++;
 			if (m_pActiveCancellation) m_pActiveCancellation->store(true, std::memory_order_relaxed);
 			if (m_oPending) m_oPending->m_tToken.Cancel();
 			m_oPending = std::move(tRequest);
 		}
 		m_cvPending.notify_one();
+		return true;
 	}
 
 	void CPathWorker::CancelAll()

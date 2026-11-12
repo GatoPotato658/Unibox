@@ -312,7 +312,7 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 			iOutTriggers += AppendTriggerFromParsed(tEnt) ? 1 : 0;
 		}
 
-		return iOutTriggers > 0;
+		return true;
 	}
 
 
@@ -1896,7 +1896,7 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 					}
 				}
 			}
-			if (pSentry->m_iAmmoShells() <= 0) G::CanPrimaryAttack = false;
+			if (pSentry->m_iAmmoShells() <= 0) bPrimary = false;
 			if (pSentry->m_iUpgradeLevel() <= 2 || pSentry->m_iAmmoRockets() <= 0)
 			{
 				bSecondary = false;

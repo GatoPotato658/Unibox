@@ -19,7 +19,7 @@ static inline void SetMain(BaseVar*& pBase, int iBind)
 static std::unordered_mapset<BaseVar*> s_mVars = {};
 static bool s_bUI = false, s_bMenu = false;
 
-static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
+static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars())
 {
 	const bool bDefault = iBind == DEFAULT_BIND;
 	for (auto pBase : vVars)
@@ -34,10 +34,9 @@ static inline void LoopVars(int iBind, std::vector<BaseVar*>& vVars = G::Vars)
 		else Set(IntRange_t, iBind)
 		else Set(FloatRange_t, iBind)
 		else Set(std::string, iBind)
-		else Set(VA_LIST(std::vector<std::pair<std::string, Color_t>>), iBind)
+		else Set(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), iBind)
 		else Set(Color_t, iBind)
 		else Set(Gradient_t, iBind)
-		else Set(Vec3, iBind)
 		else Set(DragBox_t, iBind)
 		else Set(WindowBox_t, iBind)
 	}
@@ -289,7 +288,7 @@ void CBinds::RemoveBind(int iBind, bool bForce)
 	std::scoped_lock lock(m_mMutex);
 	if (!bForce)
 	{
-		for (auto& pBase : G::Vars)
+		for (auto& pBase : G::Vars())
 		{
 			if (HasType(bool, iBind)
 				|| HasType(int, iBind)
@@ -297,7 +296,7 @@ void CBinds::RemoveBind(int iBind, bool bForce)
 				|| HasType(IntRange_t, iBind)
 				|| HasType(FloatRange_t, iBind)
 				|| HasType(std::string, iBind)
-				|| HasType(VA_LIST(std::vector<std::pair<std::string, Color_t>>), iBind)
+				|| HasType(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), iBind)
 				|| HasType(Color_t, iBind)
 				|| HasType(Gradient_t, iBind)
 				|| HasType(Vec3, iBind)
@@ -333,7 +332,7 @@ void CBinds::RemoveBind(int iBind, bool bForce)
 				tBind.m_iParent--;
 		}
 
-		for (auto& pBase : G::Vars)
+		for (auto& pBase : G::Vars())
 		{
 			Remove(bool, iIndex)
 			else Remove(int, iIndex)
@@ -341,7 +340,7 @@ void CBinds::RemoveBind(int iBind, bool bForce)
 			else Remove(IntRange_t, iIndex)
 			else Remove(FloatRange_t, iIndex)
 			else Remove(std::string, iIndex)
-			else Remove(VA_LIST(std::vector<std::pair<std::string, Color_t>>), iIndex)
+			else Remove(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), iIndex)
 			else Remove(Color_t, iIndex)
 			else Remove(Gradient_t, iIndex)
 			else Remove(Vec3, iIndex)
@@ -436,7 +435,7 @@ void CBinds::Move(int i1, int i2)
 	for (auto pBind : vBinds1) pBind->m_iParent = i2;
 	for (auto pBind : vBinds2) pBind->m_iParent = i1;
 
-	for (auto& pBase : G::Vars)
+	for (auto& pBase : G::Vars())
 	{
 		Swap(bool, i1, i2)
 		else Swap(int, i1, i2)
@@ -444,7 +443,7 @@ void CBinds::Move(int i1, int i2)
 		else Swap(IntRange_t, i1, i2)
 		else Swap(FloatRange_t, i1, i2)
 		else Swap(std::string, i1, i2)
-		else Swap(VA_LIST(std::vector<std::pair<std::string, Color_t>>), i1, i2)
+		else Swap(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), i1, i2)
 		else Swap(Color_t, i1, i2)
 		else Swap(Gradient_t, i1, i2)
 		else Swap(Vec3, i1, i2)

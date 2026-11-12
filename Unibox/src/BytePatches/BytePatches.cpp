@@ -17,20 +17,36 @@ BytePatch::BytePatch(const char* sModule, const char* sSignature, int iOffset, c
 	m_vOriginal.resize(m_iSize);
 }
 
-bool BytePatch::Write(const std::vector<byte>& vBytes)
+BytePatch::EWriteResult BytePatch::Write(const std::vector<byte>& vBytes)
 {
 	if (!m_pAddress || !m_iSize || vBytes.size() != m_iSize)
-		return false;
+		return EWriteResult::Failed;
 
 	DWORD flOldProtect;
 	if (!VirtualProtect(m_pAddress, m_iSize, PAGE_EXECUTE_READWRITE, &flOldProtect))
-		return false;
+		return EWriteResult::Failed;
 
+	std::vector<byte> vPrevious(m_iSize);
+	std::memcpy(vPrevious.data(), m_pAddress, m_iSize);
 	std::memcpy(m_pAddress, vBytes.data(), m_iSize);
 	const auto bFlushed = FlushInstructionCache(GetCurrentProcess(), m_pAddress, m_iSize) != FALSE;
 	DWORD flRestoredProtect;
 	const auto bRestored = VirtualProtect(m_pAddress, m_iSize, flOldProtect, &flRestoredProtect) != FALSE;
-	return bFlushed && bRestored;
+	if (bFlushed && bRestored)
+		return EWriteResult::Applied;
+
+	DWORD flRollbackProtect;
+	bool bRestoredBytes = false;
+	if (VirtualProtect(m_pAddress, m_iSize, PAGE_EXECUTE_READWRITE, &flRollbackProtect))
+	{
+		std::memcpy(m_pAddress, vPrevious.data(), m_iSize);
+		FlushInstructionCache(GetCurrentProcess(), m_pAddress, m_iSize);
+		DWORD flRollbackRestoredProtect;
+		VirtualProtect(m_pAddress, m_iSize, flOldProtect, &flRollbackRestoredProtect);
+		bRestoredBytes = std::memcmp(m_pAddress, vPrevious.data(), m_iSize) == 0;
+	}
+
+	return bRestoredBytes ? EWriteResult::RolledBack : EWriteResult::Applied;
 }
 
 bool BytePatch::Initialize()
@@ -101,11 +117,8 @@ bool BytePatch::Initialize()
 	if (!VirtualProtect(m_pAddress, m_iSize, flOldProtect, &flRestoredProtect))
 		return Fail();
 
-	if (!Write(m_vPatch))
-	{
-		m_bIsPatched = !Write(m_vOriginal);
+	if (Write(m_vPatch) != EWriteResult::Applied)
 		return Fail();
-	}
 
 	return m_bIsPatched = true;
 }
@@ -115,7 +128,7 @@ void BytePatch::Unload()
 	if (!m_bIsPatched)
 		return;
 
-	if (Write(m_vOriginal))
+	if (Write(m_vOriginal) == EWriteResult::Applied)
 		m_bIsPatched = false;
 	else
 		U::Core.AppendFailText(std::format("BytePatch::Unload() failed to unload:\n  {}\n  {}", m_sModule ? m_sModule : "", m_sSignature ? m_sSignature : "").c_str());

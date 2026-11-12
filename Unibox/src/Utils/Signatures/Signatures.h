@@ -1,6 +1,6 @@
 #pragma once
 #include "../Macros/Macros.h"
-#include <vector>
+#include <cstdint>
 
 class CSignature
 {
@@ -39,16 +39,10 @@ public:
 class CSignatures
 {
 private:
-	std::vector<CSignature*> m_vSignatures = {};
 	bool m_bFailed = false;
 
 public:
 	bool Initialize();
-
-	inline void AddSignature(CSignature* pSignature)
-	{
-		m_vSignatures.push_back(pSignature);
-	}
 };
 
 ADD_FEATURE_CUSTOM(CSignatures, Signatures, U);

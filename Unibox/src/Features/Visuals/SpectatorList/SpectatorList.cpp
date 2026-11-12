@@ -109,21 +109,21 @@ void CSpectatorList::Draw()
 	using namespace ImGui;
 
 	static IndicatorAnim_t tAnim;
-	static std::vector<Spectator_t> s_vLastValidSpectators;
+	static std::shared_ptr<const std::vector<Spectator_t>> s_pLastValidSpectators = std::make_shared<const std::vector<Spectator_t>>();
 
-	const std::vector<Spectator_t> vSpectators = m_tDrawCache.Get();
-	if (!vSpectators.empty())
-		s_vLastValidSpectators = vSpectators;
+	const auto pSpectators = m_tDrawCache.Get();
+	if (!pSpectators->empty())
+		s_pLastValidSpectators = pSpectators;
 
 	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Spectators) != 0;
-	const bool bVisible = bEnabled && (!vSpectators.empty() || F::Menu.m_bIsOpen);
+	const bool bVisible = bEnabled && (!pSpectators->empty() || F::Menu.m_bIsOpen);
 
 	bool bOpening = true;
 	const float flAnim = tAnim.Update(bVisible, bOpening);
 	if (!tAnim.ShouldDraw(bVisible))
 		return;
 
-	const auto& vActiveSpectators = !vSpectators.empty() ? vSpectators : s_vLastValidSpectators;
+	const auto& vActiveSpectators = !pSpectators->empty() ? *pSpectators : *s_pLastValidSpectators;
 
 	ImFont* pSmall = F::Render.FontSmall, *pRegular = F::Render.FontRegular;
 	auto fTextWidth = [](ImFont* pFont, const char* sText) { return pFont->CalcTextSizeA(pFont->LegacySize, FLT_MAX, 0.f, sText).x; };

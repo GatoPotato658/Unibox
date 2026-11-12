@@ -160,9 +160,6 @@ void CAutoItem::GetItem(item_definition_index_t iItemDef, bool bRent)
 
 void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPlayerInventory* pLocalInventory, std::string sItemDefs, int iClass, int iSlot)
 {
-	static bool bFallback{};
-	static int iFirstItemAttempts{};
-
 	if (sItemDefs == "-1")
 	{
 		EquipItem(pInventoryManager, pLocalInventory, iClass, iSlot, -1, false, false);
@@ -187,7 +184,6 @@ void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPla
 				vSplitDefIdx.emplace_back(static_cast<item_definition_index_t>(*oDefIdx));
 			}
 
-			bFallback = true;
 		}
 		else
 		{
@@ -198,8 +194,9 @@ void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPla
 		}
 
 		auto pItem = pLocalInventory->GetFirstItemOfItemDef(vSplitDefIdx.at(0));
+		const bool bFallback = vSplitDefIdx.size() > 1;
+		auto& iFirstItemAttempts = m_mWeaponRetryAttempts[{ iClass, iSlot, sItemDefs }];
 
-		// Try the first item 3 times before moving to fallback
 		if (bFallback)
 		{
 			if (!pItem && iFirstItemAttempts >= 3)
@@ -207,11 +204,14 @@ void CAutoItem::GetAndEquipWeapon(CTFInventoryManager* pInventoryManager, CTFPla
 			else
 			{
 				EquipItem(pInventoryManager, pLocalInventory, iClass, iSlot, vSplitDefIdx.at(0), true, true);
-				iFirstItemAttempts++;
+				iFirstItemAttempts = pItem ? 0 : iFirstItemAttempts + 1;
 			}
 		}
 		else
+		{
 			EquipItem(pInventoryManager, pLocalInventory, iClass, iSlot, vSplitDefIdx.at(0), true, true);
+			iFirstItemAttempts = 0;
+		}
 	}
 	else
 	{

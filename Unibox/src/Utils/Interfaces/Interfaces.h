@@ -1,6 +1,6 @@
 #pragma once
 #include "../Macros/Macros.h"
-#include <vector>
+#include <cstdint>
 
 struct InterfaceInit_t
 {
@@ -38,16 +38,10 @@ namespace MAKE_INTERFACE_SCOPE \
 class CInterfaces
 {
 private:
-	std::vector<InterfaceInit_t*> m_vInterfaces = {};
 	bool m_bFailed = false;
 
 public:
 	bool Initialize();
-
-	inline void AddInterface(InterfaceInit_t* pInterface)
-	{
-		m_vInterfaces.push_back(pInterface);
-	}
 };
 
 ADD_FEATURE_CUSTOM(CInterfaces, Interfaces, U);

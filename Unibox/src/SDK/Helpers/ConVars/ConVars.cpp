@@ -23,8 +23,11 @@ bool CConVars::RestoreInternal()
 {
 	if (m_bUnlocked)
 	{
-		for (auto& [pCmdBase, nFlags] : m_mFlagMap)
-			pCmdBase->m_nFlags = nFlags;
+		for (ConCommandBase* pBase = I::CVar->GetCommands(); pBase; pBase = pBase->m_pNext)
+		{
+			if (auto it = m_mFlagMap.find(pBase); it != m_mFlagMap.end())
+				pBase->m_nFlags = it->second;
+		}
 		m_mFlagMap.clear();
 		m_bUnlocked = false;
 
@@ -60,9 +63,13 @@ ConVar* CConVars::FindVar(const char* sCVar)
 	std::lock_guard<std::mutex> lock(m_Mutex);
 
 	auto uHash = FNV1A::Hash32(sCVar);
-	if (!m_mCVarMap.contains(uHash))
-		m_mCVarMap[uHash] = I::CVar->FindVar(sCVar);
-	return m_mCVarMap[uHash];
+	if (auto it = m_mCVarMap.find(uHash); it != m_mCVarMap.end())
+		return it->second;
+
+	ConVar* pCVar = I::CVar->FindVar(sCVar);
+	if (pCVar)
+		m_mCVarMap.emplace(uHash, pCVar);
+	return pCVar;
 }
 
 int CConVars::GetOriginalFlags(ConCommandBase* pCmd)

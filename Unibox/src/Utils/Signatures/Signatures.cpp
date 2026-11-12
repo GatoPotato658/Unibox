@@ -6,6 +6,13 @@
 #include <string>
 #include <format>
 #include <limits>
+#include <vector>
+
+static std::vector<CSignature*>& SignatureRegistry()
+{
+	static std::vector<CSignature*> vSignatures;
+	return vSignatures;
+}
 
 CSignature::CSignature(const char* sDLLName, const char* sSignature, int8_t nOffset, const char* sName)
 {
@@ -15,7 +22,7 @@ CSignature::CSignature(const char* sDLLName, const char* sSignature, int8_t nOff
 	m_nOffset = nOffset;
 	m_sName = sName;
 
-	U::Signatures.AddSignature(this);
+	SignatureRegistry().push_back(this);
 }
 
 bool CSignature::Initialize()
@@ -68,7 +75,7 @@ bool CSignatures::Initialize()
 	SDK::CInitTimingScope tTotal("Signatures.Initialize");
 
 	m_bFailed = false;
-	for (auto pSignature : m_vSignatures)
+	for (CSignature* pSignature : SignatureRegistry())
 	{
 		if (!pSignature)
 			continue;

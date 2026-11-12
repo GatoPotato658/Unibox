@@ -4,6 +4,7 @@
 #include <mutex>
 #include <array>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
@@ -36,6 +37,21 @@ struct BackpackItem_t
 	int iPaintColor = -1;
 	int iPaintColor2 = -1;
 	int iStyle = 0;
+};
+
+struct InventorySnapshot_t
+{
+	uint64_t uInventoryRevision = 0;
+	uint64_t uCatalogueRevision = 0;
+	std::vector<const ItemInfo_t*> vItems = {};
+	std::unordered_map<uint16_t, int> mCounts = {};
+};
+
+struct BackpackSnapshot_t
+{
+	uint64_t uRevision = 0;
+	std::vector<BackpackItem_t> vItems = {};
+	std::unordered_set<uint16_t> tDefs = {};
 };
 
 struct Skin_t
@@ -98,6 +114,10 @@ class CSkinChanger
 	std::map<int, uint64_t> m_mLoadout = {};
 	std::map<int, uint64_t> m_mOriginalLoadout = {};
 	std::unordered_map<uint16_t, int> m_mInventoryCounts = {};
+	std::shared_ptr<const InventorySnapshot_t> m_pInventorySnapshot = {};
+	std::shared_ptr<const BackpackSnapshot_t> m_pBackpackSnapshot = {};
+	uint64_t m_uInventoryRevision = 0;
+	uint64_t m_uBackpackRevision = 0;
 	uint64_t m_uLastSync = 0;
 	struct PendingCrate_t
 	{
@@ -199,12 +219,15 @@ public:
 	void RemoveFromBackpack(uint16_t iDef);
 	void ClearBackpack();
 	std::vector<BackpackItem_t> GetBackpack();
+	std::shared_ptr<const BackpackSnapshot_t> GetBackpackSnapshot();
 	void SetBackpack(std::vector<BackpackItem_t> vBackpack);
-	std::vector<const ItemInfo_t*> GetInventoryItems();
+	std::shared_ptr<const InventorySnapshot_t> GetInventorySnapshot();
 	bool IsInventoryLoading();
 	int GetInventoryCount(uint16_t iDef);
 
 	static const std::vector<ItemInfo_t>& GetItems();
+	static uint64_t GetCatalogueRevision();
+	static const ItemInfo_t* FindItem(uint16_t iDef);
 	static bool IsCatalogueLoading();
 
 	static int Key(int iDefIndex);

@@ -64,10 +64,28 @@ void CDraw::UpdateKeyStrings()
 	}
 }
 
+static const wchar_t* ToWideText(const char* sText)
+{
+	if (!sText || !*sText)
+		return L"";
+
+	const size_t uLength = strlen(sText);
+	thread_local std::wstring sBuffer;
+	sBuffer.resize(uLength);
+	const int iWritten = MultiByteToWideChar(CP_UTF8, 0, sText, int(uLength), sBuffer.data(), int(sBuffer.size()));
+	if (iWritten <= 0)
+	{
+		sBuffer.clear();
+		return L"";
+	}
+	sBuffer.resize(iWritten);
+	return sBuffer.c_str();
+}
+
 Vec2 CDraw::GetTextSize(const char* text, const Font_t& tFont)
 {
 	int w = 0, h = 0;
-	I::MatSystemSurface->GetTextSize(tFont.m_dwFont, SDK::ConvertUtf8ToWide(text).c_str(), w, h);
+	I::MatSystemSurface->GetTextSize(tFont.m_dwFont, ToWideText(text), w, h);
 	return { float(w), float(h) };
 }
 
@@ -77,8 +95,6 @@ Vec2 CDraw::GetTextSize(const wchar_t* text, const Font_t& tFont)
 	I::MatSystemSurface->GetTextSize(tFont.m_dwFont, text, w, h);
 	return { float(w), float(h) };
 }
-
-static wchar_t s_wstr[1024] = { '\0' };
 
 static void AlignText(EAlign eAlign, const Vec2& vSize, int& x, int& y)
 {
@@ -98,8 +114,7 @@ static void AlignText(EAlign eAlign, const Vec2& vSize, int& x, int& y)
 
 void CDraw::String(const Font_t& tFont, int x, int y, Color_t tColor, EAlign eAlign, const char* str)
 {
-	wsprintfW(s_wstr, L"%hs", str);
-	String(tFont, x, y, tColor, eAlign, s_wstr);
+	String(tFont, x, y, tColor, eAlign, ToWideText(str));
 }
 void CDraw::String(const Font_t& tFont, int x, int y, Color_t tColor, EAlign eAlign, const wchar_t* wstr)
 {
@@ -115,8 +130,7 @@ void CDraw::String(const Font_t& tFont, int x, int y, Color_t tColor, EAlign eAl
 }
 void CDraw::StringOutlined(const Font_t& tFont, int x, int y, Color_t tColor, Color_t tColorOut, EAlign eAlign, const char* str)
 {
-	wsprintfW(s_wstr, L"%hs", str);
-	StringOutlined(tFont, x, y, tColor, tColorOut, eAlign, s_wstr);
+	StringOutlined(tFont, x, y, tColor, tColorOut, eAlign, ToWideText(str));
 }
 void CDraw::StringOutlined(const Font_t& tFont, int x, int y, Color_t tColor, Color_t tColorOut, EAlign eAlign, const wchar_t* wstr)
 {
@@ -131,9 +145,13 @@ void CDraw::StringOutlined(const Font_t& tFont, int x, int y, Color_t tColor, Co
 	tColorOut.a *= Math::RemapVal(tColorOut.Brightness(), 0, 255, 0.5f, 0.1f);
 	if (tColorOut.a)
 	{
-		std::vector<std::pair<int, int>> vOutline = { { -1, 0 }, { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 } };
+		static constexpr std::pair<int, int> aOutline[] =
+		{
+			{ -1, 0 }, { 0, -1 }, { 1, 0 }, { 0, 1 },
+			{ -1, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }
+		};
 
-		for (auto& [x2, y2] : vOutline)
+		for (const auto& [x2, y2] : aOutline)
 		{
 			I::MatSystemSurface->DrawSetTextPos(x + x2, y + y2);
 			I::MatSystemSurface->DrawSetTextFont(dwFont);
@@ -150,8 +168,7 @@ void CDraw::StringOutlined(const Font_t& tFont, int x, int y, Color_t tColor, Co
 
 void CDraw::StringWithBackground(const Font_t& tFont, int x, int y, Color_t tColor, Color_t tColorBg, EAlign eAlign, const char* str)
 {
-	wsprintfW(s_wstr, L"%hs", str);
-	StringWithBackground(tFont, x, y, tColor, tColorBg, eAlign, s_wstr);
+	StringWithBackground(tFont, x, y, tColor, tColorBg, eAlign, ToWideText(str));
 }
 
 void CDraw::StringWithBackground(const Font_t& tFont, int x, int y, Color_t tColor, Color_t tColorBg, EAlign eAlign, const wchar_t* wstr)

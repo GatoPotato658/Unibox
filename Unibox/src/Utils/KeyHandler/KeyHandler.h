@@ -15,6 +15,7 @@ class CKeyHandler
 {
 public:
 	void StoreKey(byte iKey, KeyStorage* pStorage = nullptr);
+	void Update();
 
 	bool Down(byte iKey, const bool bStore = false, KeyStorage* pStorage = nullptr);
 	bool Pressed(byte iKey, const bool bStore = false, KeyStorage* pStorage = nullptr);

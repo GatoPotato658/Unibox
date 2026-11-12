@@ -62,6 +62,7 @@ private:
 	std::mutex m_tMutex;
 	std::condition_variable m_tClosed;
 	Voice_t m_aVoices[AudioVoiceCount] = {};
+	std::atomic<bool> m_aVoiceReady[AudioVoiceCount] = {};
 	std::atomic<bool> m_bStop = false;
 	std::atomic<bool> m_bStarted = false;
 	std::thread m_tThread;
@@ -72,6 +73,7 @@ public:
 	void Shutdown();
 
 	size_t OpenVoice(uint32_t uSampleRate, AudioRenderFunction fRender, void* pUser, float flVolume);
+	bool VoiceReady(size_t uVoice) const;
 	void CloseVoice(size_t uVoice);
 	void PauseVoice(size_t uVoice, bool bPaused);
 	void SlideVoice(size_t uVoice, float flVolume, uint32_t uMilliseconds);

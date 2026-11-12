@@ -7,6 +7,7 @@
 #include <deque>
 #include <functional>
 #include <numeric>
+#include <string_view>
 #include <tuple>
 
 Enum(FText, None = 0, Middle = 1 << 0, Right = 1 << 1, SameLine = 1 << 2);
@@ -105,13 +106,6 @@ namespace ImGui
 			pRowSizes->clear();
 		pRowSizes->emplace_back(vPos, vSize);
 	}
-	inline float GetRowPos(bool bDrawPos = false)
-	{
-		if (!pRowSizes->empty())
-			return pRowSizes->front().m_vPos.y - (!bDrawPos ? GetDrawPos().y : 0.f);
-		else
-			return GetCursorPosY() + (bDrawPos ? GetDrawPos().y : 0.f);
-	}
 	inline float GetRowSize(float flDefault = 0.f)
 	{
 		pRowSizes = GetCurrentWindow()->Flags & ImGuiWindowFlags_Popup ? &vRowSizesPopup : &vRowSizesRegular;
@@ -127,11 +121,6 @@ namespace ImGui
 		return tColor.r << IM_COL32_R_SHIFT | tColor.g << IM_COL32_G_SHIFT | tColor.b << IM_COL32_B_SHIFT | tColor.a << IM_COL32_A_SHIFT;
 	}
 
-	inline Color_t ColorIntToByte(ImU32 tColor)
-	{
-		return { byte(tColor >> IM_COL32_R_SHIFT), byte(tColor >> IM_COL32_G_SHIFT), byte(tColor >> IM_COL32_B_SHIFT), byte(tColor >> IM_COL32_A_SHIFT) };
-	}
-
 	inline ImVec4 ColorByteToVec(Color_t tColor)
 	{
 		return { tColor.r / 255.f, tColor.g / 255.f, tColor.b / 255.f, tColor.a / 255.f };
@@ -140,16 +129,6 @@ namespace ImGui
 	inline Color_t ColorVecToByte(ImVec4 tColor)
 	{
 		return { byte(tColor.x * 255 + 0.5f), byte(tColor.y * 255 + 0.5f), byte(tColor.z * 255 + 0.5f), byte(tColor.w * 255 + 0.5f) };
-	}
-
-	inline ImColor ColorByteToFloat(Color_t tColor)
-	{
-		return { tColor.r / 255.f, tColor.g / 255.f, tColor.b / 255.f, tColor.a / 255.f };
-	}
-
-	inline Color_t ColorFloatToByte(ImColor tColor)
-	{
-		return { byte(tColor.Value.x * 255), byte(tColor.Value.y * 255), byte(tColor.Value.z * 255), byte(tColor.Value.w * 255) };
 	}
 
 	inline void DebugDummy(ImVec2 vSize)
@@ -318,23 +297,80 @@ namespace ImGui
 		return sText;
 	}
 
-	inline std::string TruncateText(const std::string& sText, int iPixels, ImFont* pFont = nullptr, const char* sEnd = "...", int iMin = 0, int* pLength = nullptr)
+	inline ImVec2 TextSize(std::string_view sText, ImFont* pFont)
 	{
-		if (sText.empty() || FCalcTextSize(sText.c_str(), pFont).x < iPixels)
-			return sText;
-
-		std::string sTruncated = "";
-		int i = 0; while (i < iMin || i < sText.length() && FCalcTextSize(std::format("{}{}{}", sTruncated, sText[i], sEnd).c_str(), pFont).x < iPixels)
-			sTruncated += sText[i++];
-		if (i)
-			sTruncated += sEnd;
-		if (pLength)
-			*pLength = i;
-
-		return sTruncated;
+		if (sText.empty())
+			return {};
+		return pFont ? pFont->CalcTextSizeA(pFont->LegacySize, FLT_MAX, 0.f, sText.data(), sText.data() + sText.size()) : CalcTextSize(sText.data(), sText.data() + sText.size());
 	}
 
-	inline std::vector<std::string> WrapText(const std::string& sText, std::vector<int> vPixels, ImFont* pFont = nullptr)
+	inline bool IsUtf8Continuation(char iChar)
+	{
+		return (static_cast<unsigned char>(iChar) & 0xC0) == 0x80;
+	}
+
+	inline size_t NextGlyph(std::string_view sText, size_t uOffset)
+	{
+		++uOffset;
+		while (uOffset < sText.size() && IsUtf8Continuation(sText[uOffset]))
+			++uOffset;
+		return uOffset;
+	}
+
+	inline std::string TruncateText(std::string_view sText, int iPixels, ImFont* pFont = nullptr, const char* sEnd = "...", int iMin = 0, int* pLength = nullptr)
+	{
+		if (sText.empty() || TextSize(sText, pFont).x < iPixels)
+			return std::string(sText);
+
+		const std::string_view sEndText = sEnd;
+		const size_t uMinBytes = std::min<size_t>(std::max(iMin, 0), sText.size());
+		size_t uMin = 0;
+		while (uMin < uMinBytes)
+			uMin = NextGlyph(sText, uMin);
+
+		std::string sCandidate;
+		sCandidate.reserve(sText.size() + sEndText.size());
+		auto fFits = [&](size_t uLength)
+		{
+			sCandidate.assign(sText.data(), uLength);
+			sCandidate.append(sEndText.data(), sEndText.size());
+			return TextSize(sCandidate, pFont).x < iPixels;
+		};
+
+		size_t uBest = uMin;
+		if (uMin < sText.size() && fFits(uMin))
+		{
+			size_t uLow = uMin, uHigh = sText.size();
+			while (uLow < uHigh)
+			{
+				size_t uMid = uLow + (uHigh - uLow + 1) / 2;
+				while (uMid > uLow && uMid < sText.size() && IsUtf8Continuation(sText[uMid]))
+					--uMid;
+				if (uMid <= uLow)
+					uMid = NextGlyph(sText, uLow);
+				if (uMid > uHigh)
+					break;
+				if (fFits(uMid))
+				{
+					uBest = uMid;
+					uLow = uMid;
+				}
+				else
+					uHigh = uMid - 1;
+			}
+		}
+
+		if (pLength)
+			*pLength = int(uBest);
+		if (!uBest)
+			return {};
+
+		sCandidate.assign(sText.data(), uBest);
+		sCandidate.append(sEndText.data(), sEndText.size());
+		return sCandidate;
+	}
+
+	inline std::vector<std::string> WrapText(std::string_view sText, std::vector<int> vPixels, ImFont* pFont = nullptr)
 	{
 		if (vPixels.empty())
 		{
@@ -342,53 +378,62 @@ namespace ImGui
 			return {};
 		}
 
-		if (sText.empty() || sText.find("\n") == std::string::npos && FCalcTextSize(sText.c_str(), pFont).x < vPixels.front())
-			return { sText };
-
-		std::vector<std::string> vWords = { "" };
-		for (char iChar : sText)
-		{
-			if (iChar == ' ' || iChar == '\n' || iChar == '\t')
-				vWords.push_back(std::string(1, iChar));
-			else
-				vWords.back().push_back(iChar);
-		}
+		if (sText.empty() || sText.find('\n') == std::string_view::npos && TextSize(sText, pFont).x < vPixels.front())
+			return { std::string(sText) };
 
 		std::vector<std::string> vWrapped = { "" };
-		int iWord = 0; for (auto& sWord : vWords)
+		size_t iWord = 0, uOffset = 0;
+		while (uOffset < sText.size())
 		{
-		begin:
-			if (sWord.empty())
-				continue;
-
-			int iPixels = vPixels[std::min(vWrapped.size(), vPixels.size()) - 1];
-			bool bForce = sWord[0] == '\n';
-			if (!bForce && FCalcTextSize(std::format("{}{}", vWrapped.back(), sWord).c_str(), pFont).x < iPixels)
-			{
-				vWrapped.back() += sWord;
-				iWord++;
-			}
+			size_t uEnd = uOffset;
+			if (sText[uOffset] == ' ' || sText[uOffset] == '\n' || sText[uOffset] == '\t')
+				uEnd++;
 			else
 			{
+				while (uEnd < sText.size() && sText[uEnd] != ' ' && sText[uEnd] != '\n' && sText[uEnd] != '\t')
+					uEnd++;
+			}
+
+			std::string_view sWord = sText.substr(uOffset, uEnd - uOffset);
+			uOffset = uEnd;
+			while (!sWord.empty())
+			{
+				const int iPixels = vPixels[std::min(vWrapped.size(), vPixels.size()) - 1];
+				const bool bForce = sWord.front() == '\n';
+				if (!bForce)
+				{
+					const size_t uLineSize = vWrapped.back().size();
+					vWrapped.back().append(sWord.data(), sWord.size());
+					if (TextSize(vWrapped.back(), pFont).x < iPixels)
+					{
+						iWord++;
+						break;
+					}
+					vWrapped.back().resize(uLineSize);
+				}
+
 				if (sWord[0] == ' ' || sWord[0] == '\t' || bForce)
-					sWord.erase(0, 1);
+					sWord.remove_prefix(1);
 
 				if (!iWord && !bForce)
 				{
-					int i = 0; vWrapped.back() += TruncateText(sWord, iPixels, pFont, "-", 1, &i);
-					sWord = sWord.substr(i, sWord.length() - i);
+					int i = 0;
+					vWrapped.back() += TruncateText(sWord, iPixels, pFont, "-", 1, &i);
+					sWord.remove_prefix(std::min<size_t>(i, sWord.size()));
 				}
 				if (!sWord.empty() || bForce)
 				{
-					vWrapped.push_back(""); iWord = 0;
-					goto begin;
+					vWrapped.emplace_back();
+					iWord = 0;
+					continue;
 				}
+				break;
 			}
 		}
 
 		return vWrapped;
 	}
-	inline std::vector<std::string> WrapText(const std::string& sText, int iPixels, ImFont* pFont = nullptr)
+	inline std::vector<std::string> WrapText(std::string_view sText, int iPixels, ImFont* pFont = nullptr)
 	{
 		return WrapText(sText, std::vector<int>({ iPixels }), pFont);
 	}

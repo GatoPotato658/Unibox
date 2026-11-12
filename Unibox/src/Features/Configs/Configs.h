@@ -27,6 +27,8 @@ public:
 	template <class T> void SaveJson(boost::property_tree::ptree& t, const std::string& s, const T& v);
 	template <class T> void LoadJson(const boost::property_tree::ptree& t, const std::string& s, T& v);
 	template <class T> void LoadJson(const boost::property_tree::ptree& t, const std::string& s, ConfigVar<T>* c, int i);
+	void WriteJson(const std::filesystem::path& tPath, const boost::property_tree::ptree& tTree) const;
+	void WriteJson(const std::filesystem::path& tPath, const std::string& sJson) const;
 
 	std::string m_sCurrentConfig = "default";
 	std::string m_sCurrentVisuals = "default";

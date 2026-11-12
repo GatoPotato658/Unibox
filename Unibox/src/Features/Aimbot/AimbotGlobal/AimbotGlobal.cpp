@@ -29,9 +29,9 @@ std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTar
 	int iPriorityIdx = GetPriorityIdx(pWeapon);
 	if (iPriorityIdx > 0)
 	{
-		std::sort((vTargets).begin(), (vTargets).end(), [&](const Target_t& a, const Target_t& b) -> bool
+		std::stable_partition(vTargets.begin(), vTargets.end(), [iPriorityIdx](const Target_t& tTarget)
 			{
-				return a.m_pEntity->entindex() == iPriorityIdx;
+				return tTarget.m_pEntity && tTarget.m_pEntity->entindex() == iPriorityIdx;
 			});
 	}
 	vTargets.resize(std::min(size_t(iMaxTargets), vTargets.size()));

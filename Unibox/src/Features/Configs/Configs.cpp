@@ -5,39 +5,15 @@
 #include "../Visuals/Groups/Groups.h"
 #include "../Visuals/Materials/Materials.h"
 #include "../Visuals/SkinChanger/SkinChanger.h"
+#include "../../Utils/Files/FileName.h"
 
-#include <cctype>
 #include <format>
 #include <functional>
 #include <fstream>
 
-static bool IsSafeConfigName(const std::string& sConfigName)
-{
-	if (sConfigName.empty() || sConfigName == "." || sConfigName == ".." || sConfigName.size() > 128)
-		return false;
-
-	for (unsigned char c : sConfigName)
-	{
-		if (c < 32 || c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
-			return false;
-	}
-	if (sConfigName.back() == '.' || sConfigName.back() == ' ')
-		return false;
-
-	std::string sDevice = sConfigName.substr(0, sConfigName.find('.'));
-	for (char& c : sDevice)
-		c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-	if (sDevice == "CON" || sDevice == "PRN" || sDevice == "AUX" || sDevice == "NUL")
-		return false;
-	if (sDevice.size() == 4 && (sDevice.starts_with("COM") || sDevice.starts_with("LPT")) && sDevice.back() >= '1' && sDevice.back() <= '9')
-		return false;
-
-	return std::filesystem::path(sConfigName).filename() == sConfigName;
-}
-
 static std::filesystem::path GetConfigFilePath(const std::string& sDirectory, const std::string& sConfigName, const std::string& sExtension)
 {
-	if (!IsSafeConfigName(sConfigName))
+	if (!FileName::IsSafe(sConfigName))
 		return {};
 
 	std::filesystem::path tDirectory = std::filesystem::path(sDirectory).lexically_normal();
@@ -50,7 +26,18 @@ static std::filesystem::path GetConfigFilePath(const std::string& sDirectory, co
 
 using ConfigMapRestore = std::vector<std::function<void()>>;
 
-static void WriteJson(const std::filesystem::path& tPath, const boost::property_tree::ptree& tTree)
+static void CommitJson(const std::filesystem::path& tPath, std::filesystem::path& tTemp)
+{
+	if (!MoveFileExW(tTemp.c_str(), tPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+	{
+		const std::error_code tError(int(GetLastError()), std::system_category());
+		std::error_code tCleanupError;
+		std::filesystem::remove(tTemp, tCleanupError);
+		throw std::filesystem::filesystem_error("Config replace failed", tTemp, tPath, tError);
+	}
+}
+
+void CConfigs::WriteJson(const std::filesystem::path& tPath, const boost::property_tree::ptree& tTree) const
 {
 	std::filesystem::path tTemp = tPath;
 	tTemp += ".tmp";
@@ -59,19 +46,35 @@ static void WriteJson(const std::filesystem::path& tPath, const boost::property_
 	if (!std::filesystem::exists(tTemp))
 		throw std::runtime_error("Config was not written");
 
-	std::error_code tError;
-	std::filesystem::rename(tTemp, tPath, tError);
-	if (tError)
+	CommitJson(tPath, tTemp);
+}
+
+void CConfigs::WriteJson(const std::filesystem::path& tPath, const std::string& sJson) const
+{
+	std::filesystem::path tTemp = tPath;
+	tTemp += ".tmp";
+
 	{
-		std::filesystem::remove(tPath, tError);
-		tError.clear();
-		std::filesystem::rename(tTemp, tPath, tError);
-		if (tError)
+		std::ofstream fStream(tTemp, std::ios::out | std::ios::binary | std::ios::trunc);
+		if (!fStream)
+			throw std::filesystem::filesystem_error("Config temporary file could not be opened", tTemp, std::make_error_code(std::errc::io_error));
+
+		fStream << sJson;
+		fStream.flush();
+		if (!fStream)
 		{
-			std::filesystem::remove(tTemp);
-			throw std::filesystem::filesystem_error("Config replace failed", tTemp, tPath, tError);
+			std::error_code tCleanupError;
+			std::filesystem::remove(tTemp, tCleanupError);
+			throw std::filesystem::filesystem_error("Config temporary file could not be written", tTemp, std::make_error_code(std::errc::io_error));
 		}
 	}
+
+	if (!std::filesystem::exists(tTemp))
+	{
+		throw std::runtime_error("Config was not written");
+	}
+
+	CommitJson(tPath, tTemp);
 }
 
 struct LoadingScope_t
@@ -81,24 +84,41 @@ struct LoadingScope_t
 	~LoadingScope_t() { m_bLoading = false; }
 };
 
+template <class T, class F>
+static inline bool VisitIfType(BaseVar* pBase, F&& visitor)
+{
+	if (pBase->m_iType != typeid(T).hash_code())
+		return false;
+	visitor(pBase->As<T>());
+	return true;
+}
+
+template <class F>
+static inline bool VisitVar(BaseVar* pBase, F&& visitor)
+{
+	return VisitIfType<bool>(pBase, visitor)
+		|| VisitIfType<int>(pBase, visitor)
+		|| VisitIfType<float>(pBase, visitor)
+		|| VisitIfType<IntRange_t>(pBase, visitor)
+		|| VisitIfType<FloatRange_t>(pBase, visitor)
+		|| VisitIfType<std::string>(pBase, visitor)
+		|| VisitIfType<VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>)>(pBase, visitor)
+		|| VisitIfType<Color_t>(pBase, visitor)
+		|| VisitIfType<Gradient_t>(pBase, visitor)
+		|| VisitIfType<DragBox_t>(pBase, visitor)
+		|| VisitIfType<WindowBox_t>(pBase, visitor);
+}
+
 static ConfigMapRestore CaptureConfigMaps()
 {
 	ConfigMapRestore vRestore;
-	for (BaseVar* pBase : G::Vars)
+	for (BaseVar* pBase : G::Vars())
 	{
-#define Capture(t) if (pBase->m_iType == typeid(t).hash_code()) { auto pVar = pBase->As<t>(); auto tMap = pVar->Map; vRestore.emplace_back([pVar, tMap = std::move(tMap)]() mutable { pVar->Map = std::move(tMap); }); }
-		Capture(bool)
-		else Capture(int)
-		else Capture(float)
-		else Capture(IntRange_t)
-		else Capture(FloatRange_t)
-		else Capture(std::string)
-		else Capture(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>))
-		else Capture(Color_t)
-		else Capture(Gradient_t)
-		else Capture(DragBox_t)
-		else Capture(WindowBox_t)
-#undef Capture
+		VisitVar(pBase, [&vRestore](auto* pVar)
+		{
+			auto tMap = pVar->Map;
+			vRestore.emplace_back([pVar, tMap = std::move(tMap)]() mutable { pVar->Map = std::move(tMap); });
+		});
 	}
 	return vRestore;
 }
@@ -642,8 +662,8 @@ CConfigs::CConfigs()
 	if (!std::filesystem::exists(m_sVisualsPath))
 		std::filesystem::create_directory(m_sVisualsPath);
 
-		if (!std::filesystem::exists(m_sSkinsPath))
-			std::filesystem::create_directory(m_sSkinsPath);
+	if (!std::filesystem::exists(m_sSkinsPath))
+		std::filesystem::create_directory(m_sSkinsPath);
 
 	if (!std::filesystem::exists(m_sCorePath))
 		std::filesystem::create_directory(m_sCorePath);
@@ -666,12 +686,12 @@ void CConfigs::LoadState()
 		const std::string sConfig = tRead.get("Config", m_sCurrentConfig);
 		const std::string sVisuals = tRead.get("Visuals", m_sCurrentVisuals);
 		const std::string sSkins = tRead.get("Skins", m_sCurrentSkins);
-		if (IsSafeConfigName(sConfig))
+		if (FileName::IsSafe(sConfig))
 			m_sCurrentConfig = sConfig;
-		if (IsSafeConfigName(sVisuals))
+		if (FileName::IsSafe(sVisuals))
 			m_sCurrentVisuals = sVisuals;
-			if (IsSafeConfigName(sSkins))
-				m_sCurrentSkins = sSkins;
+		if (FileName::IsSafe(sSkins))
+			m_sCurrentSkins = sSkins;
 	}
 	catch (...) {}
 }
@@ -689,25 +709,18 @@ void CConfigs::SaveState() const
 	catch (...) {}
 }
 
-#define IsType(t) pBase->m_iType == typeid(t).hash_code()
-
 template <class T>
-static inline void SaveMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
+static inline void SaveMain(ConfigVar<T>* pVar, boost::property_tree::ptree& tTree)
 {
-	auto pVar = pBase->As<T>();
-
 	boost::property_tree::ptree tMap;
 	for (auto& [iBind, tValue] : pVar->Map)
 		F::Configs.SaveJson(tMap, std::to_string(iBind), tValue);
 	tTree.put_child(pVar->Name(), tMap);
 }
-#define Save(t, j) if (IsType(t)) SaveMain<t>(pBase, j);
 
 template <class T>
-static inline void LoadMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
+static inline void LoadMain(ConfigVar<T>* pVar, boost::property_tree::ptree& tTree)
 {
-	auto pVar = pBase->As<T>();
-
 	pVar->Map = { { DEFAULT_BIND, pVar->Default } };
 	if (auto tMap = tTree.get_child_optional(pVar->Name()))
 	{
@@ -725,7 +738,79 @@ static inline void LoadMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
 	else if (!(pVar->m_iFlags & NOSAVE))
 		SDK::Output("unibox", std::format("{} not found", pVar->Name()).c_str(), ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 }
-#define Load(t, j) if (IsType(t)) LoadMain<t>(pBase, j);
+
+static void SaveGroups(boost::property_tree::ptree& tWrite)
+{
+	boost::property_tree::ptree tSub;
+	for (int iID = 0; iID < F::Groups.m_vGroups.size() && iID < MAX_GROUPS; iID++)
+	{
+		const auto& tGroup = F::Groups.m_vGroups[iID];
+		boost::property_tree::ptree tChild;
+		F::Configs.SaveJson(tChild, "Name", tGroup.m_sName);
+		F::Configs.SaveJson(tChild, "Color", tGroup.m_tColor);
+		F::Configs.SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
+		F::Configs.SaveJson(tChild, "Targets", tGroup.m_iTargets);
+		F::Configs.SaveJson(tChild, "Conditions", tGroup.m_iConditions);
+		F::Configs.SaveJson(tChild, "Roles", tGroup.m_vRoles);
+		F::Configs.SaveJson(tChild, "Players", tGroup.m_iPlayers);
+		F::Configs.SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
+		F::Configs.SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
+		F::Configs.SaveJson(tChild, "ESP", tGroup.m_tESP);
+		F::Configs.SaveJson(tChild, "Chams", tGroup.m_tChams);
+		F::Configs.SaveJson(tChild, "Glow", tGroup.m_tGlow);
+		F::Configs.SaveJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
+		F::Configs.SaveJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
+		F::Configs.SaveJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
+		F::Configs.SaveJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
+		F::Configs.SaveJson(tChild, "Backtrack", tGroup.m_iBacktrack);
+		F::Configs.SaveJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
+		F::Configs.SaveJson(tChild, "BacktrackGlow", tGroup.m_tBacktrackGlow);
+		F::Configs.SaveJson(tChild, "Trajectory", tGroup.m_iTrajectory);
+		F::Configs.SaveJson(tChild, "Sightlines", tGroup.m_iSightlines);
+		tSub.put_child(std::to_string(iID), tChild);
+	}
+	tWrite.put_child("Groups", tSub);
+}
+
+static void LoadGroups(const boost::property_tree::ptree& tRead)
+{
+	auto tSub = tRead.get_child_optional("Groups");
+	if (!tSub)
+	{
+		SDK::Output("unibox", "Config groups not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
+		return;
+	}
+
+	for (const auto& tChild : *tSub | std::views::values)
+	{
+		if (F::Groups.m_vGroups.size() >= MAX_GROUPS)
+			break;
+
+		Group_t tGroup = {};
+		F::Configs.LoadJson(tChild, "Name", tGroup.m_sName);
+		F::Configs.LoadJson(tChild, "Color", tGroup.m_tColor);
+		F::Configs.LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
+		F::Configs.LoadJson(tChild, "Targets", tGroup.m_iTargets);
+		F::Configs.LoadJson(tChild, "Conditions", tGroup.m_iConditions);
+		F::Configs.LoadJson(tChild, "Roles", tGroup.m_vRoles);
+		F::Configs.LoadJson(tChild, "Players", tGroup.m_iPlayers);
+		F::Configs.LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
+		F::Configs.LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);
+		F::Configs.LoadJson(tChild, "ESP", tGroup.m_tESP);
+		F::Configs.LoadJson(tChild, "Chams", tGroup.m_tChams);
+		F::Configs.LoadJson(tChild, "Glow", tGroup.m_tGlow);
+		F::Configs.LoadJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
+		F::Configs.LoadJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
+		F::Configs.LoadJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
+		F::Configs.LoadJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
+		F::Configs.LoadJson(tChild, "Backtrack", tGroup.m_iBacktrack);
+		F::Configs.LoadJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
+		F::Configs.LoadJson(tChild, "BacktrackGlow", tGroup.m_tBacktrackGlow);
+		F::Configs.LoadJson(tChild, "Trajectory", tGroup.m_iTrajectory);
+		F::Configs.LoadJson(tChild, "Sightlines", tGroup.m_iSightlines);
+		F::Groups.m_vGroups.push_back(tGroup);
+	}
+}
 
 bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 {
@@ -762,60 +847,17 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 		{
 			boost::property_tree::ptree tSub;
 			bool bNoSave = !Vars::Config::LoadDebugSettings.Value && !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-			for (auto& pBase : G::Vars)
+			for (auto& pBase : G::Vars())
 			{
 				if (bNoSave && pBase->m_iFlags & NOSAVE)
 					continue;
 
-				Save(bool, tSub)
-				else Save(int, tSub)
-				else Save(float, tSub)
-				else Save(IntRange_t, tSub)
-				else Save(FloatRange_t, tSub)
-				else Save(std::string, tSub)
-				else Save(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), tSub)
-				else Save(Color_t, tSub)
-				else Save(Gradient_t, tSub)
-				else Save(DragBox_t, tSub)
-				else Save(WindowBox_t, tSub)
+				VisitVar(pBase, [&tSub](auto* pVar) { SaveMain(pVar, tSub); });
 			}
 			tWrite.put_child("Vars", tSub);
 		}
 
-		{
-			boost::property_tree::ptree tSub;
-			for (int iID = 0; iID < F::Groups.m_vGroups.size() && iID < MAX_GROUPS; iID++)
-			{
-				auto& tGroup = F::Groups.m_vGroups[iID];
-
-				boost::property_tree::ptree tChild;
-				SaveJson(tChild, "Name", tGroup.m_sName);
-				SaveJson(tChild, "Color", tGroup.m_tColor);
-				SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
-				SaveJson(tChild, "Targets", tGroup.m_iTargets);
-				SaveJson(tChild, "Conditions", tGroup.m_iConditions);
-				SaveJson(tChild, "Roles", tGroup.m_vRoles);
-				SaveJson(tChild, "Players", tGroup.m_iPlayers);
-				SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
-				SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
-				SaveJson(tChild, "ESP", tGroup.m_tESP);
-				SaveJson(tChild, "Chams", tGroup.m_tChams);
-				SaveJson(tChild, "Glow", tGroup.m_tGlow);
-				SaveJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
-				SaveJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
-				SaveJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
-				SaveJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
-				SaveJson(tChild, "Backtrack", tGroup.m_iBacktrack);
-				SaveJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
-				SaveJson(tChild, "BacktrackGlow", tGroup.m_tBacktrackGlow);
-				SaveJson(tChild, "Trajectory", tGroup.m_iTrajectory);
-				SaveJson(tChild, "Sightlines", tGroup.m_iSightlines);
-
-				tSub.put_child(std::to_string(iID), tChild);
-			}
-			tWrite.put_child("Groups", tSub);
-		}
-
+		SaveGroups(tWrite);
 
 		WriteJson(tPath, tWrite);
 
@@ -917,22 +959,12 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 			tSub || (tSub = tRead.get_child_optional("ConVars")))
 		{
 			bool bNoSave = !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-			for (auto& pBase : G::Vars)
+			for (auto& pBase : G::Vars())
 			{
 				if (bNoSave && pBase->m_iFlags & NOSAVE)
 					continue;
 				
-				Load(bool, *tSub)
-				else Load(int, *tSub)
-				else Load(float, *tSub)
-				else Load(IntRange_t, *tSub)
-				else Load(FloatRange_t, *tSub)
-				else Load(std::string, *tSub)
-				else Load(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), *tSub)
-				else Load(Color_t, *tSub)
-				else Load(Gradient_t, *tSub)
-				else Load(DragBox_t, *tSub)
-				else Load(WindowBox_t, *tSub)
+				VisitVar(pBase, [&tSub](auto* pVar) { LoadMain(pVar, *tSub); });
 
 				if (bNoSave && FNV1A::Hash32(pBase->Name()) == FNV1A::Hash32Const("Vars::Config::LoadDebugSettings") && pBase->As<bool>()->Map[DEFAULT_BIND])
 					bNoSave = false;
@@ -941,42 +973,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 		else
 			SDK::Output("unibox", "Config vars not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
-		if (auto tSub = tRead.get_child_optional("Groups"))
-		{
-			for (auto& tChild : *tSub | std::views::values)
-			{
-				if (F::Groups.m_vGroups.size() >= MAX_GROUPS)
-					break;
-
-				Group_t tGroup = {};
-				LoadJson(tChild, "Name", tGroup.m_sName);
-				LoadJson(tChild, "Color", tGroup.m_tColor);
-				LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
-				LoadJson(tChild, "Targets", tGroup.m_iTargets);
-				LoadJson(tChild, "Conditions", tGroup.m_iConditions);
-				LoadJson(tChild, "Roles", tGroup.m_vRoles);
-				LoadJson(tChild, "Players", tGroup.m_iPlayers);
-				LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
-				LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);
-				LoadJson(tChild, "ESP", tGroup.m_tESP);
-				LoadJson(tChild, "Chams", tGroup.m_tChams);
-				LoadJson(tChild, "Glow", tGroup.m_tGlow);
-				LoadJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
-				LoadJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
-				LoadJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
-				LoadJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
-				LoadJson(tChild, "Backtrack", tGroup.m_iBacktrack);
-				LoadJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
-				LoadJson(tChild, "BacktrackGlow", tGroup.m_tBacktrackGlow);
-				LoadJson(tChild, "Trajectory", tGroup.m_iTrajectory);
-				LoadJson(tChild, "Sightlines", tGroup.m_iSightlines);
-
-				F::Groups.m_vGroups.push_back(tGroup);
-			}
-		}
-		else
-			SDK::Output("unibox", "Config groups not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
-
+		LoadGroups(tRead);
 
 		F::Binds.SetVars(nullptr, nullptr, false);
 		H::Fonts.Reload();
@@ -1008,18 +1005,16 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 }
 
 template <class T>
-static inline void SaveMiscMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
+static inline void SaveMiscMain(ConfigVar<T>* pVar, boost::property_tree::ptree& tTree)
 {
-	F::Configs.SaveJson(tTree, pBase->Name(), pBase->As<T>()->Map[DEFAULT_BIND]);
+	F::Configs.SaveJson(tTree, pVar->Name(), pVar->Map[DEFAULT_BIND]);
 }
-#define SaveMisc(t, j) if (IsType(t)) SaveMiscMain<t>(pBase, j);
 
 template <class T>
-static inline void LoadMiscMain(BaseVar*& pBase, boost::property_tree::ptree& tTree)
+static inline void LoadMiscMain(ConfigVar<T>* pVar, boost::property_tree::ptree& tTree)
 {
-	F::Configs.LoadJson(tTree, pBase->Name(), pBase->As<T>(), DEFAULT_BIND);
+	F::Configs.LoadJson(tTree, pVar->Name(), pVar, DEFAULT_BIND);
 }
-#define LoadMisc(t, j) if (IsType(t)) LoadMiscMain<t>(pBase, j);
 
 bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 {
@@ -1035,60 +1030,17 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 		{
 			boost::property_tree::ptree tSub;
 			bool bNoSave = !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-			for (auto& pBase : G::Vars)
+			for (auto& pBase : G::Vars())
 			{
 				if (!(pBase->m_iFlags & VISUAL) || bNoSave && pBase->m_iFlags & NOSAVE)
 					continue;
 
-				SaveMisc(bool, tSub)
-				else SaveMisc(int, tSub)
-				else SaveMisc(float, tSub)
-				else SaveMisc(IntRange_t, tSub)
-				else SaveMisc(FloatRange_t, tSub)
-				else SaveMisc(std::string, tSub)
-				else SaveMisc(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), tSub)
-				else SaveMisc(Color_t, tSub)
-				else SaveMisc(Gradient_t, tSub)
-				else SaveMisc(DragBox_t, tSub)
-				else SaveMisc(WindowBox_t, tSub)
+				VisitVar(pBase, [&tSub](auto* pVar) { SaveMiscMain(pVar, tSub); });
 			}
 			tWrite.put_child("Vars", tSub);
 		}
 
-		{
-			boost::property_tree::ptree tSub;
-			for (int iID = 0; iID < F::Groups.m_vGroups.size() && iID < MAX_GROUPS; iID++)
-			{
-				auto& tGroup = F::Groups.m_vGroups[iID];
-
-				boost::property_tree::ptree tChild;
-				SaveJson(tChild, "Name", tGroup.m_sName);
-				SaveJson(tChild, "Color", tGroup.m_tColor);
-				SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
-				SaveJson(tChild, "Targets", tGroup.m_iTargets);
-				SaveJson(tChild, "Conditions", tGroup.m_iConditions);
-				SaveJson(tChild, "Roles", tGroup.m_vRoles);
-				SaveJson(tChild, "Players", tGroup.m_iPlayers);
-				SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
-				SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
-				SaveJson(tChild, "ESP", tGroup.m_tESP);
-				SaveJson(tChild, "Chams", tGroup.m_tChams);
-				SaveJson(tChild, "Glow", tGroup.m_tGlow);
-				SaveJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
-				SaveJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
-				SaveJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
-				SaveJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
-				SaveJson(tChild, "Backtrack", tGroup.m_iBacktrack);
-				SaveJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
-				SaveJson(tChild, "BacktrackGlow", tGroup.m_tBacktrackGlow);
-				SaveJson(tChild, "Trajectory", tGroup.m_iTrajectory);
-				SaveJson(tChild, "Sightlines", tGroup.m_iSightlines);
-
-				tSub.put_child(std::to_string(iID), tChild);
-			}
-			tWrite.put_child("Groups", tSub);
-		}
-
+		SaveGroups(tWrite);
 
 		WriteJson(tPath, tWrite);
 		m_sCurrentVisuals = sConfigName;
@@ -1134,63 +1086,18 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 			tSub || (tSub = tRead))
 		{
 			bool bNoSave = !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-			for (auto& pBase : G::Vars)
+			for (auto& pBase : G::Vars())
 			{
 				if (!(pBase->m_iFlags & VISUAL) || bNoSave && pBase->m_iFlags & NOSAVE)
 					continue;
 
-				LoadMisc(bool, *tSub)
-				else LoadMisc(int, *tSub)
-				else LoadMisc(float, *tSub)
-				else LoadMisc(IntRange_t, *tSub)
-				else LoadMisc(FloatRange_t, *tSub)
-				else LoadMisc(std::string, *tSub)
-				else LoadMisc(VA_LIST(std::vector<std::pair<std::string, ChamsMaterial_t>>), *tSub)
-				else LoadMisc(Color_t, *tSub)
-				else LoadMisc(Gradient_t, *tSub)
-				else LoadMisc(DragBox_t, *tSub)
-				else LoadMisc(WindowBox_t, *tSub)
+				VisitVar(pBase, [&tSub](auto* pVar) { LoadMiscMain(pVar, *tSub); });
 			}
 		}
 		else
 			SDK::Output("unibox", "Config vars not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 
-		if (auto tSub = tRead.get_child_optional("Groups"))
-		{
-			for (auto& tChild : *tSub | std::views::values)
-			{
-				if (F::Groups.m_vGroups.size() >= MAX_GROUPS)
-					break;
-
-				Group_t tGroup = {};
-				LoadJson(tChild, "Name", tGroup.m_sName);
-				LoadJson(tChild, "Color", tGroup.m_tColor);
-				LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
-				LoadJson(tChild, "Targets", tGroup.m_iTargets);
-				LoadJson(tChild, "Conditions", tGroup.m_iConditions);
-				LoadJson(tChild, "Roles", tGroup.m_vRoles);
-				LoadJson(tChild, "Players", tGroup.m_iPlayers);
-				LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
-				LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);
-				LoadJson(tChild, "ESP", tGroup.m_tESP);
-				LoadJson(tChild, "Chams", tGroup.m_tChams);
-				LoadJson(tChild, "Glow", tGroup.m_tGlow);
-				LoadJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
-				LoadJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
-				LoadJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
-				LoadJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
-				LoadJson(tChild, "Backtrack", tGroup.m_iBacktrack);
-				LoadJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
-				LoadJson(tChild, "BacktrackGlow", tGroup.m_tBacktrackGlow);
-				LoadJson(tChild, "Trajectory", tGroup.m_iTrajectory);
-				LoadJson(tChild, "Sightlines", tGroup.m_iSightlines);
-
-				F::Groups.m_vGroups.push_back(tGroup);
-			}
-		}
-		else
-			SDK::Output("unibox", "Config groups not found", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
-
+		LoadGroups(tRead);
 
 		F::Binds.SetVars(nullptr, nullptr, false);
 
@@ -1218,13 +1125,10 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 }
 
 template <class T>
-static inline void ResetMain(BaseVar*& pBase)
+static inline void ResetMain(ConfigVar<T>* pVar)
 {
-	auto pVar = pBase->As<T>();
-
 	pVar->Map = { { DEFAULT_BIND, pVar->Default } };
 }
-#define Reset(t) if (IsType(t)) ResetMain<t>(pBase);
 
 void CConfigs::DeleteConfig(const std::string& sConfigName, bool bNotify)
 {
@@ -1264,22 +1168,12 @@ void CConfigs::ResetConfig(const std::string& sConfigName, bool bNotify)
 		F::Groups.m_vGroups.clear();
 
 		bool bNoSave = !Vars::Config::LoadDebugSettings.Value && !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-		for (auto& pBase : G::Vars)
+		for (auto& pBase : G::Vars())
 		{
 			if (bNoSave && pBase->m_iFlags & NOSAVE)
 				continue;
 
-			Reset(bool)
-			else Reset(int)
-			else Reset(float)
-			else Reset(IntRange_t)
-			else Reset(FloatRange_t)
-			else Reset(std::string)
-			else Reset(std::vector<std::string>)
-			else Reset(Color_t)
-			else Reset(Gradient_t)
-			else Reset(DragBox_t)
-			else Reset(WindowBox_t)
+			VisitVar(pBase, [](auto* pVar) { ResetMain(pVar); });
 		}
 
 		SaveConfig(sConfigName, false);
@@ -1324,22 +1218,12 @@ void CConfigs::ResetVisual(const std::string& sConfigName, bool bNotify)
 		F::Groups.m_vGroups.clear();
 
 		bool bNoSave = !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-		for (auto& pBase : G::Vars)
+		for (auto& pBase : G::Vars())
 		{
 			if (!(pBase->m_iFlags & VISUAL) || bNoSave && pBase->m_iFlags & NOSAVE)
 				continue;
 
-			Reset(bool)
-			else Reset(int)
-			else Reset(float)
-			else Reset(IntRange_t)
-			else Reset(FloatRange_t)
-			else Reset(std::string)
-			else Reset(std::vector<std::string>)
-			else Reset(Color_t)
-			else Reset(Gradient_t)
-			else Reset(DragBox_t)
-			else Reset(WindowBox_t)
+			VisitVar(pBase, [](auto* pVar) { ResetMain(pVar); });
 		}
 
 		SaveVisual(sConfigName, false);
@@ -1367,8 +1251,8 @@ bool CConfigs::SaveSkins(const std::string& sConfigName, bool bNotify)
 		WriteJson(tPath, tWrite);
 		m_sCurrentSkins = sConfigName;
 		SaveState();
-	if (bNotify)
-		SDK::Output("unibox", std::format("Skin config {} saved", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+		if (bNotify)
+			SDK::Output("unibox", std::format("Skin config {} saved", sConfigName).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}
 	catch (...)
 	{

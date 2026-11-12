@@ -447,12 +447,6 @@ static std::unordered_map<uint32_t, CommandCallback> s_mCommands = {
 	{
 		F::AutoItem.MvmRent();
 	})
-#ifdef DEBUG_UNI
-	AddCommand("cat_uni",
-	{
-		F::Visuals.m_bUniDraw = true;
-	})
-#endif
 	//AddCommand("recordcvars",
 	//{
 	//	for (ConCommandBase* pBase = I::CVar->GetCommands(); pBase; pBase = pBase->m_pNext)

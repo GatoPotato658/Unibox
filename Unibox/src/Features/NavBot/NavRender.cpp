@@ -610,21 +610,21 @@ void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 void CNavRender::DrawIndicators()
 {
 	static IndicatorAnim_t tAnim;
-	static std::vector<NavIndicatorLine_t> s_vLastValidLines;
+	static std::shared_ptr<const std::vector<NavIndicatorLine_t>> s_pLastValidLines;
 
-	const std::vector<NavIndicatorLine_t> vCachedLines = m_tDrawCache.Get();
-	if (!vCachedLines.empty())
-		s_vLastValidLines = vCachedLines;
+	const auto pCachedLines = m_tDrawCache.Get();
+	if (!pCachedLines->empty())
+		s_pLastValidLines = pCachedLines;
 
 	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) != 0;
-	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && !vCachedLines.empty();
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && !pCachedLines->empty();
 
 	bool bOpening = true;
 	const float flAnim = tAnim.Update(bVisible, bOpening);
 	if (!tAnim.ShouldDraw(bVisible))
 		return;
 
-	const auto& vDraw = !vCachedLines.empty() ? vCachedLines : s_vLastValidLines;
+	const auto& vDraw = !pCachedLines->empty() ? *pCachedLines : *s_pLastValidLines;
 
 	int x = Vars::Menu::NavBotDisplay.Value.x;
 	const int y = Vars::Menu::NavBotDisplay.Value.y + 8;

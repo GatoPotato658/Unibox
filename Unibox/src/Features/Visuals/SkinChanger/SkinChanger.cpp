@@ -1067,27 +1067,6 @@ namespace
 		return false;
 	}
 
-	const ItemInfo_t* FindItemInfo(uint16_t iDef)
-	{
-		static std::unordered_map<uint16_t, const ItemInfo_t*> s_mLookup = {};
-		static uint64_t s_uLookupRevision = 0;
-		static size_t s_uSize = 0;
-		static const ItemInfo_t* s_pData = nullptr;
-
-		const auto& vItems = CSkinChanger::GetItems();
-		if (s_uLookupRevision != s_uItemCatalogueRevision || s_uSize != vItems.size() || s_pData != vItems.data())
-		{
-			s_mLookup.clear();
-			for (const auto& tItem : vItems)
-				s_mLookup[tItem.iDef] = &tItem;
-			s_uSize = vItems.size();
-			s_pData = vItems.data();
-			s_uLookupRevision = s_uItemCatalogueRevision;
-		}
-
-		auto it = s_mLookup.find(iDef);
-		return it != s_mLookup.end() ? it->second : nullptr;
-	}
 }
 
 namespace
@@ -1599,7 +1578,7 @@ bool CSkinChanger::QueueLocalCrate(uint16_t iDef)
 		const auto itKey = std::find_if(m_vBackpack.begin(), m_vBackpack.end(), [&](const BackpackItem_t& tItem) { return tItem.iDef == itProfile->second.iKeyDef || (itProfile->second.iAltKeyDef && tItem.iDef == itProfile->second.iAltKeyDef); });
 		if (itKey == m_vBackpack.end())
 		{
-			const auto* pKeyInfo = FindItemInfo(itProfile->second.iKeyDef);
+			const auto* pKeyInfo = CSkinChanger::FindItem(itProfile->second.iKeyDef);
 			SDK::Output("Inventory changer", std::format("Add a local {} first.", pKeyInfo ? pKeyInfo->sName : "key for this crate").c_str(), {}, OUTPUT_CONSOLE | OUTPUT_TOAST);
 			return false;
 		}
@@ -1619,8 +1598,8 @@ bool CSkinChanger::ApplyLocalPaint(CTFPlayerInventory* pInventory, const Pending
 	auto* pItemView = FindItemView(pInventory, tPaint.uCrate);
 	if (!pPaintView || !pItemView)
 		return false;
-	const auto* pPaint = FindItemInfo(Field<uint16_t>(pPaintView, kViewDefIndex));
-	const auto* pTarget = FindItemInfo(Field<uint16_t>(pItemView, kViewDefIndex));
+	const auto* pPaint = CSkinChanger::FindItem(Field<uint16_t>(pPaintView, kViewDefIndex));
+	const auto* pTarget = CSkinChanger::FindItem(Field<uint16_t>(pItemView, kViewDefIndex));
 	if (!pPaint || pPaint->iPaintColor < 0 || !pTarget || !pTarget->bPaintable)
 		return false;
 	{
@@ -1678,7 +1657,7 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 		std::vector<uint16_t> vAvailable = {};
 		for (uint16_t iDef : vDefs)
 		{
-			if (FindItemInfo(iDef) && std::find(vAvailable.begin(), vAvailable.end(), iDef) == vAvailable.end())
+			if (CSkinChanger::FindItem(iDef) && std::find(vAvailable.begin(), vAvailable.end(), iDef) == vAvailable.end())
 				vAvailable.push_back(iDef);
 		}
 		vDefs = std::move(vAvailable);
@@ -1725,6 +1704,7 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 		std::lock_guard tLock(m_tMutex);
 		m_mClientItemsByID[uID] = pItem;
 		m_vBackpack.push_back({ uSerial, iDef, iUnusual });
+		m_uBackpackRevision++;
 		m_mAwaitingPosition[uID] = GetTickCount64();
 	}
 
@@ -1773,7 +1753,7 @@ uint64_t CSkinChanger::FindOwnedWeapon(uint64_t uClientItemID)
 	if (!pSelected || !IsClientItem(uClientItemID))
 		return 0;
 	const uint16_t iSelectedDef = Field<uint16_t>(pSelected, kViewDefIndex);
-	const auto* pInfo = FindItemInfo(iSelectedDef);
+	const auto* pInfo = CSkinChanger::FindItem(iSelectedDef);
 	if (!pInfo || !pInfo->sClass.starts_with("tf_weapon_"))
 		return 0;
 
@@ -1886,7 +1866,8 @@ void CSkinChanger::ApplyLocalDelete(uint64_t uItemID)
 	{
 		std::lock_guard tLock(m_tMutex);
 		const uint32_t uSerial = ClientItemSerial(uItemID);
-		std::erase_if(m_vBackpack, [uSerial](const BackpackItem_t& tItem) { return tItem.uSerial == uSerial; });
+		if (std::erase_if(m_vBackpack, [uSerial](const BackpackItem_t& tItem) { return tItem.uSerial == uSerial; }))
+			m_uBackpackRevision++;
 	}
 	RemoveClientItem(pInventory, uItemID);
 }
@@ -1918,6 +1899,7 @@ void CSkinChanger::ClearClientItems()
 	m_vPendingPaints.clear();
 	m_tFailedItems.clear();
 	m_mInventoryCounts.clear();
+	m_uInventoryRevision++;
 }
 
 void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
@@ -2178,6 +2160,7 @@ void CSkinChanger::SyncInventory()
 
 	std::lock_guard tLock(m_tMutex);
 	m_mInventoryCounts = std::move(mDefCount);
+	m_uInventoryRevision++;
 	m_bInventoryLoaded = true;
 }
 
@@ -2248,7 +2231,7 @@ namespace
 
 	void UpdateWeaponExtras(WeaponVisual_t& tVisual, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, uint16_t iDef)
 	{
-		const auto* pInfo = FindItemInfo(iDef);
+		const auto* pInfo = CSkinChanger::FindItem(iDef);
 		if (!pInfo)
 			return;
 		const uint64_t uNow = GetTickCount64();
@@ -3007,6 +2990,36 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	return s_vItems;
 }
 
+uint64_t CSkinChanger::GetCatalogueRevision()
+{
+	return s_uItemCatalogueRevision;
+}
+
+const ItemInfo_t* CSkinChanger::FindItem(uint16_t iDef)
+{
+	static std::mutex s_tLookupMutex;
+	static std::unordered_map<uint16_t, const ItemInfo_t*> s_mLookup = {};
+	static uint64_t s_uLookupRevision = 0;
+	static size_t s_uSize = 0;
+	static const ItemInfo_t* s_pData = nullptr;
+
+	const auto& vItems = GetItems();
+	const uint64_t uRevision = GetCatalogueRevision();
+	std::lock_guard tLock(s_tLookupMutex);
+	if (s_uLookupRevision != uRevision || s_uSize != vItems.size() || s_pData != vItems.data())
+	{
+		s_mLookup.clear();
+		for (const auto& tItem : vItems)
+			s_mLookup[tItem.iDef] = &tItem;
+		s_uSize = vItems.size();
+		s_pData = vItems.data();
+		s_uLookupRevision = uRevision;
+	}
+
+	auto it = s_mLookup.find(iDef);
+	return it != s_mLookup.end() ? it->second : nullptr;
+}
+
 bool CSkinChanger::IsCatalogueLoading()
 {
 	if (!I::EngineClient || !I::EngineClient->IsInGame() || I::EngineClient->IsPlayingDemo())
@@ -3042,7 +3055,10 @@ void CSkinChanger::AddToBackpack(uint16_t iDef, int iUnusual, int iStyle)
 	iUnusual = ValidUnusualEffect(iUnusual);
 	std::lock_guard tLock(m_tMutex);
 	if (const uint32_t uSerial = NextSerial())
+	{
 		m_vBackpack.push_back({ uSerial, iDef, iUnusual, -1, -1, std::max(iStyle, 0) });
+		m_uBackpackRevision++;
+	}
 }
 
 void CSkinChanger::SetBackpackStyle(uint32_t uSerial, int iStyle)
@@ -3053,6 +3069,7 @@ void CSkinChanger::SetBackpackStyle(uint32_t uSerial, int iStyle)
 		if (tItem.uSerial == uSerial)
 		{
 			tItem.iStyle = std::max(iStyle, 0);
+			m_uBackpackRevision++;
 			break;
 		}
 	}
@@ -3063,19 +3080,38 @@ void CSkinChanger::RemoveFromBackpack(uint16_t iDef)
 	std::lock_guard tLock(m_tMutex);
 	const auto it = std::find_if(m_vBackpack.rbegin(), m_vBackpack.rend(), [iDef](const BackpackItem_t& tItem) { return tItem.iDef == iDef; });
 	if (it != m_vBackpack.rend())
+	{
 		m_vBackpack.erase(std::next(it).base());
+		m_uBackpackRevision++;
+	}
 }
 
 void CSkinChanger::ClearBackpack()
 {
 	std::lock_guard tLock(m_tMutex);
 	m_vBackpack.clear();
+	m_uBackpackRevision++;
 }
 
 std::vector<BackpackItem_t> CSkinChanger::GetBackpack()
 {
+	return GetBackpackSnapshot()->vItems;
+}
+
+std::shared_ptr<const BackpackSnapshot_t> CSkinChanger::GetBackpackSnapshot()
+{
 	std::lock_guard tLock(m_tMutex);
-	return m_vBackpack;
+	if (m_pBackpackSnapshot && m_pBackpackSnapshot->uRevision == m_uBackpackRevision)
+		return m_pBackpackSnapshot;
+
+	auto pSnapshot = std::make_shared<BackpackSnapshot_t>();
+	pSnapshot->uRevision = m_uBackpackRevision;
+	pSnapshot->vItems = m_vBackpack;
+	pSnapshot->tDefs.reserve(m_vBackpack.size());
+	for (const auto& tItem : m_vBackpack)
+		pSnapshot->tDefs.insert(tItem.iDef);
+	m_pBackpackSnapshot = pSnapshot;
+	return pSnapshot;
 }
 
 void CSkinChanger::SetBackpack(std::vector<BackpackItem_t> vBackpack)
@@ -3086,6 +3122,7 @@ void CSkinChanger::SetBackpack(std::vector<BackpackItem_t> vBackpack)
 		m_uNextSerial = std::max(m_uNextSerial, tItem.uSerial + 1);
 	if (m_uNextSerial > kClientSerialMask)
 		m_uNextSerial = 1;
+	m_uBackpackRevision++;
 }
 
 int CSkinChanger::GetItemUnusual(uint64_t uItemID)
@@ -3122,29 +3159,40 @@ void CSkinChanger::Unload()
 	}
 }
 
-std::vector<const ItemInfo_t*> CSkinChanger::GetInventoryItems()
+std::shared_ptr<const InventorySnapshot_t> CSkinChanger::GetInventorySnapshot()
 {
-	std::vector<uint16_t> vDefs = {};
+	GetItems();
+	std::unordered_map<uint16_t, int> mCounts = {};
+	uint64_t uInventoryRevision = 0;
+	const uint64_t uCatalogueRevision = GetCatalogueRevision();
 	{
 		std::lock_guard tLock(m_tMutex);
-		vDefs.reserve(m_mInventoryCounts.size());
-		for (const auto& [iDef, iCount] : m_mInventoryCounts)
-			vDefs.push_back(iDef);
+		if (m_pInventorySnapshot && m_pInventorySnapshot->uInventoryRevision == m_uInventoryRevision && m_pInventorySnapshot->uCatalogueRevision == uCatalogueRevision)
+			return m_pInventorySnapshot;
+		mCounts = m_mInventoryCounts;
+		uInventoryRevision = m_uInventoryRevision;
 	}
 
-	std::vector<const ItemInfo_t*> vItems = {};
-	vItems.reserve(vDefs.size());
-	for (uint16_t iDef : vDefs)
+	auto pSnapshot = std::make_shared<InventorySnapshot_t>();
+	pSnapshot->uInventoryRevision = uInventoryRevision;
+	pSnapshot->uCatalogueRevision = uCatalogueRevision;
+	pSnapshot->vItems.reserve(mCounts.size());
+	for (const auto& tEntry : mCounts)
 	{
-		if (const ItemInfo_t* pInfo = FindItemInfo(iDef))
-			vItems.push_back(pInfo);
+		if (const ItemInfo_t* pInfo = FindItem(tEntry.first))
+			pSnapshot->vItems.push_back(pInfo);
 	}
+	pSnapshot->mCounts = std::move(mCounts);
 
-	std::sort(vItems.begin(), vItems.end(), [](const ItemInfo_t* a, const ItemInfo_t* b)
+	std::sort(pSnapshot->vItems.begin(), pSnapshot->vItems.end(), [](const ItemInfo_t* a, const ItemInfo_t* b)
 	{
 		return a->sName != b->sName ? a->sName < b->sName : a->iDef < b->iDef;
 	});
-	return vItems;
+
+	std::lock_guard tLock(m_tMutex);
+	if (m_uInventoryRevision == uInventoryRevision && GetCatalogueRevision() == pSnapshot->uCatalogueRevision)
+		m_pInventorySnapshot = pSnapshot;
+	return pSnapshot;
 }
 
 bool CSkinChanger::IsInventoryLoading()
@@ -3171,6 +3219,8 @@ void CSkinChanger::CacheMenuInfo(CTFWeaponBase*) {}
 void CSkinChanger::OnLevelShutdown() {}
 void CSkinChanger::Unload() {}
 const std::vector<ItemInfo_t>& CSkinChanger::GetItems() { static std::vector<ItemInfo_t> vItems; return vItems; }
+uint64_t CSkinChanger::GetCatalogueRevision() { return 0; }
+const ItemInfo_t* CSkinChanger::FindItem(uint16_t) { return nullptr; }
 bool CSkinChanger::IsCatalogueLoading() { return false; }
 void CSkinChanger::RequestFullUpdate() {}
 void CSkinChanger::AddToBackpack(uint16_t, int, int) {}
@@ -3179,12 +3229,13 @@ bool CSkinChanger::QueueLocalCrate(uint16_t) { return false; }
 void CSkinChanger::RemoveFromBackpack(uint16_t) {}
 bool CSkinChanger::InBackpack(uint16_t) { return false; }
 std::vector<BackpackItem_t> CSkinChanger::GetBackpack() { return {}; }
+std::shared_ptr<const BackpackSnapshot_t> CSkinChanger::GetBackpackSnapshot() { static const auto s_pSnapshot = std::make_shared<BackpackSnapshot_t>(); return s_pSnapshot; }
 void CSkinChanger::SetBackpack(std::vector<BackpackItem_t>) {}
 int CSkinChanger::GetInventoryCount(uint16_t) { return 0; }
 int CSkinChanger::GetItemUnusual(uint64_t) { return 0; }
 uint32_t CSkinChanger::NextSerial() { return 0; }
 void CSkinChanger::ClearBackpack() {}
-std::vector<const ItemInfo_t*> CSkinChanger::GetInventoryItems() { return {}; }
+std::shared_ptr<const InventorySnapshot_t> CSkinChanger::GetInventorySnapshot() { static const auto s_pSnapshot = std::make_shared<InventorySnapshot_t>(); return s_pSnapshot; }
 bool CSkinChanger::IsInventoryLoading() { return false; }
 bool CSkinChanger::ClientInventoryActive() { return false; }
 bool CSkinChanger::IsClientItem(uint64_t) { return false; }

@@ -245,23 +245,11 @@ static inline void DrawIndicatorPanel(
 	int iBarWidth = static_cast<int>(std::ceil(flPanelWidth * flClampedProgress));
 	if (iBarWidth > 0)
 	{
-		ImVec4 vBarColor = ImGui::ColorConvertU32ToFloat4(uBar);
-		for (int i = 0; i < iBarWidth; i++)
-		{
-			float flBlend = iBarWidth > 1 ? static_cast<float>(i) / static_cast<float>(iBarWidth - 1) : 1.f;
-			ImVec4 vLineColor =
-			{
-				vBarColor.x * flBlend,
-				vBarColor.y * flBlend,
-				vBarColor.z * flBlend,
-				vBarColor.w
-			};
-			pDrawList->AddLine(
-				ImVec2(vPanelPos.x + static_cast<float>(i), vPanelPos.y + flTextBoxHeight),
-				ImVec2(vPanelPos.x + static_cast<float>(i), vPanelPos.y + flPanelHeight),
-				ImGui::ColorConvertFloat4ToU32(vLineColor),
-				1.f);
-		}
+		const ImU32 uBarBlack = IM_COL32(0, 0, 0, tBarColor.a);
+		pDrawList->AddRectFilledMultiColor(
+			ImVec2(vPanelPos.x, vPanelPos.y + flTextBoxHeight),
+			ImVec2(vPanelPos.x + static_cast<float>(iBarWidth), vPanelPos.y + flPanelHeight),
+			uBarBlack, uBar, uBar, uBarBlack);
 	}
 
 	const float flFontSize = ImGui::GetFontSize();

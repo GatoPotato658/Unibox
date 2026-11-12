@@ -18,7 +18,6 @@
 #include "../Features/NavBot/NavEngine.h"
 #ifndef TEXTMODE
 #include "../Features/ImGui/Overlay/CaptureOverlay.h"
-#include "../Features/ImGui/RenderSync.h"
 #endif
 #include "../SDK/Events/Events.h"
 #ifdef TEXTMODE
@@ -49,19 +48,20 @@ static inline std::string GetProcessName(DWORD dwProcessID)
 static inline bool CheckDXLevel()
 {
 	auto mat_dxlevel = H::ConVars.FindVar("mat_dxlevel");
-	if (mat_dxlevel->GetInt() < 90)
+	const int iDXLevel = mat_dxlevel ? mat_dxlevel->GetInt() : SDK::GetActiveDXLevel();
+	if (iDXLevel < 90)
 	{
 		/*
 		const char* sMessage = "You are running with graphics options that unibox does not support. -dxlevel must be at least 90.";
 		U::Core.AppendFailText(sMessage);
 		F::Menu.ShowDeferredNotification("Graphics Warning", sMessage);
-		SDK::Output("unibox", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
+		SDK::Output("unibox", sMessage, ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 		return false;
 		*/
 
 		const char* sMessage = "You are running with graphics options that unibox does not support. It is recommended for -dxlevel to be at least 90.";
 		F::Menu.ShowDeferredNotification("Graphics Warning", sMessage);
-		SDK::Output("unibox", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
+		SDK::Output("unibox", sMessage, WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_WARNING);
 	}
 
 	return true;
@@ -108,13 +108,16 @@ static bool ModulesLoaded()
 
 	if (GetModuleHandleA("client.dll"))
 	{
-		// Check I::ClientModeShared and I::UniformRandomStream here so that we wait until they get initialized
-		auto dwDest = U::Memory.FindSignature("client.dll", "48 8B 0D ? ? ? ? 48 8B 10 48 8B 19 48 8B C8 FF 92");
-		if (!dwDest || !*reinterpret_cast<void**>(U::Memory.RelToAbs(dwDest)))
+		static uintptr_t uClientMode = 0;
+		static uintptr_t uRandomStream = 0;
+		if (!uClientMode)
+			uClientMode = U::Memory.FindSignature("client.dll", "48 8B 0D ? ? ? ? 48 8B 10 48 8B 19 48 8B C8 FF 92");
+		if (!uClientMode || !*reinterpret_cast<void**>(U::Memory.RelToAbs(uClientMode)))
 			return false;
 
-		dwDest = U::Memory.FindSignature("client.dll", "48 8B 0D ? ? ? ? F3 0F 59 CA 44 8D 42");
-		if (!dwDest || !*reinterpret_cast<void**>(U::Memory.RelToAbs(dwDest)))
+		if (!uRandomStream)
+			uRandomStream = U::Memory.FindSignature("client.dll", "48 8B 0D ? ? ? ? F3 0F 59 CA 44 8D 42");
+		if (!uRandomStream || !*reinterpret_cast<void**>(U::Memory.RelToAbs(uRandomStream)))
 			return false;
 	}
 	else 
@@ -236,17 +239,19 @@ void CCore::Loop()
 	}
 }
 
-void CCore::Unload()
+CCore::UnloadResult_t CCore::Unload()
 {
 	G::Unload = true;
 #ifdef TEXTMODE
-	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
+	bool bUnloadFailed = !U::Hooks.Unload();
 	F::NamedPipe.Shutdown();
+#else
+	bool bUnloadFailed = false;
 #endif
 	if (m_bFailed)
 	{
 		LogFailText();
-		return;
+		return UnloadResult_t::Unloaded;
 	}
 
 	SDK::ShutdownSteamScreenshotHook();
@@ -257,13 +262,16 @@ void CCore::Unload()
 	F::Materials.RequestUnload();
 	for (int i = 0; i < 200 && !F::Materials.IsUnloadComplete(); ++i)
 		Sleep(10);
-	F::RenderSync.WaitIdle(1000);
 #endif
 
 #ifndef TEXTMODE
-	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
+	bUnloadFailed = !U::Hooks.Unload() || bUnloadFailed;
 	F::SkinChanger.Unload();
-	F::CaptureOverlay.Shutdown();
+	if (!F::CaptureOverlay.Shutdown())
+	{
+		AppendFailText("CaptureOverlay::Shutdown() timed out");
+		bUnloadFailed = true;
+	}
 #endif
 	U::BytePatches.Unload();
 	H::Events.Unload();
@@ -293,16 +301,14 @@ void CCore::Unload()
 		}
 	}
 
-#ifdef DEBUG_UNI
-	F::Visuals.RemoveUni();
-#endif
 	F::EnginePrediction.Unload();
 	H::ConVars.Restore();
-	if (m_bFailed2)
+	if (m_bFailed2 || bUnloadFailed)
 	{
 		LogFailText();
-		return;
+		return bUnloadFailed ? UnloadResult_t::Retain : UnloadResult_t::Unloaded;
 	}
 
 	SDK::Output("unibox", "Unloaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	return UnloadResult_t::Unloaded;
 }

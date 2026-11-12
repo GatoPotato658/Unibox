@@ -4,10 +4,17 @@
 #include "../../SDK/Definitions/Interfaces.h"
 #include <string>
 #include <format>
+#include <vector>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
 #pragma warning (disable: 4172)
+
+static std::vector<InterfaceInit_t*>& InterfaceRegistry()
+{
+	static std::vector<InterfaceInit_t*> vInterfaces;
+	return vInterfaces;
+}
 
 InterfaceInit_t::InterfaceInit_t(void** pPtr, const char* sDLL, const char* sName, int8_t nType, int8_t nOffset, int8_t nDereferenceCount, bool bNullCheck)
 {
@@ -19,12 +26,13 @@ InterfaceInit_t::InterfaceInit_t(void** pPtr, const char* sDLL, const char* sNam
 	m_nDereferenceCount = nDereferenceCount;
 	m_bNullCheck = bNullCheck;
 
-	U::Interfaces.AddInterface(this);
+	InterfaceRegistry().push_back(this);
 }
 
 bool CInterfaces::Initialize()
 {
-	for (auto* Interface : m_vInterfaces)
+	m_bFailed = false;
+	for (InterfaceInit_t* Interface : InterfaceRegistry())
 	{
 		if (!Interface || !Interface->m_pPtr || !Interface->m_sDLL || !Interface->m_sName)
 		{

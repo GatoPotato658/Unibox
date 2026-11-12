@@ -33,6 +33,8 @@ private:
 	void Connect(int iGeneration, size_t uStation);
 	bool PollConnect();
 	void Silence();
+	void FailStream();
+	void CancelConnect();
 	void Pump();
 	void ApplyVolume();
 	void PauseOutput(bool bPaused);
@@ -58,7 +60,6 @@ private:
 	CAudioStream* m_pConnectResult = nullptr;
 	size_t m_uConnectStation = RadioStationEnum::Count;
 	bool m_bConnectPending = false;
-	size_t m_uStation = RadioStationEnum::Count;
 	bool m_bPlaying = false;
 	bool m_bStarted = false;
 	bool m_bOutputPaused = false;
@@ -67,6 +68,8 @@ private:
 
 	std::atomic<int> m_iPhase = int(RadioPhaseEnum::Off);
 	std::atomic<int> m_iBuffer = 0;
+	std::atomic<size_t> m_uStation = RadioStationEnum::Count;
+	std::atomic<void*> m_pConnectThread = nullptr;
 	std::atomic<bool> m_bSelfTalking = false;
 	std::atomic<bool> m_bOthersTalking = false;
 	std::atomic<uint64_t> m_uSpeaking = 0;

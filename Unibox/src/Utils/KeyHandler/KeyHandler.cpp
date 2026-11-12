@@ -4,32 +4,37 @@
 #include "../../Features/ImGui/Render.h"
 #include <Windows.h>
 
+static void UpdateKeyStorage(KeyStorage& tStorage, bool bDown, double dFloatTime)
+{
+	const bool bPressed = bDown && !tStorage.m_bIsDown;
+	const bool bDouble = bPressed && dFloatTime < tStorage.m_dPressTime + 0.25;
+	const bool bReleased = !bDown && tStorage.m_bIsDown;
+
+	tStorage.m_bIsDown = bDown;
+	tStorage.m_bIsPressed = bPressed;
+	tStorage.m_bIsDouble = bDouble;
+	tStorage.m_bIsReleased = bReleased;
+	if (bDouble)
+		tStorage.m_dPressTime = 0.0;
+	else if (bPressed)
+		tStorage.m_dPressTime = dFloatTime;
+}
+
 void CKeyHandler::StoreKey(byte iKey, KeyStorage* pStorage)
 {
 	if (!pStorage)
 		pStorage = &m_aKeyStorage[iKey];
 
-	// down
 	const bool bDown = iKey && GetAsyncKeyState(iKey) & 0x8000 && SDK::IsGameWindowInFocus();
+	UpdateKeyStorage(*pStorage, bDown, SDK::PlatFloatTime());
+}
 
-	// pressed
-	const bool bPressed = bDown && !pStorage->m_bIsDown;
-
-	// double click
+void CKeyHandler::Update()
+{
+	const bool bFocused = SDK::IsGameWindowInFocus();
 	const double dFloatTime = SDK::PlatFloatTime();
-	const bool bDouble = bPressed && dFloatTime < pStorage->m_dPressTime + 0.25;
-
-	// released
-	const bool bReleased = !bDown && pStorage->m_bIsDown;
-
-	pStorage->m_bIsDown = bDown;
-	pStorage->m_bIsPressed = bPressed;
-	pStorage->m_bIsDouble = bDouble;
-	pStorage->m_bIsReleased = bReleased;
-	if (bDouble)
-		pStorage->m_dPressTime = 0.0;
-	else if (bPressed)
-		pStorage->m_dPressTime = dFloatTime;
+	for (int iKey = 1; iKey < 255; iKey++)
+		UpdateKeyStorage(m_aKeyStorage[iKey], bFocused && GetAsyncKeyState(iKey) & 0x8000, dFloatTime);
 }
 
 bool CKeyHandler::Down(byte iKey, const bool bStore, KeyStorage* pStorage)

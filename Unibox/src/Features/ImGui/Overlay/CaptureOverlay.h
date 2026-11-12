@@ -12,7 +12,7 @@ public:
 	void Present(IDirect3DDevice9* pDevice, ImDrawData* pDrawData);
 	void Hide();
 	void ReleaseDeviceObjects();
-	void Shutdown();
+	bool Shutdown();
 	bool Unsupported() const { return m_bUnsupported; }
 
 private:

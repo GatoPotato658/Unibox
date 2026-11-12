@@ -127,14 +127,14 @@ uintptr_t CMemory::FindOptionalSignature(const char* szModule, const char* szPat
 std::string CMemory::GetModuleName(uintptr_t uAddress)
 {
 	HMODULE hModule;
-	char cModuleName[MAX_PATH];
+	char cModuleName[MAX_PATH] = {};
 
 	if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
 		GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 		(LPCSTR)uAddress, &hModule))
 	{
-		GetModuleBaseNameA(GetCurrentProcess(), hModule, cModuleName, MAX_PATH);
-		return cModuleName;
+		if (GetModuleBaseNameA(GetCurrentProcess(), hModule, cModuleName, MAX_PATH))
+			return cModuleName;
 	}
 
 	return "Unknown";

@@ -23,7 +23,7 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	F::Radio.OnLevelShutdown();
 	F::NetworkFix.Reset();
 	F::Chams.Reset();
-	H::Entities.RemovePrecipitation();
+	H::Entities.RemovePrecipitation(false);
 	H::Entities.Clear(true);
 	F::EnginePrediction.Unload();
 	F::Spectate.Reset();

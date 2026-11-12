@@ -60,6 +60,7 @@ private:
 		bool m_bAvatarQueued = false;
 		bool m_bAvatarUnavailable = false;
 		double m_flAvatarRequestedAt = 0.0;
+		double m_flLastAccess = 0.0;
 		bool m_bSavePending = false;
 		int m_iPendingImage = 0;
 	};
@@ -73,6 +74,8 @@ private:
 	void(__cdecl* m_pUnregisterCallback)(CCallbackBase*) = nullptr;
 
 	void EnsureCallbacksRegistered();
+	bool HasPendingWork(const Entry_t& tEntry) const;
+	void PruneEntries();
 	void DispatchSteamRequest();
 	void RequestName(uint32_t uAccountID, Entry_t& tEntry, bool bForce = false);
 	void RequestAvatar(uint32_t uAccountID, Entry_t& tEntry, bool bForce);

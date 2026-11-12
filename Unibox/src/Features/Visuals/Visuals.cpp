@@ -12,7 +12,6 @@
 #include "FakeAngle/FakeAngle.h"
 #include "../World/World.h"
 #include "../ImGui/IndicatorPanel.h"
-#include "../ImGui/RenderSync.h"
 
 MAKE_SIGNATURE(UTIL_PlayerByIndex, "server.dll", "48 83 EC ? 8B D1 85 C9 7E ? 48 8B 05", 0x0);
 MAKE_SIGNATURE(CBaseAnimating_DrawServerHitboxes, "server.dll", "44 88 44 24 ? 53 48 81 EC", 0x0);
@@ -46,7 +45,7 @@ void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& p
 				return;
 
 			I::RenderView->SetBlend(flBlend * flOriginalBlend);
-			static auto IVModelRender_DrawModelExecute = U::Hooks.m_mHooks["IVModelRender_DrawModelExecute"];
+			static auto IVModelRender_DrawModelExecute = U::Hooks.Get("IVModelRender_DrawModelExecute");
 			IVModelRender_DrawModelExecute->As<DrawModelExecuteFn>()(pModelRender, pState, pInfo, pBoneToWorld);
 		};
 
@@ -471,49 +470,6 @@ void CVisuals::Triggers(CTFPlayer* pLocal)
 	}
 }
 
-#ifdef DEBUG_UNI
-void CVisuals::DrawUni()
-{
-	static float flStartDrawTime = 0.f;
-	if (m_pCurrentUniTexture && I::GlobalVars->curtime > flStartDrawTime + 1.f)
-	{
-		m_pCurrentUniTexture = nullptr;
-		return;
-	}
-
-	if (m_bUniDraw)
-	{
-		flStartDrawTime = I::GlobalVars->curtime;
-		m_bUniDraw = false;
-
-		auto pTextureInfo = &m_aUniTextures[SDK::RandomInt(0, 5)];
-		if (!pTextureInfo->m_iTextureID)
-			pTextureInfo->m_iTextureID = H::Draw.CreateTextureFromArray(pTextureInfo->m_pArray, pTextureInfo->m_iWidth, pTextureInfo->m_iHeight);
-		m_pCurrentUniTexture = pTextureInfo;
-	}
-
-	if (!m_pCurrentUniTexture || SDK::CleanScreenshot())
-		return;
-
-	H::Draw.Start();
-	{
-		float flScale = std::clamp(I::GlobalVars->curtime - flStartDrawTime, 0.f, 1.f);
-		I::MatSystemSurface->DrawSetColor(Color_t(255, 255, 255, Math::RemapVal(flScale, 0.1f, 1.f, 255, 13)));
-		I::MatSystemSurface->DrawSetTexture(m_pCurrentUniTexture->m_iTextureID);
-
-		int iImageHalfW = m_pCurrentUniTexture->m_iWidth / 2;
-		int iScreenHalfW = H::Draw.m_nScreenW / 2;
-		int iImageHalfH = m_pCurrentUniTexture->m_iHeight / 2;
-		int iScreenHalfH = H::Draw.m_nScreenH / 2;
-		int iResizeW = flScale * iScreenHalfW;
-		int iResizeH = flScale * iScreenHalfH;
-		I::MatSystemSurface->DrawTexturedRect(iScreenHalfW - iImageHalfW - iResizeW, iScreenHalfH - iImageHalfH - iResizeH, iScreenHalfW + iImageHalfW + iResizeW, iScreenHalfH + iImageHalfH + iResizeH);
-	}
-	H::Draw.End();
-}
-#endif
-
-
 std::vector<DrawBox_t> CVisuals::GetHitboxes(matrix3x4* aBones, CBaseAnimating* pEntity, std::vector<int> vHitboxes, int iTarget)
 {
 	if (!Vars::Colors::BoneHitboxEdge.Value.a && !Vars::Colors::BoneHitboxFace.Value.a && !Vars::Colors::BoneHitboxEdgeIgnoreZ.Value.a && !Vars::Colors::BoneHitboxFaceIgnoreZ.Value.a
@@ -768,7 +724,7 @@ void CVisuals::CacheBestAimPos(CTFPlayer* pLocal)
 	{
 		if (!pLocal || I::GlobalVars->curtime - F::AimbotProjectile.m_flAimAnglesSetTime > 0.5f)
 			m_vPrevAimAngles = {};
-		F::RenderSync.Set(m_tAimPosCache, AimPos_t{});
+		m_tAimPosCache.Set(AimPos_t{});
 		return;
 	}
 
@@ -794,22 +750,22 @@ void CVisuals::CacheBestAimPos(CTFPlayer* pLocal)
 
 	Vec3 vScreen;
 	if (SDK::W2S(vPoint, vScreen))
-		F::RenderSync.Set(m_tAimPosCache, AimPos_t{ true, vScreen.x, vScreen.y });
+		m_tAimPosCache.Set(AimPos_t{ true, vScreen.x, vScreen.y });
 	else
-		F::RenderSync.Set(m_tAimPosCache, AimPos_t{});
+		m_tAimPosCache.Set(AimPos_t{});
 }
 
 void CVisuals::DrawBestAimPos(ImDrawList* pDrawList)
 {
-	const AimPos_t tCache = m_tAimPosCache.Get();
-	if (!pDrawList || !tCache.m_bValid)
+	const auto pCache = m_tAimPosCache.Get();
+	if (!pDrawList || !pCache->m_bValid)
 		return;
 
 	const Color_t tColor = Vars::Colors::AimPosColor.Value;
 	const float flSize = H::Draw.IndicatorScale(Vars::Visuals::Prediction::AimPosSize.Value);
 	const float flThickness = std::max(roundf(H::Draw.IndicatorScale(Vars::Visuals::Prediction::AimPosThickness.Value)), 1.f);
 	const float flOffset = fmodf(flThickness, 2.f) ? 0.5f : 0.f;
-	const float flX = roundf(tCache.m_flX) + flOffset, flY = roundf(tCache.m_flY) + flOffset;
+	const float flX = roundf(pCache->m_flX) + flOffset, flY = roundf(pCache->m_flY) + flOffset;
 	const auto fnPoint = [&](float flDX, float flDY) -> ImVec2 { return { flX + flDX, flY + flDY }; };
 
 	const auto fnShape = [&](ImU32 uColor, float flGrow)
@@ -1543,15 +1499,3 @@ void CVisuals::Precipitation()
 	if (!pPrecipitation)
 		return;
 }
-
-#ifdef DEBUG_UNI
-void CVisuals::RemoveUni()
-{
-	for (const auto& tTextureInfo : m_aUniTextures)
-	{
-		if (!tTextureInfo.m_iTextureID) continue;
-		I::MatSystemSurface->DeleteTextureByID(tTextureInfo.m_iTextureID);
-		I::MatSystemSurface->DestroyTextureID(tTextureInfo.m_iTextureID);
-	}
-}
-#endif

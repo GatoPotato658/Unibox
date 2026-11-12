@@ -131,16 +131,6 @@ void CEntities::UpdatePartyAndLobbyInfo(int nLocalIndex)
 	if (!tUpdateTimer.Run(1.0f))
 		return;
 
-	for (int i = 0; i < PriorityTypeEnum::Count; i++)
-	{
-		m_aIPriorities[i].clear();
-		m_aUPriorities[i].clear();
-	}
-	m_mIFriends.clear();			m_mUFriends.clear();
-	m_mIParty.clear();				m_mUParty.clear();
-	m_mIF2P.clear();				m_mUF2P.clear();
-	m_mILevels.clear();				m_mULevels.clear();
-
 	auto pResource = GetResource();
 	if (!pResource)
 	{
@@ -148,44 +138,58 @@ void CEntities::UpdatePartyAndLobbyInfo(int nLocalIndex)
 		return;
 	}
 
+	std::array<std::unordered_map<int, int>, PriorityTypeEnum::Count> aIPriorities;
+	std::array<std::unordered_map<uint32_t, int>, PriorityTypeEnum::Count> aUPriorities;
+	std::unordered_map<int, bool> mIFriends;
+	std::unordered_map<uint32_t, bool> mUFriends;
+	std::unordered_map<int, int> mIParty;
+	std::unordered_map<uint32_t, int> mUParty;
+	std::unordered_map<int, bool> mIF2P;
+	std::unordered_map<uint32_t, bool> mUF2P;
+	std::unordered_map<int, int> mILevels;
+	std::unordered_map<uint32_t, int> mULevels;
 	std::unordered_map<uint32_t, uint64_t> mParties;
 	std::unordered_map<uint32_t, bool> mF2P;
 	std::unordered_map<uint32_t, int> mLevels;
 
-	if (auto pLobby = I::TFGCClientSystem->GetLobby())
+	if (I::TFGCClientSystem)
 	{
-		auto pGameRules = I::TFGameRules();
-		auto pMatchDesc = pGameRules ? pGameRules->GetMatchGroupDescription() : nullptr;
-
-		int iMembers = pLobby->GetNumMembers();
-		for (int i = 0; i < iMembers; i++)
+		if (auto pLobby = I::TFGCClientSystem->GetLobby())
 		{
-			CSteamID tSteamID;
-			if (pLobby->GetMember(&tSteamID, i))
+			auto pGameRules = I::TFGameRules();
+			auto pMatchDesc = pGameRules ? pGameRules->GetMatchGroupDescription() : nullptr;
+
+			int iMembers = pLobby->GetNumMembers();
+			for (int i = 0; i < iMembers; i++)
 			{
-				uint32_t uAccountID = tSteamID.GetAccountID();
-				ConstTFLobbyPlayer pDetails;
-				if (pLobby->GetMemberDetails(&pDetails, i))
+				CSteamID tSteamID;
+				if (pLobby->GetMember(&tSteamID, i))
 				{
-					auto pProto = pDetails.Proto();
-					mF2P[uAccountID] = pProto->chat_suspension;
-					mParties[uAccountID] = pProto->original_party_id;
-					if (pMatchDesc && pMatchDesc->m_pProgressionDesc)
-						mLevels[uAccountID] = std::max((int)pProto->rank, pMatchDesc->GetLevelForSteamID(&tSteamID));
-					else
-						mLevels[uAccountID] = pProto->rank;
+					uint32_t uMemberAccountID = tSteamID.GetAccountID();
+					ConstTFLobbyPlayer pDetails;
+					if (pLobby->GetMemberDetails(&pDetails, i))
+					{
+						auto pProto = pDetails.Proto();
+						mF2P[uMemberAccountID] = pProto->chat_suspension;
+						mParties[uMemberAccountID] = pProto->original_party_id;
+						if (pMatchDesc && pMatchDesc->m_pProgressionDesc)
+							mLevels[uMemberAccountID] = std::max((int)pProto->rank, pMatchDesc->GetLevelForSteamID(&tSteamID));
+						else
+							mLevels[uMemberAccountID] = pProto->rank;
+					}
 				}
 			}
 		}
-	}
-	if (auto pParty = I::TFGCClientSystem->GetParty())
-	{
-		int iMembers = pParty->GetNumMembers();
-		for (int i = 0; i < iMembers; i++)
+
+		if (auto pParty = I::TFGCClientSystem->GetParty())
 		{
-			CSteamID tSteamID;
-			if (pParty->GetMember(&tSteamID, i))
-				mParties[tSteamID.GetAccountID()] = 1;
+			int iMembers = pParty->GetNumMembers();
+			for (int i = 0; i < iMembers; i++)
+			{
+				CSteamID tSteamID;
+				if (pParty->GetMember(&tSteamID, i))
+					mParties[tSteamID.GetAccountID()] = 1;
+			}
 		}
 	}
 
@@ -205,28 +209,47 @@ void CEntities::UpdatePartyAndLobbyInfo(int nLocalIndex)
 		for (auto uAccountID : vAccountIds)
 			mParties[uAccountID] = iPartyIndex;
 	}
-	m_iPartyCount = uPartyCount;
+	const int iPartyCount = static_cast<int>(uPartyCount);
 
 	int nMaxClients = I::EngineClient->GetMaxClients();
+	uint32_t uAccountID = m_uAccountID;
 	for (int n = 1; n <= nMaxClients; n++)
 	{
 		if (!pResource->m_bValid(n)) continue;
 
-		uint32_t uAccountID = pResource->m_iAccountID(n);
+		uint32_t uPlayerAccountID = pResource->m_iAccountID(n);
 		bool bLocal = (n == nLocalIndex);
-		if (bLocal) m_uAccountID = uAccountID;
+		if (bLocal) uAccountID = uPlayerAccountID;
 
-		const int iPriority = bLocal ? 0 : F::PlayerUtils.GetPriority(uAccountID, false);
+		const int iPriority = bLocal ? 0 : F::PlayerUtils.GetPriority(uPlayerAccountID, false);
 
-		m_aIPriorities[PriorityTypeEnum::Relationship][n] = m_aUPriorities[PriorityTypeEnum::Relationship][uAccountID] = iPriority;
-		m_aIPriorities[PriorityTypeEnum::Follow][n] = m_aUPriorities[PriorityTypeEnum::Follow][uAccountID] = !bLocal ? F::PlayerUtils.GetFollowPriority(uAccountID, false) : 0;
-		m_aIPriorities[PriorityTypeEnum::Vote][n] = m_aUPriorities[PriorityTypeEnum::Vote][uAccountID] = !bLocal ? F::PlayerUtils.GetVotePriority(uAccountID, false) : -1;
+		aIPriorities[PriorityTypeEnum::Relationship][n] = aUPriorities[PriorityTypeEnum::Relationship][uPlayerAccountID] = iPriority;
+		aIPriorities[PriorityTypeEnum::Follow][n] = aUPriorities[PriorityTypeEnum::Follow][uPlayerAccountID] = !bLocal ? F::PlayerUtils.GetFollowPriority(uPlayerAccountID, false) : 0;
+		aIPriorities[PriorityTypeEnum::Vote][n] = aUPriorities[PriorityTypeEnum::Vote][uPlayerAccountID] = !bLocal ? F::PlayerUtils.GetVotePriority(uPlayerAccountID, false) : -1;
 
-		m_mIFriends[n] = m_mUFriends[uAccountID] = !pResource->IsFakePlayer(n) && I::SteamFriends->HasFriend({ uAccountID, 1, k_EUniversePublic, k_EAccountTypeIndividual }, k_EFriendFlagImmediate);
-		m_mIParty[n] = m_mUParty[uAccountID] = mParties.count(uAccountID) ? mParties[uAccountID] : 0;
-		m_mIF2P[n] = m_mUF2P[uAccountID] = mF2P.count(uAccountID) ? mF2P[uAccountID] : false;
-		m_mILevels[n] = m_mULevels[uAccountID] = mLevels.count(uAccountID) ? mLevels[uAccountID] : -2;
+		mIFriends[n] = mUFriends[uPlayerAccountID] = I::SteamFriends
+			&& !pResource->IsFakePlayer(n)
+			&& I::SteamFriends->HasFriend({ uPlayerAccountID, 1, k_EUniversePublic, k_EAccountTypeIndividual }, k_EFriendFlagImmediate);
+		const auto itParty = mParties.find(uPlayerAccountID);
+		mIParty[n] = mUParty[uPlayerAccountID] = itParty != mParties.end() ? itParty->second : 0;
+		const auto itF2P = mF2P.find(uPlayerAccountID);
+		mIF2P[n] = mUF2P[uPlayerAccountID] = itF2P != mF2P.end() ? itF2P->second : false;
+		const auto itLevel = mLevels.find(uPlayerAccountID);
+		mILevels[n] = mULevels[uPlayerAccountID] = itLevel != mLevels.end() ? itLevel->second : -2;
 	}
+
+	m_aIPriorities = std::move(aIPriorities);
+	m_aUPriorities = std::move(aUPriorities);
+	m_mIFriends = std::move(mIFriends);
+	m_mUFriends = std::move(mUFriends);
+	m_mIParty = std::move(mIParty);
+	m_mUParty = std::move(mUParty);
+	m_mIF2P = std::move(mIF2P);
+	m_mUF2P = std::move(mUF2P);
+	m_mILevels = std::move(mILevels);
+	m_mULevels = std::move(mULevels);
+	m_uAccountID = uAccountID;
+	m_iPartyCount = iPartyCount;
 }
 
 void CEntities::UpdatePlayerAnimations(int nLocalIndex)
@@ -678,6 +701,9 @@ CBaseTeamObjectiveResource* CEntities::GetObjectiveResource( ) { return m_pObjec
 
 CClient_Precipitation* CEntities::GetPrecipitation(int iType, int iIntensity)
 {
+	if (!I::Client || !I::ClientEntityList || !GetLocal())
+		return nullptr;
+
 	const byte uAlpha = GetPrecipitationAlpha(iType, iIntensity);
 
 	static ClientClass* pPrecipitationClass = nullptr;
@@ -693,74 +719,90 @@ CClient_Precipitation* CEntities::GetPrecipitation(int iType, int iIntensity)
 		}
 	}
 
-	if (!GetLocal())
-		return nullptr;
-
-	if (m_pPrecipitation && m_iPrecipitationType == iType)
+	if (m_hPrecipitation.IsValid() && m_iPrecipitationType == iType)
 	{
-		if (m_uPrecipitationAlpha != uAlpha)
+		IClientNetworkable* pNetworkable = I::ClientEntityList->GetClientNetworkableFromHandle(m_hPrecipitation);
+		IClientUnknown* pUnknown = pNetworkable ? pNetworkable->GetIClientUnknown() : nullptr;
+		CClient_Precipitation* pPrecipitation = pUnknown ? static_cast<CClient_Precipitation*>(pUnknown->GetBaseEntity()) : nullptr;
+
+		if (pPrecipitation)
 		{
-			m_pPrecipitationNetworkable->PreDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
-			m_pPrecipitationNetworkable->OnPreDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
-			m_pPrecipitation->m_clrRender().a = uAlpha;
-			m_pPrecipitationNetworkable->OnDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
-			m_pPrecipitationNetworkable->PostDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
-			m_uPrecipitationAlpha = uAlpha;
+			if (m_uPrecipitationAlpha != uAlpha)
+			{
+				pNetworkable->PreDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
+				pNetworkable->OnPreDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
+				pPrecipitation->m_clrRender().a = uAlpha;
+				pNetworkable->OnDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
+				pNetworkable->PostDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
+				m_uPrecipitationAlpha = uAlpha;
+			}
+			ApplyPrecipitationConVars(iType);
+			return pPrecipitation;
 		}
-		ApplyPrecipitationConVars(iType);
-		return m_pPrecipitation;
 	}
 
 	RemovePrecipitation();
 
 	if (!pPrecipitationClass)
 		return nullptr;
-
-	m_pPrecipitationNetworkable = pPrecipitationClass->m_pCreateFn(MAX_EDICTS - 1, 0);
-	if (!m_pPrecipitationNetworkable)
+	if (I::ClientEntityList->GetClientNetworkable(MAX_EDICTS - 1) || I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1))
 		return nullptr;
 
-	IClientUnknown* pUnknown = m_pPrecipitationNetworkable->GetIClientUnknown();
-	m_pPrecipitation = pUnknown ? static_cast<CClient_Precipitation*>(pUnknown->GetBaseEntity()) : nullptr;
-	if (!m_pPrecipitation)
+	IClientNetworkable* pNetworkable = pPrecipitationClass->m_pCreateFn(MAX_EDICTS - 1, 0);
+	if (!pNetworkable)
+		return nullptr;
+
+	IClientUnknown* pUnknown = pNetworkable->GetIClientUnknown();
+	CClient_Precipitation* pPrecipitation = pUnknown ? static_cast<CClient_Precipitation*>(pUnknown->GetBaseEntity()) : nullptr;
+	if (!pPrecipitation)
 	{
-		m_pPrecipitationNetworkable->Release();
-		m_pPrecipitationNetworkable = nullptr;
+		pNetworkable->Release();
 		return nullptr;
 	}
 
-	m_pPrecipitationNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_START);
-	m_pPrecipitationNetworkable->PreDataUpdate(DATA_UPDATE_CREATED);
-	m_pPrecipitationNetworkable->OnPreDataChanged(DATA_UPDATE_CREATED);
+	m_hPrecipitation = pUnknown->GetRefEHandle();
+	if (!m_hPrecipitation.IsValid())
+	{
+		pNetworkable->Release();
+		return nullptr;
+	}
 
-	m_pPrecipitation->m_vecOrigin() = {};
-	m_pPrecipitation->SetAbsOrigin({});
-	m_pPrecipitation->m_clrRender().a = uAlpha;
-	m_pPrecipitation->m_nPrecipType() = iType;
+	pNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_START);
+	pNetworkable->PreDataUpdate(DATA_UPDATE_CREATED);
+	pNetworkable->OnPreDataChanged(DATA_UPDATE_CREATED);
+
+	pPrecipitation->m_vecOrigin() = {};
+	pPrecipitation->SetAbsOrigin({});
+	pPrecipitation->m_clrRender().a = uAlpha;
+	pPrecipitation->m_nPrecipType() = iType;
 
 	const Vec3 vBounds = Vec3(16384.f, 16384.f, 16384.f);
-	m_pPrecipitation->m_Collision()->SetCollisionBounds(-vBounds, vBounds);
+	pPrecipitation->m_Collision()->SetCollisionBounds(-vBounds, vBounds);
 
-	m_pPrecipitationNetworkable->OnDataChanged(DATA_UPDATE_CREATED);
-	m_pPrecipitationNetworkable->PostDataUpdate(DATA_UPDATE_CREATED);
+	pNetworkable->OnDataChanged(DATA_UPDATE_CREATED);
+	pNetworkable->PostDataUpdate(DATA_UPDATE_CREATED);
 	m_iPrecipitationType = iType;
 	m_uPrecipitationAlpha = uAlpha;
 	ApplyPrecipitationConVars(iType);
-	return m_pPrecipitation;
+	return pPrecipitation;
 }
 
-void CEntities::RemovePrecipitation()
+void CEntities::RemovePrecipitation(bool bRelease)
 {
-	if (m_pPrecipitationNetworkable)
-	{
-		m_pPrecipitationNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_END);
-		m_pPrecipitationNetworkable->Release();
-	}
-	m_pPrecipitationNetworkable = nullptr;
-	m_pPrecipitation = nullptr;
+	IClientNetworkable* pNetworkable = bRelease && I::ClientEntityList
+		? I::ClientEntityList->GetClientNetworkableFromHandle(m_hPrecipitation)
+		: nullptr;
+
+	m_hPrecipitation.Term();
 	m_iPrecipitationType = -1;
 	m_uPrecipitationAlpha = 0;
 	RestorePrecipitationConVars();
+
+	if (pNetworkable)
+	{
+		pNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_END);
+		pNetworkable->Release();
+	}
 }
 
 const std::vector<CBaseEntity*>& CEntities::GetGroup(uint8_t iGroup) { return m_aGroups[iGroup]; }
@@ -785,17 +827,75 @@ std::deque<VelFixRecord>* CEntities::GetOrigins(uint16_t iIndex) { return iIndex
 uint32_t CEntities::GetModel(unsigned short iIndex) { return iIndex < MAX_EDICTS ? m_aModels[iIndex] : 0; }
 DormantData* CEntities::GetDormancy(unsigned short iIndex) { return s_mDormancy.contains(iIndex) ? &s_mDormancy[iIndex] : nullptr; }
 
-int CEntities::GetPriority(int iIndex, PriorityTypeEnum::PriorityTypeEnum eType) { return m_aIPriorities[eType][iIndex]; }
-int CEntities::GetPriority(uint32_t uAccountID, PriorityTypeEnum::PriorityTypeEnum eType) { return m_aUPriorities[eType][uAccountID]; }
-bool CEntities::IsFriend(int iIndex) { return m_mIFriends[iIndex]; }
-bool CEntities::IsFriend(uint32_t uAccountID) { return m_mUFriends[uAccountID]; }
-bool CEntities::InParty(int iIndex) { return iIndex != I::EngineClient->GetLocalPlayer() && m_mIParty[iIndex] == 1; }
-bool CEntities::InParty(uint32_t uAccountID) { return uAccountID != m_uAccountID && m_mUParty[uAccountID] == 1; }
-bool CEntities::IsF2P(int iIndex) { return m_mIF2P[iIndex]; }
-bool CEntities::IsF2P(uint32_t uAccountID) { return m_mUF2P[uAccountID]; }
-int CEntities::GetLevel(int iIndex) { return m_mILevels.contains(iIndex) ? m_mILevels[iIndex] : -2; }
-int CEntities::GetLevel(uint32_t uAccountID) { return m_mULevels.contains(uAccountID) ? m_mULevels[uAccountID] : -2; }
-int CEntities::GetParty(int iIndex) { return m_mIParty.contains(iIndex) ? m_mIParty[iIndex] : 0; }
-int CEntities::GetParty(uint32_t uAccountID) { return m_mUParty.contains(uAccountID) ? m_mUParty[uAccountID] : 0; }
+int CEntities::GetPriority(int iIndex, PriorityTypeEnum::PriorityTypeEnum eType)
+{
+	const int iType = int(eType);
+	if (iType < 0 || iType >= PriorityTypeEnum::Count)
+		return 0;
+	const auto it = m_aIPriorities[iType].find(iIndex);
+	return it != m_aIPriorities[iType].end() ? it->second : 0;
+}
+int CEntities::GetPriority(uint32_t uAccountID, PriorityTypeEnum::PriorityTypeEnum eType)
+{
+	const int iType = int(eType);
+	if (iType < 0 || iType >= PriorityTypeEnum::Count)
+		return 0;
+	const auto it = m_aUPriorities[iType].find(uAccountID);
+	return it != m_aUPriorities[iType].end() ? it->second : 0;
+}
+bool CEntities::IsFriend(int iIndex)
+{
+	const auto it = m_mIFriends.find(iIndex);
+	return it != m_mIFriends.end() && it->second;
+}
+bool CEntities::IsFriend(uint32_t uAccountID)
+{
+	const auto it = m_mUFriends.find(uAccountID);
+	return it != m_mUFriends.end() && it->second;
+}
+bool CEntities::InParty(int iIndex)
+{
+	if (iIndex == I::EngineClient->GetLocalPlayer())
+		return false;
+	const auto it = m_mIParty.find(iIndex);
+	return it != m_mIParty.end() && it->second == 1;
+}
+bool CEntities::InParty(uint32_t uAccountID)
+{
+	if (uAccountID == m_uAccountID)
+		return false;
+	const auto it = m_mUParty.find(uAccountID);
+	return it != m_mUParty.end() && it->second == 1;
+}
+bool CEntities::IsF2P(int iIndex)
+{
+	const auto it = m_mIF2P.find(iIndex);
+	return it != m_mIF2P.end() && it->second;
+}
+bool CEntities::IsF2P(uint32_t uAccountID)
+{
+	const auto it = m_mUF2P.find(uAccountID);
+	return it != m_mUF2P.end() && it->second;
+}
+int CEntities::GetLevel(int iIndex)
+{
+	const auto it = m_mILevels.find(iIndex);
+	return it != m_mILevels.end() ? it->second : -2;
+}
+int CEntities::GetLevel(uint32_t uAccountID)
+{
+	const auto it = m_mULevels.find(uAccountID);
+	return it != m_mULevels.end() ? it->second : -2;
+}
+int CEntities::GetParty(int iIndex)
+{
+	const auto it = m_mIParty.find(iIndex);
+	return it != m_mIParty.end() ? it->second : 0;
+}
+int CEntities::GetParty(uint32_t uAccountID)
+{
+	const auto it = m_mUParty.find(uAccountID);
+	return it != m_mUParty.end() ? it->second : 0;
+}
 int CEntities::GetPartyCount() { return m_iPartyCount; }
 uint32_t CEntities::GetLocalAccountID() { return m_uAccountID; }

@@ -11,7 +11,6 @@
 #include "../Visuals/Visuals.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../ImGui/IndicatorPanel.h"
-#include "../ImGui/RenderSync.h"
 
 bool CAimbot::ShouldRun(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
@@ -169,28 +168,28 @@ void CAimbot::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 void CAimbot::CacheDrawInfo(CTFPlayer* pLocal)
 {
 	if (!pLocal || !Vars::Aimbot::General::FOVCircle.Value || !Vars::Colors::FOVCircle.Value.a || !pLocal->CanAttack(false))
-		return F::RenderSync.Set(m_tDrawCache, FovCircle_t{});
+		return m_tDrawCache.Set(FovCircle_t{});
 
 	auto pWeapon = H::Entities.GetWeapon();
 	if (pWeapon && !SDK::AttribHookValue(1, "mult_dmg", pWeapon))
-		return F::RenderSync.Set(m_tDrawCache, FovCircle_t{});
+		return m_tDrawCache.Set(FovCircle_t{});
 
 	if (Vars::Aimbot::General::AimFOV.Value >= 90.f)
-		return F::RenderSync.Set(m_tDrawCache, FovCircle_t{});
+		return m_tDrawCache.Set(FovCircle_t{});
 
 	float flRadius = tanf(Math::Deg2Rad(Vars::Aimbot::General::AimFOV.Value)) / tanf(Math::Deg2Rad(G::FOV) / 2) * float(H::Draw.m_nScreenW) * (4.f / 6.f) / (16.f / 9.f);
-	F::RenderSync.Set(m_tDrawCache, FovCircle_t{ true, flRadius, H::Draw.m_nScreenW / 2.f, H::Draw.m_nScreenH / 2.f, Vars::Colors::FOVCircle.Value });
+	m_tDrawCache.Set(FovCircle_t{ true, flRadius, H::Draw.m_nScreenW / 2.f, H::Draw.m_nScreenH / 2.f, Vars::Colors::FOVCircle.Value });
 }
 
 void CAimbot::Draw(ImDrawList* pDrawList)
 {
-	const FovCircle_t tCache = m_tDrawCache.Get();
-	if (!pDrawList || !tCache.m_bValid || tCache.m_flRadius <= 0.f)
+	const auto pCache = m_tDrawCache.Get();
+	if (!pDrawList || !pCache->m_bValid || pCache->m_flRadius <= 0.f)
 		return;
 
-	const ImVec2 vCenter = { tCache.m_flX, tCache.m_flY };
-	pDrawList->AddCircle(vCenter, tCache.m_flRadius + 1.f, ColorToU32(Color_t(0, 0, 0, byte(tCache.m_tColor.a * 0.5f))), 72, std::max(H::Draw.IndicatorScale(1.4f), 1.f));
-	pDrawList->AddCircle(vCenter, tCache.m_flRadius, ColorToU32(tCache.m_tColor), 72, std::max(H::Draw.IndicatorScale(1.2f), 1.f));
+	const ImVec2 vCenter = { pCache->m_flX, pCache->m_flY };
+	pDrawList->AddCircle(vCenter, pCache->m_flRadius + 1.f, ColorToU32(Color_t(0, 0, 0, byte(pCache->m_tColor.a * 0.5f))), 72, std::max(H::Draw.IndicatorScale(1.4f), 1.f));
+	pDrawList->AddCircle(vCenter, pCache->m_flRadius, ColorToU32(pCache->m_tColor), 72, std::max(H::Draw.IndicatorScale(1.2f), 1.f));
 }
 
 void CAimbot::Store(CBaseEntity* pEntity, size_t iSize)

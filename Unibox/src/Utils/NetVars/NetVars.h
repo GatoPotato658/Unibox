@@ -1,9 +1,13 @@
 #pragma once
 #include "../Macros/Macros.h"
 #include "../../SDK/Definitions/Misc/dt_recv.h"
+#include <cstdint>
 
 class CNetVars
 {
+private:
+	bool GetOffset(RecvTable* pTable, uint32_t uHash, int& iOffset);
+
 public:
 	int GetOffset(RecvTable* pTable, const char* szNetVar);
 	int GetNetVar(const char* szClass, const char* szNetVar);

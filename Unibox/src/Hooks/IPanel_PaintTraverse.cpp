@@ -5,7 +5,9 @@ MAKE_HOOK(IPanel_PaintTraverse, U::Memory.GetVirtual(I::Panel, 41), void,
 {
 	DEBUG_RETURN(IPanel_PaintTraverse, rcx, vguiPanel, forceRepaint, allowForce);
 
-#ifndef TEXTMODE
+#ifdef TEXTMODE
+	CALL_ORIGINAL(rcx, vguiPanel, forceRepaint, allowForce);
+#else
 	if (G::Unload || !vguiPanel)
 		return CALL_ORIGINAL(rcx, vguiPanel, forceRepaint, allowForce);
 

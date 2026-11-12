@@ -1978,7 +1978,7 @@ namespace
 		uint16_t uDoubleClicked = 0;
 	};
 
-	ItemGrid_t DrawItemGrid(const char* sID, const std::vector<const ItemInfo_t*>& vItems, const std::unordered_set<uint16_t>& tOwned, uint16_t uSelected, float flHeight, bool bCounts = false)
+	ItemGrid_t DrawItemGrid(const char* sID, const std::vector<const ItemInfo_t*>& vItems, const std::unordered_set<uint16_t>& tOwned, uint16_t uSelected, float flHeight, const std::unordered_map<uint16_t, int>* pCounts = nullptr)
 	{
 		ItemGrid_t tResult = {};
 		const float flSpacing = H::Draw.Scale(6), flMinCellWidth = H::Draw.Scale(92);
@@ -2056,9 +2056,10 @@ namespace
 					else
 						pDrawList->AddRectFilled(vIconMin, vIconMin + ImVec2(flIconWidth, flIconHeight), FadeColor(F::Render.Background1p5), H::Draw.Scale(4));
 
-					if (bCounts)
+					if (pCounts)
 					{
-						if (const int iCount = F::SkinChanger.GetInventoryCount(pItem->iDef); iCount > 1)
+						const auto itCount = pCounts->find(pItem->iDef);
+						if (const int iCount = itCount != pCounts->end() ? itCount->second : 0; iCount > 1)
 						{
 							const std::string sCount = std::format("x{}", iCount);
 							const float flCountWidth = pSmall->CalcTextSizeA(pSmall->LegacySize, FLT_MAX, 0.f, sCount.c_str()).x;
@@ -2088,25 +2089,6 @@ namespace
 		PopStyleVar();
 
 		return tResult;
-	}
-
-	const ItemInfo_t* FindItemInfo(uint16_t iDef)
-	{
-		static std::unordered_map<uint16_t, const ItemInfo_t*> s_mLookup = {};
-		static size_t s_uSize = 0;
-		static const ItemInfo_t* s_pData = nullptr;
-		const auto& vItems = CSkinChanger::GetItems();
-		if (s_uSize != vItems.size() || s_pData != vItems.data())
-		{
-			s_mLookup.clear();
-			for (const auto& tItem : vItems)
-				s_mLookup[tItem.iDef] = &tItem;
-			s_uSize = vItems.size();
-			s_pData = vItems.data();
-		}
-
-		auto it = s_mLookup.find(iDef);
-		return it != s_mLookup.end() ? it->second : nullptr;
 	}
 
 	const std::vector<std::pair<int, std::string>>& GetUnusualEffects()
@@ -2382,12 +2364,13 @@ void CMenu::MenuSkins(int iTab)
 			DebugDummy({ 0, H::Draw.Scale(4) });
 			FInputText("Search", sBackpackSearch, GetWindowWidth() - GetStyle().WindowPadding.x * 2);
 
-			const std::vector<const ItemInfo_t*> vBackpack = F::SkinChanger.GetInventoryItems();
+			const auto pInventory = F::SkinChanger.GetInventorySnapshot();
+			const auto& vBackpack = pInventory->vItems;
 			static std::vector<const ItemInfo_t*> s_vBackpackFiltered = {};
 			static std::string s_sBackpackSearch;
-			static size_t s_uBackpackSize = 0;
-			static const ItemInfo_t* const* s_pBackpackData = nullptr;
-			if (s_sBackpackSearch != sBackpackSearch || s_uBackpackSize != vBackpack.size() || s_pBackpackData != vBackpack.data())
+			static uint64_t s_uBackpackRevision = 0;
+			static uint64_t s_uBackpackCatalogueRevision = 0;
+			if (s_sBackpackSearch != sBackpackSearch || s_uBackpackRevision != pInventory->uInventoryRevision || s_uBackpackCatalogueRevision != pInventory->uCatalogueRevision)
 			{
 				s_vBackpackFiltered.clear();
 				const std::string sNeedle = Lowercase(sBackpackSearch);
@@ -2397,20 +2380,20 @@ void CMenu::MenuSkins(int iTab)
 						s_vBackpackFiltered.push_back(pItem);
 				}
 				s_sBackpackSearch = sBackpackSearch;
-				s_uBackpackSize = vBackpack.size();
-				s_pBackpackData = vBackpack.data();
+				s_uBackpackRevision = pInventory->uInventoryRevision;
+				s_uBackpackCatalogueRevision = pInventory->uCatalogueRevision;
 			}
 
 			DebugDummy({ 0, H::Draw.Scale(4) });
 			FNote(vBackpack.empty() ? "Empty, add items from the catalogue" : std::format("{} items, double click to remove", vBackpack.size()).c_str());
 
-			const ItemInfo_t* pSelected = uBackpackSelected ? FindItemInfo(uBackpackSelected) : nullptr;
+			const ItemInfo_t* pSelected = uBackpackSelected ? CSkinChanger::FindItem(uBackpackSelected) : nullptr;
 			const bool bSelectedOwned = pSelected && vBackpack.cend() != std::find(vBackpack.cbegin(), vBackpack.cend(), pSelected);
 			const bool bSelectedAdded = bSelectedOwned && F::SkinChanger.InBackpack(uBackpackSelected);
 			const bool bHasStyles = bSelectedAdded && !pSelected->vStyles.empty();
 			const bool bLocalCrate = bSelectedAdded && pSelected->sClass == "supply_crate";
 			const float flGridHeight = std::max(H::Draw.Scale(120), GetWindowHeight() - GetCursorPosY() - GetStyle().WindowPadding.y - H::Draw.Scale(44 + (bHasStyles ? 36 : 0) + (bLocalCrate ? 36 : 0)));
-			const ItemGrid_t tGrid = DrawItemGrid("##OwnedGrid", s_vBackpackFiltered, {}, bSelectedOwned ? uBackpackSelected : 0, flGridHeight, true);
+			const ItemGrid_t tGrid = DrawItemGrid("##OwnedGrid", s_vBackpackFiltered, {}, bSelectedOwned ? uBackpackSelected : 0, flGridHeight, &pInventory->mCounts);
 			if (tGrid.uClicked)
 				uBackpackSelected = tGrid.uClicked;
 			if (tGrid.uDoubleClicked && F::SkinChanger.InBackpack(tGrid.uDoubleClicked))
@@ -2419,9 +2402,9 @@ void CMenu::MenuSkins(int iTab)
 			DebugDummy({ 0, H::Draw.Scale(6) });
 			if (bHasStyles)
 			{
-				const auto vLocalItems = F::SkinChanger.GetBackpack();
-				const auto it = std::find_if(vLocalItems.rbegin(), vLocalItems.rend(), [&](const BackpackItem_t& tItem) { return tItem.iDef == uBackpackSelected; });
-				if (it != vLocalItems.rend())
+				const auto pBackpack = F::SkinChanger.GetBackpackSnapshot();
+				const auto it = std::find_if(pBackpack->vItems.rbegin(), pBackpack->vItems.rend(), [&](const BackpackItem_t& tItem) { return tItem.iDef == uBackpackSelected; });
+				if (it != pBackpack->vItems.rend())
 				{
 					std::vector<const char*> vNames;
 					std::vector<int> vIds;
@@ -2455,9 +2438,9 @@ void CMenu::MenuSkins(int iTab)
 			static std::vector<const ItemInfo_t*> s_vCatalogueFiltered = {};
 			static std::string s_sCatalogueSearch;
 			static int s_iCatalogueFilter = -1;
-			static size_t s_uCatalogueSize = 0;
-			static const ItemInfo_t* s_pCatalogueData = nullptr;
-			if (s_sCatalogueSearch != sItemSearch || s_iCatalogueFilter != iBackpackFilter || s_uCatalogueSize != vItems.size() || s_pCatalogueData != vItems.data())
+			static uint64_t s_uCatalogueRevision = 0;
+			const uint64_t uCatalogueRevision = CSkinChanger::GetCatalogueRevision();
+			if (s_sCatalogueSearch != sItemSearch || s_iCatalogueFilter != iBackpackFilter || s_uCatalogueRevision != uCatalogueRevision)
 			{
 				s_vCatalogueFiltered.clear();
 				const std::string sNeedle = Lowercase(sItemSearch);
@@ -2478,17 +2461,15 @@ void CMenu::MenuSkins(int iTab)
 				}
 				s_sCatalogueSearch = sItemSearch;
 				s_iCatalogueFilter = iBackpackFilter;
-				s_uCatalogueSize = vItems.size();
-				s_pCatalogueData = vItems.data();
+				s_uCatalogueRevision = uCatalogueRevision;
 			}
 
-			std::unordered_set<uint16_t> tBackpack = {};
-			for (const auto& tItem : F::SkinChanger.GetBackpack())
-				tBackpack.insert(tItem.iDef);
+			const auto pBackpack = F::SkinChanger.GetBackpackSnapshot();
+			const auto& tBackpack = pBackpack->tDefs;
 			DebugDummy({ 0, H::Draw.Scale(4) });
 			FNote(std::format("{} items, double click to add", s_vCatalogueFiltered.size()).c_str());
 
-			const ItemInfo_t* pSelected = uBackpackSelected ? FindItemInfo(uBackpackSelected) : nullptr;
+			const ItemInfo_t* pSelected = uBackpackSelected ? CSkinChanger::FindItem(uBackpackSelected) : nullptr;
 			const bool bWearable = pSelected && (pSelected->sClass == "tf_wearable" || pSelected->sClass.starts_with("tf_wearable_"));
 			static uint16_t uStyleDef = 0;
 			static int iSelectedStyle = 0;
@@ -2545,7 +2526,7 @@ void CMenu::MenuSkins(int iTab)
 			if (bAdd)
 			{
 				const uint16_t uAddDef = tGrid.uDoubleClicked ? tGrid.uDoubleClicked : uBackpackSelected;
-				const ItemInfo_t* pAdd = FindItemInfo(uAddDef);
+				const ItemInfo_t* pAdd = CSkinChanger::FindItem(uAddDef);
 				const bool bAddWearable = pAdd && (pAdd->sClass == "tf_wearable" || pAdd->sClass.starts_with("tf_wearable_"));
 				F::SkinChanger.AddToBackpack(uAddDef, bAddWearable ? std::max(UnusualEffectId(sUnusualName), 0) : 0, uAddDef == uStyleDef ? iSelectedStyle : 0);
 			}
@@ -3418,7 +3399,7 @@ void CMenu::MenuSettings(int iTab)
 		{
 			auto SetAll = [](bool bEnable)
 			{
-				for (auto& pBase : G::Vars)
+				for (auto& pBase : G::Vars())
 				{
 					if (std::string(pBase->Name()).find("Vars::Hooks::") == std::string::npos)
 						continue;
@@ -3438,7 +3419,7 @@ void CMenu::MenuSettings(int iTab)
 			if (FButton("Disable all", FButtonEnum::Right))
 				SetAll(false);
 
-			for (auto& pBase : G::Vars)
+			for (auto& pBase : G::Vars())
 			{
 				if (std::string(pBase->Name()).find("Vars::Hooks::") == std::string::npos)
 					continue;
@@ -3932,17 +3913,17 @@ void CMenu::Render()
 		return;
 
 	m_bInKeybind = false;
+	const byte uPrimaryKey = Vars::Menu::PrimaryKey.Value;
+	const byte uSecondaryKey = Vars::Menu::SecondaryKey.Value;
 	if (m_bIsOpen)
-	{
-		for (short iKey = 1; iKey < 255; iKey++)
-			U::KeyHandler.StoreKey(iKey);
-	}
+		U::KeyHandler.Update();
 	else
 	{
-		U::KeyHandler.StoreKey(Vars::Menu::PrimaryKey.Value);
-		U::KeyHandler.StoreKey(Vars::Menu::SecondaryKey.Value);
+		U::KeyHandler.StoreKey(uPrimaryKey);
+		if (uSecondaryKey != uPrimaryKey)
+			U::KeyHandler.StoreKey(uSecondaryKey);
 	}
-	if (U::KeyHandler.Pressed(Vars::Menu::PrimaryKey.Value) || U::KeyHandler.Pressed(Vars::Menu::SecondaryKey.Value))
+	if (U::KeyHandler.Pressed(uPrimaryKey) || U::KeyHandler.Pressed(uSecondaryKey))
 		I::MatSystemSurface->SetCursorAlwaysVisible(m_bIsOpen = !m_bIsOpen);
 
 	static bool bNoticeChecked = false;
@@ -4039,11 +4020,6 @@ void CMenu::AddOutput(const char* sFunction, const char* sLog, Color_t tColor)
 	m_vOutput.push_front({ sFunction, sLog, FNV1A::Hash32Const(sLog), tColor });
 	if (m_vOutput.size() > m_iMaxOutputSize)
 		m_vOutput.pop_back();
-}
-
-void CMenu::ShowNotification(const char* sTitle, const char* sMessage)
-{
-	m_vNotifications.emplace_back(sTitle, sMessage);
 }
 
 void CMenu::ShowDeferredNotification(const char* sTitle, const char* sMessage)

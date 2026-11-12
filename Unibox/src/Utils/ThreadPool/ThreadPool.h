@@ -54,6 +54,7 @@ private:
 	std::atomic<int> m_iWorkers = 0;
 	std::atomic<unsigned> m_uGeneration = 0;
 
+	std::mutex m_tLifecycleMutex;
 	std::mutex m_tMutex;
 	std::condition_variable m_tWake;
 	std::condition_variable m_tDone;

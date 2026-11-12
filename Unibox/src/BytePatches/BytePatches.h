@@ -4,6 +4,13 @@
 class BytePatch
 {
 private:
+	enum class EWriteResult
+	{
+		Failed,
+		Applied,
+		RolledBack
+	};
+
 	const char* m_sModule = nullptr;
 	const char* m_sSignature = nullptr;
 	int m_iOffset = 0x0;
@@ -13,7 +20,7 @@ private:
 	LPVOID m_pAddress = 0;
 	bool m_bIsPatched = false;
 
-	bool Write(const std::vector<byte>& vBytes);
+	EWriteResult Write(const std::vector<byte>& vBytes);
 
 public:
 	BytePatch(const char* sModule, const char* sSignature, int iOffset, const char* sPatch);

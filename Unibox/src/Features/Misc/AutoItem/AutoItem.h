@@ -1,6 +1,8 @@
 #pragma once
 #include "../../../SDK/SDK.h"
 #include <chrono>
+#include <map>
+#include <tuple>
 
 struct AchivementItem_t
 {
@@ -22,6 +24,7 @@ private:
 	void EquipItem(CTFInventoryManager* pInventoryManager, CTFPlayerInventory* pLocalInventory, int iClass, int iSlot, item_definition_index_t iItemDef, bool bGet = true, bool bRent = false);
 	item_definition_index_t SelectNoisemaker(CTFPlayerInventory* pLocalInventory);
 
+	std::map<std::tuple<int, int, std::string>, int> m_mWeaponRetryAttempts;
 	std::array<std::vector<std::string>, 3> aCraftGroups{ {{"-1"}, {"-1"}, {"-1"}} };
 	std::unordered_map<item_definition_index_t, AchivementItem_t> m_mAchievementItems{
 		{45,  {1036, "TF_SCOUT_ACHIEVE_PROGRESS1"}},	// Force-A-Nature - Scout Milestone 1

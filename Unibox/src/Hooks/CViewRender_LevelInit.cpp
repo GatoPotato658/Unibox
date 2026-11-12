@@ -22,6 +22,8 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	DEBUG_RETURN(CViewRender_LevelInit, rcx);
 
 	CALL_ORIGINAL(rcx);
+	if (G::Unload)
+		return;
 
 #ifndef TEXTMODE
 	F::Materials.RefreshMaterials();

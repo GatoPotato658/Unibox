@@ -763,14 +763,14 @@ void CTicks::Draw()
 {
 	static float flCurrentProgress = 0.f;
 	static IndicatorAnim_t tAnim;
-	static DrawCache_t s_tLastValidCache;
+	static std::shared_ptr<const DrawCache_t> s_pLastValidCache;
 
-	const DrawCache_t tCache = m_tDrawCache.Get();
-	if (tCache.m_bValid)
-		s_tLastValidCache = tCache;
+	const auto pCache = m_tDrawCache.Get();
+	if (pCache->m_bValid)
+		s_pLastValidCache = pCache;
 
 	const bool bEnabled = (Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::Ticks) != 0;
-	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && tCache.m_bValid;
+	const bool bVisible = bEnabled && I::EngineClient->IsInGame() && pCache->m_bValid;
 
 	bool bOpening = true;
 	const float flAnim = tAnim.Update(bVisible, bOpening);
@@ -780,7 +780,7 @@ void CTicks::Draw()
 		return;
 	}
 
-	const auto& tDraw = tCache.m_bValid ? tCache : s_tLastValidCache;
+	const auto& tDraw = pCache->m_bValid ? *pCache : *s_pLastValidCache;
 	const float flTargetProgress = tDraw.m_iMaxTicks > 0 ? static_cast<float>(tDraw.m_iTicks) / static_cast<float>(tDraw.m_iMaxTicks) : 0.f;
 	flCurrentProgress = std::lerp(flCurrentProgress, flTargetProgress, std::clamp(ImGui::GetIO().DeltaTime * 10.f, 0.f, 1.f));
 

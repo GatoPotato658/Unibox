@@ -40,8 +40,7 @@ private:
 	CSniperDot* m_pLocalLaserDot = nullptr;
 	CTFPlayerResource* m_pPlayerResource = nullptr;
 	CBaseTeamObjectiveResource* m_pObjectiveResource = nullptr;
-	CClient_Precipitation* m_pPrecipitation = nullptr;
-	IClientNetworkable* m_pPrecipitationNetworkable = nullptr;
+	CBaseHandle m_hPrecipitation;
 
 	std::array<std::vector<CBaseEntity*>, EntityEnum::GroupsMax> m_aGroups = {};
 
@@ -63,7 +62,7 @@ private:
 	std::unordered_map<uint32_t, bool> m_mUF2P = {};
 	std::unordered_map<int, int> m_mILevels = {};
 	std::unordered_map<uint32_t, int> m_mULevels = {};
-	uint32_t m_uAccountID;
+	uint32_t m_uAccountID = 0;
 	int m_iPartyCount = 0;
 	int m_iPrecipitationType = -1;
 	byte m_uPrecipitationAlpha = 0;
@@ -84,7 +83,7 @@ public:
 	CTFPlayerResource* GetResource();
 	CBaseTeamObjectiveResource* GetObjectiveResource();
 	CClient_Precipitation* GetPrecipitation(int iType, int iIntensity);
-	void RemovePrecipitation();
+	void RemovePrecipitation(bool bRelease = true);
 
 	const std::vector<CBaseEntity*>& GetGroup(uint8_t iGroup);
 

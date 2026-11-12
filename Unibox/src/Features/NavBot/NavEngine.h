@@ -1,6 +1,7 @@
 #pragma once
 #include "Map.h"
 #include <array>
+#include <deque>
 
 namespace PathWorker { class CPathWorker; }
 
@@ -79,7 +80,7 @@ class CNavEngine
 {
 private:
 	std::unique_ptr<CMap> m_pMap;
-	std::vector<Crumb_t> m_vCrumbs;
+	std::deque<Crumb_t> m_vCrumbs;
 	std::vector<RespawnRoom_t> m_vRespawnRooms;
 	std::vector<CNavArea*> m_vRespawnRoomExitAreas;
 	CNavArea* m_pLocalArea = nullptr;
@@ -176,10 +177,9 @@ private:
 	void ResetStuckProgress(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
 	void PollPathWorker(CTFPlayer* pLocal);
 	bool StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCrumbs, CTFPlayer* pLocal);
-	bool SolveInline();
-	bool HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, size_t& iFailed, bool& bGap, CBaseEntity*& pBlocker);
+	bool HullCheckCrumbs(CTFPlayer* pLocal, std::deque<Crumb_t>& vCrumbs, size_t& iFailed, bool& bGap, CBaseEntity*& pBlocker);
 	bool ConsumeHullReject();
-	void KeepCrumbsOffWalls(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, int iBudget);
+	void KeepCrumbsOffWalls(CTFPlayer* pLocal, std::deque<Crumb_t>& vCrumbs, int iBudget);
 	void UpdateRespawnRooms();
 	void ClearPathState();
 	void RecoverOffMesh(CTFPlayer* pLocal, CNavArea* pArea, const Vector& vLocalOrigin);
@@ -215,7 +215,7 @@ public:
 		return !(ePriority < m_eCurrentPriority || (m_uPendingRequestId != 0 && ePriority < m_ePendingPriority));
 	}
 	bool IsUnstucking() const { return m_bUnstucking; }
-	bool IsNavMeshLoaded() const { return m_pMap && m_pMap->m_eState == NavStateEnum::Active; }
+	bool IsNavMeshLoaded() const;
 	std::string GetNavFilePath() const { return m_pMap ? m_pMap->m_sMapName : ""; }
 	std::string GetNavInstallPath();
 	bool HasRespawnRooms() const { return !m_vRespawnRooms.empty(); }
@@ -232,7 +232,7 @@ public:
 	CNavFile* GetNavFile() { return m_pMap ? &m_pMap->m_navfile : nullptr; }
 	CMap* GetNavMap() { return m_pMap.get(); }
 
-	std::vector<Crumb_t>* GetCrumbs() { return &m_vCrumbs; }
+	const std::deque<Crumb_t>* GetCrumbs() const { return &m_vCrumbs; }
 	const std::vector<PathHullSegment_t>& GetHullDebug() const { return m_vHullDebug; }
 
 	bool IsReady();

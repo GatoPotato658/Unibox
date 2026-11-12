@@ -304,7 +304,11 @@ bool CNavEngine::NavTo(const Vector& vDestination, PriorityListEnum::PriorityLis
 		m_bHadActivePathBeforePending = !m_vCrumbs.empty();
 	}
 	m_bRecoveryRetryUsed = m_bBypassFailedDestination;
-	m_pPathWorker->Submit(std::move(tReq));
+	if (!m_pPathWorker->Submit(std::move(tReq)))
+	{
+		m_sLastFailureReason = "Path worker unavailable";
+		return false;
+	}
 	m_eCurrentPriority = ePriority;
 	m_uPendingRequestId = m_uNextRequestId;
 	m_vPendingDestination = vDestination;
@@ -319,8 +323,7 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 {
 	if (vCrumbs.empty()) return false;
 
-	std::vector<Crumb_t> vValidated;
-	vValidated.reserve(vCrumbs.size());
+	std::deque<Crumb_t> vValidated;
 	for (const auto& tCached : vCrumbs)
 	{
 		if (!tCached.m_pNavArea || !m_pMap->IsAreaValid(tCached.m_pNavArea))
@@ -633,7 +636,7 @@ CNavArea* CNavEngine::GetLocalNavArea(const Vector& vLocalOrigin)
 	return m_pLocalArea;
 }
 
-bool CNavEngine::HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, size_t& iFailed, bool& bGap, CBaseEntity*& pBlocker)
+bool CNavEngine::HullCheckCrumbs(CTFPlayer* pLocal, std::deque<Crumb_t>& vCrumbs, size_t& iFailed, bool& bGap, CBaseEntity*& pBlocker)
 {
 	m_vHullDebug.clear();
 	iFailed = 0;
@@ -769,7 +772,7 @@ bool CNavEngine::HullCheckCrumbs(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumb
 	return true;
 }
 
-void CNavEngine::KeepCrumbsOffWalls(CTFPlayer* pLocal, std::vector<Crumb_t>& vCrumbs, int iBudget)
+void CNavEngine::KeepCrumbsOffWalls(CTFPlayer* pLocal, std::deque<Crumb_t>& vCrumbs, int iBudget)
 {
 	if (!Vars::Misc::Movement::NavEngine::HullCheck.Value || !pLocal || vCrumbs.size() < 2 || F::Ticks.m_bWarp || F::Ticks.m_bDoubletap)
 		return;
@@ -1052,7 +1055,22 @@ bool CNavEngine::EnsureMapLoaded(bool bForced)
 	if (!bLevelChanged)
 	{
 		if (m_pMap && m_pMap->m_eState == NavStateEnum::Active)
-			return true;
+		{
+			if (m_pPathWorker && m_pPathWorker->IsRunning())
+				return true;
+			if (!bForced && m_bNavLoadAttempted && !m_tNavRetry.Check(1.f))
+				return false;
+			if (m_pPathWorker && m_pPathWorker->Start(m_pMap.get()))
+			{
+				m_tNavRetry.Update();
+				m_sLastFailureReason.clear();
+				return true;
+			}
+			m_sLastFailureReason = "Path worker failed to start";
+			m_pMap.reset();
+			m_tNavRetry.Update();
+			return false;
+		}
 		if (!bForced && m_bNavLoadAttempted && !m_tNavRetry.Check(1.f))
 			return false;
 	}
@@ -1111,13 +1129,17 @@ bool CNavEngine::EnsureMapLoaded(bool bForced)
 	m_pMap = std::make_unique<CMap>(sNavPath.c_str());
 	m_vRespawnRoomExitAreas.clear();
 	m_bUpdatedRespawnRooms = false;
-	if (m_pPathWorker && m_pMap->m_eState == NavStateEnum::Active)
-		m_pPathWorker->Start(m_pMap.get());
+	if (m_pMap->m_eState == NavStateEnum::Active
+		&& (!m_pPathWorker || !m_pPathWorker->Start(m_pMap.get())))
+	{
+		m_sLastFailureReason = "Path worker failed to start";
+		m_pMap.reset();
+	}
 
 	m_sNavLevel = sLevelName;
 	m_bNavLoadAttempted = true;
 	m_tNavRetry.Update();
-	return m_pMap->m_eState == NavStateEnum::Active;
+	return m_pMap && m_pMap->m_eState == NavStateEnum::Active && m_pPathWorker && m_pPathWorker->IsRunning();
 }
 
 std::string CNavEngine::GetNavInstallPath()
@@ -1140,12 +1162,17 @@ void CNavEngine::Shutdown()
 	if (m_pPathWorker) m_pPathWorker->Stop();
 }
 
+bool CNavEngine::IsNavMeshLoaded() const
+{
+	return m_pMap && m_pMap->m_eState == NavStateEnum::Active && m_pPathWorker && m_pPathWorker->IsRunning();
+}
+
 bool CNavEngine::IsReady()
 {
 	if (!Vars::Misc::Movement::NavEngine::Enabled.Value) { m_tRestartTimer.Update(); return false; }
 	if (!m_tRestartTimer.Check(0.5f))                       return false;
 	if (!I::EngineClient->IsInGame())                     return false;
-	return m_pMap && m_pMap->m_eState == NavStateEnum::Active;
+	return IsNavMeshLoaded();
 }
 
 void CNavEngine::ClearPathState()
@@ -1209,46 +1236,13 @@ void CNavEngine::AbandonPath(const char* sReason, bool bStuck)
 	}
 	else if (bStuck || m_bRepathOnFail)
 	{
-		if (SolveInline())
-			m_bRepathRequested = false;
-		else
-		{
-			m_bRepathRequested = true;
-			m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(bStuck ? 0.45f : 0.2f));
-		}
+		m_bRepathRequested = true;
+		m_iNextRepathTick = std::max(m_iNextRepathTick, TICKCOUNT_TIMESTAMP(bStuck ? 0.45f : 0.2f));
 	}
 	else
 	{
 		m_eCurrentPriority = PriorityListEnum::None;
 	}
-}
-
-bool CNavEngine::SolveInline()
-{
-	auto pLocal = H::Entities.GetLocal();
-	if (!pLocal || !m_pMap || !IsReady()) return false;
-	if (F::Ticks.m_bWarp || F::Ticks.m_bDoubletap) return false;
-	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
-	CNavArea* pStartArea = GetPathStartArea(pLocal, vLocalOrigin);
-	if (!pStartArea) return false;
-
-	CNavArea* pDestArea = FindClosestNavArea(m_vLastDestination, false);
-	if (!pDestArea) return false;
-
-	std::vector<CachedPathCrumb_t> vCrumbs;
-	{
-		std::lock_guard lock(m_pMap->m_mutex);
-		if (pDestArea != pStartArea && m_pMap->GetAreaBlock(pDestArea, I::GlobalVars->tickcount) == CMap::AreaBlock::Stuck)
-			return false;
-		const int iResult = m_pMap->SolveCrumbs(vLocalOrigin, pStartArea, m_vLastDestination, pDestArea,
-			CMap::BuildSolveContext(m_bIgnoreTraces), vCrumbs, nullptr);
-		if (iResult != 0 && iResult != 3) return false;
-	}
-
-	if (!StoreValidatedCrumbs(vCrumbs, pLocal) || m_vCrumbs.empty()) return false;
-
-	m_uPendingRequestId = 0;
-	return true;
 }
 
 CNavArea* CNavEngine::GetPathStartArea(CTFPlayer* pLocal, const Vector& vLocalOrigin)
@@ -2401,10 +2395,8 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 
 	if (nConsumed)
 	{
-		if (nConsumed >= m_vCrumbs.size())
-			m_vCrumbs.clear();
-		else
-			m_vCrumbs.erase(m_vCrumbs.begin(), m_vCrumbs.begin() + nConsumed);
+		for (size_t i = 0; i < nConsumed; ++i)
+			m_vCrumbs.pop_front();
 
 		if (m_vCrumbs.empty())
 		{

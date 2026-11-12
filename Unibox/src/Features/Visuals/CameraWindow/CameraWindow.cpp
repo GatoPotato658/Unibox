@@ -58,7 +58,7 @@ void CCameraWindow::RenderCustomView(void* rcx, const CViewSetup& pViewSetup, IT
 	pRenderContext->PushRenderTargetAndViewport();
 	pRenderContext->SetRenderTarget(pTexture);
 
-	static auto CViewRender_RenderView = U::Hooks.m_mHooks["CViewRender_RenderView"];
+	static auto CViewRender_RenderView = U::Hooks.Get("CViewRender_RenderView");
 	CViewRender_RenderView->As<CViewRenderRenderViewFn>()(
 		rcx, pViewSetup, static_cast<ClearFlags_t>(VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH), RENDERVIEW_UNSPECIFIED);
 

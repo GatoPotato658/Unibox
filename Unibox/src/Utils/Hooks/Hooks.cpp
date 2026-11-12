@@ -3,12 +3,28 @@
 #include "../../Core/Core.h"
 #include "../../SDK/SDK.h"
 #include "../../Hooks/Direct3DDevice9.h"
-#include <ranges>
+
+static std::vector<CHook*>& HookRegistry()
+{
+	static std::vector<CHook*> vHooks;
+	return vHooks;
+}
 
 CHook::CHook(const std::string& sName, void* pInitFunc)
 {
+	m_sName = sName;
 	m_pInitFunc = pInitFunc;
-	U::Hooks.m_mHooks[sName] = this;
+	HookRegistry().push_back(this);
+}
+
+CHook* CHooks::Get(const std::string& sName) const
+{
+	for (CHook* pHook : HookRegistry())
+	{
+		if (pHook && pHook->m_sName == sName)
+			return pHook;
+	}
+	return nullptr;
 }
 
 bool CHooks::Initialize()
@@ -34,8 +50,11 @@ bool CHooks::Initialize()
 
 	{
 		SDK::CInitTimingScope tCreate("Hooks.Initialize create");
-		for (auto& pHook : m_mHooks | std::views::values)
+		for (CHook* pHook : HookRegistry())
 		{
+			if (!pHook)
+				continue;
+
 			const bool bOK = reinterpret_cast<bool(__cdecl*)()>(pHook->m_pInitFunc)();
 			m_bFailed = m_bFailed || !bOK;
 		}

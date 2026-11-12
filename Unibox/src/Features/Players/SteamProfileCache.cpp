@@ -18,6 +18,8 @@ static constexpr auto AvatarRefreshAge = std::chrono::days(7);
 static constexpr uint32_t MaxAvatarDimension = 1024;
 static constexpr double AvatarRequestTimeout = 8.0;
 static constexpr double SteamRequestInterval = 1.0;
+static constexpr double ProfileIdleTimeout = 120.0;
+static constexpr size_t MaxProfileEntries = 256;
 
 static double NowSeconds()
 {
@@ -236,7 +238,9 @@ void CSteamProfileCache::Touch(uint32_t uAccountID)
 		return;
 	EnsureCallbacksRegistered();
 	std::lock_guard tLock(m_mutex);
-	RequestName(uAccountID, m_mEntries[uAccountID]);
+	auto& tEntry = m_mEntries[uAccountID];
+	tEntry.m_flLastAccess = NowSeconds();
+	RequestName(uAccountID, tEntry);
 }
 
 void CSteamProfileCache::TouchAvatar(uint32_t uAccountID)
@@ -246,6 +250,7 @@ void CSteamProfileCache::TouchAvatar(uint32_t uAccountID)
 	EnsureCallbacksRegistered();
 	std::lock_guard tLock(m_mutex);
 	auto& tEntry = m_mEntries[uAccountID];
+	tEntry.m_flLastAccess = NowSeconds();
 	RequestName(uAccountID, tEntry);
 	if (!tEntry.m_bDiskChecked)
 		tEntry.m_bDiskLoadQueued = true;
@@ -260,10 +265,47 @@ void CSteamProfileCache::Refresh(uint32_t uAccountID)
 	EnsureCallbacksRegistered();
 	std::lock_guard tLock(m_mutex);
 	auto& tEntry = m_mEntries[uAccountID];
+	tEntry.m_flLastAccess = NowSeconds();
 	LoadAvatarFromDisk(uAccountID, tEntry);
 	tEntry.m_bNameRequested = false;
 	RequestName(uAccountID, tEntry, true);
 	RequestAvatar(uAccountID, tEntry, true);
+}
+
+bool CSteamProfileCache::HasPendingWork(const Entry_t& tEntry) const
+{
+	return tEntry.m_bDiskLoadQueued || tEntry.m_bNameRequested || tEntry.m_bNameQueued
+		|| tEntry.m_bAvatarRequested || tEntry.m_bAvatarQueued || tEntry.m_bSavePending
+		|| tEntry.m_iPendingImage > 0;
+}
+
+void CSteamProfileCache::PruneEntries()
+{
+	const double flNow = NowSeconds();
+	std::erase_if(m_mEntries, [&](const auto& tPair)
+		{
+			const Entry_t& tEntry = tPair.second;
+			return !HasPendingWork(tEntry) && flNow - tEntry.m_flLastAccess > ProfileIdleTimeout;
+		});
+
+	if (m_mEntries.size() <= MaxProfileEntries)
+		return;
+
+	std::vector<std::pair<double, uint32_t>> vCandidates;
+	vCandidates.reserve(m_mEntries.size() - MaxProfileEntries);
+	for (const auto& [uAccountID, tEntry] : m_mEntries)
+	{
+		if (!HasPendingWork(tEntry))
+			vCandidates.emplace_back(tEntry.m_flLastAccess, uAccountID);
+	}
+	std::sort(vCandidates.begin(), vCandidates.end());
+
+	for (const auto& tCandidate : vCandidates)
+	{
+		if (m_mEntries.size() <= MaxProfileEntries)
+			break;
+		m_mEntries.erase(tCandidate.second);
+	}
 }
 
 void CSteamProfileCache::Pump()
@@ -286,6 +328,7 @@ void CSteamProfileCache::Pump()
 	std::vector<uint32_t> vPendingDiskLoads;
 	{
 		std::lock_guard tLock(m_mutex);
+		PruneEntries();
 		for (auto& [uAccountID, tEntry] : m_mEntries)
 		{
 			if (tEntry.m_bSavePending && tEntry.m_pAvatarPixels)
@@ -364,7 +407,8 @@ std::string CSteamProfileCache::GetPersonaName(uint32_t uAccountID)
 		return {};
 	Touch(uAccountID);
 	std::lock_guard tLock(m_mutex);
-	return m_mEntries[uAccountID].m_sPersonaName;
+	const auto it = m_mEntries.find(uAccountID);
+	return it != m_mEntries.end() ? it->second.m_sPersonaName : std::string{};
 }
 
 bool CSteamProfileCache::TryGetAvatarImage(uint32_t uAccountID, AvatarImage_t& tOutImage)
@@ -570,6 +614,7 @@ void CSteamProfileCache::StoreAvatar(uint32_t uAccountID, std::vector<uint8_t>&&
 		return;
 
 	auto& tEntry = m_mEntries[uAccountID];
+	tEntry.m_flLastAccess = NowSeconds();
 	tEntry.m_bAvatarRequested = false;
 	tEntry.m_bAvatarUnavailable = false;
 	if (tEntry.m_pAvatarPixels)
@@ -605,6 +650,7 @@ void CSteamProfileCache::HandlePersonaStateChange(const PersonaStateChange_t& tC
 		return;
 
 	auto& tEntry = it->second;
+	tEntry.m_flLastAccess = NowSeconds();
 	if (tCallback.m_nChangeFlags & k_EPersonaChangeName)
 	{
 		if (const char* pszName = I::SteamFriends ? I::SteamFriends->GetFriendPersonaName(tSteamID) : nullptr; pszName && *pszName)

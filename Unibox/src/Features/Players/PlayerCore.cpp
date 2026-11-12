@@ -25,8 +25,6 @@ void CPlayerlistCore::SavePlayerlist()
 	if (!F::PlayerUtils.m_bSave || F::PlayerUtils.m_bLoad) // terrible if we end up saving while loading
 		return;
 
-	F::PlayerUtils.m_bSave = false;
-
 	try
 	{
 		boost::property_tree::ptree tWrite;
@@ -81,7 +79,8 @@ void CPlayerlistCore::SavePlayerlist()
 			tWrite.put_child("Aliases", tSub);
 		}
 
-		write_json(F::Configs.m_sCorePath + "Players.json", tWrite);
+		F::Configs.WriteJson(F::Configs.m_sCorePath + "Players.json", tWrite);
+		F::PlayerUtils.m_bSave = false;
 
 		SDK::Output("unibox", "Saved playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 	}
@@ -217,14 +216,7 @@ void CPlayerlistCore::SaveCheaterlist()
 	try
 	{
 		const std::string sJson = F::PlayerUtils.ExportCheatersToJson();
-		std::ofstream fStream(F::Configs.m_sCorePath + "Cheaters.json", std::ios::out | std::ios::trunc);
-		if (!fStream)
-			throw std::ios_base::failure("failed to open cheaterlist");
-
-		fStream << sJson;
-		if (!fStream)
-			throw std::ios_base::failure("failed to write cheaterlist");
-
+		F::Configs.WriteJson(F::Configs.m_sCorePath + "Cheaters.json", sJson);
 		F::PlayerUtils.m_bCheaterSave = false;
 		SDK::Output("unibox", "Saved cheaterlist", { 255, 150, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_MENU);
 	}

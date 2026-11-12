@@ -75,7 +75,8 @@ DWORD WINAPI MainThread(LPVOID lpParam)
 	U::ExceptionHandler.Initialize(reinterpret_cast<LPVOID>(uBase));
 	U::Core.Load();
 	U::Core.Loop();
-	U::Core.Unload();
+	if (U::Core.Unload() == CCore::UnloadResult_t::Retain)
+		return 0;
 	U::ExceptionHandler.Unload();
 	CleanupManualMap();
 

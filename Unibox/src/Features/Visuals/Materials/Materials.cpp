@@ -5,34 +5,10 @@
 #include "../../Configs/Configs.h"
 #include "../../Binds/Binds.h"
 #include "../Groups/Groups.h"
+#include "../../../Utils/Files/FileName.h"
 #include <algorithm>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
-
-static bool IsSafeMaterialName(const std::string& sName)
-{
-	if (sName.empty() || sName == "." || sName == ".." || sName.size() > 128)
-		return false;
-
-	for (unsigned char c : sName)
-	{
-		if (c < 32 || c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
-			return false;
-	}
-	if (sName.back() == '.' || sName.back() == ' ')
-		return false;
-
-	std::string sDevice = sName.substr(0, sName.find('.'));
-	for (char& c : sDevice)
-		c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-	if (sDevice == "CON" || sDevice == "PRN" || sDevice == "AUX" || sDevice == "NUL")
-		return false;
-	if (sDevice.size() == 4 && (sDevice.starts_with("COM") || sDevice.starts_with("LPT")) && sDevice.back() >= '1' && sDevice.back() <= '9')
-		return false;
-
-	return std::filesystem::path(sName).filename() == sName;
-}
 
 static std::filesystem::path GetMaterialFilePath(const char* sName)
 {
@@ -45,7 +21,7 @@ static std::filesystem::path GetMaterialFilePath(const char* sName)
 		if (sCleanName.ends_with(".vmt"))
 			sCleanName.erase(sCleanName.size() - 4);
 
-		if (!IsSafeMaterialName(sCleanName))
+		if (!FileName::IsSafe(sCleanName))
 			return {};
 
 		std::filesystem::path tDirectory = std::filesystem::path(F::Configs.m_sMaterialsPath).lexically_normal();
@@ -647,13 +623,6 @@ void CMaterials::RemoveMaterial(const char* sName)
 					it = val.erase(it);
 				else
 					++it;
-			}
-		};
-		auto fRemoveFromVar = [&](ConfigVar<std::vector<std::pair<std::string, ChamsMaterial_t>>>& var)
-		{
-			for (auto& [iBind, vVal] : var.Map)
-			{
-				fRemoveFromVal(vVal);
 			}
 		};
 		for (auto& tGroup : F::Groups.m_vGroups)

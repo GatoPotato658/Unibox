@@ -1,12 +1,13 @@
 #pragma once
 #include "../Macros/Macros.h"
 #include <MinHook/MinHook.h>
-#include <unordered_map>
 #include <string>
+#include <vector>
 
 class CHook
 {
 public:
+	std::string m_sName;
 	void* m_pOriginal = nullptr;
 	void* m_pInitFunc = nullptr;
 
@@ -79,11 +80,9 @@ private:
 	bool m_bInitialized = false;
 
 public:
-	std::unordered_map<std::string, CHook*> m_mHooks = {};
-
-public:
 	bool Initialize();
 	bool Unload();
+	CHook* Get(const std::string& sName) const;
 };
 
 ADD_FEATURE_CUSTOM(CHooks, Hooks, U);

@@ -110,13 +110,33 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 
 void CRender::LoadColors()
 {
-	const auto fVec = [](Color_t tColor) { return ImVec4(tColor.r / 255.f, tColor.g / 255.f, tColor.b / 255.f, tColor.a / 255.f); };
+	const Color_t tAccent = Vars::Menu::Theme::Accent.Value;
+	const Color_t tBackground = Vars::Menu::Theme::Background.Value;
+	const Color_t tActive = Vars::Menu::Theme::Active.Value;
+	const Color_t tInactive = Vars::Menu::Theme::Inactive.Value;
+	const int iOpacity = Vars::Menu::Theme::Opacity.Value;
+	static Color_t s_tLastAccent = {};
+	static Color_t s_tLastBackground = {};
+	static Color_t s_tLastActive = {};
+	static Color_t s_tLastInactive = {};
+	static int s_iLastOpacity = 0;
+	static bool s_bLoaded = false;
+	if (s_bLoaded && tAccent == s_tLastAccent && tBackground == s_tLastBackground &&
+		tActive == s_tLastActive && tInactive == s_tLastInactive && iOpacity == s_iLastOpacity)
+		return;
+
+	s_bLoaded = true;
+	s_tLastAccent = tAccent;
+	s_tLastBackground = tBackground;
+	s_tLastActive = tActive;
+	s_tLastInactive = tInactive;
+	s_iLastOpacity = iOpacity;
 	CMenuTheme::LoadColors({
-		fVec(Vars::Menu::Theme::Accent.Value),
-		fVec(Vars::Menu::Theme::Background.Value),
-		fVec(Vars::Menu::Theme::Active.Value),
-		fVec(Vars::Menu::Theme::Inactive.Value),
-		Vars::Menu::Theme::Opacity.Value / 100.f
+		ImGui::ColorByteToVec(tAccent),
+		ImGui::ColorByteToVec(tBackground),
+		ImGui::ColorByteToVec(tActive),
+		ImGui::ColorByteToVec(tInactive),
+		iOpacity / 100.f
 	});
 }
 

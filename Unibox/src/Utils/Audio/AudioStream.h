@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <thread>
 
 #define MINIMP3_FLOAT_OUTPUT
@@ -28,6 +29,7 @@ enum class AudioStreamError_t : uint8_t
 	Connect,
 	Status,
 	Format,
+	Unsupported,
 	Thread
 };
 
@@ -56,19 +58,27 @@ private:
 	void SetTitle(const char* sTitle);
 	void Close();
 	void Reader();
+	AudioStreamError_t OpenConnection(const char* sUrl);
+	bool Cancelled() const;
+	void ResetCodec();
+	AudioStreamError_t StartOutput(uint32_t uRate);
+	AudioStreamError_t ReadAudioChunk();
+	AudioStreamError_t DrainInput();
+	AudioStreamError_t ConnectVoice();
 	static void RenderVoice(void* pUser, float* pOut, uint32_t uFrames);
 
 	std::atomic<bool> m_bClosing = false;
 	std::atomic<bool> m_bEnded = false;
 	std::atomic<bool> m_bStalled = false;
 	std::atomic<bool> m_bReleased = false;
+	std::atomic<uint64_t> m_uLastDataTick = 0;
+	const std::atomic<bool>* m_pCancel = nullptr;
 
 	void* m_pSession = nullptr;
 	void* m_pConnection = nullptr;
 	void* m_pRequest = nullptr;
-	std::mutex m_tRequestMutex;
-
 	Codec_t m_iCodec = Codec_t::Mp3;
+
 	uint32_t m_uMetaint = 0;
 	uint32_t m_uAudioLeft = 0;
 	uint32_t m_uMetaLeft = 0;
@@ -84,9 +94,8 @@ private:
 	char* m_pVorbisMemory = nullptr;
 
 	float* m_pRing = nullptr;
-	uint32_t m_uRate = 0;
-	uint32_t m_uCapacity = 0;
-	uint32_t m_uStartFill = 0;
+	std::atomic<uint32_t> m_uRate = 0;
+	std::atomic<uint32_t> m_uCapacity = 0;
 	std::atomic<uint32_t> m_uWritten = 0;
 	std::atomic<uint32_t> m_uRead = 0;
 
@@ -101,10 +110,11 @@ private:
 public:
 	~CAudioStream();
 
-	static CAudioStream* Open(const char* sUrl, AudioStreamError_t& iError);
+	static CAudioStream* Open(const char* sUrl, AudioStreamError_t& iError, const std::atomic<bool>* pCancel = nullptr);
 	void Release();
 
 	void Play();
+	bool Playing() const;
 	void Pause(bool bPaused);
 	void Slide(float flVolume, uint32_t uMilliseconds);
 

@@ -413,7 +413,7 @@ void CCaptureOverlay::ReleaseDeviceObjects()
 	m_bUnsupported = false;
 }
 
-void CCaptureOverlay::Shutdown()
+bool CCaptureOverlay::Shutdown()
 {
 	ReleaseDeviceObjects();
 
@@ -422,7 +422,11 @@ void CCaptureOverlay::Shutdown()
 	if (m_hThread)
 	{
 		if (WaitForSingleObject(m_hThread, 2000) == WAIT_TIMEOUT)
-			PostThreadMessageW(GetThreadId(m_hThread), WM_QUIT, 0, 0), WaitForSingleObject(m_hThread, 1000);
+		{
+			PostThreadMessageW(GetThreadId(m_hThread), WM_QUIT, 0, 0);
+			if (WaitForSingleObject(m_hThread, 1000) == WAIT_TIMEOUT)
+				return false;
+		}
 		CloseHandle(m_hThread);
 		m_hThread = nullptr;
 	}
@@ -444,5 +448,6 @@ void CCaptureOverlay::Shutdown()
 	m_bSwapChainFailed = false;
 	m_bUnsupported = false;
 	m_bNotified = false;
+	return true;
 }
 #endif

@@ -53,10 +53,11 @@ namespace PathWorker
 	{
 	public:
 		~CPathWorker();
-		void Start(CMap* pMap);
+		bool Start(CMap* pMap);
 		void Stop();
+		bool IsRunning() const { return m_bRunning.load(std::memory_order_acquire); }
 
-		void Submit(PathRequest tRequest);
+		bool Submit(PathRequest tRequest);
 
 		void CancelAll();
 

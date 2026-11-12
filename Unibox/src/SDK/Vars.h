@@ -61,7 +61,11 @@ public:
 
 namespace G
 {
-	inline std::vector<BaseVar*> Vars = {};
+	inline std::vector<BaseVar*>& Vars()
+	{
+		static std::vector<BaseVar*> vVars;
+		return vVars;
+	}
 };
 
 template <class T>
@@ -85,7 +89,7 @@ public:
 		m_vValues = vValues;
 		m_sExtra = sNone;
 
-		G::Vars.push_back(this);
+		G::Vars().push_back(this);
 	}
 	ConfigVar(T tValue, std::vector<const char*> vNames, const char* sName, const char* sSection, int iFlags, int iMin, int iMax, int iStep = 1, const char* sFormat = "%i")
 	{
@@ -102,7 +106,7 @@ public:
 		m_unStep.i = iStep;
 		m_sExtra = sFormat;
 
-		G::Vars.push_back(this);
+		G::Vars().push_back(this);
 	}
 	ConfigVar(T tValue, std::vector<const char*> vNames, const char* sName, const char* sSection, int iFlags, float flMin, float flMax, float flStep = 1.f, const char* sFormat = "%g")
 	{
@@ -119,7 +123,7 @@ public:
 		m_unStep.f = flStep;
 		m_sExtra = sFormat;
 
-		G::Vars.push_back(this);
+		G::Vars().push_back(this);
 	}
 
 	inline T& operator[](int i)

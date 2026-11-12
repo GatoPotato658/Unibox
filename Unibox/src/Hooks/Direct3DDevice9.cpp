@@ -39,12 +39,16 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 	F::SteamProfileCache.ReleaseTextures();
 	ImGui_ImplDX9_InvalidateDeviceObjects();
 	const HRESULT Original = CALL_ORIGINAL(pDevice, pPresentationParameters);
-	ImGui_ImplDX9_CreateDeviceObjects();
+	if (SUCCEEDED(Original))
+		ImGui_ImplDX9_CreateDeviceObjects();
 	return Original;
 }
 
 LONG __stdcall WndProc::Func(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (G::Unload)
+		return CallWindowProc(Original, hWnd, uMsg, wParam, lParam);
+
 	if (F::Menu.m_bIsOpen && F::Menu.m_bInputReady)
 	{
 		ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam);

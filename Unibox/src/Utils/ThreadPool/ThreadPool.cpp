@@ -7,9 +7,11 @@ static constexpr int SpinBeforePark = 128;
 
 bool CThreadPool::Startup(int iWorkers)
 {
+	std::lock_guard tLifecycleLock(m_tLifecycleMutex);
 	if (m_bStarted.exchange(true, std::memory_order_acq_rel))
 		return m_iWorkers.load(std::memory_order_acquire) > 0;
 
+	m_bStop.store(false, std::memory_order_release);
 	if (iWorkers <= 0)
 		iWorkers = std::clamp(int(std::thread::hardware_concurrency()) / 2 - 1, 1, MaxWorkers);
 	iWorkers = std::min(iWorkers, MaxWorkers);
@@ -27,15 +29,22 @@ bool CThreadPool::Startup(int iWorkers)
 		m_iWorkers.store(i + 1, std::memory_order_release);
 	}
 
-	return m_iWorkers.load(std::memory_order_acquire) > 0;
+	if (m_iWorkers.load(std::memory_order_acquire) > 0)
+		return true;
+
+	m_bStarted.store(false, std::memory_order_release);
+	return false;
 }
 
 void CThreadPool::Shutdown()
 {
+	std::lock_guard tLifecycleLock(m_tLifecycleMutex);
+	if (!m_bStarted.exchange(false, std::memory_order_acq_rel))
+		return;
+
 	{
 		std::lock_guard tLock(m_tMutex);
 		m_bStop.store(true, std::memory_order_release);
-		m_bStarted.store(true, std::memory_order_release);
 	}
 	m_tWake.notify_all();
 

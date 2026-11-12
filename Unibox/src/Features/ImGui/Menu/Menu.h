@@ -37,7 +37,6 @@ private:
 public:
 	void Render();
 	void AddOutput(const char* sFunction, const char* sLog, Color_t tColor = Vars::Menu::Theme::Accent.Value);
-	void ShowNotification(const char* sTitle, const char* sMessage);
 	void ShowDeferredNotification(const char* sTitle, const char* sMessage);
 	void ProcessDeferredNotifications();
 	void DrawNotifications();
@@ -62,7 +61,6 @@ class CMenu
 public:
 	void Render() {}
 	void AddOutput(const char*, const char*, Color_t = {}) {}
-	void ShowNotification(const char*, const char*) {}
 	void ShowDeferredNotification(const char*, const char*) {}
 	void ProcessDeferredNotifications() {}
 	void DrawNotifications() {}

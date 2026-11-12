@@ -176,8 +176,16 @@ void CNamedPipe::Initialize()
 	Log("Cleared local bots list on startup");
 	ClearCaptureReservations();
 
-	m_pipeThread = std::thread(ConnectAndMaintainPipe);
-	Log("Pipe thread started");
+	try
+	{
+		m_pipeThread = std::thread(ConnectAndMaintainPipe);
+		Log("Pipe thread started");
+	}
+	catch (...)
+	{
+		m_shouldRun.store(false);
+		Log("Pipe thread failed to start");
+	}
 }
 
 void CNamedPipe::Shutdown()
