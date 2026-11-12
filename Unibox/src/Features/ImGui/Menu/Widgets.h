@@ -1934,10 +1934,8 @@ namespace ImGui
 	{
 		PushStyleVar(ImGuiStyleVar_FramePadding, { 0, 0 });
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, H::Draw.Scale(4) });
-		PushStyleVar(ImGuiStyleVar_PopupBorderSize, H::Draw.Scale());
-		PushStyleColor(ImGuiCol_Border, F::Render.Outline.Value);
-		tRow.m_bOpen = BeginComboPopup(tRow.m_uPopup, ImRect(tRow.m_vFieldMin, tRow.m_vFieldMax + ImVec2(0, H::Draw.Scale(2))), ImGuiComboFlags_HeightLarge);
-		PopStyleColor();
+		PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.f);
+		tRow.m_bOpen = BeginComboPopup(tRow.m_uPopup, ImRect(tRow.m_vFieldMin, tRow.m_vFieldMax + ImVec2(0, H::Draw.Scale(4))), ImGuiComboFlags_HeightLarge);
 		PopStyleVar(3);
 		if (tRow.m_bOpen)
 			PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
