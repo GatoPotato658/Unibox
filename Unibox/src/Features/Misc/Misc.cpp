@@ -147,24 +147,280 @@ void CMisc::AutoJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 	F::AntiCheatCompatibility.BunnyHop(pCmd, bValid, bLastValid);
 }
 
-void CMisc::AutoJumpbug(CTFPlayer* pLocal, CUserCmd* pCmd)
+struct FallPhysics_t
 {
-	if (!Vars::Misc::Movement::AutoJumpbug.Value || !(pCmd->buttons & IN_DUCK) || pLocal->m_hGroundEntity() || pLocal->m_vecVelocity().z > -650.f)
-		return;
+	CTFPlayer* m_pLocal = nullptr;
+	Vec3 m_vHullMin = {};
+	Vec3 m_vHullMax = {};
+	Vec3 m_vDuckHullMax = {};
+	Vec3 m_vWish = {};
+	float m_flLift = 0.f;
+	float m_flHalfGravity = 0.f;
+	float m_flMaxSpeed = 0.f;
+	float m_flAirAccelerate = 0.f;
+};
 
-	float flUnduckHeight = 20 * pLocal->m_flModelScale();
-	float flTraceDistance = flUnduckHeight + 2;
+struct FallState_t
+{
+	Vec3 m_vOrigin = {};
+	Vec3 m_vVelocity = {};
+	bool m_bDucked = false;
+	bool m_bHeld = false;
+	int m_iAirDucks = 0;
+};
+
+static inline void FallTrace(const FallPhysics_t& tPhysics, const Vec3& vStart, const Vec3& vEnd, const Vec3& vMins, const Vec3& vMaxs, CGameTrace& trace)
+{
+	CTraceFilterCollideable filter(tPhysics.m_pLocal);
+	filter.m_iType = SKIP_CHECK;
+	SDK::TraceHull(vStart, vEnd, vMins, vMaxs, tPhysics.m_pLocal->SolidMask(), &filter, &trace);
+}
+
+static inline Vec3 FallHullMax(const FallPhysics_t& tPhysics, bool bDucked)
+{
+	return bDucked ? tPhysics.m_vDuckHullMax : tPhysics.m_vHullMax;
+}
+
+static inline Vec3 ClipFallVelocity(const Vec3& vVelocity, const Vec3& vNormal)
+{
+	Vec3 vOut = vVelocity - vNormal * vVelocity.Dot(vNormal);
+	const float flAdjust = vOut.Dot(vNormal);
+	if (flAdjust < 0.f)
+		vOut -= vNormal * flAdjust;
+	return vOut;
+}
+
+static inline void FallTryPlayerMove(const FallPhysics_t& tPhysics, FallState_t& tState)
+{
+	const Vec3 vMaxs = FallHullMax(tPhysics, tState.m_bDucked);
+	const Vec3 vPrimal = tState.m_vVelocity;
+
+	Vec3 aPlanes[5] = {};
+	int iPlanes = 0;
+	Vec3 vOriginal = tState.m_vVelocity;
+	float flTimeLeft = TICK_INTERVAL;
+	float flAllFraction = 0.f;
+
+	for (int iBump = 0; iBump < 4; iBump++)
+	{
+		if (tState.m_vVelocity.Length() == 0.f)
+			break;
+
+		CGameTrace trace = {};
+		FallTrace(tPhysics, tState.m_vOrigin, tState.m_vOrigin + tState.m_vVelocity * flTimeLeft, tPhysics.m_vHullMin, vMaxs, trace);
+		flAllFraction += trace.fraction;
+
+		if (trace.allsolid)
+		{
+			tState.m_vVelocity = {};
+			return;
+		}
+
+		if (trace.fraction > 0.f)
+		{
+			tState.m_vOrigin = trace.endpos;
+			vOriginal = tState.m_vVelocity;
+			iPlanes = 0;
+		}
+
+		if (trace.fraction == 1.f)
+			break;
+
+		flTimeLeft -= flTimeLeft * trace.fraction;
+
+		if (iPlanes >= 5)
+		{
+			tState.m_vVelocity = {};
+			break;
+		}
+
+		aPlanes[iPlanes++] = trace.plane.normal;
+
+		if (iPlanes == 1)
+		{
+			tState.m_vVelocity = vOriginal = ClipFallVelocity(vOriginal, aPlanes[0]);
+			continue;
+		}
+
+		int iSlid = 0;
+		for (; iSlid < iPlanes; iSlid++)
+		{
+			tState.m_vVelocity = ClipFallVelocity(vOriginal, aPlanes[iSlid]);
+
+			int iAgainst = 0;
+			for (; iAgainst < iPlanes; iAgainst++)
+			{
+				if (iAgainst != iSlid && tState.m_vVelocity.Dot(aPlanes[iAgainst]) < 0.f)
+					break;
+			}
+
+			if (iAgainst == iPlanes)
+				break;
+		}
+
+		if (iSlid == iPlanes)
+		{
+			if (iPlanes != 2)
+			{
+				tState.m_vVelocity = {};
+				break;
+			}
+
+			const Vec3 vCrease = aPlanes[0].Cross(aPlanes[1]).Normalized();
+			tState.m_vVelocity = vCrease * vCrease.Dot(tState.m_vVelocity);
+		}
+
+		if (tState.m_vVelocity.Dot(vPrimal) <= 0.f)
+		{
+			tState.m_vVelocity = {};
+			break;
+		}
+	}
+
+	if (flAllFraction == 0.f)
+		tState.m_vVelocity = {};
+}
+
+static inline bool FallTouchesGround(const FallPhysics_t& tPhysics, const FallState_t& tState)
+{
+	const Vec3 vMins = tPhysics.m_vHullMin;
+	const Vec3 vMaxs = FallHullMax(tPhysics, tState.m_bDucked);
+	const Vec3 vEnd = { tState.m_vOrigin.x, tState.m_vOrigin.y, tState.m_vOrigin.z - 2.f };
 
 	CGameTrace trace = {};
-	CTraceFilterWorldAndPropsOnly filter = {};
+	FallTrace(tPhysics, tState.m_vOrigin, vEnd, vMins, vMaxs, trace);
+	if (trace.fraction == 1.f)
+		return false;
 
-	Vec3 vOrigin = pLocal->m_vecOrigin();
-	SDK::TraceHull(vOrigin, vOrigin - Vec3(0, 0, flTraceDistance), pLocal->m_vecMins(), pLocal->m_vecMaxs(), pLocal->SolidMask(), &filter, &trace);
-	if (!trace.DidHit() || trace.fraction * flTraceDistance < flUnduckHeight) // don't try if we aren't in range to unduck or are too low
+	if (trace.plane.normal.z >= 0.7f)
+		return true;
+
+	const Vec3 aQuadrantMins[4] = { vMins, { 0.f, 0.f, vMins.z }, { vMins.x, 0.f, vMins.z }, { 0.f, vMins.y, vMins.z } };
+	const Vec3 aQuadrantMaxs[4] = { { 0.f, 0.f, vMaxs.z }, vMaxs, { 0.f, vMaxs.y, vMaxs.z }, { vMaxs.x, 0.f, vMaxs.z } };
+	for (int i = 0; i < 4; i++)
+	{
+		FallTrace(tPhysics, tState.m_vOrigin, vEnd, aQuadrantMins[i], aQuadrantMaxs[i], trace);
+		if (trace.m_pEnt && trace.plane.normal.z >= 0.7f)
+			return true;
+	}
+
+	return false;
+}
+
+static inline bool FallCanUnduck(const FallPhysics_t& tPhysics, const FallState_t& tState)
+{
+	const Vec3 vUnducked = { tState.m_vOrigin.x, tState.m_vOrigin.y, tState.m_vOrigin.z - tPhysics.m_flLift };
+
+	CGameTrace trace = {};
+	FallTrace(tPhysics, tState.m_vOrigin, vUnducked, tPhysics.m_vHullMin, tPhysics.m_vHullMax, trace);
+	return !trace.startsolid && trace.fraction == 1.f;
+}
+
+static inline bool FallUnduckLands(const FallPhysics_t& tPhysics, const FallState_t& tState)
+{
+	if (!tState.m_bDucked || !FallCanUnduck(tPhysics, tState))
+		return false;
+
+	FallState_t tUnducked = tState;
+	tUnducked.m_vOrigin.z -= tPhysics.m_flLift;
+	tUnducked.m_bDucked = false;
+	return FallTouchesGround(tPhysics, tUnducked);
+}
+
+static inline bool FallStepOpen(const FallPhysics_t& tPhysics, FallState_t& tState)
+{
+	const float flFall = -tState.m_vVelocity.z;
+	const bool bPressed = tState.m_iAirDucks < 2;
+
+	if (bPressed && !tState.m_bDucked)
+	{
+		tState.m_vOrigin.z += tPhysics.m_flLift;
+		tState.m_bDucked = true;
+	}
+	else if (!bPressed && tState.m_bDucked)
+	{
+		if (tState.m_bHeld)
+			tState.m_iAirDucks++;
+
+		if (FallCanUnduck(tPhysics, tState))
+		{
+			tState.m_vOrigin.z -= tPhysics.m_flLift;
+			tState.m_bDucked = false;
+			if (FallTouchesGround(tPhysics, tState))
+				return false;
+		}
+	}
+
+	tState.m_bHeld = bPressed;
+	tState.m_vVelocity.z -= tPhysics.m_flHalfGravity;
+
+	Vec3 vWishDir = tPhysics.m_vWish;
+	const float flWishSpeed = std::min(vWishDir.Normalize(), tPhysics.m_flMaxSpeed);
+	const float flAdd = std::min(flWishSpeed, 30.f) - tState.m_vVelocity.Dot(vWishDir);
+	if (flAdd > 0.f)
+		tState.m_vVelocity += vWishDir * std::min(tPhysics.m_flAirAccelerate * flWishSpeed * TICK_INTERVAL, flAdd);
+
+	FallTryPlayerMove(tPhysics, tState);
+
+	if (tState.m_vVelocity.z <= 250.f && FallTouchesGround(tPhysics, tState))
+		return false;
+
+	tState.m_vVelocity.z -= tPhysics.m_flHalfGravity;
+
+	return !(-tState.m_vVelocity.z < flFall && -tState.m_vVelocity.z <= 650.f);
+}
+
+void CMisc::AutoJumpbug(CTFPlayer* pLocal, CUserCmd* pCmd)
+{
+	if (!Vars::Misc::Movement::AutoJumpbug.Value || pLocal->m_hGroundEntity() || pLocal->m_nWaterLevel()
+		|| pLocal->InCond(TF_COND_AIR_CURRENT) || pCmd->buttons & IN_JUMP && !(pLocal->m_nButtons() & IN_JUMP))
 		return;
 
-	pCmd->buttons &= ~IN_DUCK;
-	pCmd->buttons |= IN_JUMP;
+	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
+	static auto sv_airaccelerate = H::ConVars.FindVar("sv_airaccelerate");
+	const float flGravity = sv_gravity->GetFloat() * (pLocal->m_flGravity() ? pLocal->m_flGravity() : 1.f);
+	if (flGravity * TICK_INTERVAL - pLocal->m_vecVelocity().z <= 650.f)
+		return;
+
+	auto pGameRules = I::TFGameRules();
+	auto pViewVectors = pGameRules ? pGameRules->GetViewVectors() : nullptr;
+	if (!pViewVectors)
+		return;
+
+	const float flScale = pLocal->m_flModelScale();
+	FallPhysics_t tPhysics = {};
+	tPhysics.m_pLocal = pLocal;
+	tPhysics.m_vHullMin = pViewVectors->m_vHullMin * flScale;
+	tPhysics.m_vHullMax = pViewVectors->m_vHullMax * flScale;
+	tPhysics.m_vDuckHullMax = pViewVectors->m_vDuckHullMax * flScale;
+	tPhysics.m_flLift = (pViewVectors->m_vHullMax.z - pViewVectors->m_vDuckHullMax.z) * flScale;
+	tPhysics.m_flHalfGravity = flGravity * 0.5f * TICK_INTERVAL;
+	tPhysics.m_flMaxSpeed = pLocal->m_flMaxspeed();
+	tPhysics.m_flAirAccelerate = sv_airaccelerate->GetFloat();
+
+	Vec3 vForward, vRight; Math::AngleVectors({ 0.f, pCmd->viewangles.y, 0.f }, &vForward, &vRight, nullptr);
+	tPhysics.m_vWish = vForward * pCmd->forwardmove + vRight * pCmd->sidemove;
+
+	FallState_t tState = {};
+	tState.m_vOrigin = pLocal->GetAbsOrigin();
+	tState.m_vVelocity = pLocal->m_vecVelocity();
+	tState.m_bDucked = pLocal->IsDucking();
+	tState.m_bHeld = pLocal->m_nButtons() & IN_DUCK;
+	tState.m_iAirDucks = pLocal->m_nAirDucked();
+
+	if (FallUnduckLands(tPhysics, tState))
+	{
+		pCmd->buttons &= ~IN_DUCK;
+		pCmd->buttons |= IN_JUMP;
+		return;
+	}
+
+	FallState_t tNext = tState;
+	if (!FallStepOpen(tPhysics, tNext) || !FallUnduckLands(tPhysics, tNext))
+		return;
+
+	pCmd->buttons |= IN_DUCK;
+	pCmd->buttons &= ~IN_JUMP;
 }
 
 void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
