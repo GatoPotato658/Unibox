@@ -136,6 +136,7 @@
   - Nav engine:
     - Indicator: Shows info about `Navbot`'s current goal
     - Draw: Renders path, blacklisted nodes and local area
+  - Weather effects
 - **Anticheat**
   - More methods of detecting cheaters
   - Import/export-able cheaterlist
