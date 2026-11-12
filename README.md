@@ -1,6 +1,6 @@
 <div align="center">
 
-  ## <img src=".github/assets/xddd.png" alt="Unibox" width="520">
+  ## <img src=".github/assets/meow.png" alt="Unibox" width="640">
 
   [![Stars](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FGatoPotato658%2FUnibox&query=%24.stargazers_count&label=stars&style=for-the-badge&color=white&logo=github&cacheSeconds=3600)](/../../stargazers)
   [![Workflow status](https://img.shields.io/github/actions/workflow/status/GatoPotato658/Unibox/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)

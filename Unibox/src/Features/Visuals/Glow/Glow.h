@@ -17,12 +17,12 @@ private:
 
 	void RenderFakeAngle(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo);
 
-	IMaterial* m_pMatGlowColor;
-	ITexture* m_pRenderBuffer1;
-	ITexture* m_pRenderBuffer2;
-	IMaterial* m_pMatHaloAddToScreen;
-	IMaterial* m_pMatBlurX;
-	IMaterial* m_pMatBlurY;
+	std::shared_ptr<IMaterial> m_pMatGlowColor = {};
+	std::shared_ptr<ITexture> m_pRenderBuffer1 = {};
+	std::shared_ptr<ITexture> m_pRenderBuffer2 = {};
+	std::shared_ptr<IMaterial> m_pMatHaloAddToScreen = {};
+	std::shared_ptr<IMaterial> m_pMatBlurX = {};
+	std::shared_ptr<IMaterial> m_pMatBlurY = {};
 
 	struct GlowHasher_t
 	{

@@ -15,7 +15,7 @@ void CCameraWindow::Draw()
 	// Draw to screen
 	auto pRenderContext = I::MaterialSystem->GetRenderContext();
 	pRenderContext->DrawScreenSpaceRectangle(
-		m_pCameraMaterial,
+		m_pCameraMaterial.get(),
 		tWindowBox.x - tWindowBox.w / 2, tWindowBox.y, tWindowBox.w, tWindowBox.h,
 		0, 0, tWindowBox.w, tWindowBox.h,
 		m_pCameraTexture->GetActualWidth(), m_pCameraTexture->GetActualHeight(),
@@ -46,7 +46,7 @@ void CCameraWindow::RenderView(void* rcx, const CViewSetup& pViewSetup)
 	tViewSetup.m_flAspectRatio = float(tViewSetup.width) / float(tViewSetup.height);
 	tViewSetup.fov = 90;
 
-	RenderCustomView(rcx, tViewSetup, m_pCameraTexture);
+	RenderCustomView(rcx, tViewSetup, m_pCameraTexture.get());
 
 	m_bDrawing = false;
 }
@@ -72,16 +72,16 @@ void CCameraWindow::Initialize()
 
 	if (!m_pCameraMaterial)
 	{
-		m_pCameraMaterial = F::Materials.create_from_vmt("CameraMaterial",
+		m_pCameraMaterial = F::Materials.Share(F::Materials.create_from_vmt("CameraMaterial",
 			"\"UnlitGeneric\""
 			"\n{"
 			"\n\t$basetexture \"m_pCameraTexture\""
-			"\n}");
+			"\n}"));
 	}
 
 	if (!m_pCameraTexture && SDK::SupportsDX9Shaders())
 	{
-		m_pCameraTexture = I::MaterialSystem->CreateNamedRenderTargetTextureEx(
+		m_pCameraTexture.reset(I::MaterialSystem->CreateNamedRenderTargetTextureEx(
 			"m_pCameraTexture",
 			1,
 			1,
@@ -90,25 +90,12 @@ void CCameraWindow::Initialize()
 			MATERIAL_RT_DEPTH_SHARED,
 			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT,
 			CREATERENDERTARGETFLAGS_HDR
-		);
-		if (m_pCameraTexture)
-			m_pCameraTexture->IncrementReferenceCount();
+		));
 	}
 }
 
 void CCameraWindow::Unload()
 {
-	if (m_pCameraMaterial)
-	{
-		m_pCameraMaterial->DecrementReferenceCount();
-		m_pCameraMaterial->DeleteIfUnreferenced();
-		m_pCameraMaterial = nullptr;
-	}
-
-	if (m_pCameraTexture)
-	{
-		m_pCameraTexture->DecrementReferenceCount();
-		m_pCameraTexture->DeleteIfUnreferenced();
-		m_pCameraTexture = nullptr;
-	}
+	m_pCameraMaterial = {};
+	m_pCameraTexture = {};
 }

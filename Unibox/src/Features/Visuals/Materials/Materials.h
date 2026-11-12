@@ -2,6 +2,7 @@
 #include "../../../SDK/SDK.h"
 
 #include <atomic>
+#include <memory>
 
 struct Material_t
 {
@@ -21,6 +22,8 @@ struct Material_t
 class CMaterials
 {
 public:
+	CMaterials();
+	~CMaterials();
 	enum class PendingOperation : uint8_t
 	{
 		None,
@@ -47,6 +50,7 @@ public:
 	void SetColor(Material_t* pMaterial, Color_t tColor);
 
 	Material_t* GetMaterial(uint32_t uHash);
+	std::shared_ptr<IMaterial> Share(IMaterial* pMaterial);
 	std::string GetVMT(uint32_t uHash);
 	void AddMaterial(const char* sName);
 	void EditMaterial(const char* sName, const char* sVMT);
@@ -54,11 +58,14 @@ public:
 
 	std::unordered_map<uint32_t, Material_t> m_mMaterials = {};
 	std::unordered_mapset<IMaterial*> m_mMatList = {};
+	std::unordered_map<IMaterial*, std::weak_ptr<IMaterial>> m_mSharedMaterials = {};
 
 	bool m_bLoaded = false;
 	std::atomic_bool m_bLoading = false;
 
 private:
+	void Release(IMaterial* pMaterial);
+	void RefreshMaterialsInPlace();
 	std::atomic<PendingOperation> m_ePendingOperation = PendingOperation::None;
 	std::atomic_bool m_bUnloadComplete = false;
 };
