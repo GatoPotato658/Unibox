@@ -192,6 +192,13 @@ static void AimbotWeapons()
 		PopTransparent();
 		FToggle(Vars::Aimbot::Hitscan::ForwardTrack);
 		FTooltip("Simulates the target forward to where they will be by the time your shot lands. The mode adapts automatically. Likes to miss when your ping is >80.");
+		FToggle(Vars::Aimbot::Hitscan::SpreadOptimization);
+		FTooltip("Shifts the aim point so the most pellets of the spread pattern land on the target. Only used when nospread is not correcting the shot.");
+		PushTransparent(!Vars::Aimbot::Hitscan::SpreadOptimization.Value);
+		{
+			FSlider(Vars::Aimbot::Hitscan::SpreadHitChance);
+		}
+		PopTransparent();
 	} EndSection();
 	if (Section("Melee"))
 	{
@@ -506,6 +513,19 @@ static void AimbotDraw()
 		FLabel("Bounds face");
 		PathColors(Vars::Colors::BoundHitboxFace, Vars::Colors::BoundHitboxFaceIgnoreZ);
 		FSlider(Vars::Visuals::Hitbox::DrawDuration);
+	} EndSection();
+	if (Section("Hitmarker"))
+	{
+		FToggle(Vars::Visuals::Hitmarker::Enabled);
+		PushTransparent(!Vars::Visuals::Hitmarker::Enabled.Value);
+		{
+			FDropdown(Vars::Visuals::Hitmarker::Mode);
+			FToggle(Vars::Visuals::Hitmarker::ShowDamage);
+			FColorPicker(Vars::Colors::Hitmarker);
+			FColorPicker(Vars::Colors::HitmarkerCritical);
+			FColorPicker(Vars::Colors::HitmarkerKill);
+		}
+		PopTransparent();
 	} EndSection();
 	if (Vars::Debug::Options.Value)
 	{

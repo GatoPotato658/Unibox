@@ -13,7 +13,83 @@ private:
 	void ResetState();
 	bool CheckAndResetTime();
 	int GetJitter(uint32_t uHash);
+	void PlanAutoYaw(CTFPlayer* pLocal);
+	void StepShown(CTFPlayer* pLocal, const Vec3& vSent, int iSteps);
 
+	struct AutoTarget_t
+	{
+		Vec3 m_vEye = {};
+		bool m_bSeesHead = false;
+	};
+
+	struct HeadScan_t
+	{
+		const mstudiohitboxset_t* m_pSet = nullptr;
+		const mstudiobbox_t* m_pHead = nullptr;
+		const mstudioposeparamdesc_t* m_pAimYaw = nullptr;
+		Vec3 m_vOrigin = {};
+		float m_flGoalFeet = 0.f;
+		float m_flCurrentFeet = 0.f;
+		bool m_bMoving = false;
+		float m_flHeadYaw = 0.f;
+		float m_flShownYaw = 0.f;
+		Vec3 m_aPoints[9] = {};
+		Vec3 m_aShownPoints[9] = {};
+		Vec3 m_vFrontEye = {};
+		int m_aExposed[24] = {};
+		int m_aShownExposed[24] = {};
+		matrix3x4 m_aBones[MAXSTUDIOBONES] = {};
+	};
+
+	struct ShownState_t
+	{
+		float m_flEyeYaw = 0.f;
+		float m_flEyePitch = 0.f;
+		float m_flGoalFeetYaw = 0.f;
+		float m_flCurrentFeetYaw = 0.f;
+		float m_flLastAimTurnTime = 0.f;
+		bool m_bCurrentFeetYawInitialized = false;
+		MultiPlayerPoseData_t m_tPoseData = {};
+		QAngle m_vRender = {};
+		std::array<float, 24> m_aPose = {};
+		int m_iSequence = 0;
+		float m_flCycle = 0.f;
+	};
+
+	bool ScanHead(CTFPlayer* pLocal);
+	void CountExposure(const matrix3x4* aBones, const Vec3* aPoints, float flBuiltYaw, int* aExposed);
+	float SettledHeadYaw(float flRealYaw, float flFakeYaw);
+	int CountShotOverlap(const Vec3& vEye, float flHeadYaw, float flFakeYaw);
+	int CountOverlap(float flHeadYaw, float flFakeYaw);
+
+	std::vector<AutoTarget_t> m_vTargets = {};
+	HeadScan_t m_tScan = {};
+	ShownState_t m_tShown = {};
+	bool m_bShownValid = false;
+	bool m_bShownBones = false;
+	matrix3x4 m_aShownBones[MAXSTUDIOBONES] = {};
+	float m_flSentYaw = 0.f;
+	int m_iPlannedChoke = 0;
+	int m_iLastChoked = 0;
+	bool m_bAutoValid = false;
+	float m_flAutoReal = 0.f;
+	float m_flAutoFake = 0.f;
+
+public:
+	static constexpr int AutoYawBins = 24;
+	static constexpr int HeadPoints = 9;
+
+	struct YawScore_t
+	{
+		int m_iRealExposed = 0;
+		int m_iOverlap = 0;
+		int m_iFakeExposed = 0;
+	};
+
+private:
+	YawScore_t ScoreYaws(float flRealYaw, float flFakeYaw);
+	float BestRealYaw(float flFakeYaw);
+	float BestFakeYaw(float flRealYaw);
 	std::unordered_map<uint32_t, bool> m_mJitter = {};
 	float m_flUltraNextChange[2] = {};
 	float m_flUltraYawOffset[2] = {};

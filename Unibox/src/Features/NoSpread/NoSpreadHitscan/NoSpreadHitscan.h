@@ -20,7 +20,6 @@ private:
 	bool ShouldRun(CTFWeaponBase* pWeapon = nullptr);
 	int GetSeed(CUserCmd* pCmd);
 	float CalcMantissaStep(float flV);
-	bool IsFixedSpread(CTFWeaponBase* pWeapon);
 	std::string GetFormat(int iServerTime);
 
 	bool m_bWaitingForPlayerPerf = false;
@@ -32,6 +31,9 @@ private:
 
 public:
 	void Reset();
+
+	bool IsFixedSpread(CTFWeaponBase* pWeapon);
+	bool Corrects(CTFWeaponBase* pWeapon);
 
 	void AskForPlayerPerf();
 	bool ParsePlayerPerf(const std::string& sMsg);

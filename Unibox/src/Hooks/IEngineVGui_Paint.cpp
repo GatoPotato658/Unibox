@@ -4,6 +4,7 @@
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
 #include "../Features/Visuals/CameraWindow/CameraWindow.h"
 #include "../Features/Visuals/Visuals.h"
+#include "../Features/Visuals/Hitmarker/Hitmarker.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Aimbot/Aimbot.h"
 #include "../Features/PacketManip/AntiAim/AntiAim.h"
@@ -46,6 +47,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 			F::ESP.CacheDrawInfo(pCacheFor);
 			F::Aimbot.CacheDrawInfo(pCacheFor);
 			F::Visuals.CacheBestAimPos(pCacheFor);
+			F::Hitmarker.CacheDrawInfo(pCacheFor);
 		}
 
 		if (!SDK::CleanScreenshot())

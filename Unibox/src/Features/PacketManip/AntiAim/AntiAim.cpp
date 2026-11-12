@@ -112,6 +112,8 @@ void CAntiAim::OnLevelInit()
 	m_iLastTick = 0;
 	vRealAngles = vFakeAngles = {};
 	vEdgeTrace.clear();
+	m_bShownValid = m_bShownBones = m_bAutoValid = false;
+	m_iPlannedChoke = m_iLastChoked = 0;
 }
 
 
@@ -268,6 +270,7 @@ float CAntiAim::GetYawOffset(CTFPlayer* pEntity, bool bFake)
 		const float flYaw = sinf(m_flHelixPhase[i] * 2.3f) * 125.f + cosf(m_flHelixPhase[i] * 1.1f) * 35.f;
 		return Math::NormalizeAngle(flYaw);
 	}
+	case Vars::AntiAim::YawEnum::Auto: return bFake ? 0.f : 180.f;
 	case Vars::AntiAim::YawEnum::Quantum:
 	{
 		static constexpr float arrQuantumAngles[8] = { -180.f, -135.f, -90.f, -45.f, 0.f, 45.f, 90.f, 135.f };
@@ -319,8 +322,389 @@ float CAntiAim::GetBaseYaw(CTFPlayer* pLocal, CUserCmd* pCmd, bool bFake)
 
 float CAntiAim::GetYaw(CTFPlayer* pLocal, CUserCmd* pCmd, bool bFake)
 {
+	if (m_bAutoValid && (bFake ? Vars::AntiAim::YawFake.Value : Vars::AntiAim::YawReal.Value) == Vars::AntiAim::YawEnum::Auto)
+		return bFake ? m_flAutoFake : m_flAutoReal;
+
 	float flYaw = GetBaseYaw(pLocal, pCmd, bFake) + GetYawOffset(pLocal, bFake);
 	return flYaw;
+}
+
+static inline float BinYaw(int iBin)
+{
+	return float(iBin) * (360.f / CAntiAim::AutoYawBins) - 180.f;
+}
+
+static inline int YawBin(float flYaw)
+{
+	return int((Math::NormalizeAngle(flYaw) + 180.f) / (360.f / CAntiAim::AutoYawBins) + 0.5f) % CAntiAim::AutoYawBins;
+}
+
+static inline Vec3 SpinAround(const Vec3& vPoint, const Vec3& vAxis, float flDegrees)
+{
+	const float flSin = sinf(Math::Deg2Rad(flDegrees)), flCos = cosf(Math::Deg2Rad(flDegrees));
+	const float flX = vPoint.x - vAxis.x, flY = vPoint.y - vAxis.y;
+	return { vAxis.x + flX * flCos - flY * flSin, vAxis.y + flX * flSin + flY * flCos, vPoint.z };
+}
+
+static inline float TorsoTwist(const mstudioposeparamdesc_t* pAimYaw, float flEyeYaw, float flFeetYaw)
+{
+	return -std::clamp(-Math::NormalizeAngle(flEyeYaw - flFeetYaw), pAimYaw->start, pAimYaw->end);
+}
+
+static inline void StepFeetYaw(float& flGoalFeet, float& flCurrentFeet, float flEyeYaw, bool bMoving)
+{
+	if (bMoving)
+		flGoalFeet = flEyeYaw;
+	else
+	{
+		const float flDelta = Math::NormalizeAngle(flGoalFeet - flEyeYaw);
+		if (fabsf(flDelta) > 45.f)
+			flGoalFeet += flDelta > 0.f ? -45.f : 45.f;
+	}
+
+	flGoalFeet = Math::NormalizeAngle(flGoalFeet);
+	if (flGoalFeet == flCurrentFeet)
+		return;
+
+	const float flRaw = flGoalFeet - flCurrentFeet;
+	const float flStep = 720.f * TICK_INTERVAL * std::clamp(fabsf(flRaw) / 60.f, 0.01f, 1.f);
+	if (fabsf(flRaw) < flStep)
+	{
+		flCurrentFeet = flGoalFeet;
+		return;
+	}
+
+	flCurrentFeet = Math::NormalizeAngle(flCurrentFeet + (Math::NormalizeAngle(flRaw) < 0.f ? -flStep : flStep));
+}
+
+static inline int FirstHitbox(const mstudiohitboxset_t* pSet, const matrix3x4* aBones, const Vec3& vEye, const Vec3& vPoint)
+{
+	int iFirst = -1;
+	float flNearest = std::numeric_limits<float>::max();
+	for (int i = 0; i < pSet->numhitboxes; i++)
+	{
+		auto pBox = pSet->pHitbox(i);
+		float flDist = 0.f;
+		if (Math::RayToOBB(vEye, vPoint - vEye, pBox->bbmin, pBox->bbmax, aBones[pBox->bone], 1.f, &flDist) && flDist < flNearest)
+		{
+			flNearest = flDist;
+			iFirst = i;
+		}
+	}
+	return iFirst;
+}
+
+static inline void GetHeadPoints(const mstudiobbox_t* pHead, const matrix3x4* aBones, Vec3* aPoints)
+{
+	const Vec3 vCenter = (pHead->bbmin + pHead->bbmax) * 0.5f;
+	const Vec3 vQuarter = (pHead->bbmax - pHead->bbmin) * 0.25f;
+	Math::VectorTransform(vCenter, aBones[pHead->bone], aPoints[0]);
+	for (int i = 0; i < CAntiAim::HeadPoints - 1; i++)
+	{
+		const Vec3 vOffset = { i & 1 ? vQuarter.x : -vQuarter.x, i & 2 ? vQuarter.y : -vQuarter.y, i & 4 ? vQuarter.z : -vQuarter.z };
+		Math::VectorTransform(vCenter + vOffset, aBones[pHead->bone], aPoints[i + 1]);
+	}
+}
+
+static inline bool IsHeadshotWeapon(CTFWeaponBase* pWeapon)
+{
+	switch (pWeapon->GetWeaponID())
+	{
+	case TF_WEAPON_SNIPERRIFLE:
+	case TF_WEAPON_SNIPERRIFLE_CLASSIC:
+	case TF_WEAPON_SNIPERRIFLE_DECAP:
+	case TF_WEAPON_COMPOUND_BOW:
+		return true;
+	case TF_WEAPON_REVOLVER:
+		return pWeapon->m_iItemDefinitionIndex() == Spy_m_TheAmbassador || pWeapon->m_iItemDefinitionIndex() == Spy_m_FestiveAmbassador;
+	}
+	return false;
+}
+
+static inline bool IsBetterYaw(const CAntiAim::YawScore_t& tScore, const CAntiAim::YawScore_t& tBest)
+{
+	if (tScore.m_iRealExposed != tBest.m_iRealExposed)
+		return tScore.m_iRealExposed < tBest.m_iRealExposed;
+	if (tScore.m_iOverlap != tBest.m_iOverlap)
+		return tScore.m_iOverlap < tBest.m_iOverlap;
+	return tScore.m_iFakeExposed > tBest.m_iFakeExposed;
+}
+
+void CAntiAim::StepShown(CTFPlayer* pLocal, const Vec3& vSent, int iSteps)
+{
+	auto pAnimState = pLocal->m_PlayerAnimState();
+	if (!pAnimState)
+	{
+		m_bShownValid = m_bShownBones = false;
+		return;
+	}
+
+	char aLive[sizeof(CTFPlayerAnimState)];
+	memcpy(aLive, pAnimState, sizeof(CTFPlayerAnimState));
+	const auto aPose = pLocal->m_flPoseParameter();
+	const int iSequence = pLocal->m_nSequence();
+	const float flCycle = pLocal->m_flCycle();
+	const float flFrameTime = I::GlobalVars->frametime;
+	const float flCurTime = I::GlobalVars->curtime;
+
+	if (m_bShownValid)
+	{
+		pAnimState->m_flEyeYaw = m_tShown.m_flEyeYaw;
+		pAnimState->m_flEyePitch = m_tShown.m_flEyePitch;
+		pAnimState->m_flGoalFeetYaw = m_tShown.m_flGoalFeetYaw;
+		pAnimState->m_flCurrentFeetYaw = m_tShown.m_flCurrentFeetYaw;
+		pAnimState->m_flLastAimTurnTime = m_tShown.m_flLastAimTurnTime;
+		pAnimState->m_bCurrentFeetYawInitialized = m_tShown.m_bCurrentFeetYawInitialized;
+		pAnimState->m_PoseParameterData = m_tShown.m_tPoseData;
+		pAnimState->m_angRender = m_tShown.m_vRender;
+		pLocal->m_flPoseParameter() = m_tShown.m_aPose;
+		pLocal->m_nSequence() = m_tShown.m_iSequence;
+		pLocal->m_flCycle() = m_tShown.m_flCycle;
+	}
+
+	I::GlobalVars->frametime = TICK_INTERVAL;
+	I::GlobalVars->curtime = TICKS_TO_TIME(pLocal->m_nTickBase());
+	const float flPitch = std::clamp(vSent.x, -90.f, 90.f);
+	for (int i = 0; i < iSteps; i++)
+		pAnimState->Update(pAnimState->m_flEyeYaw = vSent.y, flPitch);
+
+	m_tShown.m_flEyeYaw = pAnimState->m_flEyeYaw;
+	m_tShown.m_flEyePitch = pAnimState->m_flEyePitch;
+	m_tShown.m_flGoalFeetYaw = pAnimState->m_flGoalFeetYaw;
+	m_tShown.m_flCurrentFeetYaw = pAnimState->m_flCurrentFeetYaw;
+	m_tShown.m_flLastAimTurnTime = pAnimState->m_flLastAimTurnTime;
+	m_tShown.m_bCurrentFeetYawInitialized = pAnimState->m_bCurrentFeetYawInitialized;
+	m_tShown.m_tPoseData = pAnimState->m_PoseParameterData;
+	m_tShown.m_vRender = pAnimState->m_angRender;
+	m_tShown.m_aPose = pLocal->m_flPoseParameter();
+	m_tShown.m_iSequence = pLocal->m_nSequence();
+	m_tShown.m_flCycle = pLocal->m_flCycle();
+	m_bShownValid = true;
+	m_flSentYaw = vSent.y;
+
+	pLocal->InvalidateBoneCache();
+	m_bShownBones = pLocal->SetupBones(m_aShownBones, MAXSTUDIOBONES, BONE_USED_BY_HITBOX, I::GlobalVars->curtime);
+
+	I::GlobalVars->frametime = flFrameTime;
+	I::GlobalVars->curtime = flCurTime;
+	memcpy(pAnimState, aLive, sizeof(CTFPlayerAnimState));
+	pLocal->m_flPoseParameter() = aPose;
+	pLocal->m_nSequence() = iSequence;
+	pLocal->m_flCycle() = flCycle;
+	pLocal->InvalidateBoneCache();
+}
+
+bool CAntiAim::ScanHead(CTFPlayer* pLocal)
+{
+	auto pAnimState = pLocal->m_PlayerAnimState();
+	auto pHdr = pLocal->GetStudiomodel();
+	auto pSet = pLocal->GetAimHitboxSet();
+	if (!pAnimState || !pHdr || !pSet || pSet->numhitboxes <= HITBOX_HEAD)
+		return false;
+
+	const int iAimYaw = pAnimState->m_PoseParameterData.m_iAimYaw;
+	if (iAimYaw < 0 || iAimYaw >= pHdr->numlocalposeparameters)
+		return false;
+
+	HeadScan_t& tScan = m_tScan;
+	pLocal->InvalidateBoneCache();
+	if (!pLocal->SetupBones(tScan.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_HITBOX, I::GlobalVars->curtime))
+		return false;
+
+	tScan.m_pSet = pSet;
+	tScan.m_pHead = pSet->pHitbox(HITBOX_HEAD);
+	tScan.m_pAimYaw = pHdr->pLocalPoseParameter(iAimYaw);
+	tScan.m_vOrigin = pLocal->m_vecOrigin();
+	tScan.m_flGoalFeet = pAnimState->m_flGoalFeetYaw;
+	tScan.m_flCurrentFeet = pAnimState->m_flCurrentFeetYaw;
+	tScan.m_bMoving = pLocal->m_vecVelocity().Length() > 1.f;
+	tScan.m_flHeadYaw = tScan.m_flCurrentFeet + TorsoTwist(tScan.m_pAimYaw, pAnimState->m_flEyeYaw, tScan.m_flCurrentFeet);
+
+	const matrix3x4* aShownBones = m_bShownBones ? m_aShownBones : tScan.m_aBones;
+	tScan.m_flShownYaw = m_bShownBones
+		? m_tShown.m_flCurrentFeetYaw + TorsoTwist(tScan.m_pAimYaw, m_flSentYaw, m_tShown.m_flCurrentFeetYaw)
+		: tScan.m_flHeadYaw;
+
+	GetHeadPoints(tScan.m_pHead, tScan.m_aBones, tScan.m_aPoints);
+	GetHeadPoints(tScan.m_pHead, aShownBones, tScan.m_aShownPoints);
+
+	Vec3 vForward; Math::AngleVectors(I::EngineClient->GetViewAngles(), &vForward);
+	tScan.m_vFrontEye = tScan.m_aPoints[0] + vForward * 8192.f;
+
+	for (auto& tTarget : m_vTargets)
+	{
+		CGameTrace trace = {};
+		CTraceFilterWorldAndPropsOnly filter = {};
+		SDK::Trace(tTarget.m_vEye, tScan.m_aPoints[0], MASK_SHOT, &filter, &trace);
+		tTarget.m_bSeesHead = trace.fraction == 1.f;
+	}
+
+	CountExposure(tScan.m_aBones, tScan.m_aPoints, tScan.m_flHeadYaw, tScan.m_aExposed);
+	CountExposure(aShownBones, tScan.m_aShownPoints, tScan.m_flShownYaw, tScan.m_aShownExposed);
+	return true;
+}
+
+void CAntiAim::CountExposure(const matrix3x4* aBones, const Vec3* aPoints, float flBuiltYaw, int* aExposed)
+{
+	for (int iBin = 0; iBin < AutoYawBins; iBin++)
+	{
+		aExposed[iBin] = 0;
+
+		const float flTurn = flBuiltYaw - BinYaw(iBin);
+		for (auto& tTarget : m_vTargets)
+		{
+			if (!tTarget.m_bSeesHead)
+				continue;
+
+			const Vec3 vEye = SpinAround(tTarget.m_vEye, m_tScan.m_vOrigin, flTurn);
+			for (int i = 0; i < HeadPoints; i++)
+			{
+				if (FirstHitbox(m_tScan.m_pSet, aBones, vEye, aPoints[i]) == HITBOX_HEAD)
+					aExposed[iBin]++;
+			}
+		}
+	}
+}
+
+float CAntiAim::SettledHeadYaw(float flRealYaw, float flFakeYaw)
+{
+	const int iSettleCommands = int(180.f / (720.f * TICK_INTERVAL)) + 1;
+
+	float flGoalFeet = m_tScan.m_flGoalFeet;
+	float flCurrentFeet = m_tScan.m_flCurrentFeet;
+	for (int iCommand = 0; iCommand < iSettleCommands; iCommand += m_iPlannedChoke + 1)
+	{
+		for (int i = 0; i < m_iPlannedChoke; i++)
+			StepFeetYaw(flGoalFeet, flCurrentFeet, flRealYaw, m_tScan.m_bMoving);
+		StepFeetYaw(flGoalFeet, flCurrentFeet, flFakeYaw, m_tScan.m_bMoving);
+	}
+
+	return flCurrentFeet + TorsoTwist(m_tScan.m_pAimYaw, flFakeYaw, flCurrentFeet);
+}
+
+int CAntiAim::CountShotOverlap(const Vec3& vEye, float flHeadYaw, float flFakeYaw)
+{
+	const HeadScan_t& tScan = m_tScan;
+	const Vec3 vTurnedEye = SpinAround(vEye, tScan.m_vOrigin, tScan.m_flHeadYaw - flHeadYaw);
+	const matrix3x4& mHead = tScan.m_aBones[tScan.m_pHead->bone];
+
+	int iOverlap = 0;
+	for (auto& vPoint : tScan.m_aShownPoints)
+	{
+		const Vec3 vShown = SpinAround(vPoint, tScan.m_vOrigin, flFakeYaw - tScan.m_flShownYaw + tScan.m_flHeadYaw - flHeadYaw);
+		const Vec3 vDelta = vShown - vTurnedEye;
+		float flDist = 0.f;
+		if (Math::RayToOBB(vTurnedEye, vDelta, tScan.m_pHead->bbmin, tScan.m_pHead->bbmax, mHead, 1.f, &flDist) && flDist <= vDelta.Length())
+			iOverlap++;
+	}
+	return iOverlap;
+}
+
+int CAntiAim::CountOverlap(float flHeadYaw, float flFakeYaw)
+{
+	int iOverlap = 0;
+	bool bSeen = false;
+	for (auto& tTarget : m_vTargets)
+	{
+		if (!tTarget.m_bSeesHead)
+			continue;
+
+		bSeen = true;
+		iOverlap += CountShotOverlap(tTarget.m_vEye, flHeadYaw, flFakeYaw);
+	}
+
+	return bSeen ? iOverlap : CountShotOverlap(m_tScan.m_vFrontEye, flHeadYaw, flFakeYaw);
+}
+
+CAntiAim::YawScore_t CAntiAim::ScoreYaws(float flRealYaw, float flFakeYaw)
+{
+	const float flHeadYaw = SettledHeadYaw(flRealYaw, flFakeYaw);
+
+	YawScore_t tScore = {};
+	tScore.m_iRealExposed = m_tScan.m_aExposed[YawBin(flHeadYaw)];
+	tScore.m_iOverlap = CountOverlap(flHeadYaw, flFakeYaw);
+	tScore.m_iFakeExposed = m_tScan.m_aShownExposed[YawBin(flFakeYaw)];
+	return tScore;
+}
+
+float CAntiAim::BestRealYaw(float flFakeYaw)
+{
+	float flBestYaw = m_flAutoReal;
+	YawScore_t tBest = ScoreYaws(flBestYaw, flFakeYaw);
+	for (int iBin = 0; iBin < AutoYawBins; iBin++)
+	{
+		const float flYaw = BinYaw(iBin);
+		const YawScore_t tScore = ScoreYaws(flYaw, flFakeYaw);
+		if (IsBetterYaw(tScore, tBest))
+			tBest = tScore, flBestYaw = flYaw;
+	}
+	return flBestYaw;
+}
+
+float CAntiAim::BestFakeYaw(float flRealYaw)
+{
+	float flBestYaw = m_flAutoFake;
+	YawScore_t tBest = ScoreYaws(flRealYaw, flBestYaw);
+	for (int iBin = 0; iBin < AutoYawBins; iBin++)
+	{
+		const float flYaw = BinYaw(iBin);
+		const YawScore_t tScore = ScoreYaws(flRealYaw, flYaw);
+		if (IsBetterYaw(tScore, tBest))
+			tBest = tScore, flBestYaw = flYaw;
+	}
+	return flBestYaw;
+}
+
+void CAntiAim::PlanAutoYaw(CTFPlayer* pLocal)
+{
+	if (!I::ClientState->chokedcommands)
+		m_iPlannedChoke = m_iLastChoked;
+	m_iLastChoked = I::ClientState->chokedcommands;
+
+	const bool bRealAuto = Vars::AntiAim::YawReal.Value == Vars::AntiAim::YawEnum::Auto;
+	const bool bFakeAuto = Vars::AntiAim::YawFake.Value == Vars::AntiAim::YawEnum::Auto;
+	if (!bRealAuto && !bFakeAuto)
+	{
+		m_bAutoValid = false;
+		return;
+	}
+
+	m_vTargets.clear();
+	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
+	{
+		auto pPlayer = pEntity->As<CTFPlayer>();
+		if (pPlayer->IsDormant() || !pPlayer->IsAlive() || pPlayer->IsAGhost() || pPlayer->IsTaunting() || pPlayer->IsInvisible()
+			|| pPlayer->InCond(TF_COND_HALLOWEEN_KART) || F::PlayerUtils.IsIgnored(pPlayer->entindex()))
+			continue;
+
+		auto pWeapon = pPlayer->m_hActiveWeapon().Get();
+		if (pWeapon && IsHeadshotWeapon(pWeapon->As<CTFWeaponBase>()))
+			m_vTargets.push_back({ pPlayer->GetShootPos() });
+	}
+
+	const float flView = I::EngineClient->GetViewAngles().y;
+	const bool bHideHead = !m_vTargets.empty();
+	const bool bPlan = bHideHead && !I::ClientState->chokedcommands && ScanHead(pLocal);
+	if (!m_bAutoValid)
+		m_flAutoReal = m_flAutoFake = flView;
+
+	if (bRealAuto)
+	{
+		if (!bHideHead)
+			m_flAutoReal = flView;
+		else if (bPlan)
+			m_flAutoReal = BestRealYaw(-m_flAutoReal);
+	}
+
+	if (bFakeAuto)
+	{
+		if (!bHideHead)
+			m_flAutoFake = flView;
+		else if (bPlan)
+			m_flAutoFake = BestFakeYaw(bRealAuto ? m_flAutoReal : vRealAngles.y);
+	}
+
+	m_bAutoValid = true;
 }
 
 float CAntiAim::GetPitch(float flCurPitch)
@@ -521,10 +905,12 @@ void CAntiAim::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	{
 		vRealAngles = { pCmd->viewangles.x, pCmd->viewangles.y };
 		vFakeAngles = { pCmd->viewangles.x, pCmd->viewangles.y };
+		m_bShownValid = m_bShownBones = false;
 		return;
 	}
 
 	vEdgeTrace.clear();
+	PlanAutoYaw(pLocal);
 
 	Vec2& vAngles = G::SendPacket ? vFakeAngles : vRealAngles;
 	vAngles.x = iAntiBackstab != 2 ? GetPitch(pCmd->viewangles.x) : pCmd->viewangles.x;
@@ -537,6 +923,11 @@ void CAntiAim::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	SDK::FixMovement(pCmd, vFix);
 	pCmd->viewangles.x = vAngles.x;
 	pCmd->viewangles.y = vAngles.y;
+
+	if (!m_bAutoValid)
+		m_bShownValid = m_bShownBones = false;
+	else if (G::SendPacket)
+		StepShown(pLocal, pCmd->viewangles, I::ClientState->chokedcommands + 1);
 
 	MinWalk(pLocal, pCmd);
 }

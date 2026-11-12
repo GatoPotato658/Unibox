@@ -11,7 +11,7 @@
 #define TF_DAMAGE_CRIT_CHANCE_MELEE		0.15f
 #define TF_DAMAGE_CRIT_DURATION_RAPID	2.0f
 
-#define STATS_SEND_FREQUENCY 1.f
+#define HISTORY_SETTLE 1.25f
 
 #define SEED_ATTEMPTS 4096
 #define BUCKET_ATTEMPTS 1000
@@ -209,9 +209,286 @@ void CCritHack::UpdateWeaponInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	m_iNextCrit = iNextCrit;
 }
 
+int CritTotals_t::Total() const
+{
+	return m_iRanged + m_iMelee;
+}
+
+float CritTotals_t::Observed() const
+{
+	const float flNormalized = float(m_iCrit) * (1.f / 3.f);
+	return m_iRanged > 0 ? flNormalized / (flNormalized + float(m_iRanged - m_iCrit)) : 0.f;
+}
+
+int CritTotals_t::CritForObserved(float flObserved) const
+{
+	const double dInferred = 3.0 * flObserved * m_iRanged / (1.0 + 2.0 * flObserved);
+	int iBest = std::min(int(dInferred), m_iRanged);
+	CritTotals_t tTrial = *this;
+	tTrial.m_iCrit = iBest;
+	const float flError = tTrial.Observed() - flObserved;
+	if (iBest < m_iRanged)
+	{
+		tTrial.m_iCrit++;
+		const float flNext = tTrial.Observed() - flObserved;
+		if (fabsf(flNext) < fabsf(flError))
+			iBest++;
+	}
+	return iBest;
+}
+
+void CCritHistory::Reset(int iPreviousServer, float flNow)
+{
+	const int iRound = m_iRound + 1;
+	*this = {};
+	m_iRound = iRound;
+	m_iResetServer = iPreviousServer;
+	m_flResetTime = flNow;
+	m_bWaitServer = iPreviousServer > 0;
+}
+
+void CCritHistory::Settle(float flNow)
+{
+	while (m_iCount > 0)
+	{
+		const Event_t& tEvent = m_aPending[m_iHead];
+		if (flNow - tEvent.m_flTime < HISTORY_SETTLE && m_iCount < 256)
+			break;
+
+		m_tBase.m_iRanged += tEvent.m_tDamage.m_iRanged;
+		m_tBase.m_iCrit += tEvent.m_tDamage.m_iCrit;
+		m_tBase.m_iMelee += tEvent.m_tDamage.m_iMelee;
+		m_iHead = (m_iHead + 1) % 256;
+		m_iCount--;
+	}
+}
+
+void CCritHistory::Add(int iDamage, bool bMelee, bool bCrit, float flNow)
+{
+	if (iDamage <= 0)
+		return;
+
+	Settle(flNow);
+	const CritTotals_t tDelta = { bMelee ? 0 : iDamage, !bMelee && bCrit ? iDamage : 0, bMelee ? iDamage : 0 };
+	const int iLast = (m_iHead + m_iCount + 255) % 256;
+	if (m_iCount > 0 && m_aPending[iLast].m_flTime == flNow)
+	{
+		m_aPending[iLast].m_tDamage.m_iRanged += tDelta.m_iRanged;
+		m_aPending[iLast].m_tDamage.m_iCrit += tDelta.m_iCrit;
+		m_aPending[iLast].m_tDamage.m_iMelee += tDelta.m_iMelee;
+	}
+	else
+	{
+		m_aPending[(m_iHead + m_iCount) % 256] = { tDelta, flNow };
+		m_iCount++;
+	}
+	m_tEvents.m_iRanged += tDelta.m_iRanged;
+	m_tEvents.m_iCrit += tDelta.m_iCrit;
+	m_tEvents.m_iMelee += tDelta.m_iMelee;
+
+	m_iResidual = std::max(m_iResidual - iDamage, 0);
+	Record();
+}
+
+void CCritHistory::Reconcile(int iServer, float flNow)
+{
+	m_iPreviousUpdateStart = m_iUpdateStart;
+	m_iUpdateStart = m_iRecorded;
+	if (iServer < 0)
+		return;
+
+	if (m_bWaitServer)
+	{
+		if (iServer == m_iResetServer || iServer > m_iResetServer && flNow - m_flResetTime < HISTORY_SETTLE)
+			return;
+		m_bWaitServer = false;
+	}
+	else if (iServer < m_iServer)
+		Reset(0, flNow);
+
+	m_iServer = iServer;
+	Settle(flNow);
+	const int iOldTotal = m_tBase.Total();
+	m_iResidual = std::min(m_iResidual, std::max(iServer - iOldTotal, 0));
+	if (iOldTotal > iServer)
+	{
+		const CritTotals_t tOld = m_tBase;
+		m_tBase.m_iMelee = int(int64_t(tOld.m_iMelee) * iServer / iOldTotal);
+		m_tBase.m_iRanged = iServer - m_tBase.m_iMelee;
+		m_tBase.m_iCrit = tOld.m_iRanged > 0 ? int(int64_t(tOld.m_iCrit) * m_tBase.m_iRanged / tOld.m_iRanged) : 0;
+		m_tEvents.m_iMelee += m_tBase.m_iMelee - tOld.m_iMelee;
+		m_tEvents.m_iRanged += m_tBase.m_iRanged - tOld.m_iRanged;
+		m_tEvents.m_iCrit += m_tBase.m_iCrit - tOld.m_iCrit;
+		m_iCritCorrection = 0;
+
+		for (auto& tSample : m_aSamples)
+			tSample = {};
+		m_iPreviousUpdateStart = m_iRecorded + 1;
+		m_iUpdateStart = m_iRecorded + 1;
+	}
+
+	m_iResidual += std::max(iServer - m_tEvents.Total() - m_iResidual, 0);
+	Record();
+}
+
+void CCritHistory::PushState(const CritTotals_t& tState)
+{
+	const CritTotals_t& tLast = m_aStates[(m_iRecorded + 255) % 256];
+	if (m_iRecorded > 0 && tLast.m_iRanged == tState.m_iRanged && tLast.m_iCrit == tState.m_iCrit)
+		return;
+
+	m_aStates[m_iRecorded % 256] = tState;
+	m_iRecorded++;
+}
+
+void CCritHistory::Record()
+{
+	if (m_iResidual > 0)
+	{
+		CritTotals_t tEvents = m_tEvents;
+		tEvents.m_iCrit = std::min(std::max(tEvents.m_iCrit + m_iCritCorrection, 0), tEvents.m_iRanged);
+		PushState(tEvents);
+	}
+
+	PushState(Totals());
+}
+
+CritTotals_t CCritHistory::Totals() const
+{
+	CritTotals_t tOut = m_tEvents;
+	tOut.m_iRanged += m_iResidual;
+	tOut.m_iCrit = std::min(std::max(tOut.m_iCrit + m_iCritCorrection, 0), tOut.m_iRanged);
+	return tOut;
+}
+
+void CCritHistory::Sample(float flObserved, float flNow)
+{
+	Sample_t* pSlot = m_aSamples;
+	for (auto& tEntry : m_aSamples)
+	{
+		if (tEntry.m_flValue < 0.f)
+		{
+			pSlot = &tEntry;
+			break;
+		}
+
+		if (tEntry.m_flTime < pSlot->m_flTime)
+			pSlot = &tEntry;
+	}
+
+	*pSlot = { flObserved, flNow, std::max(m_iPreviousUpdateStart - 1, 0) };
+}
+
+bool CCritHistory::Explains(const Sample_t& tSample) const
+{
+	for (int i = std::max(tSample.m_iFrom, m_iRecorded - 256); i < m_iRecorded; i++)
+	{
+		const CritTotals_t& tState = m_aStates[i % 256];
+		if (tState.m_iRanged > 0 && tState.Observed() == tSample.m_flValue)
+			return true;
+	}
+
+	return false;
+}
+
+int CCritHistory::ExactCorrection(const Sample_t& tSample) const
+{
+	int iBest = 0;
+	for (int i = std::max(tSample.m_iFrom, m_iRecorded - 256); i < m_iRecorded; i++)
+	{
+		const CritTotals_t& tState = m_aStates[i % 256];
+		CritTotals_t tFitted = tState;
+		tFitted.m_iCrit = tState.CritForObserved(tSample.m_flValue);
+		const int iCorrection = tFitted.m_iCrit - tState.m_iCrit;
+		if (tState.m_iRanged > 0 && tFitted.Observed() == tSample.m_flValue
+			&& (!iBest || abs(iCorrection) < abs(iBest)))
+			iBest = iCorrection;
+	}
+
+	return iBest;
+}
+
+bool CCritHistory::Resolve(float flNow)
+{
+	bool bCorrected = false;
+	for (auto& tSample : m_aSamples)
+	{
+		if (tSample.m_flValue < 0.f)
+			continue;
+
+		if (Explains(tSample))
+		{
+			tSample = {};
+			continue;
+		}
+
+		if (flNow - tSample.m_flTime < HISTORY_SETTLE)
+			continue;
+
+		const int iCorrection = ExactCorrection(tSample);
+		tSample = {};
+		if (!iCorrection)
+			continue;
+
+		for (int i = std::max(m_iRecorded - 256, 0); i < m_iRecorded; i++)
+		{
+			CritTotals_t& tState = m_aStates[i % 256];
+			tState.m_iCrit = std::min(std::max(tState.m_iCrit + iCorrection, 0), tState.m_iRanged);
+		}
+
+		m_iCritCorrection += iCorrection;
+		Record();
+		bCorrected = true;
+	}
+
+	return bCorrected;
+}
+
+void CCritHack::ResetHistory()
+{
+	auto pResource = H::Entities.GetResource();
+	m_tHistory.Reset(pResource ? pResource->m_iDamage(I::EngineClient->GetLocalPlayer()) : 0, I::GlobalVars->realtime);
+	m_iObservedWeapon = 0;
+	m_flObservedValue = -1.f;
+}
+
+void CCritHack::StoreHistory(CTFPlayer* pLocal)
+{
+	auto pResource = H::Entities.GetResource();
+	if (!pLocal || !pResource)
+		return;
+
+	const float flNow = I::GlobalVars->realtime;
+	m_tHistory.Reconcile(pResource->m_iDamage(I::EngineClient->GetLocalPlayer()), flNow);
+
+	auto pEntity = pLocal->m_hActiveWeapon().Get();
+	auto pWeapon = pEntity ? pEntity->As<CTFWeaponBase>() : nullptr;
+	const int iWeapon = pWeapon ? pWeapon->entindex() : 0;
+	const float flObserved = pWeapon ? pWeapon->m_flObservedCritChance() : -1.f;
+	if (iWeapon != m_iObservedWeapon || m_iObservedRound != m_tHistory.m_iRound)
+	{
+		m_iObservedWeapon = iWeapon;
+		m_iObservedRound = m_tHistory.m_iRound;
+		m_flObservedValue = flObserved;
+	}
+	else if (pWeapon && flObserved != m_flObservedValue)
+	{
+		m_flObservedValue = flObserved;
+		if (flObserved >= 0.f && flObserved <= 1.f)
+			m_tHistory.Sample(flObserved, flNow);
+	}
+
+	m_tHistory.Resolve(flNow);
+}
+
 void CCritHack::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	UpdateWeaponInfo(pLocal, pWeapon);
+
+	const CritTotals_t tTotals = m_tHistory.Totals();
+	m_iRangedDamage = tTotals.m_iRanged;
+	m_iCritDamage = tTotals.m_iCrit;
+	m_iMeleeDamage = tTotals.m_iMelee;
 
 	m_bCritBanned = false;
 	m_flDamageTilFlip = 0;
@@ -229,22 +506,6 @@ void CCritHack::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			m_flDamageTilFlip = flNormalizedDamage / flCritChance + flNormalizedDamage * 2 - m_iRangedDamage;
 		else
 			m_flDamageTilFlip = TF_DAMAGE_CRIT_MULTIPLIER * (flNormalizedDamage - flCritChance * (flNormalizedDamage + m_iRangedDamage - m_iCritDamage)) / (flCritChance - 1);
-	}
-
-	if (auto pResource = H::Entities.GetResource())
-	{
-		m_iResourceDamage = pResource->m_iDamage(I::EngineClient->GetLocalPlayer());
-		/* // more of a proof of concept for resyncing crit damage
-		if (m_flLastDamageTime < I::GlobalVars->curtime + STATS_SEND_FREQUENCY * 2)
-		{	// attempt to resync damages
-			m_iRangedDamage = m_iResourceDamage - m_iMeleeDamage;
-
-			float flObservedCritChance = pWeapon->m_flObservedCritChance();
-			m_iCritDamage = (TF_DAMAGE_CRIT_MULTIPLIER * flObservedCritChance * m_iResourceDamage) / (1 + 2 * flObservedCritChance);
-			SDK::Output("Info", std::format("{}, {}", m_iRangedDamage, m_iCritDamage).c_str());
-		}
-		*/
-		m_iDesyncDamage = m_iRangedDamage + m_iMeleeDamage - m_iResourceDamage;
 	}
 }
 
@@ -293,15 +554,16 @@ void CCritHack::Reset()
 	m_iCritDamage = 0;
 	m_iRangedDamage = 0;
 	m_iMeleeDamage = 0;
-	m_iResourceDamage = 0;
-	m_iDesyncDamage = 0;
+	m_tHistory = {};
+	m_iObservedWeapon = 0;
+	m_flObservedValue = -1.f;
+	m_iObservedRound = 0;
 
 	m_bCritBanned = false;
 	m_flDamageTilFlip = 0;
 
 	m_mHealthHistory.clear();
 
-	//m_flLastDamageTime = 0.f;
 }
 
 
@@ -505,8 +767,6 @@ void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
 				return;
 		}
 
-		//m_flLastDamageTime = I::GlobalVars->curtime;
-
 		CTFWeaponBase* pWeapon = nullptr;
 		for (int i = 0; i < MAX_WEAPONS; i++)
 		{
@@ -518,15 +778,7 @@ void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
 			break;
 		}
 
-		if (!pWeapon || pWeapon->GetSlot() != SLOT_MELEE)
-		{
-			m_iRangedDamage += iDamage;
-			if (bCrit && !pLocal->IsCritBoosted())
-				m_iCritDamage += iDamage;
-		}
-		else
-			m_iMeleeDamage += iDamage;
-
+		m_tHistory.Add(iDamage, pWeapon && pWeapon->GetSlot() == SLOT_MELEE, bCrit && !pLocal->IsCritBoosted(), I::GlobalVars->realtime);
 		return;
 	}
 	case FNV1A::Hash32Const("player_spawn"):
@@ -542,11 +794,9 @@ void CCritHack::Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal)
 
 		return;
 	}
-	case FNV1A::Hash32Const("scorestats_accumulated_update"):
-	case FNV1A::Hash32Const("mvm_reset_stats"):
-	case FNV1A::Hash32Const("teamplay_round_start"):
+	case FNV1A::Hash32Const("stats_resetround"):
 	{
-		m_iRangedDamage = m_iCritDamage = m_iMeleeDamage = 0;
+		ResetHistory();
 		return;
 	}
 	case FNV1A::Hash32Const("client_beginconnect"):
@@ -570,6 +820,8 @@ void CCritHack::Store()
 		if (pPlayer && pPlayer->IsAlive() && !pPlayer->IsAGhost())
 			StoreHealthHistory(n, pPlayer->m_iHealth(), pPlayer);
 	}
+
+	StoreHistory(H::Entities.GetLocal());
 }
 
 void CCritHack::StoreHealthHistory(int iIndex, int iHealth, CTFPlayer* pPlayer)

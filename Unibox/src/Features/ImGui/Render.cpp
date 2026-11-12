@@ -16,6 +16,7 @@
 #include "../Aimbot/AutoHeal/AutoHeal.h"
 #include "../Visuals/ESP/ESP.h"
 #include "../Visuals/Visuals.h"
+#include "../Visuals/Hitmarker/Hitmarker.h"
 #include "../Aimbot/Aimbot.h"
 #include "../Misc/Radio/Radio.h"
 #include "Overlay/CaptureOverlay.h"
@@ -90,6 +91,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 		F::ESP.Draw(pBackground);
 		F::Aimbot.Draw(pBackground);
 		F::Visuals.DrawBestAimPos(pBackground);
+		F::Hitmarker.Draw(pBackground);
 
 		ImGui::PopFont();
 	}

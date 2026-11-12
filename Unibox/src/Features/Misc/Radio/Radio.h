@@ -79,6 +79,7 @@ private:
 	mutable std::mutex m_tTitleMutex;
 	char m_sTitle[AudioTitleCapacity] = {};
 
+	size_t m_uAnnounced = RadioStationEnum::Count;
 	bool m_aBindHeld[BindCount] = {};
 	KeyStorage m_aBindStorage[BindCount] = {};
 	std::thread m_tThread;

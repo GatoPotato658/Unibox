@@ -6,6 +6,7 @@
 
 #ifndef TEXTMODE
 #include "../../ImGui/IndicatorPanel.h"
+#include "../../ImGui/Notifications/Notifications.h"
 #endif
 
 static constexpr int RadioVolumeStep = 5;
@@ -502,6 +503,21 @@ void CRadio::OnFrame()
 		Vars::Misc::Radio::Volume.Value = (std::min)(Vars::Misc::Radio::Volume.Value + RadioVolumeStep, 100);
 	if (Pressed(BindQuieter, Vars::Misc::Radio::QuieterKey.Value))
 		Vars::Misc::Radio::Volume.Value = (std::max)(Vars::Misc::Radio::Volume.Value - RadioVolumeStep, 0);
+
+#ifndef TEXTMODE
+	if (!Vars::Misc::Radio::Enabled.Value)
+	{
+		m_uAnnounced = RadioStationEnum::Count;
+		return;
+	}
+
+	const size_t uStation = std::clamp<size_t>(Vars::Misc::Radio::Station.Value, 0, RadioStationEnum::Count - 1);
+	if (m_uAnnounced != uStation)
+	{
+		m_uAnnounced = uStation;
+		F::Notifications.Add(std::format("Station changed: {}", RadioStationName(uStation)));
+	}
+#endif
 }
 
 bool CRadio::Pressed(int iSlot, int iKey)

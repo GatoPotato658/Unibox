@@ -69,6 +69,11 @@ bool CNoSpreadHitscan::IsFixedSpread(CTFWeaponBase* pWeapon)
 	return bFixed || int(SDK::AttribHookValue(0.f, "fixed_shot_pattern", pWeapon));
 }
 
+bool CNoSpreadHitscan::Corrects(CTFWeaponBase* pWeapon)
+{
+	return ShouldRun(pWeapon) && (IsFixedSpread(pWeapon) || m_bSynced);
+}
+
 std::string CNoSpreadHitscan::GetFormat(int iServerTime)
 {
 	int iDays = iServerTime / 86400;

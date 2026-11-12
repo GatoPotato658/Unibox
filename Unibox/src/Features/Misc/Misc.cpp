@@ -1258,11 +1258,26 @@ int CMisc::AntiBackstab(CTFPlayer* pLocal, CUserCmd* pCmd)
 		Vec3 vLocalPos = pLocal->GetCenter();
 		Vec3 vTargetPos1 = pPlayer->GetCenter();
 		Vec3 vTargetPos2 = vTargetPos1 + pPlayer->m_vecVelocity() * F::Backtrack.GetReal();
-		float flDistance = std::max(std::max(SDK::MaxSpeed(pPlayer), SDK::MaxSpeed(pLocal)), pPlayer->m_vecVelocity().Length());
-		float flDistanceSqr = powf(flDistance, 2);
-		if ((vLocalPos.DistToSqr(vTargetPos1) > flDistanceSqr || !SDK::VisPosWorld(pLocal, pPlayer, vLocalPos, vTargetPos1))
-			&& (vLocalPos.DistToSqr(vTargetPos2) > flDistanceSqr || !SDK::VisPosWorld(pLocal, pPlayer, vLocalPos, vTargetPos2)))
-			continue;
+		if (pWeapon->GetWeaponID() == TF_WEAPON_KNIFE)
+		{
+			const Vec3 vBounds = { 18.f, 18.f, 18.f };
+			const Vec3 vMins = pLocal->m_vecOrigin() + pLocal->m_vecMins() - vBounds;
+			const Vec3 vMaxs = pLocal->m_vecOrigin() + pLocal->m_vecMaxs() + vBounds;
+			const Vec3 vSpyEye = pPlayer->GetShootPos();
+			const float flGap = vSpyEye.DistTo(vSpyEye.Clamp(vMins, vMaxs)) - 48.f;
+			const float flTime = F::Backtrack.GetReal() + TICKS_TO_TIME(I::ClientState->chokedcommands + 1);
+			if (flGap > std::max(SDK::MaxSpeed(pPlayer), pPlayer->m_vecVelocity().Length()) * flTime
+				|| !SDK::VisPosWorld(pLocal, pPlayer, vLocalPos, vTargetPos1) && !SDK::VisPosWorld(pLocal, pPlayer, vLocalPos, vTargetPos2))
+				continue;
+		}
+		else
+		{
+			float flDistance = std::max(std::max(SDK::MaxSpeed(pPlayer), SDK::MaxSpeed(pLocal)), pPlayer->m_vecVelocity().Length());
+			float flDistanceSqr = powf(flDistance, 2);
+			if ((vLocalPos.DistToSqr(vTargetPos1) > flDistanceSqr || !SDK::VisPosWorld(pLocal, pPlayer, vLocalPos, vTargetPos1))
+				&& (vLocalPos.DistToSqr(vTargetPos2) > flDistanceSqr || !SDK::VisPosWorld(pLocal, pPlayer, vLocalPos, vTargetPos2)))
+				continue;
+		}
 
 		vTargets.emplace_back(vTargetPos2, pEntity);
 	}

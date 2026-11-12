@@ -1,6 +1,7 @@
 #include "Createmove.h"
 
 #include "../Aimbot/Aimbot.h"
+#include "../Aimbot/AutoDetonate/AutoDetonate.h"
 #include "../Backtrack/Backtrack.h"
 #include "../CritHack/CritHack.h"
 #include "../EnginePrediction/EnginePrediction.h"
@@ -94,6 +95,7 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::CritHack.Run(pLocal, pWeapon, pCmd);
 		F::CritHack.CacheDrawInfo(pLocal);
 		F::NoSpread.Run(pLocal, pWeapon, pCmd);
+		F::AutoDetonate.Capture(pLocal, pWeapon, pCmd);
 		F::Misc.RunPost(pLocal, pCmd);
 		F::Misc.AutoFaNJump(pLocal, pWeapon, pCmd);
 		F::PacketManip.Run(pLocal, pWeapon, pCmd);

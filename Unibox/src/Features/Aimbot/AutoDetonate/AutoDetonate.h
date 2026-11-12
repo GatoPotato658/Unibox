@@ -2,12 +2,31 @@
 #include "../../../SDK/SDK.h"
 
 #include "../AimbotGlobal/AimbotGlobal.h"
+#include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include <unordered_set>
 #include <optional>
+#include <array>
 
 class CAutoDetonate
 {
 private:
+	struct Flight_t
+	{
+		unsigned long m_uHandle = INVALID_EHANDLE_INDEX;
+		int m_iFirstTick = 0;
+		std::vector<Vec3> m_vPath = {};
+	};
+
+	void Simulate(ProjectileInfo& tProjInfo, CBaseEntity* pProjectile, int iTicks, Flight_t& tFlight);
+	void Bind(CBaseEntity* pPipe);
+	const Flight_t* Replay(CBaseEntity* pPipe, int iSeen) const;
+	const Flight_t* Resume(CBaseEntity* pPipe, int iSeen, int iAhead);
+	Vec3 Fly(CTFGrenadePipebombProjectile* pPipe);
+
+	std::array<Flight_t, 8> m_aFlights = {};
+	size_t m_iFlightNext = 0;
+	Flight_t m_tResumed = {};
+
 	void PredictPlayer(CBaseEntity* pLocal, CBaseEntity* pTarget, float flLatency);
 	void RestorePlayer(CBaseEntity* pTarget);
 
@@ -27,6 +46,8 @@ private:
 	std::optional<Vector> m_vRestore;
 public:
 	void Run(CTFPlayer* pLocal, CUserCmd* pCmd);
+	void Capture(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+	void Store();
 };
 
 ADD_FEATURE(CAutoDetonate, AutoDetonate);

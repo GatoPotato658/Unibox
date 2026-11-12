@@ -264,6 +264,9 @@ NAMESPACE_BEGIN(Vars)
 		CVar(BestPath, "Best path color", Color_t(255, 255, 255, 0), VISUAL);
 		CVar(BestPathIgnoreZ, "Best path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
 		CVar(AimPosColor, "Aim pos color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(Hitmarker, "Hitmarker color", Color_t(220, 235, 240, 255), VISUAL);
+		CVar(HitmarkerCritical, "Hitmarker critical color", Color_t(255, 205, 80, 255), VISUAL);
+		CVar(HitmarkerKill, "Hitmarker kill color", Color_t(255, 95, 90, 255), VISUAL);
 		CVar(RealPath, "Real path color", Color_t(255, 255, 255, 0), NOSAVE | DEBUGVAR);
 		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
 
@@ -342,6 +345,8 @@ NAMESPACE_BEGIN(Vars)
 				Tapfire = 1 << 0, WaitForHeadshot = 1 << 1, WaitForCharge = 1 << 2, ScopedOnly = 1 << 3, AutoScope = 1 << 4, AutoRev = 1 << 5, ExtinguishTeam = 1 << 6, PreferMedics = 1 << 7);
 			CVar(MultipointScale, "Multipoint scale", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(TapfireDistance, "Tapfire distance", 1000.f, SLIDER_MIN | SLIDER_PRECISION, 250.f, 1000.f, 50.f);
+			CVar(SpreadOptimization, "Spread optimization", false);
+			CVar(SpreadHitChance, "Spread hit chance", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 
 			CVar(ForwardTrack, "Forward tracking", false);
 			CVarEnum(ForwardTrackMode, "Forward track mode", 0, NOSAVE | DEBUGVAR, nullptr,
@@ -564,11 +569,11 @@ NAMESPACE_BEGIN(Vars)
 		CVarEnum(PitchFake, "Fake pitch", 0, NONE, nullptr,
 			VA_LIST("None", "Up", "Down", "Jitter", "Reverse jitter", "Half up", "Half down", "Random", "Spin", "Ultra Random", "Inverse", "Mirror"),
 			None, Up, Down, Jitter, ReverseJitter, HalfUp, HalfDown, Random, Spin, UltraRandom, Inverse, Mirror);
-		Enum(Yaw, Forward, Left, Right, Backwards, Edge, Jitter, Spin, Random, Wiggle, Mercedes, Star, UltraRandom, Sideways, Omega, RandomUnclamped, Heck, Tornado, Pulse, Helix, Quantum);
+		Enum(Yaw, Forward, Left, Right, Backwards, Edge, Jitter, Spin, Random, Wiggle, Mercedes, Star, UltraRandom, Sideways, Omega, RandomUnclamped, Heck, Tornado, Pulse, Helix, Quantum, Auto);
 		CVarValues(YawReal, "Real yaw", 0, NONE, nullptr,
-			"Forward", "Left", "Right", "Backwards", "Edge", "Jitter", "Spin", "Random", "Wiggle", "Mercedes", "Star", "Ultra Random", "Sideways", "Omega", "Random Unclamped", "Heck", "Tornado", "Pulse", "Helix", "Quantum");
+			"Forward", "Left", "Right", "Backwards", "Edge", "Jitter", "Spin", "Random", "Wiggle", "Mercedes", "Star", "Ultra Random", "Sideways", "Omega", "Random Unclamped", "Heck", "Tornado", "Pulse", "Helix", "Quantum", "Auto");
 		CVarValues(YawFake, "Fake yaw", 0, NONE, nullptr,
-			"Forward", "Left", "Right", "Backwards", "Edge", "Jitter", "Spin", "Random", "Wiggle", "Mercedes", "Star", "Ultra Random", "Sideways", "Omega", "Random Unclamped", "Heck", "Tornado", "Pulse", "Helix", "Quantum");
+			"Forward", "Left", "Right", "Backwards", "Edge", "Jitter", "Spin", "Random", "Wiggle", "Mercedes", "Star", "Ultra Random", "Sideways", "Omega", "Random Unclamped", "Heck", "Tornado", "Pulse", "Helix", "Quantum", "Auto");
 		Enum(YawMode, View, Target);
 		CVarValues(RealYawBase, "Real base", 0, NONE, nullptr,
 			"View", "Target");
@@ -743,6 +748,14 @@ NAMESPACE_BEGIN(Vars)
 				OnShot = 1 << 0, OnHit = 1 << 1, AimPoint = 1 << 2);
 			CVar(DrawDuration, VA_LIST("Draw duration", "Hitbox draw duration"), 5.f, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f);
 		NAMESPACE_END(Hitbox)
+
+		NAMESPACE_BEGIN(Hitmarker)
+			CVar(Enabled, VA_LIST("Enabled", "Hitmarker enabled"), false, VISUAL);
+			CVarEnum(Mode, VA_LIST("Mode", "Hitmarker mode"), 0, VISUAL, nullptr,
+				VA_LIST("World", "Crosshair"),
+				World, Crosshair);
+			CVar(ShowDamage, VA_LIST("Show damage", "Hitmarker show damage"), true, VISUAL);
+		NAMESPACE_END(Hitmarker)
 
 		NAMESPACE_BEGIN(Prediction)
 			CVarValues(PlayerPath, "Player path", 0, VISUAL, nullptr,

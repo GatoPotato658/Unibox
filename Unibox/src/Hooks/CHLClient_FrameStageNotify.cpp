@@ -1,6 +1,7 @@
 #include "../SDK/SDK.h"
 
 #include "../Features/Aimbot/Aimbot.h"
+#include "../Features/Aimbot/AutoDetonate/AutoDetonate.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Binds/Binds.h"
 #include "../Features/CheatDetection/CheatDetection.h"
@@ -72,6 +73,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		F::Backtrack.Store();
 		F::MoveSim.Store();
 		F::CritHack.Store();
+		F::AutoDetonate.Store();
 #ifndef TEXTMODE
 		F::Aimbot.Store();
 		auto pLocal = H::Entities.GetLocal();

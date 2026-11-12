@@ -5,6 +5,7 @@
 #include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/Visuals/Chams/Chams.h"
+#include "../Features/Visuals/Hitmarker/Hitmarker.h"
 #include "../Features/NavBot/NavEngine.h"
 #include "../Features/NavBot/Hazards.h"
 #include "../Features/NavBot/Jobs/NavBotJobs.h"
@@ -23,6 +24,7 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	F::Radio.OnLevelShutdown();
 	F::NetworkFix.Reset();
 	F::Chams.Reset();
+	F::Hitmarker.Clear();
 	H::Entities.RemovePrecipitation(false);
 	H::Entities.Clear(true);
 	F::EnginePrediction.Unload();

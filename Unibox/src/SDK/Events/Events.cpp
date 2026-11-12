@@ -9,6 +9,7 @@
 #include "../../Features/Output/Output.h"
 #include "../../Features/Resolver/Resolver.h"
 #include "../../Features/Visuals/Visuals.h"
+#include "../../Features/Visuals/Hitmarker/Hitmarker.h"
 #include "../../Features/Killstreak/Killstreak.h"
 #include "../../Features/NavBot/NavEngine.h"
 #include "../../Features/NavBot/Jobs/NavBotJobs.h"
@@ -22,7 +23,7 @@ bool CEventListener::Initialize()
 {
 	m_bFailed = false;
 	std::vector<const char*> vEvents = {
-		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify", "party_chat"
+		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "stats_resetround", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify", "party_chat"
 	};
 
 	for (auto szEvent : vEvents)
@@ -66,6 +67,7 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 	F::Misc.Event(pEvent, uHash);
 #ifndef TEXTMODE
 	F::Visuals.Event(pEvent, uHash);
+	F::Hitmarker.Event(pEvent, uHash);
 #else
 	F::NamedPipe.Event(pEvent, uHash);
 #endif

@@ -1,4 +1,5 @@
 #include "AimbotHitscan.h"
+#include "SpreadOptimizer.h"
 
 #include "../Aimbot.h"
 #include "../../Ticks/Ticks.h"
@@ -648,6 +649,21 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 				if ((!bChanged || Math::RayToOBB(m_vEyePos, vForward, vCheckMins, vCheckMaxs, *pTransform, flModelScale) && SDK::VisPos(pLocal, tTarget.m_pEntity, m_vEyePos, m_vEyePos + vForward * m_vEyePos.DistTo(vOrigin)))
 					&& (!pHullTransform || Math::RayToOBB(m_vEyePos, vForward, vHullMins, vHullMaxs, *pHullTransform)))
 				{
+					if (bPlayer && tHitbox.m_pBox && F::SpreadOptimizer.Applies(pLocal, pWeapon))
+					{
+						Vec3 vSpreadPos = vOrigin;
+						if (!F::SpreadOptimizer.Optimize(pLocal, pWeapon, tTarget.m_pEntity, aBones, flModelScale, pRecord->m_vOrigin + vHullMins, pRecord->m_vOrigin + vHullMaxs, m_vEyePos, vSpreadPos))
+							goto skip;
+
+						if (vSpreadPos != vOrigin)
+						{
+							Vec3 vSpreadAngles; Aim(G::CurrentUserCmd->viewangles, Math::CalcAngle(m_vEyePos, vSpreadPos), vSpreadAngles);
+							if (pHoldAngle) vSpreadAngles -= F::NoSpread.GetOffset();
+							if (F::AimbotGlobal.ShouldAimAtAngle(vSpreadAngles))
+								vAngles = vSpreadAngles, vOrigin = vSpreadPos;
+						}
+					}
+
 					tTarget.m_vAngleTo = vAngles;
 					tTarget.m_pRecord = pRecord;
 					tTarget.m_vPos = vOrigin;

@@ -227,7 +227,16 @@ void CBacktrack::MakeRecords()
 
 		auto& vRecords = m_mRecords[pPlayer];
 		if (!vRecords.empty() && vRecords.front().m_flSimTime >= pPlayer->m_flSimulationTime())
+		{
+			static auto sv_lagcompensation_teleport_dist = H::ConVars.FindVar("sv_lagcompensation_teleport_dist");
+			const float flDist = powf(sv_lagcompensation_teleport_dist->GetFloat(), 2.f);
+			if ((pPlayer->m_vecOrigin() - vRecords.front().m_vOrigin).Length2DSqr() > flDist)
+			{
+				vRecords.clear();
+				H::Entities.SetLagCompensation(pPlayer->entindex(), true);
+			}
 			continue;
+		}
 
 		const Vec3 vOldAbsOrigin = pPlayer->GetAbsOrigin();
 		const Vec3 vOldAbsAngles = pPlayer->GetAbsAngles();
@@ -312,7 +321,7 @@ void CBacktrack::CleanRecords()
 			continue;
 		}
 
-		const float flDeadtime = I::GlobalVars->curtime + GetReal() - m_flMaxUnlag;
+		const float flDeadtime = float(int(TICKS_TO_TIME(GetServerTick()) - m_flMaxUnlag));
 		if (vRecords.size() > 1 && vRecords.back().m_flSimTime == std::numeric_limits<float>::max())
 			vRecords.pop_back();
 		while (!vRecords.empty())

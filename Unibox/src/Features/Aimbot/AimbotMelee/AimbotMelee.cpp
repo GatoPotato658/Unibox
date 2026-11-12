@@ -476,15 +476,21 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 
 	CGameTrace trace = {};
 	CTraceFilterHitscan filter(pLocal);
+	const bool bBackstab = Vars::Aimbot::Melee::AutoBackstab.Value && pWeapon->GetWeaponID() == TF_WEAPON_KNIFE;
 	for (auto pRecord : vRecords)
 	{
-
-		tTarget.m_vPos = m_vEyePos.Clamp(pRecord->m_vOrigin + pRecord->m_vMins, pRecord->m_vOrigin + pRecord->m_vMaxs);
-		if (Vars::Aimbot::Melee::AutoBackstab.Value && pWeapon->GetWeaponID() == TF_WEAPON_KNIFE)
-			tTarget.m_vPos.x = pRecord->m_vOrigin.x, tTarget.m_vPos.y = pRecord->m_vOrigin.y;
-		Aim(G::CurrentUserCmd->viewangles, Math::CalcAngle(m_vEyePos, tTarget.m_vPos), tTarget.m_vAngleTo);
-		if (!F::AimbotGlobal.ShouldAimAtAngle(tTarget.m_vAngleTo))
-			continue;
+		const Vec3 vBoxMins = pRecord->m_vOrigin + pRecord->m_vMins, vBoxMaxs = pRecord->m_vOrigin + pRecord->m_vMaxs;
+		Vec3 vPoints[2] = { m_vEyePos.Clamp(vBoxMins, vBoxMaxs), {} };
+		int iPoints = 1;
+		if (bBackstab)
+			vPoints[0].x = pRecord->m_vOrigin.x, vPoints[0].y = pRecord->m_vOrigin.y;
+		else
+		{
+			const Vec3 vEpsilon = { 0.03125f, 0.03125f, 0.03125f };
+			vPoints[1] = m_vEyePos.Clamp(vBoxMins - vSwingMaxs + vEpsilon, vBoxMaxs - vSwingMins - vEpsilon);
+			if (vPoints[1] != vPoints[0])
+				iPoints = 2;
+		}
 
 		Vec3 vRestoreOrigin = tTarget.m_pEntity->GetAbsOrigin();
 		Vec3 vRestoreMins = tTarget.m_pEntity->m_vecMins();
@@ -494,23 +500,37 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 		tTarget.m_pEntity->m_vecMins() = pRecord->m_vMins + PLAYER_ORIGIN_COMPRESSION;
 		tTarget.m_pEntity->m_vecMaxs() = pRecord->m_vMaxs - PLAYER_ORIGIN_COMPRESSION;
 
-		Vec3 vForward; Math::AngleVectors(tTarget.m_vAngleTo, &vForward);
-		Vec3 vTraceEnd = m_vEyePos + vForward * flRange;
-
-		SDK::TraceHull(m_vEyePos, vTraceEnd, {}, {}, MASK_SOLID, &filter, &trace);
-		bool bReturn = trace.m_pEnt == tTarget.m_pEntity;
-		if (!bReturn)
+		bool bReturn = false, bAimable = false;
+		Vec3 vForward, vTraceEnd;
+		for (int i = 0; i < iPoints && !bReturn; i++)
 		{
-			SDK::TraceHull(m_vEyePos, vTraceEnd, vSwingMins, vSwingMaxs, MASK_SOLID, &filter, &trace);
-			bReturn = trace.m_pEnt == tTarget.m_pEntity;
-		}
+			tTarget.m_vPos = vPoints[i];
+			Aim(G::CurrentUserCmd->viewangles, Math::CalcAngle(m_vEyePos, tTarget.m_vPos), tTarget.m_vAngleTo);
+			if (!F::AimbotGlobal.ShouldAimAtAngle(tTarget.m_vAngleTo))
+				continue;
+			bAimable = true;
 
-		if (bReturn && Vars::Aimbot::Melee::AutoBackstab.Value && pWeapon->GetWeaponID() == TF_WEAPON_KNIFE)
-			bReturn = CanBackstab(tTarget.m_pEntity, pLocal, pWeapon, tTarget.m_vAngleTo);
+			Math::AngleVectors(tTarget.m_vAngleTo, &vForward);
+			vTraceEnd = m_vEyePos + vForward * flRange;
+
+			SDK::TraceHull(m_vEyePos, vTraceEnd, {}, {}, MASK_SOLID, &filter, &trace);
+			bReturn = trace.m_pEnt == tTarget.m_pEntity;
+			if (!bReturn)
+			{
+				SDK::TraceHull(m_vEyePos, vTraceEnd, vSwingMins, vSwingMaxs, MASK_SOLID, &filter, &trace);
+				bReturn = trace.m_pEnt == tTarget.m_pEntity;
+			}
+
+			if (bReturn && bBackstab)
+				bReturn = CanBackstab(tTarget.m_pEntity, pLocal, pWeapon, tTarget.m_vAngleTo);
+		}
 
 		tTarget.m_pEntity->SetAbsOrigin(vRestoreOrigin);
 		tTarget.m_pEntity->m_vecMins() = vRestoreMins;
 		tTarget.m_pEntity->m_vecMaxs() = vRestoreMaxs;
+
+		if (!bAimable)
+			continue;
 
 		if (bReturn)
 		{
@@ -526,7 +546,9 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 		case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		case Vars::Aimbot::General::AimTypeEnum::Legit:
 		{
+			tTarget.m_vPos = vPoints[0];
 			auto vAngle = Math::CalcAngle(m_vEyePos, tTarget.m_vPos);
+			Aim(G::CurrentUserCmd->viewangles, vAngle, tTarget.m_vAngleTo);
 
 			Math::AngleVectors(vAngle, &vForward);
 			vTraceEnd = m_vEyePos + vForward * flRange;

@@ -11,6 +11,150 @@ enum
 #define SHIELD_NORMAL_VALUE		0.33f
 #define SHIELD_MAX_VALUE		0.10f
 
+static inline bool NetworksAs(const Vec3& vPosition, const Vec3& vOrigin)
+{
+	for (int i = 0; i < 3; i++)
+	{
+		if (float(int(vPosition[i])) != vOrigin[i])
+			return false;
+	}
+	return true;
+}
+
+void CAutoDetonate::Simulate(ProjectileInfo& tProjInfo, CBaseEntity* pProjectile, int iTicks, Flight_t& tFlight)
+{
+	CGameTrace trace = {};
+	CTraceFilterCollideable filter(pProjectile ? pProjectile : tProjInfo.m_pOwner);
+	int nMask = MASK_SOLID;
+	if (pProjectile)
+		F::ProjSim.SetupTrace(filter, nMask, pProjectile);
+	else
+		F::ProjSim.SetupTrace(filter, nMask, tProjInfo.m_pWeapon);
+
+	tFlight.m_uHandle = INVALID_EHANDLE_INDEX;
+	tFlight.m_vPath = { F::ProjSim.GetOrigin() };
+
+	Vec3 vNew = tFlight.m_vPath.front();
+	for (int n = 1; n <= iTicks; n++)
+	{
+		F::ProjSim.RunTick(tProjInfo, false);
+
+		Vec3 vOld = vNew; vNew = F::ProjSim.GetOrigin();
+		SDK::TraceHull(vOld, vNew, -tProjInfo.m_vHull, tProjInfo.m_vHull, nMask, &filter, &trace);
+		if (!pProjectile)
+			F::ProjSim.SetupTrace(filter, nMask, tProjInfo.m_pWeapon, n);
+		if (trace.DidHit())
+		{
+			tFlight.m_vPath.push_back(trace.endpos);
+			return;
+		}
+		tFlight.m_vPath.push_back(vNew);
+	}
+}
+
+void CAutoDetonate::Capture(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
+{
+	if (!(Vars::Aimbot::Projectile::AutoDetonate.Value & Vars::Aimbot::Projectile::AutoDetonateEnum::Stickies)
+		|| G::Attacking != 1 || !pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_PIPEBOMBLAUNCHER)
+		return;
+
+	ProjectileInfo tProjInfo = {};
+	if (!F::ProjSim.GetInfo(pLocal, pWeapon, pCmd->viewangles, tProjInfo) || !F::ProjSim.Initialize(tProjInfo))
+		return;
+
+	Simulate(tProjInfo, nullptr, TIME_TO_TICKS(std::min(tProjInfo.m_flLifetime, 10.f)), m_aFlights[m_iFlightNext]);
+	m_iFlightNext = (m_iFlightNext + 1) % m_aFlights.size();
+}
+
+void CAutoDetonate::Store()
+{
+	if (!(Vars::Aimbot::Projectile::AutoDetonate.Value & Vars::Aimbot::Projectile::AutoDetonateEnum::Stickies))
+		return;
+
+	for (auto pProjectile : H::Entities.GetGroup(EntityEnum::LocalStickies))
+		Bind(pProjectile);
+}
+
+void CAutoDetonate::Bind(CBaseEntity* pPipe)
+{
+	const unsigned long uHandle = (unsigned long)pPipe->GetRefEHandle().ToInt();
+	for (auto& tFlight : m_aFlights)
+	{
+		if (tFlight.m_uHandle == uHandle)
+			return;
+	}
+
+	if (pPipe->As<CTFGrenadePipebombProjectile>()->m_bTouched())
+		return;
+
+	const Vec3 vOrigin = pPipe->m_vecOrigin();
+	const int iSeen = TIME_TO_TICKS(pPipe->m_flSimulationTime());
+	for (size_t i = 0; i < m_aFlights.size(); i++)
+	{
+		auto& tFlight = m_aFlights[(m_iFlightNext + i) % m_aFlights.size()];
+		if (tFlight.m_uHandle != INVALID_EHANDLE_INDEX)
+			continue;
+
+		for (int n = 1; n < int(tFlight.m_vPath.size()); n++)
+		{
+			if (NetworksAs(tFlight.m_vPath[n], vOrigin))
+			{
+				tFlight.m_uHandle = uHandle;
+				tFlight.m_iFirstTick = iSeen - n;
+				return;
+			}
+		}
+	}
+}
+
+const CAutoDetonate::Flight_t* CAutoDetonate::Replay(CBaseEntity* pPipe, int iSeen) const
+{
+	const unsigned long uHandle = (unsigned long)pPipe->GetRefEHandle().ToInt();
+	for (auto& tFlight : m_aFlights)
+	{
+		if (tFlight.m_uHandle != uHandle)
+			continue;
+
+		const int iIndex = iSeen - tFlight.m_iFirstTick;
+		return iIndex >= 0 && iIndex < int(tFlight.m_vPath.size()) && NetworksAs(tFlight.m_vPath[iIndex], pPipe->m_vecOrigin()) ? &tFlight : nullptr;
+	}
+
+	return nullptr;
+}
+
+const CAutoDetonate::Flight_t* CAutoDetonate::Resume(CBaseEntity* pPipe, int iSeen, int iAhead)
+{
+	ProjectileInfo tProjInfo = {};
+	F::ProjSim.GetInfo(pPipe, tProjInfo);
+	if (tProjInfo.m_flVelocity < 1.5f || !F::ProjSim.Initialize(tProjInfo, false, true))
+		return nullptr;
+
+	Simulate(tProjInfo, pPipe, iAhead, m_tResumed);
+	m_tResumed.m_iFirstTick = iSeen;
+	return &m_tResumed;
+}
+
+Vec3 CAutoDetonate::Fly(CTFGrenadePipebombProjectile* pPipe)
+{
+	const Vec3 vOrigin = pPipe->m_vecOrigin();
+	if (!Vars::Aimbot::Projectile::AutodetAccountPing.Value || pPipe->m_bTouched())
+		return vOrigin;
+
+	const int iSeen = TIME_TO_TICKS(pPipe->m_flSimulationTime());
+	if (I::ClientState->m_ClockDriftMgr.m_nServerTick - iSeen > 4)
+		return vOrigin;
+
+	const int iAhead = std::max(F::Backtrack.GetServerTick() - 1 - iSeen, 0);
+	const Flight_t* pFlight = Replay(pPipe, iSeen);
+	if (!pFlight)
+		pFlight = Resume(pPipe, iSeen, iAhead);
+	if (!pFlight || pFlight->m_vPath.empty())
+		return vOrigin;
+
+	const int iIndex = std::max(iSeen - pFlight->m_iFirstTick + iAhead, 0);
+	return pFlight->m_vPath[std::min(iIndex, int(pFlight->m_vPath.size()) - 1)];
+}
+
 void CAutoDetonate::PredictPlayer(CBaseEntity* pLocal, CBaseEntity* pTarget, float flLatency)
 {
 	m_vRestore = std::nullopt;
@@ -350,7 +494,7 @@ bool CAutoDetonate::StickyCheck(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 		vStickies.push_back(pPipebomb);
 		vRadiuses[pPipebomb->entindex()] = (pPipebomb->GetDamageRadius() * Vars::Aimbot::Projectile::AutodetRadius.Value / 100) - 1;
-		vPredictedStickyOrigins[pPipebomb->entindex()] = SDK::PredictOrigin(pPipebomb->m_vecOrigin(), pPipebomb->GetAbsVelocity(), flLatency);
+		vPredictedStickyOrigins[pPipebomb->entindex()] = Fly(pPipebomb);
 	}
 
 	if (!pWeapon)
