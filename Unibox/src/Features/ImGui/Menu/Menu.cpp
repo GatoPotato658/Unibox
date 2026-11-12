@@ -3277,7 +3277,7 @@ void CMenu::MenuSettings(int iTab)
 			if (FButton("Console", FButtonEnum::Left))
 				I::EngineClient->ClientCmd_Unrestricted("toggleconsole");
 			if (FButton("Reload materials", FButtonEnum::Right) && F::Materials.m_bLoaded)
-				F::Materials.ReloadMaterials();
+				F::Materials.RefreshMaterials();
 		} EndSection();
 		if (!I::EngineClient->IsConnected())
 		{

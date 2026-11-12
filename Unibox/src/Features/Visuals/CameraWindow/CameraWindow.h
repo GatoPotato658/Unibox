@@ -6,8 +6,8 @@ class CCameraWindow
 private:
 	void RenderCustomView(void* rcx, const CViewSetup& pViewSetup, ITexture* pTexture);
 
-	std::shared_ptr<IMaterial> m_pCameraMaterial = {};
-	std::shared_ptr<ITexture> m_pCameraTexture = {};
+	IMaterial* m_pCameraMaterial;
+	ITexture* m_pCameraTexture;
 
 public:
 	void Draw();

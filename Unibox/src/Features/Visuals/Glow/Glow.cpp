@@ -28,7 +28,7 @@ void CGlow::Begin()
 
 	I::RenderView->SetBlend(0.f);
 	I::RenderView->SetColorModulation(1.f, 1.f, 1.f);
-	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor.get());
+	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor);
 }
 void CGlow::End()
 {
@@ -62,7 +62,7 @@ void CGlow::SecondBegin(IMatRenderContext* pRenderContext, int w, int h)
 	Begin();
 
 	pRenderContext->PushRenderTargetAndViewport();
-	pRenderContext->SetRenderTarget(m_pRenderBuffer1.get());
+	pRenderContext->SetRenderTarget(m_pRenderBuffer1);
 	pRenderContext->Viewport(0, 0, w, h);
 	pRenderContext->ClearColor4ub(0, 0, 0, 0);
 	pRenderContext->ClearBuffers(true, false, false);
@@ -79,10 +79,10 @@ void CGlow::SecondEnd(Glow_t tGlow, IMatRenderContext* pRenderContext, int w, in
 		pRenderContext->PushRenderTargetAndViewport();
 		{
 			pRenderContext->Viewport(0, 0, w, h);
-			pRenderContext->SetRenderTarget(m_pRenderBuffer2.get());
-			pRenderContext->DrawScreenSpaceRectangle(m_pMatBlurX.get(), 0, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-			pRenderContext->SetRenderTarget(m_pRenderBuffer1.get());
-			pRenderContext->DrawScreenSpaceRectangle(m_pMatBlurY.get(), 0, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+			pRenderContext->SetRenderTarget(m_pRenderBuffer2);
+			pRenderContext->DrawScreenSpaceRectangle(m_pMatBlurX, 0, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+			pRenderContext->SetRenderTarget(m_pRenderBuffer1);
+			pRenderContext->DrawScreenSpaceRectangle(m_pMatBlurY, 0, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
 		}
 		pRenderContext->PopRenderTargetAndViewport();
 	}
@@ -99,20 +99,20 @@ void CGlow::SecondEnd(Glow_t tGlow, IMatRenderContext* pRenderContext, int w, in
 	if (tGlow.Stencil)
 	{
 		int iSide = (tGlow.Stencil + 1) / 2.f;
-		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), -iSide, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), 0, -iSide, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), iSide, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), 0, iSide, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, -iSide, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, 0, -iSide, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, iSide, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, 0, iSide, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
 		if (int iCorner = tGlow.Stencil / 2.f)
 		{
-			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), -iCorner, -iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), iCorner, iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), iCorner, -iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
-			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), -iCorner, iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, -iCorner, -iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, iCorner, iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, iCorner, -iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+			pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, -iCorner, iCorner, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
 		}
 	}
 	if (tGlow.Blur && m_pMatBlurX && m_pMatBlurY)
-		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen.get(), 0, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
+		pRenderContext->DrawScreenSpaceRectangle(m_pMatHaloAddToScreen, 0, 0, w, h, 0.f, 0.f, w - 1, h - 1, w, h);
 
 	pRenderContext->SetStencilEnable(false);
 
@@ -241,7 +241,7 @@ void CGlow::RenderSecond()
 	m_tOriginalColor = I::RenderView->GetColorModulation();
 	m_flOriginalBlend = I::RenderView->GetBlend();
 	I::ModelRender->GetMaterialOverride(&m_pOriginalMaterial, &m_iOriginalOverride);
-	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor.get());
+	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor);
 	for (auto& [tGlow, vInfo] : m_mEntities)
 	{
 		for (auto& tInfo : vInfo)
@@ -312,7 +312,7 @@ void CGlow::RenderViewmodel(CBaseAnimating* rcx, int flags)
 	m_tOriginalColor = I::RenderView->GetColorModulation();
 	m_flOriginalBlend = I::RenderView->GetBlend();
 	I::ModelRender->GetMaterialOverride(&m_pOriginalMaterial, &m_iOriginalOverride);
-	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor.get());
+	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor);
 	I::RenderView->SetColorModulation(pGroup->m_tColor);
 	I::RenderView->SetBlend(pGroup->m_tColor.a / 255.f);
 	CBaseAnimating_InternalDrawModel->As<InternalDrawModelFn>()(rcx, flags);
@@ -351,7 +351,7 @@ void CGlow::RenderViewmodel(IVModelRender* pModelRender, const DrawModelState_t&
 	m_tOriginalColor = I::RenderView->GetColorModulation();
 	m_flOriginalBlend = I::RenderView->GetBlend();
 	I::ModelRender->GetMaterialOverride(&m_pOriginalMaterial, &m_iOriginalOverride);
-	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor.get());
+	I::ModelRender->ForcedMaterialOverride(m_pMatGlowColor);
 	I::RenderView->SetColorModulation(pGroup->m_tColor);
 	I::RenderView->SetBlend(pGroup->m_tColor.a / 255.f);
 	IVModelRender_DrawModelExecute->As<DrawModelExecuteFn>()(pModelRender, pState, pInfo, pBoneToWorld);
@@ -368,10 +368,17 @@ void CGlow::Initialize()
 
 	if (!m_pMatGlowColor || m_pMatGlowColor->IsErrorMaterial())
 	{
-		m_pMatGlowColor.reset();
+		if (m_pMatGlowColor)
+			m_pMatGlowColor->DecrementReferenceCount();
+
+		m_pMatGlowColor = nullptr;
 		auto pMaterial = I::MaterialSystem->FindMaterial("dev/glow_color", TEXTURE_GROUP_OTHER);
 		if (pMaterial && !pMaterial->IsErrorMaterial())
-			m_pMatGlowColor = F::Materials.Share(pMaterial);
+		{
+			m_pMatGlowColor = pMaterial;
+			m_pMatGlowColor->IncrementReferenceCount();
+			F::Materials.m_mMatList[m_pMatGlowColor];
+		}
 	}
 
 	if (!bDx9Shaders)
@@ -388,47 +395,80 @@ void CGlow::Initialize()
 			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT | TEXTUREFLAGS_EIGHTBITALPHA,
 			CREATERENDERTARGETFLAGS_HDR
 		);
-		return std::shared_ptr<ITexture>(
-			pNew,
-			[](ITexture* pTexture)
-			{
-				pTexture->DecrementReferenceCount();
-				pTexture->DeleteIfUnreferenced();
-			}
-		);
+		return pNew;
 	};
 	m_pRenderBuffer1 = fCreateBuffer("RenderBuffer1");
 	m_pRenderBuffer2 = fCreateBuffer("RenderBuffer2");
 
 	if (!m_pMatHaloAddToScreen)
-		m_pMatHaloAddToScreen = F::Materials.Share(F::Materials.create_from_vmt("MatHaloAddToScreen",
+	{
+		m_pMatHaloAddToScreen = F::Materials.create_from_vmt("MatHaloAddToScreen",
 			"\"UnlitGeneric\""
 			"\n{"
 			"\n\t$basetexture \"RenderBuffer1\""
 			"\n\t$additive \"1\""
-			"\n}"));
+			"\n}");
+	}
 
 	if (!m_pMatBlurX)
-		m_pMatBlurX = F::Materials.Share(F::Materials.create_from_vmt("MatBlurX",
+	{
+		m_pMatBlurX = F::Materials.create_from_vmt("MatBlurX",
 			"\"BlurFilterX\""
 			"\n{"
 			"\n\t$basetexture \"RenderBuffer1\""
-			"\n}"));
+			"\n}");
+	}
 
 	if (!m_pMatBlurY)
-		m_pMatBlurY = F::Materials.Share(F::Materials.create_from_vmt("MatBlurY",
+	{
+		m_pMatBlurY = F::Materials.create_from_vmt("MatBlurY",
 			"\"BlurFilterY\""
 			"\n{"
 			"\n\t$basetexture \"RenderBuffer2\""
-			"\n}"));
+			"\n}");
+	}
 }
 
 void CGlow::Unload()
 {
-	m_pMatGlowColor.reset();
-	m_pMatBlurX = {};
-	m_pMatBlurY = {};
-	m_pMatHaloAddToScreen = {};
-	m_pRenderBuffer1 = {};
-	m_pRenderBuffer2 = {};
+	if (m_pMatGlowColor)
+	{
+		m_pMatGlowColor->DecrementReferenceCount();
+		m_pMatGlowColor = nullptr;
+	}
+
+	if (m_pMatBlurX)
+	{
+		m_pMatBlurX->DecrementReferenceCount();
+		m_pMatBlurX->DeleteIfUnreferenced();
+		m_pMatBlurX = nullptr;
+	}
+
+	if (m_pMatBlurY)
+	{
+		m_pMatBlurY->DecrementReferenceCount();
+		m_pMatBlurY->DeleteIfUnreferenced();
+		m_pMatBlurY = nullptr;
+	}
+
+	if (m_pMatHaloAddToScreen)
+	{
+		m_pMatHaloAddToScreen->DecrementReferenceCount();
+		m_pMatHaloAddToScreen->DeleteIfUnreferenced();
+		m_pMatHaloAddToScreen = nullptr;
+	}
+
+	if (m_pRenderBuffer1)
+	{
+		m_pRenderBuffer1->DecrementReferenceCount();
+		m_pRenderBuffer1->DeleteIfUnreferenced();
+		m_pRenderBuffer1 = nullptr;
+	}
+
+	if (m_pRenderBuffer2)
+	{
+		m_pRenderBuffer2->DecrementReferenceCount();
+		m_pRenderBuffer2->DeleteIfUnreferenced();
+		m_pRenderBuffer2 = nullptr;
+	}
 }

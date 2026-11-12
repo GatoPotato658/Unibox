@@ -10,22 +10,6 @@
 #include <filesystem>
 #include <fstream>
 
-CMaterials::CMaterials()
-{
-	m_mSharedMaterials.clear();
-}
-
-CMaterials::~CMaterials()
-{
-	m_mSharedMaterials.clear();
-
-	for (auto& tMaterial : m_mMaterials | std::views::values)
-	{
-		if (tMaterial.m_pMaterial)
-			tMaterial.m_pMaterial->DecrementReferenceCount();
-	}
-}
-
 static std::filesystem::path GetMaterialFilePath(const char* sName)
 {
 	if (!sName || !*sName)
@@ -59,7 +43,6 @@ IMaterial* CMaterials::Create(char const* szName, KeyValues* pKV)
 	if (!pMaterial)
 		return nullptr;
 
-	pMaterial->IncrementReferenceCount();
 	m_mMatList[pMaterial];
 	return pMaterial;
 }
@@ -125,12 +108,11 @@ void CMaterials::ServicePendingOperation()
 	{
 	case PendingOperation::Load: sName = "Materials.Load"; break;
 	case PendingOperation::Refresh: sName = "Materials.Refresh"; break;
-	case PendingOperation::Reload: sName = "Materials.Reload"; break;
 	case PendingOperation::Unload: sName = "Materials.Unload"; break;
 	case PendingOperation::None: break;
 	}
 	SDK::CInitTimingScope tOperation(sName);
-	m_bLoading = operation == PendingOperation::Load || operation == PendingOperation::Refresh || operation == PendingOperation::Reload;
+	m_bLoading = operation == PendingOperation::Load || operation == PendingOperation::Refresh;
 
 	switch (operation)
 	{
@@ -142,11 +124,6 @@ void CMaterials::ServicePendingOperation()
 		UnloadMaterials();
 		LoadMaterials();
 		break;
-	case PendingOperation::Reload:
-		I::MaterialSystem->ReloadMaterials();
-		RefreshMaterialsInPlace();
-		LoadMaterials();
-		break;
 	case PendingOperation::Unload:
 		UnloadMaterials();
 		I::MaterialSystem->Flush(true);
@@ -155,7 +132,6 @@ void CMaterials::ServicePendingOperation()
 	case PendingOperation::None:
 		break;
 	}
-	std::erase_if(m_mSharedMaterials, [](const auto& entry) { return entry.second.expired(); });
 	m_bLoading = false;
 }
 
@@ -171,9 +147,7 @@ IMaterial* CMaterials::create_from_vmt(const char* name, const std::string& vmt)
 		return nullptr;
 	}
 
-	IMaterial* pMaterial = Create(name, kv);
-	kv->DeleteThis();
-	return pMaterial;
+	return Create(name, kv);
 }
 
 void CMaterials::Remove(IMaterial* pMaterial)
@@ -184,47 +158,8 @@ void CMaterials::Remove(IMaterial* pMaterial)
 	if (m_mMatList.contains(pMaterial))
 		m_mMatList.erase(pMaterial);
 
-	if (auto it = m_mSharedMaterials.find(pMaterial); it != m_mSharedMaterials.end())
-	{
-		if (!it->second.expired())
-			return;
-		m_mSharedMaterials.erase(it);
-	}
-
 	pMaterial->DecrementReferenceCount();
 	pMaterial->DeleteIfUnreferenced();
-}
-
-void CMaterials::Release(IMaterial* pMaterial)
-{
-	m_mSharedMaterials.erase(pMaterial);
-	pMaterial->DecrementReferenceCount();
-	pMaterial->DeleteIfUnreferenced();
-}
-
-std::shared_ptr<IMaterial> CMaterials::Share(IMaterial* pMaterial)
-{
-	if (!pMaterial)
-		return {};
-
-	pMaterial->IncrementReferenceCount();
-	auto it = m_mSharedMaterials.find(pMaterial);
-	if (it != m_mSharedMaterials.end())
-	{
-		if (auto pShared = it->second.lock())
-		{
-			pMaterial->DecrementReferenceCount();
-			return pShared;
-		}
-		m_mSharedMaterials.erase(it);
-	}
-
-	std::shared_ptr<IMaterial> pShared(
-		pMaterial,
-		[this](IMaterial* pMaterial) { Release(pMaterial); }
-	);
-	m_mSharedMaterials[pMaterial] = pShared;
-	return pShared;
 }
 
 void CMaterials::StoreStruct(const std::string& sName, const std::string& sVMT, bool bLocked)
@@ -489,42 +424,15 @@ void CMaterials::UnloadMaterials()
 	F::CameraWindow.Unload();
 
 	for (auto& tMaterial : m_mMaterials | std::views::values)
-	{
-		if (tMaterial.m_pMaterial)
-			Remove(tMaterial.m_pMaterial);
-	}
+		Remove(tMaterial.m_pMaterial);
 	m_mMaterials.clear();
 	m_mMatList.clear();
-	std::erase_if(m_mSharedMaterials, [](const auto& entry) { return entry.second.expired(); });
-}
-
-void CMaterials::RefreshMaterialsInPlace()
-{
-	m_bLoaded = false;
-	for (auto& tMaterial : m_mMaterials | std::views::values)
-	{
-		if (!tMaterial.m_pMaterial)
-			continue;
-
-		tMaterial.m_pMaterial->DecrementReferenceCount();
-		tMaterial.m_pMaterial->DeleteIfUnreferenced();
-		RemoveVars(tMaterial);
-	}
-}
-
-void CMaterials::ReloadMaterials()
-{
-	PendingOperation pending = m_ePendingOperation.load();
-	while (pending != PendingOperation::Unload
-		&& !m_ePendingOperation.compare_exchange_weak(pending, PendingOperation::Reload))
-	{
-	}
 }
 
 void CMaterials::RefreshMaterials()
 {
 	PendingOperation pending = m_ePendingOperation.load();
-	while (pending != PendingOperation::Unload && pending != PendingOperation::Reload
+	while (pending != PendingOperation::Unload
 		&& !m_ePendingOperation.compare_exchange_weak(pending, PendingOperation::Refresh))
 	{
 	}
