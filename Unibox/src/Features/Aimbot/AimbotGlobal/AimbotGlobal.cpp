@@ -20,6 +20,48 @@ inline int GetPriorityIdx(CTFWeaponBase* pWeapon)
 	return -1;
 }
 
+CrosshairRecord_t CAimbotGlobal::GetCrosshairRecord(CTFPlayer* pLocal, CBaseEntity* pTarget, const Vec3& vOrigin, const Vec3& vDirection, float flRange, const std::vector<TickRecord*>& vRecords)
+{
+	CrosshairRecord_t tBest = {};
+	if (!pLocal || !pTarget || !pTarget->IsPlayer() || !std::isfinite(flRange) || flRange <= 0.f)
+		return tBest;
+
+	const float flDirectionLength = vDirection.Length();
+	if (!std::isfinite(flDirectionLength) || flDirectionLength <= 0.000001f)
+		return tBest;
+	const Vec3 vUnitDirection = vDirection / flDirectionLength;
+
+	const auto pSet = pTarget->As<CBaseAnimating>()->GetAimHitboxSet();
+	if (!pSet || pSet->numhitboxes <= 0)
+		return tBest;
+
+	for (auto pRecord : vRecords)
+	{
+		if (!pRecord || !std::isfinite(pRecord->m_flModelScale) || pRecord->m_flModelScale <= 0.f)
+			continue;
+
+		for (int i = 0; i < pSet->numhitboxes; i++)
+		{
+			const auto pBox = pSet->pHitbox(i);
+			if (!pBox || pBox->bone < 0 || pBox->bone >= MAXSTUDIOBONES)
+				continue;
+
+			float flDist = 0.f;
+			if (!Math::RayToOBB(vOrigin, vUnitDirection, pBox->bbmin, pBox->bbmax, pRecord->m_aBones[pBox->bone], pRecord->m_flModelScale, &flDist)
+				|| flDist > flRange || flDist >= tBest.m_flDist)
+				continue;
+
+			if (!SDK::VisPosWorld(pLocal, pTarget, vOrigin, vOrigin + vUnitDirection * (flDist + 0.1f)))
+				continue;
+
+			tBest.m_flDist = flDist;
+			tBest.m_flSimTime = pRecord->m_flSimTime;
+		}
+	}
+
+	return tBest;
+}
+
 std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTargets)(CTFPlayer* pLocal, CTFWeaponBase* pWeapon), CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
 	int iMethod, int iMaxTargets)
 {

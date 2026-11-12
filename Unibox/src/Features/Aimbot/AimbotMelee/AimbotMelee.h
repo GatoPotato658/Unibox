@@ -7,7 +7,7 @@ class CAimbotMelee
 {
 private:
 	void UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, const std::vector<Target_t>& vTargets);
-	bool CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, Vec3 vEyeAngles);
+	bool CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, Vec3 vEyeAngles);
 	int CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	
 	bool Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& vOut, int iMethod = Vars::Aimbot::General::AimType.Value);
@@ -30,12 +30,10 @@ private:
 	std::unordered_map<int, std::deque<TickRecord>> m_mRecordMap;
 	std::unordered_map<int, std::vector<Vec3>> m_mPaths;
 
-	std::pair<float, float> GetClosestRecord(std::vector<TickRecord*> vRecords);
-
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 
-	void BacktrackToCrosshair(CTFPlayer* pLocal, CUserCmd* pCmd);
+	void BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 };
 
 ADD_FEATURE(CAimbotMelee, AimbotMelee);

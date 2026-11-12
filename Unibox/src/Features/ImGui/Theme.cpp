@@ -1,7 +1,7 @@
 #ifndef TEXTMODE
 #include "Theme.h"
 
-#include "Fonts/Alata/Alata.h"
+#include "Fonts/Rubik/Rubik.h"
 #include "Fonts/CascadiaMono/CascadiaMono.h"
 #include "Fonts/MaterialDesign/MaterialIcons.h"
 #include <algorithm>
@@ -34,13 +34,17 @@ void CMenuTheme::LoadColors(const ThemeInput_t& tInput)
 	OnAccent = Luminance(tAccent) > 0.55f ? ImVec4(0.04f, 0.05f, 0.06f, 1.f) : ImVec4(0.98f, 0.98f, 0.99f, 1.f);
 	Background1 = Tint(tInput.m_tBackground, tInput.m_tBackground.w * flOpacity);
 	Background0 = Tint(tBlack, 0.42f);
-	Sidebar = Tint(tBlack, 0.14f);
-	Background0p5 = Tint(tActive, 0.035f);
+	Sidebar = Tint(tBlack, 0.26f);
+	Background0p5 = Tint(tBlack, 0.3f);
 	Background1p5 = Tint(tActive, 0.07f);
 	Background1p5L = Tint(tActive, 0.11f);
 	Background2 = Tint(tActive, 0.08f);
 	Track = Tint(tActive, 0.12f);
-	Popup = Tint(Mix(tInput.m_tBackground, tActive, 0.1f), 0.99f);
+	Popup = Tint(Mix(tInput.m_tBackground, tBlack, 0.2f), 0.99f);
+	Field = Tint(tActive, 0.07f);
+	FieldHover = Tint(tActive, 0.12f);
+	FieldText = tActive;
+	Outline = Tint(tBlack, 0.55f);
 	Danger = Mix({ 1.f, 0.36f, 0.38f, 1.f }, tActive, 0.12f);
 	Inactive = tInput.m_tInactive;
 	Active = tActive;
@@ -96,29 +100,13 @@ static void MergeFallback(ImFontAtlas* pAtlas, float flSize)
 	}
 }
 
-static void RemapCapitals(ImFont* pFont)
-{
-	for (ImWchar c = 'A'; c <= 'Z'; c++)
-		pFont->AddRemapChar(c, c + 32);
-	for (ImWchar c = 0xC0; c <= 0xDE; c++)
-	{
-		if (c != 0xD7)
-			pFont->AddRemapChar(c, c + 32);
-	}
-	for (ImWchar c = 0x400; c <= 0x40F; c++)
-		pFont->AddRemapChar(c, c + 80);
-	for (ImWchar c = 0x410; c <= 0x42F; c++)
-		pFont->AddRemapChar(c, c + 32);
-}
-
-static ImFont* AddAlata(ImFontAtlas* pAtlas, float flSize)
+static ImFont* AddRubik(ImFontAtlas* pAtlas, const unsigned int* pData, unsigned int uSize, float flSize)
 {
 	ImFontConfig tConfig;
 	tConfig.OversampleH = 2;
 	tConfig.FontDataOwnedByAtlas = false;
-	ImFont* pFont = pAtlas->AddFontFromMemoryTTF(const_cast<unsigned int*>(Alata_data), int(Alata_size), flSize, &tConfig);
+	ImFont* pFont = pAtlas->AddFontFromMemoryTTF(const_cast<unsigned int*>(pData), int(uSize), flSize, &tConfig);
 	MergeFallback(pAtlas, flSize);
-	RemapCapitals(pFont);
 	return pFont;
 }
 
@@ -137,22 +125,22 @@ static ImFont* AddCustom(ImFontAtlas* pAtlas, const std::string& sPath, float fl
 	return pFont;
 }
 
-static ImFont* AddMenuFont(ImFontAtlas* pAtlas, const std::string& sCustomFont, float flSize)
+static ImFont* AddMenuFont(ImFontAtlas* pAtlas, const std::string& sCustomFont, const unsigned int* pData, unsigned int uSize, float flSize)
 {
 	if (!sCustomFont.empty())
 	{
 		if (ImFont* pFont = AddCustom(pAtlas, sCustomFont, flSize))
 			return pFont;
 	}
-	return AddAlata(pAtlas, flSize);
+	return AddRubik(pAtlas, pData, uSize, flSize);
 }
 
 void CMenuTheme::LoadFonts(ImFontAtlas* pAtlas, float flScale, const std::string& sCustomFont)
 {
-	FontSmall = AddMenuFont(pAtlas, sCustomFont, 11.5f * flScale);
-	FontRegular = AddMenuFont(pAtlas, sCustomFont, 13.5f * flScale);
-	FontBold = AddMenuFont(pAtlas, sCustomFont, 14.5f * flScale);
-	FontLarge = AddMenuFont(pAtlas, sCustomFont, 17.f * flScale);
+	FontSmall = AddMenuFont(pAtlas, sCustomFont, Rubik_Regular_data, Rubik_Regular_size, 11.5f * flScale);
+	FontRegular = AddMenuFont(pAtlas, sCustomFont, Rubik_Medium_data, Rubik_Medium_size, 13.f * flScale);
+	FontBold = AddMenuFont(pAtlas, sCustomFont, Rubik_SemiBold_data, Rubik_SemiBold_size, 13.5f * flScale);
+	FontLarge = AddMenuFont(pAtlas, sCustomFont, Rubik_SemiBold_data, Rubik_SemiBold_size, 16.f * flScale);
 
 	ImFontConfig tMonoConfig;
 	tMonoConfig.OversampleH = 2;
@@ -175,16 +163,16 @@ void CMenuTheme::LoadStyle(float flScale)
 	tStyle.ChildRounding = 4.f * flScale;
 	tStyle.FrameBorderSize = 0.f;
 	tStyle.FramePadding = { 0.f, 0.f };
-	tStyle.FrameRounding = 3.f * flScale;
+	tStyle.FrameRounding = 4.f * flScale;
 	tStyle.GrabRounding = 2.f * flScale;
 	tStyle.ItemInnerSpacing = { 0.f, 0.f };
 	tStyle.ItemSpacing = { 8.f * flScale, 8.f * flScale };
 	tStyle.PopupBorderSize = 0.f;
 	tStyle.PopupRounding = 4.f * flScale;
-	tStyle.ScrollbarSize = 6.f * flScale;
-	tStyle.ScrollbarRounding = 3.f * flScale;
+	tStyle.ScrollbarSize = 4.f * flScale;
+	tStyle.ScrollbarRounding = 2.f * flScale;
 	tStyle.WindowBorderSize = 0.f;
 	tStyle.WindowPadding = { 0.f, 0.f };
-	tStyle.WindowRounding = 6.f * flScale;
+	tStyle.WindowRounding = 5.f * flScale;
 }
 #endif

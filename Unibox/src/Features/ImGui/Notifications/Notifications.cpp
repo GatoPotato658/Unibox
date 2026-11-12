@@ -83,13 +83,13 @@ void CNotifications::Draw()
 
 	ImDrawList* pDrawList = GetForegroundDrawList();
 
-	float h = H::Draw.Scale(40);
+	float h = H::Draw.Scale(30);
 	float y = ShouldReverseY() ? GetIO().DisplaySize.y - H::Draw.Scale(8) - h : H::Draw.Scale(8);
 	for (auto& tNotification : m_vNotifications)
 	{
 		bool bIcon = tNotification.m_sIcon;
 
-		float w = CalcTextSize(tNotification.m_sText.c_str()).x + H::Draw.Scale(bIcon ? 54 : 30);
+		float w = CalcTextSize(tNotification.m_sText.c_str()).x + H::Draw.Scale(bIcon ? 50 : 26);
 		float x = ShouldReverseX() ? GetIO().DisplaySize.x - H::Draw.Scale(8) - w : H::Draw.Scale(8);
 
 		float flEaseX = 1.f, flEaseY = 1.f;
@@ -110,30 +110,34 @@ void CNotifications::Draw()
 
 		x -= (w + H::Draw.Scale(8)) * (1.f - flEaseX) * X();
 
-		ImU32 uBackground = F::Render.Popup;
-		ImU32 uActive = F::Render.Active;
-		ImU32 uAccentOpaque = ColorByteToInt(tNotification.m_tColor.Alpha(255));
-		ImU32 uAccentTransparent = ColorByteToInt(tNotification.m_tColor.Alpha(50));
+		const ImU32 uBackground = FadeColor(F::Render.Background1, 0.92f);
+		const ImU32 uOutline = FadeColor(F::Render.Outline);
+		const ImU32 uActive = F::Render.Active;
+		const ImU32 uShadow = IM_COL32(0, 0, 0, 200);
+		const ImU32 uAccentOpaque = ColorByteToInt(tNotification.m_tColor.Alpha(255));
+		const ImU32 uAccentTransparent = ColorByteToInt(tNotification.m_tColor.Alpha(40));
 
-		ImVec2 vDrawPos = { x, y };
-		ImVec2 vSize = { w, h };
-		float flInset = H::Draw.Scale();
+		const ImVec2 vDrawPos = { floorf(x), floorf(y) };
+		const ImVec2 vSize = { w, h };
+		const float flBar = H::Draw.Scale(2), flShadow = H::Draw.Scale();
 
-		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uBackground, H::Draw.Scale(3));
-		pDrawList->PushClipRect(vDrawPos + ImVec2(flInset, h - flInset - H::Draw.Scale(2)), vDrawPos + ImVec2(w - flInset, h - flInset), false);
-		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uAccentTransparent, H::Draw.Scale(3));
-		pDrawList->PopClipRect();
-		pDrawList->PushClipRect(vDrawPos + ImVec2(flInset, h - flInset - H::Draw.Scale(2)), vDrawPos + ImVec2((w - flInset) * flLife, h - flInset), false);
-		pDrawList->AddRectFilled(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vSize - ImVec2(flInset, flInset), uAccentOpaque, H::Draw.Scale(3));
-		pDrawList->PopClipRect();
-		if (!bIcon)
-			pDrawList->AddText(vDrawPos + ImVec2(H::Draw.Scale(15), H::Draw.Scale(13)), uActive, tNotification.m_sText.c_str());
-		else
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + vSize, uBackground);
+		pDrawList->AddRect(vDrawPos, vDrawPos + vSize, uOutline, 0.f, ImDrawFlags_None, H::Draw.Scale());
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flBar, h), uAccentOpaque);
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(flBar, h - flBar), vDrawPos + ImVec2(w, h), uAccentTransparent);
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(flBar, h - flBar), vDrawPos + ImVec2(flBar + (w - flBar) * flLife, h), uAccentOpaque);
+
+		const float flTextY = floorf(vDrawPos.y + (h - flBar - GetFontSize()) / 2);
+		float flTextX = vDrawPos.x + H::Draw.Scale(12);
+		if (bIcon)
 		{
-			pDrawList->AddText(vDrawPos + ImVec2(H::Draw.Scale(39), H::Draw.Scale(13)), uActive, tNotification.m_sText.c_str());
-			pDrawList->AddText(F::Render.IconFont, F::Render.IconFont->LegacySize, vDrawPos + ImVec2(H::Draw.Scale(12), H::Draw.Scale(12)), uAccentOpaque, tNotification.m_sIcon);
+			const float flIcon = F::Render.IconFont->LegacySize;
+			pDrawList->AddText(F::Render.IconFont, flIcon, { flTextX, floorf(vDrawPos.y + (h - flBar - flIcon) / 2) }, uAccentOpaque, tNotification.m_sIcon);
+			flTextX += flIcon + H::Draw.Scale(8);
 		}
+		pDrawList->AddText({ flTextX + flShadow, flTextY + flShadow }, uShadow, tNotification.m_sText.c_str());
+		pDrawList->AddText({ flTextX, flTextY }, uActive, tNotification.m_sText.c_str());
 
-		y += (h + H::Draw.Scale(8, Scale_Round)) * (flEaseY) * Y();
+		y += (h + H::Draw.Scale(4, Scale_Round)) * (flEaseY) * Y();
 	}
 }

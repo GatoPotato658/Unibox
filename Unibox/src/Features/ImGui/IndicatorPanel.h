@@ -234,12 +234,11 @@ static inline void DrawIndicatorPanel(
 	const ImU32 uRight = ColorToU32(tRightColor);
 	const ImU32 uBar = ColorToU32(tBarColor);
 
-	pDrawList->AddRectFilled(vPanelPos, ImVec2(vPanelPos.x + vPanelSize.x, vPanelPos.y + vPanelSize.y), uBackground, H::Draw.IndicatorScale(3.f));
+	pDrawList->AddRectFilled(vPanelPos, ImVec2(vPanelPos.x + vPanelSize.x, vPanelPos.y + vPanelSize.y), uBackground);
 	pDrawList->AddRectFilled(
 		ImVec2(vPanelPos.x, vPanelPos.y + flTextBoxHeight),
 		ImVec2(vPanelPos.x + flPanelWidth, vPanelPos.y + flPanelHeight),
-		uBarBackground,
-		H::Draw.IndicatorScale(3.f));
+		uBarBackground);
 
 	float flClampedProgress = std::clamp(flProgress, 0.f, 1.f);
 	int iBarWidth = static_cast<int>(std::ceil(flPanelWidth * flClampedProgress));

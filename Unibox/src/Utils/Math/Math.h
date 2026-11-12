@@ -282,44 +282,55 @@ namespace Math
 		return vOut;
 	}
 
-	inline bool RayToOBB(const Vec3& vOrigin, const Vec3& vDirection, const Vec3& vMins, const Vec3& vMaxs, const matrix3x4& mMatrix, float flScale = 1.f)
+	inline bool RayToOBB(const Vec3& vOrigin, const Vec3& vDirection, const Vec3& vMins, const Vec3& vMaxs, const matrix3x4& mMatrix, float flScale = 1.f, float* pDist = nullptr)
 	{
-		if (!flScale)
+		if (!std::isfinite(flScale) || flScale <= 0.f)
 			return false;
 
-		Vec3 vDelta = Vec3(mMatrix[0][3], mMatrix[1][3], mMatrix[2][3]) - vOrigin;
+		const float flDirectionLength = vDirection.Length();
+		if (!std::isfinite(flDirectionLength) || flDirectionLength <= 0.000001f)
+			return false;
 
-		Vec3 X = Vec3(mMatrix[0][0], mMatrix[1][0], mMatrix[2][0]) / flScale;
-		Vec3 Y = Vec3(mMatrix[0][1], mMatrix[1][1], mMatrix[2][1]) / flScale;
-		Vec3 Z = Vec3(mMatrix[0][2], mMatrix[1][2], mMatrix[2][2]) / flScale;
-		if (flScale != 1.f)
-			X /= flScale, Y /= flScale, Z /= flScale;
+		const Vec3 vRayDirection = vDirection / flDirectionLength;
+		const Vec3 vDelta = Vec3(mMatrix[0][3], mMatrix[1][3], mMatrix[2][3]) - vOrigin;
+		float flTMin = -FLT_MAX, flTMax = FLT_MAX;
 
-		Vec3 f = Vec3(X.Dot(vDirection), Y.Dot(vDirection), Z.Dot(vDirection));
-		Vec3 e = Vec3(X.Dot(vDelta), Y.Dot(vDelta), Z.Dot(vDelta));
-
-		float t[6] = { 0, 0, 0, 0, 0, 0 };
-
-		for (int i = 0; i < 3; ++i)
+		for (int i = 0; i < 3; i++)
 		{
-			if (FLT_COMPARE(f[i], 0.f))
-			{
-				if (-e[i] + vMins[i] * flScale > 0.f || -e[i] + vMaxs[i] * flScale < 0.f)
-					return false;
+			const Vec3 vAxis = { mMatrix[0][i], mMatrix[1][i], mMatrix[2][i] };
+			const float flAxisLength = vAxis.Length();
+			if (!std::isfinite(flAxisLength) || flAxisLength <= 0.000001f)
+				return false;
 
-				f[i] = 0.00001f;
+			const Vec3 vUnitAxis = vAxis / flAxisLength;
+			const float flLocalOrigin = vUnitAxis.Dot(vDelta) / flScale;
+			const float flLocalDirection = vUnitAxis.Dot(vRayDirection) / flScale;
+			if (!std::isfinite(flLocalOrigin) || !std::isfinite(flLocalDirection))
+				return false;
+
+			if (fabsf(flLocalDirection) <= 0.000001f)
+			{
+				if (flLocalOrigin < vMins[i] || flLocalOrigin > vMaxs[i])
+					return false;
+				continue;
 			}
 
-			t[i * 2 + 0] = (e[i] + vMaxs[i]) / f[i];
-			t[i * 2 + 1] = (e[i] + vMins[i]) / f[i];
+			float flNear = (vMins[i] - flLocalOrigin) / flLocalDirection;
+			float flFar = (vMaxs[i] - flLocalOrigin) / flLocalDirection;
+			if (flNear > flFar)
+				std::swap(flNear, flFar);
+
+			flTMin = std::max(flTMin, flNear);
+			flTMax = std::min(flTMax, flFar);
+			if (flTMin > flTMax)
+				return false;
 		}
 
-		float flTMin = fmaxf(fmaxf(fminf(t[0], t[1]), fminf(t[2], t[3])), fminf(t[4], t[5]));
-		float flTMax = fminf(fminf(fmaxf(t[0], t[1]), fmaxf(t[2], t[3])), fmaxf(t[4], t[5]));
-
-		if (flTMax < 0.f || flTMin > flTMax)
+		if (flTMax < 0.f)
 			return false;
 
+		if (pDist)
+			*pDist = std::max(flTMin, 0.f);
 		return true;
 	}
 

@@ -11,7 +11,7 @@ MAKE_SIGNATURE(CTFPlayerModelPanel_AddCarriedItem, "client.dll", "48 89 5C 24 10
 
 namespace
 {
-	void* s_pHudClassPanel = nullptr;
+	std::atomic<bool> s_bInventoryHudRefreshPending = false;
 	bool s_bBuildingHudClassModel = false;
 }
 #endif
@@ -21,10 +21,12 @@ MAKE_HOOK(CTFHudPlayerClass_UpdateModelPanel, S::CTFHudPlayerClass_UpdateModelPa
 {
 #ifndef TEXTMODE
 	DEBUG_RETURN(CTFHudPlayerClass_UpdateModelPanel, rcx);
-	s_pHudClassPanel = rcx;
+	const bool bRefreshPending = s_bInventoryHudRefreshPending.exchange(false);
 	const bool bPrevious = s_bBuildingHudClassModel;
 	s_bBuildingHudClassModel = true;
 	CALL_ORIGINAL(rcx);
+	if (bRefreshPending)
+		CALL_ORIGINAL(rcx);
 	s_bBuildingHudClassModel = bPrevious;
 #endif
 }
@@ -41,13 +43,12 @@ MAKE_HOOK(CTFPlayerModelPanel_AddCarriedItem, S::CTFPlayerModelPanel_AddCarriedI
 
 void RefreshInventoryHudModel()
 {
-	if (s_pHudClassPanel)
-		S::CTFHudPlayerClass_UpdateModelPanel.Call<void>(s_pHudClassPanel);
+	s_bInventoryHudRefreshPending.store(true);
 }
 
 void ResetInventoryHudModel()
 {
-	s_pHudClassPanel = nullptr;
+	s_bInventoryHudRefreshPending.store(false);
 	s_bBuildingHudClassModel = false;
 }
 #endif

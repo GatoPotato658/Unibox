@@ -10,7 +10,7 @@
 #include <thread>
 
 Enum(RadioPhase, Off, Connecting, Buffering, Playing, Paused, Failed)
-Enum(RadioStation, DnB, Jungle, LiquidDnB, Hardcore, Techno, ClassicRap, Vaporwave, NonStopFm, Tekk, Underground, TheBeat, Count)
+Enum(RadioStation, DnB, Jungle, LiquidDnB, Hardcore, Techno, ClassicRap, Vaporwave, NonStopFm, Tekk, Underground, TheBeat, Frenchcore, Gabber, Hardstyle, Harder, HappyHardcore, HardcorePower, UkBass, Phonk, LoFi, Count)
 
 const char* RadioStationName(size_t uStation);
 const char* const* RadioStationNames();

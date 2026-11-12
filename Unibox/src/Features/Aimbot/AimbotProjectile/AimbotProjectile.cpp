@@ -308,16 +308,19 @@ float CAimbotProjectile::GetSplashRadius(CBaseEntity* pProjectile, CTFWeaponBase
 	return flRadius * flScale;
 }
 
-static inline float ArmTime(CTFWeaponBase* pWeapon)
+static inline int ArmTicks(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, float flLatency)
 {
-	if (Vars::Aimbot::Projectile::Modifiers.Value & Vars::Aimbot::Projectile::ModifiersEnum::UseArmTime && pWeapon->GetWeaponID() == TF_WEAPON_PIPEBOMBLAUNCHER)
-	{
-		static auto tf_grenadelauncher_livetime = H::ConVars.FindVar("tf_grenadelauncher_livetime");
-		const float flLiveTime = tf_grenadelauncher_livetime->GetFloat();
-		return SDK::AttribHookValue(flLiveTime, "sticky_arm_time", pWeapon);
-	}
+	if (!(Vars::Aimbot::Projectile::Modifiers.Value & Vars::Aimbot::Projectile::ModifiersEnum::UseArmTime) || pWeapon->GetWeaponID() != TF_WEAPON_PIPEBOMBLAUNCHER)
+		return 0;
 
-	return 0.f;
+	static auto tf_grenadelauncher_livetime = H::ConVars.FindVar("tf_grenadelauncher_livetime");
+	float flLiveTime = SDK::AttribHookValue(tf_grenadelauncher_livetime->GetFloat(), "sticky_arm_time", pWeapon);
+	if (pLocal->InCond(TF_COND_RUNE_HASTE))
+		flLiveTime *= 0.5f;
+	else if (pLocal->InCond(TF_COND_RUNE_KING) || pLocal->InCond(TF_COND_KING_BUFFED))
+		flLiveTime *= 0.75f;
+
+	return std::max(int(flLiveTime / TICK_INTERVAL) + 1, TIME_TO_TICKS(flLatency));
 }
 
 static inline bool ShouldLob(Info_t& tInfo)
@@ -400,6 +403,105 @@ static inline int GetHitboxPriority(int nHitbox, Target_t& tTarget, Info_t& tInf
 	return -1;
 };
 
+static TickRecord* GetAimRecord(CBaseEntity* pEntity)
+{
+	std::vector<TickRecord*> vRecords = {};
+	if (!F::Backtrack.GetRecords(pEntity, vRecords) || vRecords.empty())
+		return nullptr;
+
+	return vRecords.front();
+}
+
+static bool GetHeadOffset(CBaseEntity* pEntity, const TickRecord* pRecord, Vec3& vOffset)
+{
+	if (!pEntity || !pEntity->IsPlayer() || !pRecord
+		|| !std::isfinite(pRecord->m_flModelScale) || pRecord->m_flModelScale <= 0.f)
+		return false;
+
+	auto pSet = pEntity->As<CBaseAnimating>()->GetAimHitboxSet();
+	if (!pSet || pSet->numhitboxes <= 0)
+		return false;
+
+	for (int i = 0; i < pSet->numhitboxes; i++)
+	{
+		auto pBox = pSet->pHitbox(i);
+		if (!pBox || pBox->group != HITGROUP_HEAD || pBox->bone < 0 || pBox->bone >= MAXSTUDIOBONES)
+			continue;
+
+		Vec3 vCenter;
+		Math::VectorTransform((pBox->bbmin + pBox->bbmax) * 0.5f, pRecord->m_aBones[pBox->bone], vCenter);
+		vOffset = vCenter - pRecord->m_vOrigin;
+		return std::isfinite(vOffset.x) && std::isfinite(vOffset.y) && std::isfinite(vOffset.z);
+	}
+
+	return false;
+}
+
+static bool IsHeadshotHitbox(CBaseEntity* pEntity, const TickRecord* pRecord, const Vec3& vRecordOffset, const Vec3& vStart, const Vec3& vEnd, const Vec3& vImpact)
+{
+	if (!pEntity || !pRecord
+		|| !std::isfinite(pRecord->m_flModelScale) || pRecord->m_flModelScale <= 0.f)
+		return false;
+
+	auto pSet = pEntity->As<CBaseAnimating>()->GetAimHitboxSet();
+	if (!pSet || pSet->numhitboxes <= 0)
+		return false;
+
+	const Vec3 vOrigin = vStart + vRecordOffset;
+	const Vec3 vDirection = vEnd - vStart;
+	const float flLength = vDirection.Length();
+	if (!std::isfinite(flLength) || flLength <= 0.000001f)
+		return false;
+
+	float flClosest = std::numeric_limits<float>::max();
+	const mstudiobbox_t* pClosest = nullptr;
+	for (int i = 0; i < pSet->numhitboxes; i++)
+	{
+		auto pBox = pSet->pHitbox(i);
+		if (!pBox || pBox->bone < 0 || pBox->bone >= MAXSTUDIOBONES)
+			continue;
+
+		float flDist = 0.f;
+		if (!Math::RayToOBB(vOrigin, vDirection, pBox->bbmin, pBox->bbmax, pRecord->m_aBones[pBox->bone], pRecord->m_flModelScale, &flDist)
+			|| flDist > flLength + 0.001f || flDist >= flClosest)
+			continue;
+
+		flClosest = flDist;
+		pClosest = pBox;
+	}
+
+	if (!pClosest)
+	{
+		const Vec3 vForward = vDirection / flLength;
+		const Vec3 vFallbackStart = vImpact + vRecordOffset + vForward * 16.f;
+		matrix3x4 mBox;
+		for (int i = 0; i < pSet->numhitboxes; i++)
+		{
+			auto pBox = pSet->pHitbox(i);
+			if (!pBox || pBox->bone < 0 || pBox->bone >= MAXSTUDIOBONES)
+				continue;
+
+			const auto& mBone = pRecord->m_aBones[pBox->bone];
+			const Vec3 vBone = { mBone[0][3], mBone[1][3], mBone[2][3] };
+			const Vec3 vTrace = vBone - vFallbackStart;
+			const float flTraceLength = vTrace.Length();
+			if (!std::isfinite(flTraceLength) || flTraceLength <= 0.000001f)
+				continue;
+
+			float flDist = 0.f;
+			Math::MatrixInitialize(mBox, vBone, false);
+			if (!Math::RayToOBB(vFallbackStart, vTrace, pBox->bbmin, pBox->bbmax, mBox, 1.f, &flDist)
+				|| flDist > flTraceLength + 0.001f || flDist >= flClosest)
+				continue;
+
+			flClosest = flDist;
+			pClosest = pBox;
+		}
+	}
+
+	return pClosest && pClosest->group == HITGROUP_HEAD;
+}
+
 Directs_t CAimbotProjectile::GetDirects()
 {
 	Directs_t mDirects = {};
@@ -424,15 +526,13 @@ Directs_t CAimbotProjectile::GetDirects()
 		case BOUNDS_HEAD:
 			if (tTarget.m_nAimedHitbox == HITBOX_HEAD)
 			{
-				auto aBones = F::Backtrack.GetBones(tTarget.m_pEntity);
-				if (!aBones)
+				auto pRecord = GetAimRecord(tTarget.m_pEntity);
+				if (!pRecord)
 					break;
 
-				//Vec3 vOff = tTarget.m_pEntity->As<CBaseAnimating>()->GetHitboxOrigin(aBones, HITBOX_HEAD) - tTarget.m_pEntity->m_vecOrigin();
-
-				// https://www.youtube.com/watch?v=_PSGD-pJUrM, might be better??
-				Vec3 vCenter, vBBoxMins, vBBoxMaxs; tTarget.m_pEntity->As<CBaseAnimating>()->GetHitboxInfo(aBones, HITBOX_HEAD, &vCenter, &vBBoxMins, &vBBoxMaxs);
-				Vec3 vOff = vCenter + (vBBoxMins + vBBoxMaxs) / 2 - tTarget.m_pEntity->m_vecOrigin();
+				Vec3 vOff;
+				if (!GetHeadOffset(tTarget.m_pEntity, pRecord, vOff))
+					break;
 
 				float flLow = 0.f;
 				Vec3 vDelta = tTarget.m_vPos + m_tInfo.m_vTargetEye - m_tInfo.m_vLocalEye;
@@ -453,6 +553,7 @@ Directs_t CAimbotProjectile::GetDirects()
 				vOff.x = std::clamp(vOff.x, vMins.x + Vars::Aimbot::Projectile::HuntsmanClamp.Value, vMaxs.x - Vars::Aimbot::Projectile::HuntsmanClamp.Value);
 				vOff.y = std::clamp(vOff.y, vMins.y + Vars::Aimbot::Projectile::HuntsmanClamp.Value, vMaxs.y - Vars::Aimbot::Projectile::HuntsmanClamp.Value);
 				vOff.z = std::clamp(vOff.z, vMins.z + Vars::Aimbot::Projectile::HuntsmanClamp.Value, vMaxs.z - Vars::Aimbot::Projectile::HuntsmanClamp.Value);
+				tTarget.m_pRecord = pRecord;
 				mDirects[iPriority] = { vOff, iFlags };
 			}
 			else
@@ -1641,36 +1742,12 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 						m_tProjInfo.m_vPath.pop_back();
 				}
 
-				// attempted to have a headshot check though this seems more detrimental than useful outside of smooth aimbot
-				if (tTarget.m_nAimedHitbox == HITBOX_HEAD && !bSecondTest &&
-					(Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Smooth
-					|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
-					|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Assistive))
-				{	// loop and see if closest hitbox is head
-					auto aBones = F::Backtrack.GetBones(tTarget.m_pEntity);
-					if (!aBones)
+				if (tTarget.m_nAimedHitbox == HITBOX_HEAD)
+				{
+					if (!tTarget.m_pRecord)
 						break;
-
-					auto pSet = tTarget.m_pEntity->As<CTFPlayer>()->GetHitboxSet();
-					if (!pSet)
-						break;
-
-					Vec3 vOffset = tOriginal.m_vOrigin - tTarget.m_vPos;
-					Vec3 vPos = trace.endpos + F::ProjSim.GetVelocity().Normalized() * 16 + vOffset;
-
-					float flLowestDistance = std::numeric_limits<float>::max(); int iClosest = -1;
-					for (int nHitbox = 0; nHitbox < pSet->numhitboxes; ++nHitbox)
-					{
-						auto pBox = pSet->pHitbox(nHitbox);
-						if (!pBox) continue;
-
-						Vec3 vCenter; Math::VectorTransform({}, aBones[pBox->bone], vCenter);
-
-						const float flDistance = vPos.DistToSqr(vCenter);
-						if (flDistance < flLowestDistance)
-							iClosest = nHitbox, flLowestDistance = flDistance;
-					}
-					if (iClosest != HITBOX_HEAD)
+					const Vec3 vRecordOffset = tTarget.m_pRecord->m_vOrigin - tTarget.m_vPos;
+					if (!IsHeadshotHitbox(tTarget.m_pEntity, tTarget.m_pRecord, vRecordOffset, vOld, vNew, trace.endpos))
 						break;
 				}
 
@@ -1986,7 +2063,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 		: GetSplashRadius(pWeapon, pLocal, Vars::Aimbot::Projectile::SplashRadius.Value / 100);
 	m_tInfo.m_flBoundsTime = tTarget.m_pEntity->GetSize().Length() / m_tInfo.m_flVelocity;
 	m_tInfo.m_flRadiusTime = m_tInfo.m_flBoundsTime + m_tInfo.m_flRadius / m_tInfo.m_flVelocity;
-	m_tInfo.m_iArmTime = TIME_TO_TICKS(ArmTime(pWeapon));
+	m_tInfo.m_iArmTime = ArmTicks(pLocal, pWeapon, m_tInfo.m_flLatency);
 	switch (pWeapon->GetWeaponID())
 	{
 	case TF_WEAPON_ROCKETLAUNCHER:

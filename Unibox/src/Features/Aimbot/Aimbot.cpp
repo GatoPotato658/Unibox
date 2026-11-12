@@ -159,9 +159,9 @@ void CAimbot::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		&& pLocal->IsAlive() && !pLocal->IsAGhost() && !pLocal->InCond(TF_COND_HALLOWEEN_KART))
 	{
 		if (G::PrimaryWeaponType == EWeaponType::HITSCAN)
-			F::AimbotHitscan.BacktrackToCrosshair(pCmd);
+			F::AimbotHitscan.BacktrackToCrosshair(pLocal, pWeapon, pCmd);
 		else if (G::PrimaryWeaponType == EWeaponType::MELEE)
-			F::AimbotMelee.BacktrackToCrosshair(pLocal, pCmd);
+			F::AimbotMelee.BacktrackToCrosshair(pLocal, pWeapon, pCmd);
 	}
 }
 

@@ -256,6 +256,7 @@ void CBacktrack::MakeRecords()
 		tCurRecord.m_vVelocity = pPlayer->m_vecVelocity();
 		tCurRecord.m_flCycle = pPlayer->m_flCycle();
 		tCurRecord.m_flPlaybackRate = pPlayer->m_flPlaybackRate();
+		tCurRecord.m_flModelScale = pPlayer->m_flModelScale();
 		memcpy(tCurRecord.m_aBones, s_aBones, sizeof(tCurRecord.m_aBones));
 		const bool bHasLastRecord = !vRecords.empty();
 		const Vec3 vLastOrigin = bHasLastRecord ? vRecords.front().m_vOrigin : Vec3();
@@ -285,6 +286,7 @@ void CBacktrack::MakeRecords()
 				tRecord.m_vMins = tCurRecord.m_vMins;
 				tRecord.m_vMaxs = tCurRecord.m_vMaxs;
 				tRecord.m_bOnShot = tCurRecord.m_bOnShot;
+				tRecord.m_flModelScale = tCurRecord.m_flModelScale;
 				memcpy(tRecord.m_aBones, tCurRecord.m_aBones, sizeof(tRecord.m_aBones));
 			}
 		}

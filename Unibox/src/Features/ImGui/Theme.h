@@ -31,6 +31,10 @@ public:
 	ImColor Background2 = {};
 	ImColor Track = {};
 	ImColor Popup = {};
+	ImColor Field = {};
+	ImColor FieldHover = {};
+	ImColor FieldText = {};
+	ImColor Outline = {};
 	ImColor Danger = {};
 	ImColor Inactive = {};
 	ImColor Active = {};

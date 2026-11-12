@@ -773,7 +773,7 @@
     <ClInclude Include="src\Features\CritHack\CritHack.h" />
     <ClInclude Include="src\Features\EnginePrediction\EnginePrediction.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\CascadiaMono\CascadiaMono.h" />
-    <ClInclude Include="src\Features\ImGui\Fonts\Alata\Alata.h" />
+    <ClInclude Include="src\Features\ImGui\Fonts\Rubik\Rubik.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\IconDefinitions.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\MaterialIcons.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
@@ -1080,7 +1080,6 @@
     <ClInclude Include="src\Utils\Audio\AudioDevice.h" />
     <ClInclude Include="src\Utils\Audio\AudioStream.h" />
     <ClInclude Include="src\Utils\Audio\Vendor\minimp3.h" />
-    <ClInclude Include="src\Utils\Audio\Vendor\stb_vorbis.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

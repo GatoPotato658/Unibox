@@ -19,8 +19,9 @@ static constexpr size_t VorbisMemory = 4 * 1024 * 1024;
 static constexpr size_t OggPageHeader = 27;
 static constexpr uint64_t StreamStallDelay = 2000;
 static constexpr uint64_t StreamStartTimeout = 10000;
-static constexpr int StreamConnectTimeout = 3000;
-static constexpr int StreamReceiveTimeout = 2000;
+static constexpr size_t Mp3Window = 16 * 1024;
+static constexpr int StreamConnectTimeout = 5000;
+static constexpr int StreamReceiveTimeout = 10000;
 
 static bool ContentIs(const wchar_t* sType, const wchar_t* sPrefix)
 {
@@ -280,7 +281,7 @@ AudioStreamError_t CAudioStream::OpenConnection(const char* sUrl)
 	if (!m_pRequest || Cancelled())
 		return AudioStreamError_t::Connect;
 
-	if (!WinHttpSendRequest(m_pRequest, L"Accept: */*\r\nIcy-MetaData: 1\r\n", DWORD(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+	if (!WinHttpSendRequest(m_pRequest, L"Icy-MetaData: 1", DWORD(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
 		!WinHttpReceiveResponse(m_pRequest, nullptr) || Cancelled())
 		return AudioStreamError_t::Connect;
 
@@ -464,7 +465,7 @@ AudioStreamError_t CAudioStream::DecodeMp3()
 	float aPcm[MINIMP3_MAX_SAMPLES_PER_FRAME] = {};
 	uint32_t uInvalid = 0;
 
-	while (m_uInputSize != m_uInputUsed)
+	while (m_uInputSize - m_uInputUsed >= Mp3Window)
 	{
 		mp3dec_frame_info_t tInfo = {};
 		const int iSamples = mp3dec_decode_frame(&m_tMp3, m_aInput + m_uInputUsed,

@@ -25,16 +25,6 @@ private:
 	void Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod = Vars::Aimbot::General::AimType.Value);
 	bool ShouldFire(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, const Target_t& tTarget);
 
-	struct CrosshairRecordInfo_t
-	{
-		float m_flMinDist = -1.f;
-		float m_flFov = -1.f;
-		float m_flSimTime = -1.f;
-
-		bool m_bInsideThisRecord = false;
-	};
-	CrosshairRecordInfo_t GetCrosshairRecord(const Vec3 vAngles, const Vec3 vPos, std::vector<TickRecord*> vRecords, const std::vector<const mstudiobbox_t*> vHitboxes);
-
 	Vec3 m_vEyePos = {};
 
 	matrix3x4 m_mMatrix = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } };
@@ -46,7 +36,7 @@ private:
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 
-	void BacktrackToCrosshair(CUserCmd* pCmd);
+	void BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 };
 
 ADD_FEATURE(CAimbotHitscan, AimbotHitscan);

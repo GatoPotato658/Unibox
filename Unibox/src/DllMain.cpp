@@ -66,6 +66,45 @@ static void CleanupManualMap()
 	}
 }
 
+[[noreturn]] static void ReleaseManualMapAndExit(uintptr_t uBase)
+{
+	MEMORY_BASIC_INFORMATION mbi{};
+	if (!uBase || !VirtualQuery(reinterpret_cast<LPCVOID>(uBase), &mbi, sizeof(mbi)))
+		ExitThread(EXIT_SUCCESS);
+
+	const uintptr_t uRelease = mbi.Type == MEM_PRIVATE ? reinterpret_cast<uintptr_t>(&VirtualFree) : reinterpret_cast<uintptr_t>(&UnmapViewOfFile);
+	const uintptr_t uExit = reinterpret_cast<uintptr_t>(&ExitThread);
+
+	uint8_t aStub[] =
+	{
+		0x48, 0x83, 0xEC, 0x28,
+		0x48, 0xB9, 0, 0, 0, 0, 0, 0, 0, 0,
+		0x31, 0xD2,
+		0x41, 0xB8, 0x00, 0x80, 0x00, 0x00,
+		0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,
+		0xFF, 0xD0,
+		0x31, 0xC9,
+		0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0,
+		0xFF, 0xD0,
+		0xCC
+	};
+	memcpy(aStub + 6, &uBase, sizeof(uBase));
+	memcpy(aStub + 24, &uRelease, sizeof(uRelease));
+	memcpy(aStub + 38, &uExit, sizeof(uExit));
+
+	void* pStub = VirtualAlloc(nullptr, sizeof(aStub), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	DWORD dwOldProtect = 0;
+	if (!pStub)
+		ExitThread(EXIT_SUCCESS);
+	memcpy(pStub, aStub, sizeof(aStub));
+	if (!VirtualProtect(pStub, sizeof(aStub), PAGE_EXECUTE_READ, &dwOldProtect))
+		ExitThread(EXIT_SUCCESS);
+	FlushInstructionCache(GetCurrentProcess(), pStub, sizeof(aStub));
+
+	reinterpret_cast<void(*)()>(pStub)();
+	ExitThread(EXIT_SUCCESS);
+}
+
 DWORD WINAPI MainThread(LPVOID lpParam)
 {
 	const uintptr_t uBase = s_uModuleBase ? s_uModuleBase : GetCurrentModuleBase(lpParam);
@@ -81,7 +120,7 @@ DWORD WINAPI MainThread(LPVOID lpParam)
 	CleanupManualMap();
 
 	if (s_bManualMapped || !uBase)
-		ExitThread(EXIT_SUCCESS);
+		ReleaseManualMapAndExit(uBase);
 	else
 		FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(uBase), EXIT_SUCCESS);
 

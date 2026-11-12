@@ -20,7 +20,7 @@ static const char* RadioStationUrl(size_t uStation)
 	case RadioStationEnum::DnB: return "https://sc2.dubplate.fm/radio/8030/dnb/uhifi";
 	case RadioStationEnum::Jungle: return "https://energy1058.radioca.st/stream";
 	case RadioStationEnum::LiquidDnB: return "https://antares.dribbcast.com/proxy/dave1/stream/";
-	case RadioStationEnum::Hardcore: return "https://stream.hardcoreradio.nl:9000/hcr.ogg";
+	case RadioStationEnum::Hardcore: return "http://shoutcast1.hardcoreradio.nl/";
 	case RadioStationEnum::Techno: return "https://schranz.in/schranz";
 	case RadioStationEnum::ClassicRap: return "https://radio.thisisarealdomain.com/THE-CRIB";
 	case RadioStationEnum::Vaporwave: return "https://radio.plaza.one/mp3";
@@ -28,6 +28,15 @@ static const char* RadioStationUrl(size_t uStation)
 	case RadioStationEnum::Tekk: return "https://stream.zeno.fm/oj65ts503spvv";
 	case RadioStationEnum::Underground: return "https://54house.fm:9013/stream";
 	case RadioStationEnum::TheBeat: return "https://audio.gtaradio.net/4/beat_95";
+	case RadioStationEnum::Frenchcore: return "https://stream.technolovers.fm/frenchcore";
+	case RadioStationEnum::Gabber: return "https://stream.technolovers.fm/gabber";
+	case RadioStationEnum::Hardstyle: return "https://playerservices.streamtheworld.com/api/livestream-redirect/Q_DANCE.mp3";
+	case RadioStationEnum::Harder: return "https://harder-high.rautemusik.fm/";
+	case RadioStationEnum::HappyHardcore: return "https://happyhardcore-high.rautemusik.fm/";
+	case RadioStationEnum::HardcorePower: return "https://hardcorepower.beheerstream.nl/8012/stream";
+	case RadioStationEnum::UkBass: return "https://www.ukbassradio.com/stream";
+	case RadioStationEnum::Phonk: return "https://stream.laut.fm/phonk";
+	case RadioStationEnum::LoFi: return "http://usa9.fastcast4u.com/proxy/jamz?mp=/1";
 	default: return nullptr;
 	}
 }
@@ -47,6 +56,15 @@ const char* RadioStationName(size_t uStation)
 	case RadioStationEnum::Tekk: return "Tekk";
 	case RadioStationEnum::Underground: return "Underground";
 	case RadioStationEnum::TheBeat: return "The Beat 102.7";
+	case RadioStationEnum::Frenchcore: return "Frenchcore";
+	case RadioStationEnum::Gabber: return "Gabber";
+	case RadioStationEnum::Hardstyle: return "Q-dance";
+	case RadioStationEnum::Harder: return "Harder";
+	case RadioStationEnum::HappyHardcore: return "Happy hardcore";
+	case RadioStationEnum::HardcorePower: return "Hardcore Power";
+	case RadioStationEnum::UkBass: return "UK Bass";
+	case RadioStationEnum::Phonk: return "Phonk";
+	case RadioStationEnum::LoFi: return "Lo-fi";
 	default: return "No station tuned";
 	}
 }

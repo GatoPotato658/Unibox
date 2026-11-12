@@ -206,11 +206,11 @@ NAMESPACE_BEGIN(Vars)
 		CVar(CustomFont, "Custom font", std::string(), NOBIND | NOSAVE | DEBUGVAR);
 
 		NAMESPACE_BEGIN(Theme)
-			CVar(Accent, "Accent color", Color_t(190, 44, 58, 255), VISUAL);
-			CVar(Background, "Background color", Color_t(21, 14, 16, 255), VISUAL);
-			CVar(Active, "Active color", Color_t(240, 231, 232, 255), VISUAL);
-			CVar(Inactive, "Inactive color", Color_t(146, 124, 128, 255), VISUAL);
-			CVar(Opacity, "Opacity", 96, VISUAL | NOBIND | SLIDER_CLAMP, 40, 100, 1, "%i%%");
+			CVar(Accent, "Accent color", Color_t(236, 38, 22, 255), VISUAL);
+			CVar(Background, "Background color", Color_t(34, 34, 34, 255), VISUAL);
+			CVar(Active, "Active color", Color_t(238, 238, 238, 255), VISUAL);
+			CVar(Inactive, "Inactive color", Color_t(140, 140, 140, 255), VISUAL);
+			CVar(Opacity, "Opacity", 100, VISUAL | NOBIND | SLIDER_CLAMP, 40, 100, 1, "%i%%");
 		NAMESPACE_END(Theme)
 	NAMESPACE_END(Menu)
 
@@ -1346,7 +1346,7 @@ NAMESPACE_BEGIN(Vars)
 		NAMESPACE_BEGIN(Radio)
 			CVar(Enabled, "Enable radio", false);
 			CVarValues(Station, "Station", 0, NONE, nullptr,
-				"Drum and bass", "Jungle", "Liquid DnB", "Hardcore", "Techno", "Classic rap", "Vaporwave", "NonStop FM", "Tekk", "Underground", "The Beat 102.7");
+				"Drum and bass", "Jungle", "Liquid DnB", "Hardcore", "Techno", "Classic rap", "Vaporwave", "NonStop FM", "Tekk", "Underground", "The Beat 102.7", "Frenchcore", "Gabber", "Q-dance", "Harder", "Happy hardcore", "Hardcore Power", "UK Bass", "Phonk", "Lo-fi");
 			CVar(Volume, "Volume", 50, SLIDER_CLAMP, 0, 100, 1, "%i%%");
 			CVar(ScaleToGameVolume, "Follow game volume", false);
 			CVar(DuckOnVoice, "Duck on voice chat", false);

@@ -200,18 +200,24 @@ namespace ImGui
 		return sEntry[0] == '#' && !strcmp(sEntry, "##Divider");
 	}
 
-	inline void RenderBackground(ImU32 uBackground, float flRounding = H::Draw.Scale(6))
+	inline void RenderBackground(ImU32 uBackground, float flRounding = H::Draw.Scale(4))
 	{
 		ImVec2 vSize = GetWindowSize();
 		ImVec2 vDrawPos = GetDrawPos();
 		GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + vSize, uBackground, flRounding);
+	}
+	inline void RenderOutline(ImU32 uOutline = F::Render.Outline, float flRounding = H::Draw.Scale(4))
+	{
+		ImVec2 vSize = GetWindowSize();
+		ImVec2 vDrawPos = GetDrawPos();
+		GetWindowDrawList()->AddRect(vDrawPos, vDrawPos + vSize, uOutline, flRounding, ImDrawFlags_None, H::Draw.Scale());
 	}
 	inline void RenderTitledBackground(float flTitleHeight, const char* sTitle = nullptr, bool bSolid = false)
 	{
 		const ImVec2 vSize = GetWindowSize();
 		const ImVec2 vDrawPos = GetDrawPos();
 		ImDrawList* pDrawList = GetWindowDrawList();
-		const float flRounding = H::Draw.Scale(6);
+		const float flRounding = H::Draw.Scale(4);
 
 		if (bSolid)
 			pDrawList->AddRectFilled(vDrawPos, vDrawPos + vSize, F::Render.Background1, flRounding);
@@ -219,7 +225,10 @@ namespace ImGui
 		if (sTitle)
 		{
 			ImFont* pFont = F::Render.FontBold;
-			pDrawList->AddText(pFont, pFont->LegacySize, vDrawPos + ImVec2(H::Draw.Scale(12), floorf((flTitleHeight - pFont->LegacySize) / 2) + H::Draw.Scale(1)), FadeColor(F::Render.Active), sTitle);
+			const float flPad = H::Draw.Scale(14);
+			const float flTextY = floorf((flTitleHeight - pFont->LegacySize) / 2);
+			pDrawList->AddText(pFont, pFont->LegacySize, vDrawPos + ImVec2(flPad, flTextY), FadeColor(F::Render.Active), sTitle);
+			pDrawList->AddRectFilled(vDrawPos + ImVec2(flPad, flTitleHeight - H::Draw.Scale(1)), vDrawPos + ImVec2(vSize.x - flPad, flTitleHeight), FadeColor(F::Render.Background2));
 		}
 	}
 	inline void RenderOverlayWindow(float flHeaderHeight, const char* sIcon, const char* sTitle, const char* sSide = nullptr)
@@ -227,7 +236,7 @@ namespace ImGui
 		const ImVec2 vSize = GetWindowSize();
 		const ImVec2 vDrawPos = GetDrawPos();
 		ImDrawList* pDrawList = GetWindowDrawList();
-		const float flRounding = H::Draw.Scale(8);
+		const float flRounding = H::Draw.Scale(4);
 
 		pDrawList->AddRectFilled(vDrawPos, vDrawPos + vSize, F::Render.Background1, flRounding);
 		if (flHeaderHeight <= 0.f)
@@ -235,14 +244,14 @@ namespace ImGui
 
 		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(vSize.x, flHeaderHeight), F::Render.Background0, flRounding, ImDrawFlags_RoundCornersTop);
 		const float flIcon = H::Draw.Scale(15);
-		pDrawList->AddText(F::Render.IconFont, flIcon, vDrawPos + ImVec2(H::Draw.Scale(12), floorf((flHeaderHeight - flIcon) / 2)), FadeColor(F::Render.Accent), sIcon);
+		pDrawList->AddText(F::Render.IconFont, flIcon, vDrawPos + ImVec2(H::Draw.Scale(10), floorf((flHeaderHeight - flIcon) / 2)), FadeColor(F::Render.Accent), sIcon);
 		ImFont* pBold = F::Render.FontBold;
-		pDrawList->AddText(pBold, pBold->LegacySize, vDrawPos + ImVec2(H::Draw.Scale(34), floorf((flHeaderHeight - pBold->LegacySize) / 2)), FadeColor(F::Render.Active), sTitle);
+		pDrawList->AddText(pBold, pBold->LegacySize, vDrawPos + ImVec2(H::Draw.Scale(31), floorf((flHeaderHeight - pBold->LegacySize) / 2)), FadeColor(F::Render.Active), sTitle);
 		if (sSide)
 		{
 			ImFont* pSmall = F::Render.FontSmall;
 			const float flWidth = pSmall->CalcTextSizeA(pSmall->LegacySize, FLT_MAX, 0.f, sSide).x;
-			pDrawList->AddText(pSmall, pSmall->LegacySize, vDrawPos + ImVec2(vSize.x - H::Draw.Scale(12) - flWidth, floorf((flHeaderHeight - pSmall->LegacySize) / 2)), FadeColor(F::Render.Inactive), sSide);
+			pDrawList->AddText(pSmall, pSmall->LegacySize, vDrawPos + ImVec2(vSize.x - H::Draw.Scale(10) - flWidth, floorf((flHeaderHeight - pSmall->LegacySize) / 2)), FadeColor(F::Render.Inactive), sSide);
 		}
 	}
 	inline float OverlayChipWidth(const char* sText)
@@ -493,7 +502,8 @@ namespace ImGui
 		vPos.x = std::clamp(vPos.x, H::Draw.Scale(4), std::max(H::Draw.Scale(4), vDisplay.x - vBox.x - H::Draw.Scale(4)));
 		vPos = { floorf(vPos.x), floorf(vPos.y) };
 
-		pDrawList->AddRectFilled(vPos, vPos + vBox, F::Render.Popup, H::Draw.Scale(5));
+		pDrawList->AddRectFilled(vPos, vPos + vBox, F::Render.Popup, H::Draw.Scale(4));
+		pDrawList->AddRect(vPos, vPos + vBox, F::Render.Outline, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 		for (size_t i = 0; i < vWraps.size(); i++)
 			pDrawList->AddText(vPos + ImVec2(flPadX, flPadY + flLine * i), F::Render.Active, vWraps[i].c_str());
 
@@ -534,19 +544,19 @@ namespace ImGui
 	inline bool FInputText(const char* sLabel, std::string& sText, float flWidth = H::Draw.Scale(150), ImGuiInputTextFlags iFlags = ImGuiInputTextFlags_None, ImGuiInputTextCallback fCallback = nullptr)
 	{
 		const std::string sDisplay = StripDoubleHash(sLabel);
-		const float flHeight = H::Draw.Scale(28);
+		const float flHeight = H::Draw.Scale(26);
 		PushStyleVar(ImGuiStyleVar_FramePadding, { H::Draw.Scale(10), floorf((flHeight - GetFontSize()) / 2) });
 		PushStyleVar(ImGuiStyleVar_FrameRounding, H::Draw.Scale(4));
-		PushStyleColor(ImGuiCol_FrameBg, F::Render.Background1p5.Value);
-		PushStyleColor(ImGuiCol_FrameBgHovered, F::Render.Background1p5L.Value);
-		PushStyleColor(ImGuiCol_FrameBgActive, F::Render.Background1p5L.Value);
-		PushStyleColor(ImGuiCol_Text, F::Render.Active.Value);
+		PushStyleColor(ImGuiCol_FrameBg, F::Render.Field.Value);
+		PushStyleColor(ImGuiCol_FrameBgHovered, F::Render.FieldHover.Value);
+		PushStyleColor(ImGuiCol_FrameBgActive, F::Render.FieldHover.Value);
+		PushStyleColor(ImGuiCol_Text, F::Render.FieldText.Value);
 		PushItemWidth(flWidth);
 
 		bool bReturn = InputText(std::format("##{}", sLabel).c_str(), &sText, iFlags | ImGuiInputTextFlags_NoKeyboardNavigate, fCallback);
 		const bool bHovered = IsItemHovered();
 		if (sText.empty() && !IsItemActive())
-			GetWindowDrawList()->AddText(GetItemRectMin() + GetStyle().FramePadding, FadeColor(F::Render.Inactive), sDisplay.c_str());
+			GetWindowDrawList()->AddText(GetItemRectMin() + GetStyle().FramePadding, FadeColor(F::Render.FieldText, 0.55f), sDisplay.c_str());
 		if (!Disabled && bHovered)
 			SetMouseCursor(ImGuiMouseCursor_TextInput);
 
@@ -689,6 +699,7 @@ namespace ImGui
 		if (bReturn)
 		{
 			RenderBackground(F::Render.Popup);
+			RenderOutline();
 
 			if (flOffset)
 				SetCursorPosY(GetCursorPosY() + H::Draw.Scale(flOffset));
@@ -705,7 +716,8 @@ namespace ImGui
 
 		if (bReturn)
 		{
-			RenderBackground(F::Render.Popup, H::Draw.Scale(8));
+			RenderBackground(F::Render.Popup, H::Draw.Scale(6));
+			RenderOutline(F::Render.Outline, H::Draw.Scale(6));
 
 			if (flOffset)
 				SetCursorPosY(GetCursorPosY() + H::Draw.Scale(flOffset));
@@ -884,7 +896,7 @@ namespace ImGui
 
 	inline void DrawCheckbox(ImDrawList* pDrawList, ImVec2 vMin, float flOn, float flHover, bool bPlain = false)
 	{
-		const float flSize = H::Draw.Scale(14), flRounding = H::Draw.Scale(3.5f);
+		const float flSize = H::Draw.Scale(13), flRounding = H::Draw.Scale(3.5f);
 		const ImVec2 vMax = vMin + ImVec2(flSize, flSize);
 		const ImVec4 tOn = bPlain ? F::Render.Active.Value : F::Render.Accent.Value;
 
@@ -895,9 +907,9 @@ namespace ImGui
 		if (flOn > 0.01f)
 		{
 			pDrawList->PathClear();
-			pDrawList->PathLineTo(vMin + ImVec2(H::Draw.Scale(3.5f), H::Draw.Scale(7.3f)));
-			pDrawList->PathLineTo(vMin + ImVec2(H::Draw.Scale(6.f), H::Draw.Scale(9.8f)));
-			pDrawList->PathLineTo(vMin + ImVec2(H::Draw.Scale(10.7f), H::Draw.Scale(4.4f)));
+			pDrawList->PathLineTo(vMin + ImVec2(H::Draw.Scale(3.f), H::Draw.Scale(6.8f)));
+			pDrawList->PathLineTo(vMin + ImVec2(H::Draw.Scale(5.5f), H::Draw.Scale(9.3f)));
+			pDrawList->PathLineTo(vMin + ImVec2(H::Draw.Scale(10.2f), H::Draw.Scale(3.9f)));
 			pDrawList->PathStroke(FadeColor(bPlain ? ImVec4(0.04f, 0.05f, 0.06f, 1.f) : F::Render.OnAccent.Value, flOn), ImDrawFlags_None, H::Draw.Scale(1.7f));
 		}
 	}
@@ -1376,8 +1388,8 @@ namespace ImGui
 
 		const float flWidth = RowWidth(iFlags);
 		const ImVec2 vOriginalPos = GetCursorPos(), vRowMin = GetDrawPos() + vOriginalPos;
-		const float flBox = H::Draw.Scale(14);
-		const auto vLines = RowLabel(sLabel, flWidth - flBox - H::Draw.Scale(12));
+		const float flBox = H::Draw.Scale(13), flLead = flBox + H::Draw.Scale(10);
+		const auto vLines = RowLabel(sLabel, flWidth - flLead);
 		const ImVec2 vSize = { flWidth, H::Draw.Scale(32 + 16 * (int(vLines.size()) - 1)) };
 
 		PushID(sLabel);
@@ -1399,10 +1411,10 @@ namespace ImGui
 		const float flHover = Anim(uHash, 1, bHovered && !Disabled ? 1.f : 0.f);
 
 		ImDrawList* pDrawList = GetWindowDrawList();
-		DrawCheckbox(pDrawList, vRowMin + ImVec2(flWidth - flBox, floorf((vSize.y - flBox) / 2)), flOn, flHover, iFlags & FToggleEnum::PlainColor);
-		DrawRowLabel(pDrawList, vRowMin, vSize.y, vLines, LabelColor(std::max(flOn, flHover)));
+		DrawCheckbox(pDrawList, vRowMin + ImVec2(0.f, floorf((vSize.y - flBox) / 2)), flOn, flHover, iFlags & FToggleEnum::PlainColor);
+		DrawRowLabel(pDrawList, vRowMin + ImVec2(flLead, 0.f), vSize.y, vLines, LabelColor(std::max(flOn, flHover)));
 
-		LastRow = { vRowMin, vRowMin + vSize, vRowMin.x + flWidth - flBox - H::Draw.Scale(10), vSize.y };
+		LastRow = { vRowMin, vRowMin + vSize, vRowMin.x + flWidth, vSize.y };
 		EndRow(vOriginalPos, vSize);
 
 		if (Transparent || Disabled)
@@ -1473,7 +1485,7 @@ namespace ImGui
 		bool m_bTitle = false;
 		bool m_bStacked = false;
 	};
-	inline FieldLayout_t FieldLayout(const char* sLabel, float flWidth, float flReserve = 0.f, float flFieldWidth = 0.f, float flFieldHeight = H::Draw.Scale(26))
+	inline FieldLayout_t FieldLayout(const char* sLabel, float flWidth, float flReserve = 0.f, float flFieldWidth = 0.f, float flFieldHeight = H::Draw.Scale(24))
 	{
 		FieldLayout_t tLayout = {};
 		tLayout.m_bTitle = sLabel[0] != '#';
@@ -1487,11 +1499,8 @@ namespace ImGui
 		}
 
 		const float flLabel = CalcTextSize(StripDoubleHash(sLabel).c_str()).x, flGap = H::Draw.Scale(14);
-		float flField = flFieldWidth ? std::min(flFieldWidth, flWidth * 0.62f) : floorf(flWidth * 0.5f);
-		if (flLabel + flGap + flReserve > flWidth - flField && !flFieldWidth)
-			flField = flWidth - flLabel - flGap - flReserve;
-		const float flMinField = flFieldWidth ? flField : std::max(H::Draw.Scale(118), flWidth * 0.34f);
-		if (flField >= flMinField && flLabel + flGap + flReserve <= flWidth - flField)
+		const float flField = std::min(flFieldWidth, flWidth * 0.62f);
+		if (flFieldWidth && flLabel + flGap + flReserve <= flWidth - flField)
 		{
 			tLayout.m_vRowSize = { flWidth, flFieldHeight + H::Draw.Scale(6) };
 			tLayout.m_vFieldPos = { flWidth - flField, H::Draw.Scale(3) };
@@ -1504,7 +1513,7 @@ namespace ImGui
 		tLayout.m_flLineHeight = H::Draw.Scale(22);
 		tLayout.m_vFieldPos = { 0, tLayout.m_flLineHeight };
 		tLayout.m_vFieldSize = { flWidth - flReserve, flFieldHeight };
-		tLayout.m_vRowSize = { flWidth, tLayout.m_flLineHeight + flFieldHeight + H::Draw.Scale(4) };
+		tLayout.m_vRowSize = { flWidth, tLayout.m_flLineHeight + flFieldHeight + H::Draw.Scale(6) };
 		return tLayout;
 	}
 	inline bool FSliderCore(const char* sLabel, float* pVar1, float* pVar2, float flMin, float flMax, float flStep, const char* fmt, int iFlags, bool* pHovered, bool* pToggle, int iToggleFlags)
@@ -1526,8 +1535,9 @@ namespace ImGui
 
 		const float flWidth = RowWidth(iFlags);
 		const ImVec2 vOriginalPos = GetCursorPos(), vRowMin = GetDrawPos() + vOriginalPos;
-		const float flBox = H::Draw.Scale(14);
-		const float flValueRight = pToggle ? flWidth - flBox - H::Draw.Scale(10) : flWidth;
+		const float flBox = H::Draw.Scale(13);
+		const float flLead = pToggle ? flBox + H::Draw.Scale(10) : 0.f;
+		const float flValueRight = flWidth;
 
 		const FieldLayout_t tLayout = FieldLayout(sLabel, flWidth);
 		const bool bInline = !tLayout.m_bStacked;
@@ -1542,7 +1552,7 @@ namespace ImGui
 			const std::string sMax = pVar2 ? FormatText(fmt, flMax, flMax) : FormatText(fmt, flMax);
 			flReserve = std::max({ flReserve, CalcTextSize(sMin.c_str()).x, CalcTextSize(sMax.c_str()).x, H::Draw.Scale(pVar2 ? 64 : 36) });
 		}
-		const auto vLines = bInline ? RowLabel(sLabel, std::max(flFieldX - H::Draw.Scale(14), 1.f)) : RowLabel(sLabel, flValueRight - flEntryWidth - H::Draw.Scale(pVar2 ? 12 : 34));
+		const auto vLines = bInline ? RowLabel(sLabel, std::max(flFieldX - H::Draw.Scale(14) - flLead, 1.f)) : RowLabel(sLabel, flValueRight - flEntryWidth - H::Draw.Scale(pVar2 ? 12 : 34) - flLead);
 		const float flLabelHeight = bInline ? tLayout.m_vRowSize.y : H::Draw.Scale(22 + 16 * (int(vLines.size()) - 1));
 		const ImVec2 vSize = bInline ? tLayout.m_vRowSize : ImVec2(flWidth, flLabelHeight + H::Draw.Scale(20));
 
@@ -1553,7 +1563,7 @@ namespace ImGui
 		bool bToggleHovered = false;
 		if (pToggle)
 		{
-			const ImVec2 vBoxMin = vRowMin + ImVec2(flWidth - flBox, floorf((flLabelHeight - flBox) / 2));
+			const ImVec2 vBoxMin = vRowMin + ImVec2(0.f, floorf((flLabelHeight - flBox) / 2));
 			bToggleHovered = !Disabled && IsWindowHovered() && IsMouseWithin(vBoxMin.x - H::Draw.Scale(4), vBoxMin.y - H::Draw.Scale(4), flBox + H::Draw.Scale(8), flBox + H::Draw.Scale(8));
 			if (bToggleHovered)
 			{
@@ -1568,7 +1578,7 @@ namespace ImGui
 		if (bSliderOff)
 			PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
 
-		DrawRowLabel(pDrawList, vRowMin, flLabelHeight, vLines, LabelColor(pToggle ? std::max(flOn, flHover) : flHover));
+		DrawRowLabel(pDrawList, vRowMin + ImVec2(flLead, 0.f), flLabelHeight, vLines, LabelColor(pToggle ? std::max(flOn, flHover) : flHover));
 
 		{
 			const uint32_t uHash2 = FNV1A::Hash32Const(std::format("{}## Text", sLabel).c_str());
@@ -1857,7 +1867,7 @@ namespace ImGui
 	{
 		ImDrawList* pDrawList = GetWindowDrawList();
 		const float flPad = H::Draw.Scale(10);
-		pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, std::max(flHover, flOpen))), H::Draw.Scale(4));
+		pDrawList->AddRectFilled(vMin, vMax, FadeColor(MixColor(F::Render.Field, F::Render.FieldHover, std::max(flHover, flOpen))), H::Draw.Scale(4));
 
 		const float flTextWidth = vMax.x - vMin.x - flPad * 2 - (bChevron ? H::Draw.Scale(14) : 0.f);
 		ImFont* pFont = GetFont();
@@ -1869,7 +1879,7 @@ namespace ImGui
 		}
 		const float flFontSize = pFont->LegacySize;
 		const ImVec2 vValuePos = { vMin.x + flPad, floorf(vMin.y + (vMax.y - vMin.y - flFontSize) / 2) };
-		const ImU32 uText = FadeColor(F::Render.Active);
+		const ImU32 uText = FadeColor(F::Render.FieldText);
 		pDrawList->AddText(pFont, flFontSize, vValuePos, uText, sShown.c_str());
 		if (bTyping && fmodf(float(GetTime()), 1.f) < 0.55f)
 		{
@@ -1879,7 +1889,7 @@ namespace ImGui
 
 		if (bChevron)
 		{
-			const ImU32 uChevron = FadeColor(MixColor(F::Render.Inactive, F::Render.Active, std::max(flHover, flOpen)));
+			const ImU32 uChevron = FadeColor(F::Render.FieldText, 0.6f + 0.4f * std::max(flHover, flOpen));
 			const float flChevronX = vMax.x - flPad - H::Draw.Scale(4), flChevronY = floorf((vMin.y + vMax.y) / 2) + H::Draw.Scale(0.5f);
 			const float flHalf = H::Draw.Scale(3.5f), flRise = H::Draw.Scale(2.f) * (1.f - 2.f * flOpen);
 			pDrawList->AddLine({ flChevronX - flHalf, flChevronY - flRise }, { flChevronX, flChevronY + flRise }, uChevron, H::Draw.Scale(1.4f));
@@ -1924,8 +1934,10 @@ namespace ImGui
 	{
 		PushStyleVar(ImGuiStyleVar_FramePadding, { 0, 0 });
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, H::Draw.Scale(4) });
-		PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.f);
-		tRow.m_bOpen = BeginComboPopup(tRow.m_uPopup, ImRect(tRow.m_vFieldMin, tRow.m_vFieldMax + ImVec2(0, H::Draw.Scale(4))), ImGuiComboFlags_HeightLarge);
+		PushStyleVar(ImGuiStyleVar_PopupBorderSize, H::Draw.Scale());
+		PushStyleColor(ImGuiCol_Border, F::Render.Outline.Value);
+		tRow.m_bOpen = BeginComboPopup(tRow.m_uPopup, ImRect(tRow.m_vFieldMin, tRow.m_vFieldMax + ImVec2(0, H::Draw.Scale(2))), ImGuiComboFlags_HeightLarge);
+		PopStyleColor();
 		PopStyleVar(3);
 		if (tRow.m_bOpen)
 			PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
@@ -2480,16 +2492,16 @@ namespace ImGui
 		DrawFieldLabel(sLabel, tLayout, vRowMin, std::max(flHover, flListen));
 
 		ImDrawList* pDrawList = GetWindowDrawList();
-		pDrawList->AddRectFilled(vFieldMin, vFieldMax, FadeColor(MixColor(F::Render.Background1p5, F::Render.Background1p5L, flHover)), H::Draw.Scale(4));
+		pDrawList->AddRectFilled(vFieldMin, vFieldMax, FadeColor(MixColor(F::Render.Field, F::Render.FieldHover, flHover)), H::Draw.Scale(4));
 		if (flListen > 0.01f)
-			pDrawList->AddRectFilled(vFieldMin, vFieldMax, FadeColor(F::Render.AccentDim, flListen), H::Draw.Scale(4));
+			pDrawList->AddRect(vFieldMin, vFieldMax, FadeColor(F::Render.Accent, flListen), H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale(1.5f));
 		const ImVec2 vText = CalcTextSize(sKey.c_str());
 		const float flTextX = vSize.x ? floorf((vFieldMin.x + vFieldMax.x - vText.x) / 2) : vFieldMin.x + H::Draw.Scale(10);
-		pDrawList->AddText({ flTextX, floorf((vFieldMin.y + vFieldMax.y - vText.y) / 2) }, FadeColor(ImLerp(F::Render.Active.Value, F::Render.Accent.Value, flListen)), sKey.c_str());
+		pDrawList->AddText({ flTextX, floorf((vFieldMin.y + vFieldMax.y - vText.y) / 2) }, FadeColor(ImLerp(F::Render.FieldText.Value, F::Render.Accent.Value, flListen)), sKey.c_str());
 		if (!vSize.x)
 		{
 			const float flIcon = H::Draw.Scale(14);
-			pDrawList->AddText(F::Render.IconFont, flIcon, { vFieldMax.x - H::Draw.Scale(10) - flIcon, floorf((vFieldMin.y + vFieldMax.y - flIcon) / 2) }, FadeColor(MixColor(F::Render.Inactive, F::Render.Active, std::max(flHover, flListen) * 0.6f)), ICON_MD_KEYBOARD);
+			pDrawList->AddText(F::Render.IconFont, flIcon, { vFieldMax.x - H::Draw.Scale(10) - flIcon, floorf((vFieldMin.y + vFieldMax.y - flIcon) / 2) }, FadeColor(F::Render.FieldText, 0.5f + 0.5f * std::max(flHover, flListen)), ICON_MD_KEYBOARD);
 		}
 
 		LastRow = { vRowMin, vRowMin + tLayout.m_vRowSize, tLayout.m_bStacked || !tLayout.m_bTitle ? vRowMin.x + flWidth : vFieldMin.x - H::Draw.Scale(8), tLayout.m_flLineHeight };

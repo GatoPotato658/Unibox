@@ -25,9 +25,17 @@ struct Target_t
 	bool m_bBacktrack = false;
 };
 
+struct CrosshairRecord_t
+{
+	float m_flDist = std::numeric_limits<float>::max();
+	float m_flSimTime = -1.f;
+};
+
 class CAimbotGlobal
 {
 public:
+	CrosshairRecord_t GetCrosshairRecord(CTFPlayer* pLocal, CBaseEntity* pTarget, const Vec3& vOrigin, const Vec3& vDirection, float flRange, const std::vector<TickRecord*>& vRecords);
+
 	std::vector<Target_t> ManageTargets(std::vector<Target_t>(*GetTargets)(CTFPlayer* pLocal, CTFWeaponBase* pWeapon), CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
 		int iMethod, int iMaxTargets = Vars::Aimbot::General::MaxTargets.Value);
 	void SortTargetsPre(std::vector<Target_t>& vTargets, int iMethod);

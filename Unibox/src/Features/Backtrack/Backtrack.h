@@ -81,6 +81,7 @@ struct TickRecord
 	Vec3 m_vVelocity = {};
 	float m_flCycle = 0.f;
 	float m_flPlaybackRate = 1.f;
+	float m_flModelScale = 1.f;
 	matrix3x4 m_aBones[MAXSTUDIOBONES];
 };
 
