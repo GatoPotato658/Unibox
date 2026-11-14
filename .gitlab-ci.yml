@@ -12,7 +12,7 @@ workflow:
 build:
   stage: build
   tags:
-    - windows
+    - saas-windows-medium-amd64
   parallel:
     matrix:
       - CONFIGURATION: [Release, ReleaseAVX2, ReleaseTextmode, ReleaseTextmodeAVX2]
