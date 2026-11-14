@@ -390,6 +390,9 @@ float CBacktrack::GetFakeTarget(CNetChannel* pNetChan)
 	if (!Vars::Backtrack::Latency.Value || I::EngineClient->IsPlayingDemo())
 		return 0.f;
 
+	if (I::ClientState->m_nSignonState != SIGNONSTATE_FULL)
+		return 0.f;
+
 	auto pLocal = H::Entities.GetLocal();
 	if (!pLocal || !pLocal->IsAlive())
 		return 0.f;
@@ -462,7 +465,7 @@ void CBacktrack::AdjustPing(CNetChannel* pNetChan)
 	m_tLatency.m_dLastFaked = dNow;
 	PushLatencySample(dNow - pRecord->m_dTime);
 
-	pNetChan->m_nInSequenceNr = pRecord->m_nSequenceNr + NET_FRAMES_BACKUP;
+	pNetChan->m_nInSequenceNr = pRecord->m_nSequenceNr;
 	m_tLatency.m_bFaked = true;
 }
 
@@ -524,7 +527,8 @@ void CBacktrack::PacketEnd(CNetChannel* pNetChan, double dReceived)
 
 bool CBacktrack::IsFiltering(CNetChannel* pNetChan)
 {
-	if (pNetChan != m_tLatency.m_pNetChan || m_tLatency.m_dLastFaked < 0.0)
+	if (pNetChan != m_tLatency.m_pNetChan || m_tLatency.m_dLastFaked < 0.0
+		|| I::ClientState->m_nSignonState != SIGNONSTATE_FULL)
 		return false;
 
 	return F::Ticks.PacketTime(pNetChan->IsLoopback()) - m_tLatency.m_dLastFaked < LATENCY_FILTER_GRACE;
@@ -572,6 +576,8 @@ bool CBacktrack::PeekBlock(CNetChannel* pNetChan, bf_read& tBuffer, int iStream,
 	else
 	{
 		auto& tTransfer = pNetChan->m_ReceiveList()[iStream];
+		if (!tTransfer.buffer)
+			return false;
 		uBytes = tTransfer.bytes;
 		iFragments = tTransfer.numFragments;
 	}
@@ -614,6 +620,7 @@ bool CBacktrack::IsCopy(CNetChannel* pNetChan, SubChannel_t& tState)
 bool CBacktrack::PeekPacket(CNetChannel* pNetChan, bf_read& tBuffer, int iFirstStream)
 {
 	const int iSaved = tBuffer.m_iCurBit;
+	const bool bWasOverflow = tBuffer.m_bOverflow;
 	bool bIdentical = true, bPresent = false;
 
 	auto& tState = m_tLatency.m_aSubChannels[m_tLatency.m_iPacketIndex];
@@ -634,7 +641,7 @@ bool CBacktrack::PeekPacket(CNetChannel* pNetChan, bf_read& tBuffer, int iFirstS
 	}
 
 	tBuffer.m_iCurBit = iSaved;
-	tBuffer.m_bOverflow = false;
+	tBuffer.m_bOverflow = bWasOverflow;
 
 	if (!bPresent || !bIdentical || !IsCopy(pNetChan, tState))
 		return false;

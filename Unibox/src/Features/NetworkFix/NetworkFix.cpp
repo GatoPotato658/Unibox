@@ -358,6 +358,8 @@ void CNetworkFix::RestoreCompressed()
 
 void CNetworkFix::Reset()
 {
+	m_tState = {};
+	m_tBackup = {};
 	m_pCompressedClass = nullptr;
 	m_vCompressedProps.clear();
 	m_aSnapshots = {};
