@@ -1,19 +1,19 @@
 <div align="center">
 
-  ## <img src=".github/assets/meow.png" alt="Unibox" width="640">
+  ## <img src="assets/meow.png" alt="Unibox" width="640">
 
   [![Pipeline](https://img.shields.io/gitlab/pipeline-status/jamesfunction%2Funibox?branch=master&style=for-the-badge)](https://gitlab.com/jamesfunction/unibox/-/pipelines)
   [![Discord](https://unibox-discord-badge.puppytunnel.workers.dev/)](https://dsc.gg/unibox)
   
-  [![Download](.github/assets/download.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64Release.zip)
-  [![PDB](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleasePDB.zip)
-  [![Download AVX2](.github/assets/download_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2.zip)
-  [![PDB AVX2](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2PDB.zip)
+  [![Download](assets/download.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64Release.zip)
+  [![PDB](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleasePDB.zip)
+  [![Download AVX2](assets/download_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2.zip)
+  [![PDB AVX2](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2PDB.zip)
   <br>
-  [![Textmode](.github/assets/textmode.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmode.zip)
-  [![PDB Textmode](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodePDB.zip)
-  [![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2.zip)
-  [![PDB Textmode AVX2](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2PDB.zip)
+  [![Textmode](assets/textmode.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmode.zip)
+  [![PDB Textmode](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodePDB.zip)
+  [![Textmode AVX2](assets/textmode_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2.zip)
+  [![PDB Textmode AVX2](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2PDB.zip)
   <br>
   <sub>AVX2 may be faster than SSE2 though not all CPUs support it (`Steam > Help > System Information > Processor Information > AVX2`). PDBs are for developer use. </sub>
   <br><br>
