@@ -1,6 +1,5 @@
 stages:
   - build
-  - badge
   - deploy
 
 workflow:
@@ -52,22 +51,6 @@ build:
     paths:
       - dist/*.zip
     expire_in: 30 days
-
-discord-badge:
-  stage: badge
-  image: node:20
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-  script:
-    - git config user.name "pupnoodle"
-    - git config user.email "dobryfraudzichaxd@proton.me"
-    - node .github/scripts/gen-discord-badge.mjs discord-new.svg
-    - git fetch --depth 1 origin gh-pages
-    - git checkout -B gh-pages FETCH_HEAD
-    - mv discord-new.svg discord.svg
-    - git add discord.svg
-    - git diff --cached --quiet || git commit -m "discord badge"
-    - git push origin gh-pages
 
 pages:
   stage: deploy

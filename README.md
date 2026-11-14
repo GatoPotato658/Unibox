@@ -3,7 +3,7 @@
   ## <img src=".github/assets/meow.png" alt="Unibox" width="640">
 
   [![Pipeline](https://img.shields.io/gitlab/pipeline-status/jamesfunction%2Funibox?branch=master&style=for-the-badge)](https://gitlab.com/jamesfunction/unibox/-/pipelines)
-  [![Discord](https://gitlab.com/jamesfunction/unibox/-/raw/gh-pages/discord.svg)](https://dsc.gg/unibox)
+  [![Discord](https://unibox-discord-badge.puppytunnel.workers.dev/)](https://dsc.gg/unibox)
   
   [![Download](.github/assets/download.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64Release.zip)
   [![PDB](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleasePDB.zip)
