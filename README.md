@@ -62,6 +62,7 @@
     - Enables some additional hooks to avoid crashes (currently WIP)
   -->
 - **Misc**
+  - Radio: listen to music while playing
   - Backtrack to crosshair (Performs `tick_count` manipulations on manual shots allowing to hit backtrack records)
   - Auto engineer building repair/upgrade
   - Auto class select
