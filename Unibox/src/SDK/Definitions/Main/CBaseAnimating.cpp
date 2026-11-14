@@ -95,15 +95,18 @@ bool CBaseAnimating::SetupAimBones(matrix3x4* pBoneToWorldOut, int nMaxBones, in
 	if (!IsPlayer() || As<CTFPlayer>()->m_iClass() != TF_CLASS_SPY)
 		return SetupBones(pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
+	auto pSpyStudio = GetAimStudio();
+	auto pSourceStudio = GetModelPtr();
+	if (!pSpyStudio || pSpyStudio == pSourceStudio)
+		return SetupBones(pBoneToWorldOut, nMaxBones, boneMask, currentTime);
+
 	CMDLCacheCriticalSection tLock(I::MDLCache);
 
-	auto pSpyStudio = GetAimStudio();
 	auto pStudio = reinterpret_cast<AimStudioHdr*>(pSpyStudio);
 	if (!pStudio || !pStudio->m_pStudioHdr || !pBoneToWorldOut)
 		return false;
 
 	auto pHeader = pStudio->m_pStudioHdr;
-	auto pSourceStudio = GetModelPtr();
 	if (!S::CStudioHdr_SequencesAvailable.Call<bool, CStudioHdr*>(pSpyStudio) ||
 		m_nSequence() < 0 || pHeader->numbones <= 0 || pHeader->numbones > MAXSTUDIOBONES ||
 		nMaxBones < pHeader->numbones)

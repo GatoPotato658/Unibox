@@ -10,6 +10,17 @@
 #include "../FollowBot/FollowBot.h"
 #include <numeric>
 
+static uint32_t GetSeededValue(uint64_t uSeed, uint32_t uDomain)
+{
+	uint64_t uValue = uSeed ^ (static_cast<uint64_t>(uDomain) * 0x9e3779b97f4a7c15ull);
+	uValue ^= uValue >> 30;
+	uValue *= 0xbf58476d1ce4e5b9ull;
+	uValue ^= uValue >> 27;
+	uValue *= 0x94d049bb133111ebull;
+	uValue ^= uValue >> 31;
+	return static_cast<uint32_t>(uValue);
+}
+
 static int GetTransientVischeckExpireTick()
 {
 	const float flSeconds = std::clamp(static_cast<float>(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value), 10.f, 500.f);
@@ -433,6 +444,13 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 	else
 		m_vHullDebug.clear();
 
+	m_pVariationArea = nullptr;
+	m_vVariationBase = {};
+	m_vVariationDir = {};
+	m_vVariationTarget = {};
+	m_flVariationApplied = -1.f;
+	m_iVariationRetryTick = 0;
+	m_bVariationTargetValid = false;
 	m_vCrumbs = std::move(vValidated);
 	return true;
 }
@@ -1193,6 +1211,13 @@ void CNavEngine::ClearPathState()
 	m_iDoorWaitStartTick = 0;
 	m_iDoorWaitEntIndex = 0;
 	m_bHoldingCrouch = false;
+	m_pVariationArea = nullptr;
+	m_vVariationBase = {};
+	m_vVariationDir = {};
+	m_vVariationTarget = {};
+	m_flVariationApplied = -1.f;
+	m_iVariationRetryTick = 0;
+	m_bVariationTargetValid = false;
 	m_vHullDebug.clear();
 	m_tStuckSampleTimer.Update();
 	m_tLastProgressTimer.Update();
@@ -1913,6 +1938,18 @@ void CNavEngine::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		CancelPath();
 		return;
 	}
+	const uint64_t uRouteSeed = CMap::GetRouteSeed(pLocal);
+	if (uRouteSeed != m_uRouteSeed)
+	{
+		m_uRouteSeed = uRouteSeed;
+		m_pVariationArea = nullptr;
+		m_vVariationBase = {};
+		m_vVariationDir = {};
+		m_vVariationTarget = {};
+		m_flVariationApplied = -1.f;
+		m_iVariationRetryTick = 0;
+		m_bVariationTargetValid = false;
+	}
 
 	if (!Vars::Misc::Movement::NavEngine::Enabled.Value) m_bWasEnabled = false;
 	else if (I::EngineClient->IsInGame() && !m_bWasEnabled)
@@ -2071,7 +2108,11 @@ void CNavEngine::DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& v
 	if (G::Attacking == 1)
 	{
 		m_vLastLookTarget = {};
-		F::BotUtils.InvalidateLLAP();
+		return;
+	}
+	if (F::BotUtils.IsLegitAimActive())
+	{
+		m_vLastLookTarget = {};
 		return;
 	}
 
@@ -2086,7 +2127,7 @@ void CNavEngine::DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& v
 		const Vec3 vEye = pLocal->GetEyePosition();
 		const Vec3 vAngles = Math::CalcAngle(vEye, vMoveTarget);
 		if (bLegit)
-			F::BotUtils.LookLegit(pLocal, pCmd, vMoveTarget, bSilent);
+			F::BotUtils.LookLegit(pLocal, pCmd, vMoveTarget, bSilent, true);
 		else
 		{
 			F::BotUtils.InvalidateLLAP();
@@ -2154,6 +2195,81 @@ void CNavEngine::DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& v
 		const Vec3 vEye = pLocal->GetEyePosition();
 		F::BotUtils.LookAtPath(pCmd, Vec2(vLookTarget.x, vLookTarget.y), vEye, bSilent);
 	}
+}
+
+void CNavEngine::ApplyFollowVariation(CTFPlayer* pLocal, const Crumb_t& tCrumb, const Crumb_t* pNext, const Vector& vLocalOrigin, Vector& vMoveTarget)
+{
+	const float flVariation = Vars::Misc::Movement::NavBot::Enabled.Value
+		? std::clamp(Vars::Misc::Movement::NavBot::MovementVariation.Value / 100.f, 0.f, 1.f)
+		: 0.f;
+	if (!pLocal || !tCrumb.m_pNavArea || !m_pMap || flVariation <= 0.f)
+		return;
+
+	Vector vDirection = tCrumb.m_vApproachDir;
+	vDirection.z = 0.f;
+	if (vDirection.Normalize() <= 0.01f)
+		return;
+
+	const int iNow = I::GlobalVars->tickcount;
+	const bool bSameKey = m_pVariationArea == tCrumb.m_pNavArea
+		&& m_vVariationBase.DistToSqr(tCrumb.m_vPos) < 1.f
+		&& std::fabs(m_flVariationApplied - flVariation) < 0.001f
+		&& m_vVariationDir.Dot(vDirection) >= 0.995f;
+	if (bSameKey && m_bVariationTargetValid)
+	{
+		vMoveTarget = m_vVariationTarget;
+		return;
+	}
+	if (bSameKey && iNow < m_iVariationRetryTick)
+		return;
+
+	m_pVariationArea = tCrumb.m_pNavArea;
+	m_vVariationBase = tCrumb.m_vPos;
+	m_vVariationDir = vDirection;
+	m_flVariationApplied = flVariation;
+	m_bVariationTargetValid = false;
+
+	const uint32_t uArea = tCrumb.m_pNavArea->m_uId
+		? tCrumb.m_pNavArea->m_uId
+		: static_cast<uint32_t>(m_pMap->GetAreaIndex(tCrumb.m_pNavArea));
+	const uint32_t uHash = GetSeededValue(m_uRouteSeed, uArea);
+	float flLateral = static_cast<float>(uHash & 0xffffu) / 32767.5f - 1.f;
+	flLateral *= 12.f * flVariation;
+
+	const Vector vSide = { -vDirection.y, vDirection.x, 0.f };
+	Vector vTarget = tCrumb.m_vPos + vSide * flLateral;
+	constexpr float flMargin = HALF_PLAYER_WIDTH + 2.f;
+	auto Inset = [flMargin](float flValue, float flMin, float flMax)
+		{
+			if (flMax - flMin <= flMargin * 2.f)
+				return (flMin + flMax) * 0.5f;
+			return std::clamp(flValue, flMin + flMargin, flMax - flMargin);
+		};
+	vTarget.x = Inset(vTarget.x, tCrumb.m_pNavArea->m_vNwCorner.x, tCrumb.m_pNavArea->m_vSeCorner.x);
+	vTarget.y = Inset(vTarget.y, tCrumb.m_pNavArea->m_vNwCorner.y, tCrumb.m_pNavArea->m_vSeCorner.y);
+	vTarget.z = tCrumb.m_pNavArea->GetZ(vTarget.x, vTarget.y);
+
+	bool bNeedsCrouch = false;
+	const bool bIncomingClear = vTarget.DistTo2DSqr(tCrumb.m_vPos) >= 1.f
+		&& IsPlayerPassableNavigation(pLocal, vLocalOrigin, vTarget, MASK_PLAYERSOLID, &bNeedsCrouch)
+		&& !bNeedsCrouch;
+	bool bOutgoingClear = true;
+	if (pNext)
+	{
+		bNeedsCrouch = false;
+		bOutgoingClear = IsPlayerPassableNavigation(pLocal, vTarget, pNext->m_vPos, MASK_PLAYERSOLID, &bNeedsCrouch)
+			&& !bNeedsCrouch;
+	}
+	if (!bIncomingClear || !bOutgoingClear)
+	{
+		m_iVariationRetryTick = iNow + TIME_TO_TICKS(0.25f);
+		return;
+	}
+
+	m_iVariationRetryTick = 0;
+	m_vVariationTarget = vTarget;
+	m_bVariationTargetValid = true;
+	vMoveTarget = vTarget;
 }
 
 void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
@@ -2328,7 +2444,10 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			continue;
 		}
 
-		if (!bDropCrumb && !bJumpCrumb && !bLadderCrumb && uRemaining > 1
+		const bool bShortcutSpecial = uRemaining > 1
+			&& (m_vCrumbs[nConsumed + 1].m_bRequiresDrop || m_vCrumbs[nConsumed + 1].m_bRequiresJump
+				|| m_vCrumbs[nConsumed + 1].m_bRequiresLadder || m_vCrumbs[nConsumed + 1].m_bRequiresCrouch);
+		if (!bDropCrumb && !bJumpCrumb && !bLadderCrumb && uRemaining > 1 && !bShortcutSpecial
 			&& vLocalOrigin.DistToSqr(m_vCrumbs[nConsumed + 1].m_vPos) < kReachRadius * kReachRadius
 			&& IsVectorVisibleNavigation(vLocalOrigin + Vector(0.f, 0.f, PLAYER_STEP_HEIGHT),
 				m_vCrumbs[nConsumed + 1].m_vPos + Vector(0.f, 0.f, PLAYER_STEP_HEIGHT)))
@@ -2527,6 +2646,16 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		m_iNavJumpTick = iNow;
 		if (!(bCrouchArea && pLocal->IsDucking()))
 			pCmd->buttons &= ~IN_DUCK;
+	}
+
+	const bool bNextSpecial = m_vCrumbs.size() > 1
+		&& (m_vCrumbs[1].m_bRequiresDrop || m_vCrumbs[1].m_bRequiresJump
+			|| m_vCrumbs[1].m_bRequiresLadder || m_vCrumbs[1].m_bRequiresCrouch);
+	const bool bSpecialFollow = bDropCrumb || bJumpCrumb || bLadderCrumb || bCrouchArea || bNextSpecial;
+	if (!bSpecialFollow && !m_bUnstucking && !bPayloadEscortPace && !bResetHeight)
+	{
+		const Crumb_t* pNext = m_vCrumbs.size() > 1 ? &m_vCrumbs[1] : nullptr;
+		ApplyFollowVariation(pLocal, m_tCurrentCrumb, pNext, vLocalOrigin, vMoveTarget);
 	}
 
 	DoLookAtPath(pLocal, pCmd, vLookTarget, true, bLookPitch);

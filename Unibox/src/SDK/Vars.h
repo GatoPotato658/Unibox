@@ -292,8 +292,8 @@ NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Aimbot)
 		NAMESPACE_BEGIN(General, Aimbot)
 			CVarEnum(AimType, "Aim type", 0, NONE, nullptr,
-				VA_LIST("Off", "Plain", "Smooth", "Silent", "Locking", "Assistive", "Legit", "SmoothVelocity"),
-				Off, Plain, Smooth, Silent, Locking, Assistive, Legit, SmoothVelocity);
+				VA_LIST("Off", "Plain", "Smooth", "Silent", "Locking", "Assistive", "legitforbots", "SmoothVelocity"),
+				Off, Plain, Smooth, Silent, Locking, Assistive, LegitForBots, SmoothVelocity);
 			CVarEnum(TargetSelectionHitscan, "Hitscan selection", 0, NONE, nullptr,
 				VA_LIST("FOV", "Distance", "Hybrid", "Most health", "Least health"),
 				FOV, Distance, Hybrid, MostHealth, LeastHealth);
@@ -324,6 +324,21 @@ NAMESPACE_BEGIN(Vars)
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
 			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
 			CVar(NoSpread, "No spread", false);
+
+			NAMESPACE_BEGIN(LegitForBots, Aimbot)
+				CVar(ShowOptions, "Show legitbot options", false);
+				CVar(ReactionTime, "Reaction time", 0.16f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 0.6f, 0.01f, "%gs");
+				CVar(ReactionVariation, "Reaction variation", 35.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
+				CVar(TrackingSpeed, "Tracking speed", 55.f, SLIDER_CLAMP, 10.f, 120.f, 5.f);
+				CVar(AimError, "Aim error", 0.75f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 3.f, 0.05f, "%g deg");
+				CVar(Overshoot, "Overshoot", 30.f, SLIDER_CLAMP, 0.f, 100.f, 5.f, "%g%%");
+				CVar(FireTolerance, "Fire tolerance", 0.55f, SLIDER_CLAMP | SLIDER_PRECISION, 0.05f, 2.f, 0.05f, "%g deg");
+				CVar(AvoidFriendlyFire, "Avoid friendly fire", true);
+				CVar(ReactToEnemies, "React to enemies", true);
+				CVar(ReactToThreats, "React to threats", true);
+				CVar(IdleScanning, "Idle scanning", true);
+				CVar(TargetMemory, "Target memory", 1.2f, SLIDER_CLAMP | SLIDER_PRECISION, 0.2f, 3.f, 0.1f, "%gs");
+			NAMESPACE_END(LegitForBots)
 
 			CVarEnum(AimHoldsFire, "Aim holds fire", 2, NOSAVE | DEBUGVAR, nullptr,
 				VA_LIST("False", "Minigun only", "Always"),
@@ -919,6 +934,7 @@ NAMESPACE_BEGIN(Vars)
 				CVarEnum(Personality, "Personality", 1, NONE, nullptr,
 					VA_LIST("Yolo", "Balanced", "Cautious"),
 					Yolo, Balanced, Cautious);
+				CVar(MovementVariation, "Movement variation", 65, SLIDER_CLAMP, 0, 100, 5, "%i%%");
 				CVar(MeleeTargetRange, "Melee target range", 600, NONE, 150, 4000, 50);
 				CVar(DangerOverlay, "Danger overlay", false);
 				CVar(DangerOverlayMaxDist, "Danger overlay max distance", 2000.f, SLIDER_MIN, 500.f, 6000.f, 250.f, "%0.0f");

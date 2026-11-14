@@ -694,6 +694,9 @@ bool CAimbotHitscan::ShouldFire(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 {
 	if (!Vars::Aimbot::General::AutoShoot.Value)
 		return false;
+	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots
+		&& !F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex()))
+		return false;
 
 	if (Vars::Aimbot::Hitscan::Modifiers.Value & Vars::Aimbot::Hitscan::ModifiersEnum::WaitForHeadshot
 		&& tTarget.m_pEntity->IsPlayer())
@@ -779,8 +782,8 @@ bool CAimbotHitscan::Aim(const Vec3& vCurAngle, Vec3 vToAngle, Vec3& vOut, int i
 	case Vars::Aimbot::General::AimTypeEnum::Locking:
 		vOut = vToAngle;
 		break;
-	case Vars::Aimbot::General::AimTypeEnum::Legit:
-		vOut = vCurAngle;
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
+		vOut = vToAngle;
 		bReturn = true;
 		break;
 	case Vars::Aimbot::General::AimTypeEnum::Smooth:
@@ -838,12 +841,12 @@ void CAimbotHitscan::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 			MarkSteering(vAngles);
 		}
 		break;
-	case Vars::Aimbot::General::AimTypeEnum::Legit:
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
 	{
 		auto pLocal = H::Entities.GetLocal();
-		if (pLocal && G::AimPoint.m_iTickCount == I::GlobalVars->tickcount)
+		if (pLocal && G::AimTarget.m_iEntIndex)
 		{
-			F::BotUtils.LookLegit(pLocal, pCmd, G::AimPoint.m_vOrigin, false);
+			F::BotUtils.AimLegit(pLocal, pCmd, G::AimTarget.m_iEntIndex, vAngles);
 			vAngles = pCmd->viewangles;
 			MarkSteering(vAngles);
 		}
@@ -1011,6 +1014,12 @@ void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pC
 			G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
 			Aim(pCmd, tTarget.m_vAngleTo);
 			break;
+		}
+
+		if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots)
+		{
+			G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+			Aim(pCmd, tTarget.m_vAngleTo);
 		}
 
 		if (ShouldFire(pLocal, pWeapon, pCmd, tTarget))

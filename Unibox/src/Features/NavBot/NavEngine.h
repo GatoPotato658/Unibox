@@ -124,6 +124,14 @@ private:
 	bool m_bBypassFailedDestination = false;
 	bool m_bHoldingCrouch = false;
 	int m_iNavJumpTick = 0;
+	uint64_t m_uRouteSeed = 0;
+	CNavArea* m_pVariationArea = nullptr;
+	Vector m_vVariationBase = {};
+	Vector m_vVariationDir = {};
+	Vector m_vVariationTarget = {};
+	float m_flVariationApplied = -1.f;
+	int m_iVariationRetryTick = 0;
+	bool m_bVariationTargetValid = false;
 
 	bool m_bUpdatedRespawnRooms = false;
 
@@ -186,6 +194,7 @@ private:
 	void SampleFallSpeed(float flVerticalVelocity);
 	bool RecentlyAtRest() const;
 	StuckPhase TickStuckSample(const Vector& vLocalOrigin, const Vector& vCrumbTarget);
+	void ApplyFollowVariation(CTFPlayer* pLocal, const Crumb_t& tCrumb, const Crumb_t* pNext, const Vector& vLocalOrigin, Vector& vMoveTarget);
 	void DoLookAtPath(CTFPlayer* pLocal, CUserCmd* pCmd, const Vector& vMoveTarget, bool bHaveTarget, bool bIncludePitch = false);
 	bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrigin);
 

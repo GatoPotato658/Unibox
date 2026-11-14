@@ -121,6 +121,22 @@ static void AimbotGeneral()
 			FToggle(Vars::Aimbot::General::NoSpread);
 		}
 		PopDisabled();
+		if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots)
+		{
+			using namespace Vars::Aimbot::General::LegitForBots;
+			FToggle(ShowOptions);
+			if (ShowOptions.Value)
+			{
+				Subheader("legitforbots");
+				FSlider(ReactionTime);
+				FSlider(ReactionVariation);
+				FSlider(TrackingSpeed);
+				FSlider(AimError);
+				FSlider(Overshoot);
+				FSlider(FireTolerance);
+				FToggle(AvoidFriendlyFire);
+			}
+		}
 	} EndSection();
 
 	TableNextColumn();
@@ -1294,6 +1310,8 @@ static void MiscBots()
 				PopTransparent();
 				FDropdown(NavBot::Preferences);
 				FDropdown(NavBot::Personality);
+				FSlider(NavBot::MovementVariation);
+				FTooltip("Varies route preference and safe path lanes from each bot's identity");
 				FDropdown(NavBot::Blacklist);
 				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::NormalThreats));
 				{
@@ -1392,10 +1410,23 @@ static void MiscBots()
 		PushTransparent(!NavEngine::LookAtPath.Value && !FollowBot::LookAtPath.Value);
 		{
 			FSlider(BotUtils::LookAtPathSpeed);
-			FTooltip("Specifies how smooth the viewangles will change when using 'Look at path' in nav engine or followbot");
+			FTooltip("Higher values turn the visible view faster when using 'Look at path'");
 			FToggle(BotUtils::LookAtPathDebug);
 		}
 		PopTransparent();
+		if (NavEngine::LookAtPath.Value == NavEngine::LookAtPathEnum::Legit
+			|| NavEngine::LookAtPath.Value == NavEngine::LookAtPathEnum::LegitSilent)
+		{
+			using namespace Vars::Aimbot::General::LegitForBots;
+			FToggle(ShowOptions);
+			if (ShowOptions.Value)
+			{
+				FToggle(ReactToEnemies);
+				FToggle(ReactToThreats);
+				FToggle(IdleScanning);
+				FSlider(TargetMemory);
+			}
+		}
 		FDropdown(Vars::Misc::Automation::ForceClass, { "Off", "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" }, { 0, 1, 3, 7, 4, 6, 9, 5, 2, 8 });
 		FToggle(Vars::Misc::Automation::RandomClass);
 		PushTransparent(!Vars::Misc::Automation::RandomClass.Value);

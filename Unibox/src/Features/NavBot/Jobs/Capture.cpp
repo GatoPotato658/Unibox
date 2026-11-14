@@ -742,10 +742,7 @@ bool CNavBotCapture::GetObjectiveGoal(CTFPlayer* pLocal, int iOurTeam, int iEnem
 void CNavBotCapture::LookAtObjective(CUserCmd* pCmd, CTFPlayer* pLocal, const Vec3& vTarget, bool bTargetValid)
 {
 	if (G::Attacking == 1)
-	{
-		F::BotUtils.InvalidateLLAP();
 		return;
-	}
 
 	const auto eLook = Vars::Misc::Movement::NavEngine::LookAtPath.Value;
 	const bool bSilent = eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Silent || eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;

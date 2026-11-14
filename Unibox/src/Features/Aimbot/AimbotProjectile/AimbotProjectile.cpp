@@ -1852,7 +1852,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 	}
 	else if (!bTested && !m_tInfo.m_pProjectile)
 	{
-		switch (Vars::Aimbot::General::AimType.Value)
+		switch (m_iMethod)
 		{
 		case Vars::Aimbot::General::AimTypeEnum::Smooth:
 			if (Vars::Aimbot::General::AssistStrength.Value == 100.f)
@@ -2290,8 +2290,8 @@ bool CAimbotProjectile::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& v
 	case Vars::Aimbot::General::AimTypeEnum::Locking:
 		vOut = vToAngle;
 		break;
-	case Vars::Aimbot::General::AimTypeEnum::Legit:
-		vOut = vCurAngle;
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
+		vOut = vToAngle;
 		bReturn = true;
 		break;
 	case Vars::Aimbot::General::AimTypeEnum::Smooth:
@@ -2339,12 +2339,12 @@ void CAimbotProjectile::Aim(CUserCmd* pCmd, Vec3& vAngles)
 			G::PSilentAngles = true;
 		}
 		break;
-	case Vars::Aimbot::General::AimTypeEnum::Legit:
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
 	{
 		auto pLocal = H::Entities.GetLocal();
-		if (pLocal && G::AimPoint.m_iTickCount == I::GlobalVars->tickcount)
+		if (pLocal && G::AimTarget.m_iEntIndex)
 		{
-			F::BotUtils.LookLegit(pLocal, pCmd, G::AimPoint.m_vOrigin, false);
+			F::BotUtils.AimLegit(pLocal, pCmd, G::AimTarget.m_iEntIndex, vAngles);
 			vAngles = pCmd->viewangles;
 			if (G::AimbotSteering)
 				return;
@@ -2538,11 +2538,21 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 		if (iResult == 2)
 		{
 			G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+			G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
 			DrawVisuals(iResult, tTarget, m_vPlayerPath, m_vProjectilePath, m_vBoxes);
 			Aim(pCmd, tTarget.m_vAngleTo);
 			break;
 		}
 
+		if (m_iMethod == Vars::Aimbot::General::AimTypeEnum::LegitForBots)
+		{
+			G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+			G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
+			Aim(pCmd, tTarget.m_vAngleTo);
+		}
+
+		const bool bLegitReady = m_iMethod != Vars::Aimbot::General::AimTypeEnum::LegitForBots
+			|| F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex());
 		if (Vars::Aimbot::General::AutoShoot.Value)
 		{
 			switch (m_iWeaponID)
@@ -2608,6 +2618,38 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 				break;
 			default:
 				pCmd->buttons |= IN_ATTACK;
+			}
+		}
+		if (!bLegitReady && Vars::Aimbot::General::AutoShoot.Value)
+		{
+			switch (m_iWeaponID)
+			{
+			case TF_WEAPON_COMPOUND_BOW:
+				if (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f)
+					pCmd->buttons |= IN_ATTACK;
+				else
+					pCmd->buttons &= ~IN_ATTACK;
+				break;
+			case TF_WEAPON_PIPEBOMBLAUNCHER:
+				if (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f)
+					pCmd->buttons |= IN_ATTACK;
+				else
+					pCmd->buttons &= ~IN_ATTACK;
+				break;
+			case TF_WEAPON_CANNON:
+				if (pWeapon->As<CTFGrenadeLauncher>()->m_flDetonateTime() > 0.f)
+					pCmd->buttons |= IN_ATTACK;
+				else
+					pCmd->buttons &= ~IN_ATTACK;
+				break;
+			case TF_WEAPON_PARTICLE_CANNON:
+				if (pWeapon->As<CTFParticleCannon>()->m_flChargeBeginTime() > 0.f)
+					pCmd->buttons |= IN_ATTACK;
+				else
+					pCmd->buttons &= ~IN_ATTACK;
+				break;
+			default:
+				pCmd->buttons &= ~IN_ATTACK;
 			}
 		}
 
@@ -2786,12 +2828,20 @@ bool CAimbotProjectile::RunMechArm(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CU
 		if (!CanHitProjectile(pLocal, pWeapon, tTarget, iSimTicks))
 			continue;
 
+		G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+		Aim(pCmd, tTarget.m_vAngleTo);
+		const bool bLegitReady = m_iMethod != Vars::Aimbot::General::AimTypeEnum::LegitForBots
+			|| F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex());
 		if (Vars::Aimbot::General::AutoShoot.Value)
-			pCmd->buttons |= IN_ATTACK2, pCmd->buttons &= ~IN_ATTACK;
+		{
+			if (bLegitReady)
+				pCmd->buttons |= IN_ATTACK2, pCmd->buttons &= ~IN_ATTACK;
+			else
+				pCmd->buttons &= ~(IN_ATTACK | IN_ATTACK2);
+		}
 		if (G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
 			F::Aimbot.m_eRanType = EWeaponType::PROJECTILE;
 
-		Aim(pCmd, tTarget.m_vAngleTo);
 		return true;
 	}
 	return false;

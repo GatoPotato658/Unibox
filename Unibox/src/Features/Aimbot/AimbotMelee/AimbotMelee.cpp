@@ -378,7 +378,7 @@ bool CAimbotMelee::CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, CTFWeapo
 		F::EnginePrediction.End(pLocal, pCmd);
 
 		G::Attacking = true;
-		Aim(pCmd, vEyeAngles);
+		Aim(pCmd, vEyeAngles, Vars::Aimbot::General::AimTypeEnum::Plain);
 		F::Ticks.Start(pLocal, pCmd);
 		vEyeAngles = pCmd->viewangles;
 		vEyePos = pLocal->GetShootPos();
@@ -544,7 +544,7 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 		case Vars::Aimbot::General::AimTypeEnum::Smooth:
 		case Vars::Aimbot::General::AimTypeEnum::SmoothVelocity:
 		case Vars::Aimbot::General::AimTypeEnum::Assistive:
-		case Vars::Aimbot::General::AimTypeEnum::Legit:
+		case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
 		{
 			tTarget.m_vPos = vPoints[0];
 			auto vAngle = Math::CalcAngle(m_vEyePos, tTarget.m_vPos);
@@ -574,8 +574,8 @@ bool CAimbotMelee::Aim(const Vec3& vCurAngle, const Vec3& vToAngle, Vec3& vOut, 
 	case Vars::Aimbot::General::AimTypeEnum::Locking:
 		vOut = vToAngle;
 		break;
-	case Vars::Aimbot::General::AimTypeEnum::Legit:
-		vOut = vCurAngle;
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
+		vOut = vToAngle;
 		bReturn = true;
 		break;
 	case Vars::Aimbot::General::AimTypeEnum::Smooth:
@@ -621,12 +621,12 @@ void CAimbotMelee::Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod)
 			G::PSilentAngles = true;
 		}
 		break;
-	case Vars::Aimbot::General::AimTypeEnum::Legit:
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
 	{
 		auto pLocal = H::Entities.GetLocal();
-		if (pLocal && G::AimPoint.m_iTickCount == I::GlobalVars->tickcount)
+		if (pLocal && G::AimTarget.m_iEntIndex)
 		{
-			F::BotUtils.LookLegit(pLocal, pCmd, G::AimPoint.m_vOrigin, false);
+			F::BotUtils.AimLegit(pLocal, pCmd, G::AimTarget.m_iEntIndex, vAngles);
 			vAngles = pCmd->viewangles;
 			if (G::AimbotSteering)
 				return;
@@ -747,6 +747,12 @@ void CAimbotMelee::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd
 
 	m_mRecordMap.clear(); m_mPaths.clear();
 	m_iDoubletapTicks = F::Ticks.GetTicks(pWeapon);
+	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots
+		&& pWeapon->m_flSmackTime() > 0.f && G::AimTarget.m_iEntIndex)
+	{
+		Vec3 vAngles = I::EngineClient->GetViewAngles();
+		Aim(pCmd, vAngles);
+	}
 
 	if (RunSapper(pLocal, pWeapon, pCmd))
 		return;
@@ -768,13 +774,25 @@ void CAimbotMelee::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd
 			break;
 		}
 
+		if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots)
+		{
+			G::AimTarget = { tTarget.m_pEntity->entindex(), I::GlobalVars->tickcount, 0 };
+			G::AimPoint = { tTarget.m_vPos, I::GlobalVars->tickcount };
+			Aim(pCmd, tTarget.m_vAngleTo);
+		}
+
 		if (Vars::Aimbot::General::AutoShoot.Value && pWeapon->m_flSmackTime() < 0.f)
 		{
-			if (m_bShouldSwing)
+			if (m_bShouldSwing && (Vars::Aimbot::General::AimType.Value != Vars::Aimbot::General::AimTypeEnum::LegitForBots
+				|| F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex())))
 				pCmd->buttons |= IN_ATTACK;
 			if (m_iDoubletapTicks)
 				F::Ticks.m_bDoubletap = true;
 		}
+
+		if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots
+			&& pWeapon->m_flSmackTime() < 0.f && G::CanPrimaryAttack && pCmd->buttons & IN_ATTACK)
+			F::BotUtils.LockLegitAim(tTarget.m_pEntity->entindex(), std::max(int(TIME_TO_TICKS(pWeapon->GetSmackDelay())), 1));
 
 		if (G::Attacking = SDK::IsAttacking(pLocal, pWeapon, pCmd, true))
 			F::Aimbot.m_eRanType = EWeaponType::MELEE;

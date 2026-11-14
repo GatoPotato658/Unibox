@@ -26,6 +26,24 @@ static float GetPathLowerBound(const CNavArea& tFrom, const CNavArea& tTo)
 	return std::sqrt(flDx * flDx + flDy * flDy) + flDz;
 }
 
+static uint64_t MixRouteHash(uint64_t uValue)
+{
+	uValue ^= uValue >> 30;
+	uValue *= 0xbf58476d1ce4e5b9ull;
+	uValue ^= uValue >> 27;
+	uValue *= 0x94d049bb133111ebull;
+	return uValue ^ (uValue >> 31);
+}
+
+static float GetRouteVariation(uint64_t uSeed, uint32_t uFrom, uint32_t uTo)
+{
+	if (!uSeed)
+		return 0.f;
+
+	const uint64_t uHash = MixRouteHash(uSeed ^ (uint64_t(uFrom) << 32) ^ uTo);
+	return static_cast<float>(uHash & 0xffffu) / 65535.f;
+}
+
 static Vector GetSafePointOnArea(CNavArea* pArea, const Vector& vPos)
 {
 	if (!pArea) return vPos;
@@ -261,6 +279,10 @@ SolveContext CMap::BuildSolveContext(bool bIgnoreTraces)
 	tCtx.m_flTickInterval = I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.0f);
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
 	tCtx.m_bIgnoreTraces = bIgnoreTraces;
+	tCtx.m_flVariation = Vars::Misc::Movement::NavBot::Enabled.Value
+		? std::clamp(Vars::Misc::Movement::NavBot::MovementVariation.Value / 100.f, 0.f, 1.f)
+		: 0.f;
+	tCtx.m_uRouteSeed = GetRouteSeed(pLocal);
 	switch (Vars::Misc::Movement::NavBot::Personality.Value)
 	{
 	case Vars::Misc::Movement::NavBot::PersonalityEnum::Yolo:
@@ -282,6 +304,26 @@ SolveContext CMap::BuildSolveContext(bool bIgnoreTraces)
 	tCtx.m_tPolicy = NavPolicy::Snapshot(tCtx.m_iTeam);
 	F::Hazards.SnapshotCosts(tCtx.m_mHazardCosts);
 	return tCtx;
+}
+
+uint64_t CMap::GetRouteSeed(CTFPlayer* pLocal)
+{
+	uint32_t uAccountID = I::SteamUser ? I::SteamUser->GetSteamID().GetAccountID() : 0;
+	if (!uAccountID && I::EngineClient)
+	{
+		player_info_t tInfo{};
+		if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &tInfo))
+			uAccountID = tInfo.friendsID;
+	}
+	if (!uAccountID)
+		uAccountID = H::Entities.GetLocalAccountID();
+
+	uint64_t uSeed = uAccountID;
+	if (!uSeed && pLocal)
+		uSeed = static_cast<uint64_t>(pLocal->entindex()) * 0x9e3779b97f4a7c15ull;
+	if (!uSeed)
+		uSeed = 0x6a09e667f3bcc909ull;
+	return MixRouteHash(uSeed);
 }
 
 int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
@@ -621,6 +663,11 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 				m_mConnectionStuckTime.erase(itStuck);
 		}
 
+		const uint32_t uFromId = pCurrentArea->m_uId ? pCurrentArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pCurrentArea));
+		const uint32_t uToId = pNextArea->m_uId ? pNextArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pNextArea));
+		flFinalCost += GetRouteVariation(tCtx.m_uRouteSeed, uFromId, uToId)
+			* std::clamp(flBaseCost * 0.09f, 6.f, 36.f) * tCtx.m_flVariation;
+
 		if (!std::isfinite(flFinalCost) || flFinalCost <= 0.f)
 			continue;
 
@@ -668,6 +715,11 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 						else
 							m_mConnectionStuckTime.erase(itStuck);
 					}
+
+					const uint32_t uFromId = pCurrentArea->m_uId ? pCurrentArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pCurrentArea));
+					const uint32_t uToId = pNextArea->m_uId ? pNextArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pNextArea));
+					flCost += GetRouteVariation(tCtx.m_uRouteSeed, uFromId, uToId)
+						* std::clamp(pLadder->m_flLength * 0.09f, 6.f, 36.f) * tCtx.m_flVariation;
 
 					vOut.push_back({ pNextArea, flCost });
 				};

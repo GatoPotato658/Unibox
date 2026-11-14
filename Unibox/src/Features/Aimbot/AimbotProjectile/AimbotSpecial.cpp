@@ -94,6 +94,7 @@ void CAimbotProjectile::HoldAngles(CUserCmd* pCmd, const Vec3& vAngles)
 	case Vars::Aimbot::General::AimTypeEnum::Smooth:
 	case Vars::Aimbot::General::AimTypeEnum::SmoothVelocity:
 	case Vars::Aimbot::General::AimTypeEnum::Assistive:
+	case Vars::Aimbot::General::AimTypeEnum::LegitForBots:
 		pCmd->viewangles = vAim;
 		I::EngineClient->SetViewAngles(vAim);
 		break;

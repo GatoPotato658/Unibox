@@ -51,6 +51,7 @@
   - Navbot options: personality, smart jump, escape spawn, melee target range, blacklist scan delays, danger overlay
   - Nav engine options: stuck detection/blacklist/expire times, vischeck, path in setup time, look at path (with speed)
   - Navbot jobs: capture objectives, engineer, escape danger, get supplies, MvM sniper, roam, stay near; plus hazard avoidance
+  - Per-bot route and lane variation
   - Namedpipe
     - Implements communication with [unibox botpanel](https://github.com/pupnoodle/unibox-botbox)
     - Sends client info such as localplayer's health, class, server name and map name
@@ -93,7 +94,7 @@
     - 360 aim FOV and allow aiming with active ui
     - Smooth curve (assist strength changes dynamically depending on this option and a curve percentage var)
     - Smooth+velocity aim type (same smooth aim type but also takes into account target's velocity for smooth curve)
-    - Legit aim type for bots with legit look at path enabled (WIP)
+    - legitforbots aim type with human reaction, tracking, fire timing, and legit look at path
     - Separate target selection for hitscan, projectile and melee
     - Grappling hook aim
     - Auto short circuit minimum metal amount

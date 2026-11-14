@@ -450,7 +450,12 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 					ResetEdgebug();
 					return;
 				}
-				pCmd->viewangles.y = Math::NormalizeAngle(m_flEdgeBugStartYaw + m_flEdgeBugYawDelta * (1 + m_iEdgeBugTicksTotal - m_iEdgeBugTicksLeft));
+				const float flMaxDelta = Vars::Misc::Movement::AutoEdgebugStrafeMaxDelta.Value;
+				const float flYawOffset = std::clamp(
+					m_flEdgeBugYawDelta * (1 + m_iEdgeBugTicksTotal - m_iEdgeBugTicksLeft),
+					-flMaxDelta,
+					flMaxDelta);
+				pCmd->viewangles.y = Math::NormalizeAngle(m_flEdgeBugStartYaw + flYawOffset);
 				if (Vars::Misc::Movement::AutoEdgebug.Value != Vars::Misc::Movement::AutoEdgebugEnum::StrafeSilent)
 					I::EngineClient->SetViewAngles(pCmd->viewangles);
 			}
@@ -614,9 +619,10 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 				if (bStrafe)
 				{
-					G::DummyCmd.viewangles.y = Math::NormalizeAngle(pCmd->viewangles.y + flSampleYawDelta * iTick);
-					if (std::abs(Math::NormalizeAngle(G::DummyCmd.viewangles.y - flStartYaw)) > flStrafeMaxDelta)
+					const float flYawOffset = flSampleYawDelta * iTick;
+					if (std::abs(flYawOffset) > flStrafeMaxDelta)
 						break;
+					G::DummyCmd.viewangles.y = Math::NormalizeAngle(flStartYaw + flYawOffset);
 				}
 
 				I::Prediction->SetLocalViewAngles(G::DummyCmd.viewangles);

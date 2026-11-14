@@ -1495,7 +1495,5 @@ void CVisuals::Precipitation()
 	}
 
 	const int iType = Vars::Visuals::World::Precipitation.Value - 1;
-	CClient_Precipitation* pPrecipitation = H::Entities.GetPrecipitation(iType, Vars::Visuals::World::PrecipitationIntensity.Value);
-	if (!pPrecipitation)
-		return;
+	H::Entities.GetPrecipitation(iType, Vars::Visuals::World::PrecipitationIntensity.Value);
 }

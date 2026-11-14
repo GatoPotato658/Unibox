@@ -730,9 +730,7 @@ CClient_Precipitation* CEntities::GetPrecipitation(int iType, int iIntensity)
 			if (m_uPrecipitationAlpha != uAlpha)
 			{
 				pNetworkable->PreDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
-				pNetworkable->OnPreDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
 				pPrecipitation->m_clrRender().a = uAlpha;
-				pNetworkable->OnDataChanged(DATA_UPDATE_DATATABLE_CHANGED);
 				pNetworkable->PostDataUpdate(DATA_UPDATE_DATATABLE_CHANGED);
 				m_uPrecipitationAlpha = uAlpha;
 			}
@@ -743,7 +741,7 @@ CClient_Precipitation* CEntities::GetPrecipitation(int iType, int iIntensity)
 
 	RemovePrecipitation();
 
-	if (!pPrecipitationClass)
+	if (!pPrecipitationClass || !pPrecipitationClass->m_pCreateFn)
 		return nullptr;
 	if (I::ClientEntityList->GetClientNetworkable(MAX_EDICTS - 1) || I::ClientEntityList->GetClientEntity(MAX_EDICTS - 1))
 		return nullptr;
@@ -767,20 +765,28 @@ CClient_Precipitation* CEntities::GetPrecipitation(int iType, int iIntensity)
 		return nullptr;
 	}
 
-	pNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_START);
 	pNetworkable->PreDataUpdate(DATA_UPDATE_CREATED);
-	pNetworkable->OnPreDataChanged(DATA_UPDATE_CREATED);
 
 	pPrecipitation->m_vecOrigin() = {};
 	pPrecipitation->SetAbsOrigin({});
 	pPrecipitation->m_clrRender().a = uAlpha;
 	pPrecipitation->m_nPrecipType() = iType;
+	if (iType == PRECIPITATION_TYPE_ASH || iType == PRECIPITATION_TYPE_SNOWFALL)
+	{
+		if (auto pWorld = I::ClientEntityList->GetClientEntity(0))
+		{
+			auto pWorldBase = pWorld->As<CBaseEntity>();
+			if (pWorldBase)
+				pPrecipitation->m_nModelIndex() = pWorldBase->m_nModelIndex();
+		}
+	}
+	pPrecipitation->m_nRenderMode() = kRenderEnvironmental;
 
 	const Vec3 vBounds = Vec3(16384.f, 16384.f, 16384.f);
 	pPrecipitation->m_Collision()->SetCollisionBounds(-vBounds, vBounds);
 
-	pNetworkable->OnDataChanged(DATA_UPDATE_CREATED);
 	pNetworkable->PostDataUpdate(DATA_UPDATE_CREATED);
+	pNetworkable->NotifyShouldTransmit(SHOULDTRANSMIT_START);
 	m_iPrecipitationType = iType;
 	m_uPrecipitationAlpha = uAlpha;
 	ApplyPrecipitationConVars(iType);

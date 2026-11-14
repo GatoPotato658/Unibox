@@ -265,6 +265,7 @@ void CResolver::HitscanRan(CTFPlayer* pLocal, CTFPlayer* pTarget, CTFWeaponBase*
 	if (!Vars::Resolver::Enabled.Value || !Vars::Resolver::AutoResolve.Value
 		|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Smooth
 		|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
+		|| Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots
 		|| pLocal->m_iTeamNum() == pTarget->m_iTeamNum())
 		return;
 

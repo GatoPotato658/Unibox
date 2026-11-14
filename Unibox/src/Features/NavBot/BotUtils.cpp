@@ -257,7 +257,11 @@ ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTarget(CTFPlayer* pLocal, CT
 	if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Friends && H::Entities.IsFriend(iEntIdx)
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Party && H::Entities.InParty(iEntIdx)
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Invulnerable && pPlayer->IsInvulnerable() && G::SavedDefIndexes[SLOT_MELEE] != Heavy_t_TheHolidayPunch
-		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Invisible && pPlayer->m_flInvisibility() && pPlayer->m_flInvisibility() >= Vars::Aimbot::General::IgnoreInvisible.Value / 100.f
+		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Invisible
+			&& !pPlayer->InCond(TF_COND_BURNING) && !pPlayer->InCond(TF_COND_BURNING_PYRO)
+			&& !pPlayer->InCond(TF_COND_MAD_MILK) && !pPlayer->InCond(TF_COND_URINE)
+			&& Vars::Aimbot::General::IgnoreInvisible.Value > 0.f
+			&& pPlayer->GetEffectiveInvisibilityLevel() >= Vars::Aimbot::General::IgnoreInvisible.Value / 100.f
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::DeadRinger && pPlayer->m_bFeignDeathReady()
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Taunting && pPlayer->IsTaunting()
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Disguised && pPlayer->InCond(TF_COND_DISGUISED))
@@ -431,6 +435,11 @@ void CBotUtils::UpdateBestSlot(CTFPlayer* pLocal)
 
 void CBotUtils::SetSlot(CTFPlayer* pLocal, int iSlot)
 {
+	auto pWeaponEntity = pLocal ? pLocal->m_hActiveWeapon().Get() : nullptr;
+	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
+	if (pWeapon && pWeapon->m_flSmackTime() > 0.f || I::GlobalVars->tickcount <= m_tLegitAim.m_iCommitUntilTick)
+		return;
+
 	if (iSlot > -1 && F::AutoHeal.m_iAutoSwitch == 0)
 	{
 		auto sCommand = "slot" + std::to_string(iSlot + 1);
@@ -441,10 +450,23 @@ void CBotUtils::SetSlot(CTFPlayer* pLocal, int iSlot)
 
 void CBotUtils::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
-	if ((!Vars::Misc::Movement::NavBot::Enabled.Value && !(Vars::Misc::Movement::FollowBot::Enabled.Value && Vars::Misc::Movement::FollowBot::Targets.Value)) ||
-		!pLocal->IsAlive() || !pWeapon)
+	if (!pLocal || !pLocal->IsAlive() || !pWeapon)
 	{
 		Reset();
+		return;
+	}
+
+	if (!Vars::Misc::Movement::NavBot::Enabled.Value && !(Vars::Misc::Movement::FollowBot::Enabled.Value && Vars::Misc::Movement::FollowBot::Targets.Value))
+	{
+		m_mAutoScopeCache.clear();
+		m_mAutoRevCache.clear();
+		m_bScopeKeep = m_bScopeClearCache = m_bRevKeep = m_bRevClearCache = false;
+		m_tClosestEnemy = {};
+		m_iBestSlot = -1;
+		m_iCurrentSlot = -1;
+		m_eJumpState = STATE_AWAITING_JUMP;
+		m_vPredictedJumpPos = {};
+		m_vJumpPeakPos = {};
 		return;
 	}
 
@@ -476,7 +498,9 @@ void CBotUtils::Reset()
 	m_vJumpPeakPos = {};
 	m_vDebugLook = {};
 	m_flDebugLookExpire = 0.f;
-	InvalidateLLAP();
+	m_tLegitAim = {};
+	m_tLLAP = {};
+	m_vLastAngles = I::EngineClient ? I::EngineClient->GetViewAngles() : Vec3{};
 }
 
 bool CBotUtils::IsSurfaceWalkable(const Vector& vNormal)
@@ -652,6 +676,8 @@ void CBotUtils::HandleSmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 static bool SmoothAimHasPriority()
 {
 	const auto iAimType = Vars::Aimbot::General::AimType.Value;
+	if (iAimType == Vars::Aimbot::General::AimTypeEnum::LegitForBots)
+		return F::BotUtils.IsLegitAimActive();
 	if (iAimType != Vars::Aimbot::General::AimTypeEnum::Smooth
 		&& iAimType != Vars::Aimbot::General::AimTypeEnum::SmoothVelocity
 		&& iAimType != Vars::Aimbot::General::AimTypeEnum::Assistive)
@@ -775,39 +801,94 @@ static LegitPathCandidate_t ScorePathCandidate(CTFPlayer* pLocal, const Vec3& vE
 	return tResult;
 }
 
-static Vec3 ClampAngleSpeed(const Vec3& vFrom, const Vec3& vTarget, float& flPitchVelocity, float& flYawVelocity, float flSpeed, bool bEnemyLock)
+void CBotUtils::AdvanceLegitMotion(LegitMotion_t& tMotion, const Vec3& vGoal, float flSpeed, float flAcceleration)
 {
-	Vec3 vDelta = vTarget.DeltaAngle(vFrom);
-	const float flTick = std::max(I::GlobalVars->interval_per_tick, 0.001f);
-	const float flPitchLimit = (bEnemyLock ? 125.f : 55.f) * std::clamp(flSpeed / 25.f, 0.45f, 2.2f);
-	const float flYawLimit = (bEnemyLock ? 180.f : 80.f) * std::clamp(flSpeed / 25.f, 0.45f, 2.2f);
-	const float flPitchAccel = (bEnemyLock ? 520.f : 220.f) * flTick;
-	const float flYawAccel = (bEnemyLock ? 720.f : 320.f) * flTick;
-	const float flDesiredPitchVelocity = std::clamp(vDelta.x / flTick, -flPitchLimit, flPitchLimit);
-	const float flDesiredYawVelocity = std::clamp(vDelta.y / flTick, -flYawLimit, flYawLimit);
+	const float flNow = I::GlobalVars->curtime;
+	if (!tMotion.m_bInitialized)
+	{
+		tMotion.m_vAngles = I::EngineClient->GetViewAngles();
+		tMotion.m_vVelocity = {};
+		tMotion.m_flLastTime = flNow;
+		tMotion.m_bInitialized = true;
+	}
 
-	flPitchVelocity += std::clamp(flDesiredPitchVelocity - flPitchVelocity, -flPitchAccel, flPitchAccel);
-	flYawVelocity += std::clamp(flDesiredYawVelocity - flYawVelocity, -flYawAccel, flYawAccel);
-	flPitchVelocity = std::clamp(flPitchVelocity, -flPitchLimit, flPitchLimit);
-	flYawVelocity = std::clamp(flYawVelocity, -flYawLimit, flYawLimit);
+	const float flDeltaTime = std::clamp(flNow - tMotion.m_flLastTime, 0.f, std::max(I::GlobalVars->interval_per_tick * 4.f, 0.05f));
+	if (flDeltaTime <= 0.f)
+		return;
+	tMotion.m_flLastTime = flNow;
 
-	Vec3 vResult = vFrom;
-	vResult.x += flPitchVelocity * flTick;
-	vResult.y += flYawVelocity * flTick;
-	Math::ClampAngles(vResult);
-	return vResult;
+	const Vec3 vDelta = vGoal.DeltaAngle(tMotion.m_vAngles);
+	const float flDistance = vDelta.Length();
+	if (!std::isfinite(flDistance))
+	{
+		tMotion.m_vAngles = vGoal;
+		tMotion.m_vVelocity = {};
+		return;
+	}
+
+	const float flMaxSpeed = std::max(flSpeed * 4.2f, 20.f);
+	const Vec3 vDesiredVelocity = flDistance > 0.001f
+		? vDelta.Normalized() * std::min(flMaxSpeed, flDistance * 10.f)
+		: Vec3{};
+	Vec3 vVelocityDelta = vDesiredVelocity - tMotion.m_vVelocity;
+	const float flVelocityDelta = vVelocityDelta.Length();
+	const float flMaxVelocityDelta = std::max(flAcceleration, 90.f) * flDeltaTime;
+	if (flVelocityDelta > flMaxVelocityDelta && flVelocityDelta > 0.f)
+		vVelocityDelta *= flMaxVelocityDelta / flVelocityDelta;
+	tMotion.m_vVelocity += vVelocityDelta;
+
+	if (flDistance < 0.03f && tMotion.m_vVelocity.Length() < 2.f)
+	{
+		tMotion.m_vAngles = vGoal;
+		tMotion.m_vVelocity = {};
+	}
+	else
+	{
+		tMotion.m_vAngles += tMotion.m_vVelocity * flDeltaTime;
+		Math::ClampAngles(tMotion.m_vAngles);
+	}
+}
+
+float CBotUtils::GetLegitReactionTime()
+{
+	const float flBase = std::max(Vars::Aimbot::General::LegitForBots::ReactionTime.Value, 0.f);
+	const float flVariation = std::clamp(Vars::Aimbot::General::LegitForBots::ReactionVariation.Value / 100.f, 0.f, 1.f);
+	return flBase * SDK::RandomFloat(1.f - flVariation, 1.f + flVariation);
+}
+
+bool CBotUtils::IsLegitShotClear(CTFPlayer* pLocal, CBaseEntity* pTarget, const Vec3& vAngles)
+{
+	if (!pLocal || !Vars::Aimbot::General::LegitForBots::AvoidFriendlyFire.Value || !SDK::FriendlyFire())
+		return true;
+
+	auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
+	Vec3 vShotAngles = vAngles;
+	if (pWeapon && SDK::GetWeaponType(pWeapon) != EWeaponType::MELEE)
+		vShotAngles += pLocal->m_vecPunchAngle();
+
+	Vec3 vForward;
+	Math::AngleVectors(vShotAngles, &vForward);
+	const float flRange = pWeapon ? std::max(pWeapon->GetRange(), 256.f) : 8192.f;
+	const Vec3 vStart = pLocal->GetShootPos();
+
+	CGameTrace tTrace = {};
+	CTraceFilterCollideable tFilter(pLocal);
+	tFilter.m_iPlayer = PLAYER_ALL;
+	tFilter.m_iObject = OBJECT_ALL;
+	SDK::Trace(vStart, vStart + vForward * flRange, MASK_SHOT, &tFilter, &tTrace);
+	if (!tTrace.DidHit() || !tTrace.m_pEnt || tTrace.m_pEnt == pTarget)
+		return true;
+	return tTrace.m_pEnt->m_iTeamNum() != pLocal->m_iTeamNum();
 }
 
 void CBotUtils::DoSlowAim(Vec3& vWishAngles, float flSpeed, Vec3 vPreviousAngles)
 {
-	float flAimSpeed = std::max(flSpeed, 1.f);
-	Vec3 vSlowDelta = vWishAngles.DeltaAngle(vPreviousAngles);
-
-	const float flPitchStep = std::clamp(std::fabs(vSlowDelta.x) / (flAimSpeed * 1.35f), 0.1f, std::max(0.35f, 18.f / std::sqrt(flAimSpeed)));
-	const float flYawStep = std::clamp(std::fabs(vSlowDelta.y) / flAimSpeed, 0.15f, std::max(0.5f, 32.f / std::sqrt(flAimSpeed)));
-
-	vPreviousAngles.x += std::clamp(vSlowDelta.x, -flPitchStep, flPitchStep);
-	vPreviousAngles.y += std::clamp(vSlowDelta.y, -flYawStep, flYawStep);
+	const float flAimSpeed = std::clamp(flSpeed, 1.f, 120.f);
+	const float flDeltaTime = std::max(I::GlobalVars->interval_per_tick, 0.001f);
+	const float flBlend = std::clamp(1.f - expf(-flAimSpeed * flDeltaTime * 0.15f), 0.005f, 0.8f);
+	const Vec3 vSlowDelta = vWishAngles.DeltaAngle(vPreviousAngles);
+	vPreviousAngles += vSlowDelta * flBlend;
 	vWishAngles = vPreviousAngles;
 	Math::ClampAngles(vWishAngles);
 }
@@ -840,7 +921,7 @@ void CBotUtils::LookAtPath(CUserCmd* pCmd, Vec3 vWishAngles, Vec3 vLocalEyePos, 
 	}
 
 	if (bSmooth)
-		DoSlowAim(vWishAngles, 25.f, m_vLastAngles);
+		DoSlowAim(vWishAngles, static_cast<float>(Vars::Misc::Movement::BotUtils::LookAtPathSpeed.Value), m_vLastAngles);
 
 	if (bSilent)
 		pCmd->viewangles = vWishAngles;
@@ -849,351 +930,655 @@ void CBotUtils::LookAtPath(CUserCmd* pCmd, Vec3 vWishAngles, Vec3 vLocalEyePos, 
 	m_vLastAngles = vWishAngles;
 }
 
-void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, bool bSilent)
+Vec3 CBotUtils::GetLegitActorPoint(CBaseEntity* pActor)
 {
-	if (!pLocal)
-		return;
+	if (!pActor)
+		return {};
+	if (!pActor->IsPlayer())
+		return pActor->GetCenter();
 
-	auto& tState = m_tLLAP;
+	Vec3 vPoint = pActor->As<CTFPlayer>()->GetEyePosition();
+	vPoint.z -= 8.f;
+	const Vec3 vVelocity = pActor->GetAbsVelocity();
+	const float flLead = std::clamp(vPoint.DistTo(H::Entities.GetLocal() ? H::Entities.GetLocal()->GetEyePosition() : vPoint) / 3200.f, 0.01f, 0.07f);
+	return vPoint + vVelocity * flLead;
+}
 
-	if (SmoothAimHasPriority())
-	{
-		Vec3 vCurrent = I::EngineClient->GetViewAngles();
-		m_vLastAngles = vCurrent;
-		if (tState.m_bInitialized)
-			tState.m_vAnchor = vCurrent;
-		return;
-	}
+CBaseEntity* CBotUtils::FindLegitThreat(CTFPlayer* pLocal, const Vec3& vEye)
+{
+	if (!pLocal || !Vars::Aimbot::General::LegitForBots::ReactToThreats.Value)
+		return nullptr;
 
-	Vec3 vEye = pLocal->GetEyePosition();
-	Vec3 vLook = vDest;
-	bool bEnemyLock = false;
-	const int iPreviousTarget = tState.m_iLastTarget;
-	int iTrackedTarget = -1;
+	CBaseEntity* pBest = nullptr;
+	float flBestTime = 0.85f;
 	const Vec3 vVelocity = pLocal->m_vecVelocity();
-	const float flSpeed = vVelocity.Length2D();
-	const Vec3 vOrigin = pLocal->GetAbsOrigin();
-	Vec3 vPathDelta = vDest.IsZero() ? Vec3{} : vDest - vOrigin;
-	const bool bHasPathTarget = !vDest.IsZero() && vPathDelta.Length2D() > 24.f;
-	const Vec3 vPathDirection = GetFlatDirection(vPathDelta, bHasPathTarget ? Vec3{} : vVelocity);
-
-	CBaseEntity* pBestEnemy = nullptr;
-	float flBestDist = FLT_MAX;
-	auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
-	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
-
-	if (G::AimTarget.m_iEntIndex)
+	for (auto pProjectile : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 	{
-		auto pClientEntity = I::ClientEntityList->GetClientEntity(G::AimTarget.m_iEntIndex);
-		if (auto pTarget = pClientEntity ? pClientEntity->As<CBaseEntity>() : nullptr)
-		{
-			if (pTarget->IsPlayer() ? pTarget->As<CTFPlayer>()->IsAlive() : (pTarget->IsBuilding() ? pTarget->As<CBaseObject>()->m_iHealth() > 0 : false))
-			{
-				Vec3 vTargetPos = pTarget->IsPlayer() ? pTarget->As<CTFPlayer>()->GetEyePosition() : pTarget->GetCenter();
-				if (SDK::VisPos(pLocal, pTarget, vEye, vTargetPos))
-				{
-					pBestEnemy = pTarget;
-					flBestDist = -1.f;
-				}
-			}
-		}
+		if (!pProjectile || pProjectile->IsDormant() || pProjectile->m_iTeamNum() == pLocal->m_iTeamNum())
+			continue;
+
+		const Vec3 vOrigin = pProjectile->GetAbsOrigin();
+		const Vec3 vRelativeOrigin = vOrigin - vEye;
+		const Vec3 vRelativeVelocity = pProjectile->GetAbsVelocity() - vVelocity;
+		const float flRelativeSpeed = vRelativeVelocity.LengthSqr();
+		if (flRelativeSpeed < 100.f * 100.f)
+			continue;
+
+		const float flTime = std::clamp(-vRelativeOrigin.Dot(vRelativeVelocity) / flRelativeSpeed, 0.f, 0.85f);
+		if (flTime > flBestTime)
+			continue;
+
+		const Vec3 vClosest = vRelativeOrigin + vRelativeVelocity * flTime;
+		if (vClosest.LengthSqr() > 220.f * 220.f || !SDK::VisPosWorld(pLocal, pProjectile, vEye, vOrigin))
+			continue;
+
+		flBestTime = flTime;
+		pBest = pProjectile;
 	}
+	return pBest;
+}
+
+CBaseEntity* CBotUtils::FindLegitAttention(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const Vec3& vEye, const Vec3& vOrigin, const Vec3& vPathDirection, bool bHasPathTarget, bool bAllowSteep, float* pScore)
+{
+	if (!pLocal || !Vars::Aimbot::General::LegitForBots::ReactToEnemies.Value)
+		return nullptr;
+
+	struct Candidate_t
+	{
+		CBaseEntity* m_pEntity = nullptr;
+		float m_flScore = -FLT_MAX;
+	};
+
+	std::vector<Candidate_t> vCandidates;
+	const Vec3 vViewAngles = I::EngineClient->GetViewAngles();
+	const float flSinceDamage = I::GlobalVars->curtime - pLocal->m_flLastDamageTime();
+	auto AddCandidate = [&](CBaseEntity* pEntity, const Vec3& vPoint, float flBase)
+		{
+			if (!pEntity || pEntity->IsDormant())
+				return;
+			const Vec3 vToTarget = vPoint - vEye;
+			const float flDistance = vToTarget.Length();
+			if (flDistance < 1.f)
+				return;
+			const float flFov = Math::CalcFov(vViewAngles, Math::CalcAngle(vEye, vPoint));
+			if (flFov > 165.f)
+				return;
+
+			float flScore = flBase + std::clamp(1.f - flDistance / 2600.f, 0.f, 1.f) * 2.2f
+				+ std::clamp(1.f - flFov / 130.f, 0.f, 1.f) * 2.4f;
+			if (pEntity->entindex() == G::AimTarget.m_iEntIndex)
+				flScore += 3.5f;
+			if (pEntity->entindex() == m_tLLAP.m_iTarget)
+				flScore += 3.f;
+			if (pLocal->m_iHealth() < pLocal->GetMaxHealth() * 0.35f)
+				flScore += 0.8f;
+			if (bHasPathTarget && !IsPathTargetForward(vOrigin, vPoint, vPathDirection, -0.25f))
+				flScore -= 1.5f;
+			vCandidates.push_back({ pEntity, flScore });
+		};
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
 		auto pEnemy = pEntity->As<CTFPlayer>();
-		if (!pEnemy || !pEnemy->IsAlive() || pEnemy->IsDormant())
+		if (!pEnemy || !pEnemy->IsAlive() || ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) != ShouldTargetEnum::Target)
 			continue;
 
-		if (ShouldTarget(pLocal, pWeapon, pEnemy->entindex()) != ShouldTargetEnum::Target)
-			continue;
-
-		Vec3 vEnemyEye = pEnemy->GetEyePosition();
-		if (SDK::VisPos(pLocal, pEnemy, vEye, vEnemyEye))
-		{
-			float flDist = vEye.DistTo(vEnemyEye);
-			if (flDist < flBestDist)
-			{
-				flBestDist = flDist;
-				pBestEnemy = pEnemy;
-			}
-		}
+		const Vec3 vPoint = GetLegitActorPoint(pEnemy);
+		float flThreat = 0.f;
+		Vec3 vForward;
+		Math::AngleVectors(pEnemy->GetEyeAngles(), &vForward);
+		Vec3 vToLocal = pLocal->GetEyePosition() - pEnemy->GetEyePosition();
+		if (vToLocal.Normalize() > 0.01f && vForward.Dot(vToLocal) > 0.94f)
+			flThreat += 3.5f;
+		if (flSinceDamage < 0.75f)
+			flThreat += 1.4f;
+		if (pEnemy->m_iHealth() < pEnemy->GetMaxHealth() * 0.35f)
+			flThreat += 0.5f;
+		AddCandidate(pEnemy, vPoint, flThreat);
 	}
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingEnemy))
 	{
 		auto pBuilding = pEntity->As<CBaseObject>();
-		if (!pBuilding || pBuilding->m_iHealth() <= 0 || pBuilding->IsDormant())
+		if (!pBuilding || pBuilding->m_iHealth() <= 0 || ShouldTargetBuilding(pLocal, pBuilding->entindex()) != ShouldTargetEnum::Target)
 			continue;
+		float flThreat = 0.f;
+		if (pBuilding->IsSentrygun())
+		{
+			auto pSentry = pBuilding->As<CObjectSentrygun>();
+			if (pSentry && pSentry->m_hEnemy().Get() == pLocal)
+				flThreat += 4.5f;
+		}
+		AddCandidate(pBuilding, GetLegitActorPoint(pBuilding), flThreat);
+	}
 
-		if (ShouldTargetBuilding(pLocal, pBuilding->entindex()) != ShouldTargetEnum::Target)
+	if (pWeapon)
+	{
+		if (auto pMedigun = pWeapon->As<CWeaponMedigun>())
+		{
+			if (auto pHealing = pMedigun->m_hHealingTarget().Get())
+				AddCandidate(pHealing, GetLegitActorPoint(pHealing), 4.f);
+		}
+	}
+
+	std::sort(vCandidates.begin(), vCandidates.end(), [](const Candidate_t& a, const Candidate_t& b)
+		{
+			return a.m_flScore > b.m_flScore;
+		});
+
+	const size_t nTraceCount = std::min<size_t>(vCandidates.size(), 5);
+	for (size_t i = 0; i < nTraceCount; i++)
+	{
+		CBaseEntity* pEntity = vCandidates[i].m_pEntity;
+		const Vec3 vPoint = GetLegitActorPoint(pEntity);
+		if (!bAllowSteep && std::fabs(vPoint.z - vEye.z) > 180.f)
 			continue;
-
-		Vec3 vBuildingCenter = pBuilding->GetCenter();
-		if (SDK::VisPos(pLocal, pBuilding, vEye, vBuildingCenter))
+		if (SDK::VisPos(pLocal, pEntity, vEye, vPoint))
 		{
-			float flDist = vEye.DistTo(vBuildingCenter);
-			if (flDist < flBestDist)
-			{
-				flBestDist = flDist;
-				pBestEnemy = pBuilding;
-			}
+			if (pScore)
+				*pScore = vCandidates[i].m_flScore;
+			return pEntity;
 		}
 	}
+	return nullptr;
+}
 
-	if (pBestEnemy)
+Vec3 CBotUtils::GetLegitPathGoal(CTFPlayer* pLocal, const Vec3& vEye, const Vec3& vOrigin, const Vec3& vDest, const Vec3& vPathDirection, bool bAllowSteep)
+{
+	auto& tState = m_tLLAP;
+	const int iTick = I::GlobalVars->tickcount;
+	const bool bSameDest = vDest.IsZero() && tState.m_vPathDest.IsZero()
+		|| !vDest.IsZero() && !tState.m_vPathDest.IsZero() && vDest.DistToSqr(tState.m_vPathDest) < 128.f * 128.f;
+	const bool bSameDirection = tState.m_vPathDirection.IsZero() || tState.m_vPathDirection.Dot(vPathDirection) >= 0.94f;
+	if (iTick - tState.m_iPathScanTick < 10 && !tState.m_vPathGoal.IsZero() && bSameDest && bSameDirection
+		&& IsPathTargetForward(vOrigin, tState.m_vPathGoal, vPathDirection, -0.1f))
+		return tState.m_vPathGoal;
+	if (!bSameDest || !bSameDirection)
 	{
-		if (pBestEnemy->IsPlayer())
-		{
-			vLook = pBestEnemy->As<CTFPlayer>()->GetEyePosition();
-			vLook.z -= 10.f;
-			Vec3 vTargetVelocity = pBestEnemy->GetAbsVelocity();
-			const float flLeadTime = std::clamp(vEye.DistTo(vLook) / 2800.f, 0.015f, 0.08f);
-			vLook += vTargetVelocity * flLeadTime;
-		}
-		else
-			vLook = pBestEnemy->GetCenter();
-
-		iTrackedTarget = pBestEnemy->entindex();
-		tState.m_flLastSeen = I::GlobalVars->curtime;
-		tState.m_vLastPos = vLook;
-		bEnemyLock = true;
+		tState.m_vPathGoal = {};
+		tState.m_flPathScore = 0.f;
 	}
-	else if ((I::GlobalVars->curtime - tState.m_flLastSeen) < 1.2f && !tState.m_vLastPos.IsZero())
+	tState.m_vPathDest = vDest;
+	tState.m_vPathDirection = vPathDirection;
+	tState.m_iPathScanTick = iTick;
+
+	const float flSpeed = pLocal->m_vecVelocity().Length2D();
+	const float flEyeHeight = vEye.z - vOrigin.z;
+	const float flDistance = vDest.IsZero() ? std::max(280.f, flSpeed * 0.75f) : std::clamp((vDest - vOrigin).Length2D(), 180.f, 620.f);
+	const float flHeight = vDest.IsZero() ? 0.f : std::clamp(vDest.z - vOrigin.z, -96.f, 112.f);
+	std::array<Vec3, 6> vCandidates = {
+		vDest.IsZero() ? Vec3{} : Vec3(vDest.x, vDest.y, vEye.z + flHeight * 0.3f),
+		vOrigin + vPathDirection * std::min(flDistance + 100.f, 560.f) + Vec3(0.f, 0.f, flEyeHeight + flHeight * 0.25f),
+		vOrigin + vPathDirection * std::min(flDistance + 220.f, 720.f) + Vec3(0.f, 0.f, flEyeHeight + flHeight * 0.15f),
+		MakePositionFromYaw(vOrigin, vPathDirection, -9.f, std::min(flDistance + 60.f, 520.f), flEyeHeight + flHeight * 0.15f),
+		MakePositionFromYaw(vOrigin, vPathDirection, 9.f, std::min(flDistance + 60.f, 520.f), flEyeHeight + flHeight * 0.15f),
+		vOrigin + vPathDirection * 260.f + Vec3(0.f, 0.f, flEyeHeight)
+	};
+
+	LegitPathCandidate_t tBest = {};
+	for (const Vec3& vCandidate : vCandidates)
 	{
-		if (!bHasPathTarget || IsPathTargetForward(vOrigin, tState.m_vLastPos, vPathDirection, 0.f))
-		{
-			vLook = tState.m_vLastPos;
-			iTrackedTarget = iPreviousTarget;
-			bEnemyLock = true;
-		}
+		if (vCandidate.IsZero())
+			continue;
+		LegitPathCandidate_t tScored = ScorePathCandidate(pLocal, vEye, vOrigin, vCandidate, vPathDirection, tState.m_vPathGoal, bAllowSteep);
+		if (tScored.m_bValid && tScored.m_flScore > tBest.m_flScore)
+			tBest = tScored;
 	}
 
-	if (!bEnemyLock)
+	if (tBest.m_bValid)
 	{
-		const bool bAllowSteep = !pLocal->OnSolid() || (!vDest.IsZero() && std::fabs(vDest.z - vOrigin.z) > 48.f) || std::fabs(vVelocity.z) > 120.f;
-		const float flBaseDistance = std::clamp(std::max(vPathDelta.Length2D(), flSpeed * 0.7f), 150.f, 520.f);
-		const float flTargetHeight = !vDest.IsZero() ? std::clamp(vDest.z - vOrigin.z, -96.f, 112.f) : 0.f;
-		const float flEyeHeight = vEye.z - vOrigin.z;
-		std::array<Vec3, 7> vCandidates = {
-			vDest.IsZero() ? Vec3{} : Vec3(vDest.x, vDest.y, vEye.z + flTargetHeight * 0.35f),
-			vOrigin + vPathDirection * std::min(flBaseDistance + 120.f, 620.f) + Vec3(0.f, 0.f, flEyeHeight + flTargetHeight * 0.3f),
-			vOrigin + vPathDirection * std::min(flBaseDistance + 240.f, 760.f) + Vec3(0.f, 0.f, flEyeHeight + flTargetHeight * 0.2f),
-			!bHasPathTarget && flSpeed > 25.f ? vOrigin + GetFlatDirection(vVelocity, vPathDirection) * std::min(flSpeed * 1.25f, 540.f) + Vec3(0.f, 0.f, flEyeHeight) : Vec3{},
-			MakePositionFromYaw(vOrigin, vPathDirection, -12.f, std::min(flBaseDistance + 80.f, 560.f), flEyeHeight + flTargetHeight * 0.15f),
-			MakePositionFromYaw(vOrigin, vPathDirection, 12.f, std::min(flBaseDistance + 80.f, 560.f), flEyeHeight + flTargetHeight * 0.15f),
-			vOrigin + vPathDirection * 260.f + Vec3(0.f, 0.f, flEyeHeight)
+		const bool bBetter = tBest.m_flScore > tState.m_flPathScore + 0.35f;
+		if (tState.m_vPathGoal.IsZero() || !IsPathTargetForward(vOrigin, tState.m_vPathGoal, vPathDirection, 0.03f)
+			|| bBetter || tState.m_vPathGoal.DistToSqr(tBest.m_vPosition) > 260.f * 260.f)
+		{
+			tState.m_vPathGoal = tBest.m_vPosition;
+			tState.m_flPathScore = tBest.m_flScore;
+		}
+		else if (tState.m_vPathGoal == tBest.m_vPosition)
+			tState.m_flPathScore = tBest.m_flScore;
+	}
+	else
+	{
+		tState.m_vPathGoal = vDest.IsZero()
+			? vOrigin + vPathDirection * std::clamp(flDistance, 260.f, 560.f) + Vec3(0.f, 0.f, flEyeHeight)
+			: vDest;
+		tState.m_flPathScore = 0.f;
+	}
+
+	if (std::fabs(tState.m_vPathGoal.z - vEye.z) > 220.f)
+		tState.m_vPathGoal.z = vEye.z + std::clamp(tState.m_vPathGoal.z - vEye.z, -220.f, 220.f);
+	return tState.m_vPathGoal;
+}
+
+void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const Vec3& vToAngle)
+{
+	if (!pLocal || !pCmd)
+		return;
+
+	auto& tState = m_tLegitAim;
+	const float flNow = I::GlobalVars->curtime;
+	const int iTick = I::GlobalVars->tickcount;
+	if (tState.m_iLastCommand == pCmd->command_number)
+	{
+		if (!tState.m_bReady && Vars::Aimbot::General::AutoShoot.Value)
+			pCmd->buttons &= ~IN_ATTACK;
+		return;
+	}
+	tState.m_iLastTick = iTick;
+	tState.m_iLastCommand = pCmd->command_number;
+
+	if (iTick <= tState.m_iCommitUntilTick)
+	{
+		auto pClientTarget = tState.m_iTarget > 0 ? I::ClientEntityList->GetClientEntity(tState.m_iTarget) : nullptr;
+		CBaseEntity* pTarget = pClientTarget ? pClientTarget->As<CBaseEntity>() : nullptr;
+		tState.m_flLastSeen = flNow;
+		tState.m_vExact = tState.m_vCommitAngles;
+		tState.m_tMotion.m_vAngles = tState.m_vCommitAngles;
+		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_flLastTime = flNow;
+		tState.m_bReady = IsLegitShotClear(pLocal, pTarget, tState.m_vExact);
+		pCmd->viewangles = tState.m_vExact;
+		I::EngineClient->SetViewAngles(tState.m_vExact);
+		if (!tState.m_bReady && Vars::Aimbot::General::AutoShoot.Value)
+			pCmd->buttons &= ~IN_ATTACK;
+		return;
+	}
+
+	if (tState.m_iTarget != iTarget || flNow - tState.m_flLastSeen > 0.3f || !tState.m_tMotion.m_bInitialized)
+	{
+		tState.m_iPreviousTarget = tState.m_iTarget;
+		tState.m_iTarget = iTarget;
+		tState.m_flReactionEnd = flNow + GetLegitReactionTime() * (tState.m_iPreviousTarget == iTarget ? 0.55f : 1.f);
+		tState.m_flNoisePhase = SDK::RandomFloat(0.f, 6.2831853f);
+		tState.m_flErrorBlend = 0.f;
+		tState.m_vOvershoot = {};
+		tState.m_bReady = false;
+		if (!tState.m_tMotion.m_bInitialized)
+		{
+			tState.m_tMotion.m_vAngles = I::EngineClient->GetViewAngles();
+			tState.m_tMotion.m_flLastTime = flNow;
+			tState.m_tMotion.m_bInitialized = true;
+		}
+	}
+	else if (tState.m_iPreviousTarget != iTarget && tState.m_iPreviousTarget != 0)
+	{
+		tState.m_iPreviousTarget = 0;
+	}
+	tState.m_iTarget = iTarget;
+	tState.m_flLastSeen = flNow;
+	tState.m_vExact = vToAngle;
+	Math::ClampAngles(tState.m_vExact);
+
+	auto pClientTarget = iTarget > 0 ? I::ClientEntityList->GetClientEntity(iTarget) : nullptr;
+	CBaseEntity* pTarget = pClientTarget ? pClientTarget->As<CBaseEntity>() : nullptr;
+
+	if (flNow < tState.m_flReactionEnd)
+	{
+		const Vec3 vCurrent = I::EngineClient->GetViewAngles();
+		tState.m_tMotion.m_vAngles = vCurrent;
+		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_flLastTime = flNow;
+		tState.m_bReady = false;
+		pCmd->viewangles = vCurrent;
+		if (Vars::Aimbot::General::AutoShoot.Value)
+			pCmd->buttons &= ~IN_ATTACK;
+		return;
+	}
+
+	const float flDeltaTime = std::max(I::GlobalVars->interval_per_tick, 0.001f);
+	tState.m_flNoisePhase += flDeltaTime * SDK::RandomFloat(1.3f, 2.2f);
+	tState.m_vOvershoot *= expf(-flDeltaTime * 4.2f);
+	const float flSettle = std::clamp((flNow - tState.m_flReactionEnd) / 0.85f, 0.f, 1.f);
+	tState.m_flErrorBlend = Math::Lerp(1.f, 0.12f, flSettle);
+
+	float flAngularSpeed = 0.f;
+	float flDistance = 400.f;
+	if (pTarget)
+	{
+		const Vec3 vTargetEye = pTarget->IsPlayer() ? pTarget->As<CTFPlayer>()->GetEyePosition() : pTarget->GetCenter();
+		const Vec3 vToTarget = vTargetEye - pLocal->GetEyePosition();
+		flDistance = std::max(vToTarget.Length(), 1.f);
+		Vec3 vTangent = pTarget->GetAbsVelocity();
+		const Vec3 vDirection = vToTarget / flDistance;
+		vTangent -= vDirection * vTangent.Dot(vDirection);
+		flAngularSpeed = std::clamp(vTangent.Length() / flDistance * 57.2957795f, 0.f, 360.f);
+	}
+
+	const float flErrorScale = Vars::Aimbot::General::LegitForBots::AimError.Value
+		* tState.m_flErrorBlend
+		* std::clamp(0.55f + flAngularSpeed / 320.f, 0.45f, 1.35f)
+		* std::clamp(flDistance / 600.f, 0.55f, 1.35f);
+	const Vec3 vError = {
+		(std::sin(tState.m_flNoisePhase * 1.71f) * 0.65f + std::sin(tState.m_flNoisePhase * 0.47f + 1.3f) * 0.35f) * flErrorScale,
+		(std::sin(tState.m_flNoisePhase * 1.13f + 2.1f) * 0.7f + std::sin(tState.m_flNoisePhase * 0.31f) * 0.3f) * flErrorScale,
+		0.f
+	};
+	tState.m_vError = tState.m_vError.LerpAngle(vError, std::clamp(flDeltaTime * 12.f, 0.f, 0.5f));
+
+	auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
+	float flSpeedScale = 1.f;
+	if (pWeapon)
+	{
+		switch (SDK::GetWeaponType(pWeapon))
+		{
+		case EWeaponType::MELEE:
+			flSpeedScale = 1.35f;
+			break;
+		case EWeaponType::PROJECTILE:
+			flSpeedScale = 0.82f;
+			break;
+		default:
+			break;
+		}
+		if (pLocal->InCond(TF_COND_ZOOMED))
+			flSpeedScale *= 0.72f;
+	}
+
+	if (tState.m_vOvershoot.IsZero())
+	{
+		const Vec3 vInitialDelta = tState.m_vExact.DeltaAngle(tState.m_tMotion.m_vAngles);
+		const float flOvershoot = std::clamp(Vars::Aimbot::General::LegitForBots::Overshoot.Value / 100.f, 0.f, 1.f);
+		tState.m_vOvershoot = {
+			std::clamp(vInitialDelta.x * flOvershoot * 0.18f, -2.f, 2.f),
+			std::clamp(vInitialDelta.y * flOvershoot * 0.18f, -3.f, 3.f),
+			0.f
 		};
+	}
 
-		LegitPathCandidate_t tBestCandidate = {};
-		for (const Vec3& vCandidate : vCandidates)
+	Vec3 vGoal = tState.m_vExact + tState.m_vError + tState.m_vOvershoot;
+	Math::ClampAngles(vGoal);
+	vGoal.x = std::clamp(vGoal.x, -89.f, 89.f);
+	const float flTrackingSpeed = Vars::Aimbot::General::LegitForBots::TrackingSpeed.Value * flSpeedScale;
+	AdvanceLegitMotion(tState.m_tMotion, vGoal, flTrackingSpeed, flTrackingSpeed * 8.f);
+
+	Vec3 vWish = tState.m_tMotion.m_vAngles;
+	const float flAimError = Math::CalcFov(vWish, tState.m_vExact);
+	bool bReady = flAimError <= Vars::Aimbot::General::LegitForBots::FireTolerance.Value
+		&& IsLegitShotClear(pLocal, pTarget, vWish);
+	if (bReady && pWeapon && SDK::GetWeaponType(pWeapon) == EWeaponType::PROJECTILE)
+	{
+		vWish = tState.m_vExact;
+		tState.m_tMotion.m_vAngles = vWish;
+		tState.m_tMotion.m_vVelocity = {};
+		bReady = IsLegitShotClear(pLocal, pTarget, vWish);
+	}
+	tState.m_bReady = bReady;
+
+	pCmd->viewangles = vWish;
+	I::EngineClient->SetViewAngles(vWish);
+	if (!tState.m_bReady && Vars::Aimbot::General::AutoShoot.Value)
+		pCmd->buttons &= ~IN_ATTACK;
+}
+
+bool CBotUtils::IsLegitAimReady(int iTarget) const
+{
+	return m_tLegitAim.m_iTarget == iTarget
+		&& m_tLegitAim.m_iLastTick == I::GlobalVars->tickcount
+		&& m_tLegitAim.m_bReady;
+}
+
+bool CBotUtils::IsLegitAimActive() const
+{
+	return m_tLegitAim.m_iLastTick == I::GlobalVars->tickcount
+		&& m_tLegitAim.m_iTarget > 0
+		&& m_tLegitAim.m_tMotion.m_bInitialized;
+}
+
+void CBotUtils::LockLegitAim(int iTarget, int iTicks)
+{
+	m_tLegitAim.m_iTarget = iTarget;
+	m_tLegitAim.m_iCommitUntilTick = I::GlobalVars->tickcount + std::max(iTicks, 1);
+	m_tLegitAim.m_vCommitAngles = I::EngineClient->GetViewAngles();
+	m_tLegitAim.m_tMotion.m_vAngles = m_tLegitAim.m_vCommitAngles;
+	m_tLegitAim.m_tMotion.m_vVelocity = {};
+	m_tLegitAim.m_tMotion.m_flLastTime = I::GlobalVars->curtime;
+	m_tLegitAim.m_bReady = true;
+}
+
+void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, bool bSilent, bool bFocus)
+{
+	if (!pLocal || !pCmd)
+		return;
+	auto& tState = m_tLLAP;
+	const int iTick = I::GlobalVars->tickcount;
+	const float flNow = I::GlobalVars->curtime;
+	if (SmoothAimHasPriority())
+	{
+		const Vec3 vCurrent = I::EngineClient->GetViewAngles();
+		tState.m_iLastTick = iTick;
+		tState.m_iLastCommand = pCmd->command_number;
+		tState.m_tMotion.m_vAngles = vCurrent;
+		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_flLastTime = flNow;
+		tState.m_tMotion.m_bInitialized = true;
+		m_vLastAngles = vCurrent;
+		return;
+	}
+
+	if (tState.m_iLastCommand == pCmd->command_number)
+		return;
+	if (tState.m_iLastTick < iTick - 1 && tState.m_tMotion.m_bInitialized)
+	{
+		tState.m_tMotion.m_vAngles = I::EngineClient->GetViewAngles();
+		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_flLastTime = flNow;
+	}
+	tState.m_iLastCommand = pCmd->command_number;
+	tState.m_iLastTick = iTick;
+
+	const Vec3 vVelocity = pLocal->m_vecVelocity();
+	const Vec3 vOrigin = pLocal->GetAbsOrigin();
+	const Vec3 vEye = pLocal->GetEyePosition();
+	const Vec3 vPathDelta = vDest.IsZero() ? Vec3{} : vDest - vOrigin;
+	const bool bHasPathTarget = !vDest.IsZero() && vPathDelta.Length2D() > 24.f;
+	Vec3 vViewForward;
+	Math::AngleVectors(I::EngineClient->GetViewAngles(), &vViewForward);
+	const Vec3 vPathDirection = GetFlatDirection(vPathDelta, bHasPathTarget ? Vec3{} : vVelocity.Length2D() > 24.f ? vVelocity : vViewForward);
+	const bool bAllowSteep = !pLocal->OnSolid() || (!vDest.IsZero() && std::fabs(vDest.z - vOrigin.z) > 48.f) || std::fabs(vVelocity.z) > 120.f;
+	auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
+	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
+	auto pMedigun = pWeapon ? pWeapon->As<CWeaponMedigun>() : nullptr;
+	CBaseEntity* pHealingTarget = pMedigun ? pMedigun->m_hHealingTarget().Get() : nullptr;
+	if (tState.m_flNextGlance <= 0.f)
+		tState.m_flNextGlance = flNow + SDK::RandomFloat(2.8f, 5.6f);
+
+	auto pClientTarget = tState.m_iTarget > 0 ? I::ClientEntityList->GetClientEntity(tState.m_iTarget) : nullptr;
+	CBaseEntity* pTarget = pClientTarget ? pClientTarget->As<CBaseEntity>() : nullptr;
+	bool bTargetAlive = pTarget && (pTarget->IsPlayer()
+		? pTarget->As<CTFPlayer>()->IsAlive()
+		: pTarget->IsBuilding() && pTarget->As<CBaseObject>()->m_iHealth() > 0);
+	if (!bTargetAlive)
+	{
+		pTarget = nullptr;
+		tState.m_bTargetValid = false;
+		tState.m_iTarget = -1;
+	}
+	if (!Vars::Aimbot::General::LegitForBots::ReactToEnemies.Value)
+	{
+		pTarget = nullptr;
+		tState.m_bTargetValid = false;
+		tState.m_iTarget = -1;
+		tState.m_flTargetSeen = 0.f;
+		tState.m_vLastSeenPoint = {};
+		tState.m_flTargetScore = 0.f;
+	}
+	else if (pTarget && (pTarget->IsDormant()
+		|| pTarget->IsPlayer() && pTarget != pHealingTarget && ShouldTarget(pLocal, pWeapon, pTarget->entindex()) != ShouldTargetEnum::Target
+		|| pTarget->IsBuilding() && ShouldTargetBuilding(pLocal, pTarget->entindex()) != ShouldTargetEnum::Target))
+	{
+		pTarget = nullptr;
+		tState.m_bTargetValid = false;
+	}
+
+	if (pTarget)
+	{
+		tState.m_vTargetPoint = GetLegitActorPoint(pTarget);
+		tState.m_bTargetValid = SDK::VisPos(pLocal, pTarget, vEye, tState.m_vTargetPoint);
+		if (tState.m_bTargetValid)
 		{
-			LegitPathCandidate_t tScored = ScorePathCandidate(pLocal, vEye, vOrigin, vCandidate, vPathDirection, tState.m_vPathTargetGoal, bAllowSteep);
-			if (tScored.m_bValid && tScored.m_flScore > tBestCandidate.m_flScore)
-				tBestCandidate = tScored;
+			tState.m_flTargetSeen = flNow;
+			tState.m_vLastSeenPoint = tState.m_vTargetPoint;
 		}
+	}
+	else
+		tState.m_bTargetValid = false;
 
-		if (tBestCandidate.m_bValid)
+	if (flNow >= tState.m_flNextTargetScan)
+	{
+		float flCandidateScore = 0.f;
+		CBaseEntity* pCandidate = FindLegitAttention(pLocal, pWeapon, vEye, vOrigin, vPathDirection, bHasPathTarget, bAllowSteep, &flCandidateScore);
+		const bool bImportant = flCandidateScore > tState.m_flTargetScore + 1.5f;
+		if (pCandidate && pCandidate->entindex() == tState.m_iTarget)
+			tState.m_flTargetScore = flCandidateScore;
+		if (pCandidate && (pCandidate->entindex() != tState.m_iTarget || !tState.m_bTargetValid)
+			&& (!tState.m_bTargetValid || flNow >= tState.m_flTargetDwell || bImportant))
 		{
-			const float flTimeSinceSwitch = I::GlobalVars->curtime - tState.m_flPathTargetTime;
-			const bool bNoTarget = tState.m_vPathTargetGoal.IsZero();
-			const bool bMuchBetter = tBestCandidate.m_flScore > tState.m_flPathTargetScore + 0.85f;
-			const bool bStaleTarget = flTimeSinceSwitch > 1.35f && tBestCandidate.m_vPosition.DistToSqr(tState.m_vPathTargetGoal) > 180.f * 180.f;
-			const bool bInvalidOld = !bNoTarget && !TracePathTargetVisible(pLocal, vEye, tState.m_vPathTargetGoal, nullptr);
-			const bool bOldBehind = !bNoTarget && !IsPathTargetForward(vOrigin, tState.m_vPathTargetGoal, vPathDirection, 0.2f);
+			const int iPrevious = tState.m_iTarget;
+			tState.m_iTarget = pCandidate->entindex();
+			tState.m_vTargetPoint = GetLegitActorPoint(pCandidate);
+			tState.m_flTargetSeen = flNow;
+			tState.m_flTargetScore = flCandidateScore;
+			tState.m_flTargetDwell = flNow + SDK::RandomFloat(0.55f, 1.2f);
+			const bool bImmediate = flNow - pLocal->m_flLastDamageTime() < 0.5f;
+			tState.m_flReactionEnd = flNow + GetLegitReactionTime() * (bImmediate ? 0.55f : 1.f);
+			tState.m_vLastSeenPoint = tState.m_vTargetPoint;
+			tState.m_bTargetValid = true;
+			if (iPrevious != tState.m_iTarget)
+				tState.m_vGlanceGoal = {};
+		}
+		tState.m_flNextTargetScan = flNow + SDK::RandomFloat(0.1f, 0.18f);
+	}
 
-			if (bNoTarget || bInvalidOld || bOldBehind || (flTimeSinceSwitch > 0.45f && (bMuchBetter || bStaleTarget)))
+	if (!Vars::Aimbot::General::LegitForBots::ReactToThreats.Value)
+	{
+		tState.m_iThreat = -1;
+		tState.m_vThreatPoint = {};
+		tState.m_flThreatUntil = 0.f;
+	}
+	else
+	{
+		if (tState.m_iThreat > 0)
+		{
+			auto pClientThreat = I::ClientEntityList->GetClientEntity(tState.m_iThreat);
+			CBaseEntity* pThreat = pClientThreat ? pClientThreat->As<CBaseEntity>() : nullptr;
+			if (!pThreat || pThreat->IsDormant() || flNow >= tState.m_flThreatUntil)
 			{
-				tState.m_vPathTargetGoal = tBestCandidate.m_vPosition;
-				tState.m_flPathTargetScore = tBestCandidate.m_flScore;
-				tState.m_flPathTargetTime = I::GlobalVars->curtime;
+				tState.m_iThreat = -1;
+				tState.m_vThreatPoint = {};
+				tState.m_flThreatUntil = 0.f;
 			}
 			else
-				tState.m_flPathTargetScore = Math::Lerp(tState.m_flPathTargetScore, tBestCandidate.m_flScore, 0.08f);
-
-			const float flTargetBlend = std::clamp(I::GlobalVars->interval_per_tick * (flSpeed > 120.f ? 4.6f : 3.2f), 0.02f, 0.16f);
-			if (tState.m_vPathTarget.IsZero())
-				tState.m_vPathTarget = tState.m_vPathTargetGoal;
-			else if (!IsPathTargetForward(vOrigin, tState.m_vPathTarget, vPathDirection, 0.05f))
-				tState.m_vPathTarget = tState.m_vPathTargetGoal;
-			else
-				tState.m_vPathTarget = tState.m_vPathTarget.Lerp(tState.m_vPathTargetGoal, flTargetBlend);
-			vLook = tState.m_vPathTarget;
+				tState.m_vThreatPoint = pThreat->GetAbsOrigin();
 		}
-		else
-			vLook = vOrigin + vPathDirection * std::max(flBaseDistance, 260.f) + Vec3(0.f, 0.f, flEyeHeight + flTargetHeight * 0.25f);
-	}
-
-	tState.m_iLastTarget = iTrackedTarget;
-
-	Vec3 vFocus;
-	if (bEnemyLock)
-	{
-		vFocus = vLook;
-	}
-	else
-	{
-		const float flHeightDelta = std::clamp(vLook.z - vEye.z, -72.f, 96.f);
-		const float flPitchFactor = flHeightDelta >= 0.f ? 0.55f : 0.22f;
-		vFocus = { vLook.x, vLook.y, vEye.z + flHeightDelta * flPitchFactor + 6.f };
-	}
-
-	Vec3 vDesired = Math::CalcAngle(vEye, vFocus);
-	Math::ClampAngles(vDesired);
-
-	const float flTargetDelta = tState.m_vLastTarget.IsZero() ? FLT_MAX : tState.m_vLastTarget.DistToSqr(vFocus);
-	const float flDesiredDelta = tState.m_bInitialized ? Math::CalcFov(tState.m_vAnchor, vDesired) : FLT_MAX;
-	if (!tState.m_bInitialized || !std::isfinite(flTargetDelta) || !std::isfinite(flDesiredDelta) || flDesiredDelta > 120.f || (!bEnemyLock && flTargetDelta > powf(1200.f, 2)))
-	{
-		tState.m_bInitialized = true;
-		tState.m_vAnchor = vDesired;
-		tState.m_vOffset = {};
-		tState.m_vOffsetGoal = {};
-		tState.m_vLastTarget = vFocus;
-		tState.m_vPathTarget = bEnemyLock ? Vec3{} : vLook;
-		tState.m_vPathTargetGoal = bEnemyLock ? Vec3{} : vLook;
-		tState.m_vGlanceCurrent = {};
-		tState.m_vGlanceGoal = {};
-		tState.m_flPathTargetTime = I::GlobalVars->curtime;
-		tState.m_flPathTargetScore = 0.f;
-		tState.m_flNextOffset = SDK::RandomFloat(0.6f, 1.8f);
-		tState.m_flAcquireDuration = SDK::RandomFloat(0.09f, 0.18f);
-		tState.m_flEnemyBlend = bEnemyLock ? 1.f : 0.f;
-		tState.m_flPhase = SDK::RandomFloat(0.f, 6.2831853f);
-		tState.m_flNextGlance = SDK::RandomFloat(1.4f, 3.0f);
-		tState.m_flGlanceDuration = SDK::RandomFloat(0.3f, 0.55f);
-		tState.m_bGlancing = false;
-		tState.m_tOffsetTimer.Update();
-		tState.m_tAcquireTimer.Update();
-		tState.m_tGlanceTimer.Update();
-		tState.m_tGlanceCooldown.Update();
-
-		tState.m_flNextScan = SDK::RandomFloat(0.5f, 1.5f);
-		tState.m_tScanTimer.Update();
-		tState.m_flPitchVelocity = 0.f;
-		tState.m_flYawVelocity = 0.f;
-	}
-	else
-		tState.m_vLastTarget = vFocus;
-
-	if (bEnemyLock && iTrackedTarget != -1 && iTrackedTarget != iPreviousTarget)
-	{
-		tState.m_flAcquireDuration = SDK::RandomFloat(0.09f, 0.18f);
-		tState.m_tAcquireTimer.Update();
-		tState.m_flEnemyBlend = std::min(tState.m_flEnemyBlend, 0.2f);
-	}
-
-	const bool bAcquireComplete = !bEnemyLock || tState.m_tAcquireTimer.Run(tState.m_flAcquireDuration);
-	const float flEnemyBlendGoal = bEnemyLock ? (bAcquireComplete ? 1.f : 0.42f) : 0.f;
-	tState.m_flEnemyBlend = Math::Lerp(tState.m_flEnemyBlend, flEnemyBlendGoal, bEnemyLock ? 0.18f : 0.08f);
-
-	float flAnchorDelta = Math::CalcFov(tState.m_vAnchor, vDesired);
-	if (!std::isfinite(flAnchorDelta) || flAnchorDelta > 120.f)
-		tState.m_vAnchor = vDesired;
-	else
-	{
-		float flAnchorBlend = std::clamp(flAnchorDelta / 90.f, 0.05f, 0.3f);
-		if (bEnemyLock)
+		if (flNow >= tState.m_flNextThreatScan)
 		{
-			float flProgressive = std::pow(std::clamp(flAnchorDelta / 30.f, 0.f, 1.f), 1.5f);
-			flAnchorBlend = std::clamp((0.08f + flProgressive * 0.42f) * std::clamp(tState.m_flEnemyBlend, 0.2f, 1.f), 0.04f, 0.5f);
-		}
-		tState.m_vAnchor = tState.m_vAnchor.LerpAngle(vDesired, flAnchorBlend);
-	}
-
-	const float flVelocity2D = pLocal->m_vecVelocity().Length2D();
-	if (tState.m_tOffsetTimer.Run(tState.m_flNextOffset))
-	{
-		float flYawScale = std::clamp(flVelocity2D / 220.f, 0.3f, 0.95f);
-		float flPitchScale = std::clamp(flVelocity2D / 320.f, 0.18f, 0.75f);
-		if (!bEnemyLock)
-		{
-			tState.m_vOffsetGoal.y = SDK::RandomFloat(-28.f, 28.f) * flYawScale;
-			tState.m_vOffsetGoal.x = SDK::RandomFloat(-3.f, 4.f) * flPitchScale;
-		}
-		else
-			tState.m_vOffsetGoal = {};
-
-		tState.m_flNextOffset = SDK::RandomFloat(0.65f, 1.95f);
-	}
-
-	float flOffsetBlend = bEnemyLock ? Math::Lerp(0.16f, 0.08f, std::clamp(tState.m_flEnemyBlend, 0.f, 1.f)) : 0.1f;
-	tState.m_vOffset = tState.m_vOffset.LerpAngle(tState.m_vOffsetGoal, flOffsetBlend);
-
-	if (tState.m_bGlancing)
-	{
-		if (bEnemyLock || tState.m_tGlanceTimer.Run(tState.m_flGlanceDuration))
-		{
-			tState.m_bGlancing = false;
-			tState.m_vGlanceGoal = {};
-			tState.m_flNextGlance = SDK::RandomFloat(1.6f, 3.4f);
-			tState.m_tGlanceCooldown.Update();
+			if (auto pThreat = FindLegitThreat(pLocal, vEye))
+			{
+				tState.m_iThreat = pThreat->entindex();
+				tState.m_vThreatPoint = pThreat->GetAbsOrigin();
+				tState.m_flThreatUntil = flNow + 0.32f;
+			}
+			tState.m_flNextThreatScan = flNow + SDK::RandomFloat(0.11f, 0.18f);
 		}
 	}
-	else if (!bEnemyLock && tState.m_tGlanceCooldown.Run(tState.m_flNextGlance))
+
+	const bool bTargetMemory = !tState.m_bTargetValid && !tState.m_vLastSeenPoint.IsZero()
+		&& flNow - tState.m_flTargetSeen <= Vars::Aimbot::General::LegitForBots::TargetMemory.Value;
+	if (!tState.m_bTargetValid && !bTargetMemory)
 	{
+		tState.m_iTarget = -1;
+		tState.m_vLastSeenPoint = {};
+		tState.m_flTargetScore = 0.f;
+	}
+
+	bool bActorFocus = pTarget && tState.m_bTargetValid && flNow >= tState.m_flReactionEnd;
+	bool bMemoryFocus = !bActorFocus && bTargetMemory && flNow >= tState.m_flReactionEnd;
+	const bool bThreatFocus = Vars::Aimbot::General::LegitForBots::ReactToThreats.Value && flNow < tState.m_flThreatUntil;
+
+	Vec3 vLook = {};
+	if (!vDest.IsZero())
+		vLook = vDest;
+	else
+		vLook = vOrigin + vPathDirection * 320.f + Vec3(0.f, 0.f, vEye.z - vOrigin.z);
+
+	if (bThreatFocus)
+	{
+		vLook = tState.m_vThreatPoint;
 		tState.m_bGlancing = true;
-		tState.m_flGlanceDuration = SDK::RandomFloat(0.28f, 0.52f);
-		float flYawGlance = SDK::RandomFloat(10.f, 24.f) * (SDK::RandomInt(0, 1) == 0 ? -1.f : 1.f);
-		tState.m_vGlanceGoal = { SDK::RandomFloat(-3.5f, 4.5f), flYawGlance, 0.f };
-		tState.m_tGlanceTimer.Update();
 	}
+	else if (bFocus && !vDest.IsZero())
+		vLook = vDest;
+	else if (bActorFocus)
+		vLook = tState.m_vTargetPoint;
+	else if (bMemoryFocus)
+		vLook = tState.m_vLastSeenPoint;
+	else
+		vLook = GetLegitPathGoal(pLocal, vEye, vOrigin, vDest, vPathDirection, bAllowSteep);
 
-	tState.m_vGlanceCurrent = tState.m_vGlanceCurrent.LerpAngle(tState.m_vGlanceGoal, tState.m_bGlancing ? 0.12f : 0.08f);
+	if (!bThreatFocus && !bActorFocus && !bMemoryFocus && !bFocus)
+	{
+		if (tState.m_bGlancing)
+		{
+			if (flNow >= tState.m_flGlanceUntil)
+			{
+				tState.m_bGlancing = false;
+				tState.m_vGlanceGoal = {};
+				tState.m_flNextGlance = flNow + SDK::RandomFloat(2.8f, 5.6f);
+			}
+		}
+		else if (Vars::Aimbot::General::LegitForBots::IdleScanning.Value && flNow >= tState.m_flNextGlance)
+		{
+			tState.m_bGlancing = true;
+			tState.m_flGlanceUntil = flNow + SDK::RandomFloat(0.32f, 0.68f);
+			tState.m_vGlanceGoal = {
+				SDK::RandomFloat(-2.5f, 3.5f),
+				SDK::RandomFloat(7.f, 19.f) * (SDK::RandomInt(0, 1) ? 1.f : -1.f),
+				0.f
+			};
+		}
+	}
+	else
+	{
+		tState.m_bGlancing = false;
+		tState.m_vGlanceGoal = {};
+	}
+	tState.m_vGlanceCurrent = tState.m_vGlanceCurrent.LerpAngle(tState.m_vGlanceGoal, std::clamp(I::GlobalVars->interval_per_tick * (tState.m_bGlancing ? 12.f : 7.f), 0.f, 0.45f));
 
-	float flPhaseSpeed = std::clamp(flVelocity2D / 240.f, 0.25f, 1.0f);
-	tState.m_flPhase += I::GlobalVars->interval_per_tick * (0.9f + flPhaseSpeed);
+	tState.m_flPhase += I::GlobalVars->interval_per_tick * std::clamp(0.7f + vVelocity.Length2D() / 360.f, 0.7f, 1.7f);
 	if (tState.m_flPhase > 8192.f)
 		tState.m_flPhase = std::fmod(tState.m_flPhase, 8192.f);
-
-	float flMicroScale = std::clamp(flVelocity2D / 320.f, 0.12f, 0.4f);
-	Vec3 vMicro = {
-		std::sin(tState.m_flPhase * 0.92f) * 0.6f * flMicroScale,
-		std::sin(tState.m_flPhase * 0.55f + 1.4f) * 0.8f * flMicroScale,
+	const float flMicroScale = bActorFocus ? 0.12f : 0.35f;
+	const Vec3 vMicro = {
+		std::sin(tState.m_flPhase * 0.43f) * 0.45f * flMicroScale,
+		std::sin(tState.m_flPhase * 0.29f + 1.8f) * 0.65f * flMicroScale,
 		0.f
 	};
 
-	if (bEnemyLock)
-	{
-		float flErrorScale = Math::Lerp(0.55f, 0.25f, std::clamp(tState.m_flEnemyBlend, 0.f, 1.f));
-		float flDeltaX = SDK::RandomFloat(-1.f, 1.f) * flErrorScale;
-		float flDeltaY = SDK::RandomFloat(-1.f, 1.f) * flErrorScale;
-		tState.m_flErrorVelocityX += (flDeltaX - tState.m_flErrorX) * 0.12f;
-		tState.m_flErrorVelocityY += (flDeltaY - tState.m_flErrorY) * 0.12f;
-		tState.m_flErrorVelocityX *= 0.82f;
-		tState.m_flErrorVelocityY *= 0.82f;
-		tState.m_flErrorX += tState.m_flErrorVelocityX;
-		tState.m_flErrorY += tState.m_flErrorVelocityY;
-	}
-	else
-	{
-		tState.m_flErrorX = Math::Lerp(tState.m_flErrorX, 0.f, 0.1f);
-		tState.m_flErrorY = Math::Lerp(tState.m_flErrorY, 0.f, 0.1f);
-	}
+	Vec3 vDesired = Math::CalcAngle(vEye, vLook);
+	vDesired += tState.m_vGlanceCurrent + vMicro;
+	Math::ClampAngles(vDesired);
+	vDesired.x = std::clamp(vDesired.x, (bThreatFocus || bActorFocus) ? -70.f : -35.f, (bThreatFocus || bActorFocus) ? 70.f : 30.f);
 
-	Vec3 vGoal = tState.m_vAnchor + tState.m_vOffset + tState.m_vGlanceCurrent + vMicro + Vec3(tState.m_flErrorX, tState.m_flErrorY, 0.f);
-	Math::ClampAngles(vGoal);
-	if (bEnemyLock)
-		vGoal.x = std::clamp(vGoal.x, -89.f, 89.f);
-	else
-		vGoal.x = std::clamp(vGoal.x, -15.f, 25.f);
-
-	float flSpeedVal = std::max(1.f, static_cast<float>(Vars::Misc::Movement::BotUtils::LookAtPathSpeed.Value));
-	Vec3 vWish = ClampAngleSpeed(m_vLastAngles, vGoal, tState.m_flPitchVelocity, tState.m_flYawVelocity, flSpeedVal, bEnemyLock);
+	const float flBaseSpeed = static_cast<float>(Vars::Misc::Movement::BotUtils::LookAtPathSpeed.Value);
+	const float flSpeed = std::max(1.f, flBaseSpeed * (bThreatFocus ? 1.6f : bActorFocus ? 1.25f : bFocus ? 1.4f : 1.f));
+	AdvanceLegitMotion(tState.m_tMotion, vDesired, flSpeed, std::max(140.f, flSpeed * 9.f));
+	Vec3 vWish = tState.m_tMotion.m_vAngles;
+	Math::ClampAngles(vWish);
 
 	m_vDebugLook = vLook;
-	m_flDebugLookExpire = I::GlobalVars->curtime + 0.1f;
-
+	m_flDebugLookExpire = flNow + 0.1f;
 	pCmd->viewangles = vWish;
 	if (!bSilent)
 		I::EngineClient->SetViewAngles(vWish);
-
 	m_vLastAngles = vWish;
 }
 
 void CBotUtils::InvalidateLLAP()
 {
+	const Vec3 vAngles = I::EngineClient ? I::EngineClient->GetViewAngles() : Vec3{};
 	m_tLLAP = {};
+	m_vLastAngles = vAngles;
 }
 
 static void RefreshAutoCache(std::unordered_map<int, bool>& mCache, bool& bClearNext)

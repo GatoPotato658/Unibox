@@ -21,6 +21,8 @@ MAKE_HOOK(CBaseAnimating_SetupBones, S::CBaseAnimating_SetupBones(), bool,
 	auto pEntity = pOwner ? pOwner : pAnimating;
 	if (!pEntity->IsPlayer() || pEntity->entindex() == I::EngineClient->GetLocalPlayer())
 		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
+	if (pEntity->As<CTFPlayer>()->m_iClass() == TF_CLASS_SPY)
+		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
 	if (pBoneToWorldOut)
 	{

@@ -149,6 +149,8 @@ struct SolveContext
 	float m_flRunSpeed = 230.f;
 	float m_flDeathDropHeight = PLAYER_DEATH_DROP_HEIGHT;
 	float m_flHazardScale = 1.f;
+	float m_flVariation = 0.f;
+	uint64_t m_uRouteSeed = 0;
 	NavPolicyState m_tPolicy{};
 	const std::atomic_bool* m_pCancel = nullptr;
 	std::unordered_map<CNavArea*, float> m_mHazardCosts;
@@ -181,6 +183,7 @@ public:
 	size_t GetAreaIndex(const CNavArea* pArea) const { return static_cast<size_t>(pArea - m_navfile.m_vAreas.data()); }
 
 	static SolveContext BuildSolveContext(bool bIgnoreTraces = false);
+	static uint64_t GetRouteSeed(CTFPlayer* pLocal);
 	int SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& vEnd, CNavArea* pEndArea,
 		const SolveContext& tCtx, std::vector<CachedPathCrumb_t>& vOutPath, float* pflCost);
 
