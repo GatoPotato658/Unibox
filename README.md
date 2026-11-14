@@ -2,26 +2,24 @@
 
   ## <img src=".github/assets/meow.png" alt="Unibox" width="640">
 
-  [![Stars](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FGatoPotato658%2FUnibox&query=%24.stargazers_count&label=stars&style=for-the-badge&color=white&logo=github&cacheSeconds=3600)](/../../stargazers)
-  [![Workflow status](https://img.shields.io/github/actions/workflow/status/GatoPotato658/Unibox/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)
-  [![Commit activity](https://img.shields.io/github/commit-activity/m/GatoPotato658/Unibox?style=for-the-badge)](/../../commits/)
-  [![Discord](https://raw.githubusercontent.com/GatoPotato658/Unibox/gh-pages/discord.svg)](https://dsc.gg/unibox)
+  [![Pipeline](https://img.shields.io/gitlab/pipeline-status/jamesfunction%2Funibox?branch=master&style=for-the-badge)](https://gitlab.com/jamesfunction/unibox/-/pipelines)
+  [![Discord](https://gitlab.com/jamesfunction/unibox/-/raw/gh-pages/discord.svg)](https://dsc.gg/unibox)
   
-  [![Download](.github/assets/download.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64Release.zip)
-  [![PDB](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleasePDB.zip)
-  [![Download AVX2](.github/assets/download_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleaseAVX2.zip)
-  [![PDB AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleaseAVX2PDB.zip)
+  [![Download](.github/assets/download.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64Release.zip)
+  [![PDB](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleasePDB.zip)
+  [![Download AVX2](.github/assets/download_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2.zip)
+  [![PDB AVX2](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2PDB.zip)
   <br>
-  [![Textmode](.github/assets/textmode.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleaseTextmode.zip)
-  [![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleaseTextmodePDB.zip)
-  [![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleaseTextmodeAVX2.zip)
-  [![PDB Textmode AVX2](.github/assets/pdb.svg)](https://nightly.link/GatoPotato658/Unibox/workflows/msbuild/master/Uniboxx64ReleaseTextmodeAVX2PDB.zip)
+  [![Textmode](.github/assets/textmode.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmode.zip)
+  [![PDB Textmode](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodePDB.zip)
+  [![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2.zip)
+  [![PDB Textmode AVX2](.github/assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2PDB.zip)
   <br>
   <sub>AVX2 may be faster than SSE2 though not all CPUs support it (`Steam > Help > System Information > Processor Information > AVX2`). PDBs are for developer use. </sub>
   <br><br>
   <sub><strong>Ember builds are experimental.</strong> Some features may be broken or unstable.</sub>
   <br><br>
-  <sub>If nightly.link is down or can't be accessed, you can still download through [GitHub](https://github.com/GatoPotato658/Unibox/actions) with an account. </sub>
+  <sub>Binaries are built by <a href="https://gitlab.com/jamesfunction/unibox/-/pipelines">GitLab CI</a> and published to <a href="https://jamesfunction.gitlab.io/unibox/">GitLab Pages</a> on every push to master. </sub>
   <br><br>
   <!-- <sub>Textmode doesnt fully make the game textmode. You need to preload [TextModeTF2](https://github.com/pupnoodle/TextmodeTF2) module to make the game textmode.</sub> -->
 

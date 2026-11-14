@@ -1,0 +1,97 @@
+stages:
+  - build
+  - badge
+  - deploy
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+
+build:
+  stage: build
+  tags:
+    - windows
+  parallel:
+    matrix:
+      - CONFIGURATION: [Release, ReleaseAVX2, ReleaseTextmode, ReleaseTextmodeAVX2]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - when: on_success
+  script:
+    - |
+      $ErrorActionPreference = 'Stop'
+      $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+      $msbuild = $null
+      if (Test-Path $vswhere) {
+        $msbuild = & $vswhere -latest -products * -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+      }
+      if (-not $msbuild) { $msbuild = (Get-Command msbuild.exe -ErrorAction SilentlyContinue).Source }
+      if (-not $msbuild) { throw 'MSBuild not found' }
+      Write-Host "MSBuild: $msbuild"
+      $nuget = Join-Path $env:TEMP 'nuget.exe'
+      Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $nuget -UseBasicParsing
+      & $nuget restore Unibox.sln
+      if ($LASTEXITCODE -ne 0) { throw "nuget restore failed: $LASTEXITCODE" }
+      & $msbuild Unibox.sln /p:Platform=x64 /p:Configuration=$env:CONFIGURATION /m /v:m
+      if ($LASTEXITCODE -ne 0) { throw "msbuild failed: $LASTEXITCODE" }
+      $out = "output/x64/$env:CONFIGURATION"
+      New-Item -ItemType Directory -Force -Path dist | Out-Null
+      if (Get-ChildItem "$out/*.dll" -ErrorAction SilentlyContinue) {
+        Compress-Archive -Path "$out/*.dll" -DestinationPath "dist/Uniboxx64$env:CONFIGURATION.zip" -Force
+      }
+      if (Get-ChildItem "$out/*.pdb" -ErrorAction SilentlyContinue) {
+        Compress-Archive -Path "$out/*.pdb" -DestinationPath "dist/Uniboxx64${env:CONFIGURATION}PDB.zip" -Force
+      }
+      Get-ChildItem dist
+  artifacts:
+    name: "unibox-x64-$CONFIGURATION"
+    paths:
+      - dist/*.zip
+    expire_in: 30 days
+
+discord-badge:
+  stage: badge
+  image: node:20
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - git config user.name "pupnoodle"
+    - git config user.email "dobryfraudzichaxd@proton.me"
+    - node .github/scripts/gen-discord-badge.mjs discord-new.svg
+    - git fetch --depth 1 origin gh-pages
+    - git checkout -B gh-pages FETCH_HEAD
+    - mv discord-new.svg discord.svg
+    - git add discord.svg
+    - git diff --cached --quiet || git commit -m "discord badge"
+    - git push origin gh-pages
+
+pages:
+  stage: deploy
+  image: alpine:3.20
+  needs: [build]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - when: on_success
+  script:
+    - mkdir -p public/downloads
+    - find . -name '*.zip' -not -path './.git/*' -exec cp {} public/downloads/ \;
+    - ls public/downloads/*.zip > /dev/null || { echo 'ERROR - no build artifacts found'; exit 1; }
+    - |
+      {
+        echo '<!doctype html><html><head><meta charset="utf-8"><title>Unibox builds</title></head><body>'
+        echo '<h1>Unibox builds</h1><ul>'
+        for f in public/downloads/*.zip; do
+          b=$(basename "$f")
+          printf '<li><a href="downloads/%s">%s</a></li>\n' "$b" "$b"
+        done
+        echo '</ul></body></html>'
+      } > public/index.html
+    - ls -la public/downloads
+  artifacts:
+    paths:
+      - public
