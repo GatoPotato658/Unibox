@@ -18,7 +18,7 @@ furnished to do so, subject to the following conditions:
    visibly credit Unibox. This credit must include:
    - Clear acknowledgement of "Unibox" as a source or base in your project's
      README and documentation.
-   - A link to the official Unibox repository: https://github.com/GatoPotato658/Unibox
+   - A link to the official Unibox repository: https://gitlab.com/jamesfunction/unibox
    - If the derivative software includes an in-game or graphical user interface
      (GUI, menu, or credits screen), attribution must be displayed or accessible
      within that interface.
