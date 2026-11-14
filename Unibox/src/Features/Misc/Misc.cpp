@@ -481,15 +481,29 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 		}
 	}
 
-	size_t iSize = pLocal->GetIntermediateDataSize();
+	if (pLocal->m_vecVelocity().z >= 0.f)
+	{
+		m_iEdgeBugTicksUntilLand = 0;
+		return;
+	}
+
 	auto pDataMap = pLocal->GetPredDescMap();
 	if (!pDataMap)
 		return;
 
+	const size_t iSize = pLocal->GetIntermediateDataSize();
+	std::vector<byte> vOriginalData(iSize);
+	if (vOriginalData.empty())
+		return;
+
 	const int iLocalIdx = pLocal->entindex();
-	byte* pOriginalData = reinterpret_cast<byte*>(I::MemAlloc->Alloc(iSize));
+	auto fRestore = [&]() -> void
 	{
-		CPredictionCopy copy = { PC_EVERYTHING, pOriginalData, PC_DATA_PACKED, pLocal, PC_DATA_NORMAL };
+		CPredictionCopy copy = { PC_EVERYTHING, pLocal, PC_DATA_NORMAL, vOriginalData.data(), PC_DATA_PACKED };
+		copy.TransferData("EdgebugReset", iLocalIdx, pDataMap);
+	};
+	{
+		CPredictionCopy copy = { PC_EVERYTHING, vOriginalData.data(), PC_DATA_PACKED, pLocal, PC_DATA_NORMAL };
 		copy.TransferData("EdgebugStore", iLocalIdx, pDataMap);
 	}
 
@@ -497,19 +511,17 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 	const bool bOldInPrediction = I::Prediction->m_bInPrediction;
 	const float flOldFrametime = I::GlobalVars->frametime;
 	const float flOldCurtime = I::GlobalVars->curtime;
+	auto pOldCurrentCommand = pLocal->m_pCurrentCommand();
 
-	if (m_iEdgeBugTicksUntilLand)
+	if (m_iEdgeBugTicksUntilLand > 0)
 	{
-		// disable random if we are about to land, its not going to change anything anyway
 		if (m_iEdgeBugMoveStage > EBStageEnum::NormalInverted
 			&& TICKS_TO_TIME(m_iEdgeBugTicksUntilLand) < 0.4f)
 			m_iEdgeBugMoveStage -= 2;
 
 		m_iEdgeBugTicksUntilLand--;
 	}
-
-	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
-	const float flFallPerTick = round(TICKS_TO_TIME(-sv_gravity->GetFloat()));
+	m_iEdgeBugTicksUntilLand = 0;
 
 	const bool bNegateDir = Vars::Misc::Movement::AutoEdgebugTryNegativeDir.Value && m_iEdgeBugMoveStage % 2 != 0;
 	const float flDirMult = bNegateDir ? -1.f : 1.f;
@@ -534,12 +546,13 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 	float flYawDelta = 30.f;
 	bool bShouldStrafe = Vars::Misc::Movement::AutoEdgebug.Value > Vars::Misc::Movement::AutoEdgebugEnum::Legit && G::Attacking != 1;
-	if (bShouldStrafe && abs(flCurrentDirDelta) > 1.f)
+	if (bShouldStrafe && std::abs(flCurrentDirDelta) > 1.f)
 		flYawDelta = std::clamp(flCurrentDirDelta, -45.f, 45.f);
 	flYawDelta *= flDirMult;
 
 	const float flStartYaw = pCmd->viewangles.y;
-	if (bShouldStrafe && abs(Math::NormalizeAngle(flStartYaw + flYawDelta) - flStartYaw) > Vars::Misc::Movement::AutoEdgebugStrafeMaxDelta.Value)
+	const float flStrafeMaxDelta = Vars::Misc::Movement::AutoEdgebugStrafeMaxDelta.Value;
+	if (bShouldStrafe && std::abs(Math::NormalizeAngle(flYawDelta)) > flStrafeMaxDelta)
 		bShouldStrafe = false;
 
 	const int iMaxTicks = TIME_TO_TICKS(1.5f);
@@ -547,23 +560,27 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 	bool bSuccess = false;
 	std::vector<Vector> vPath;
-	const int iStrafeSamples = Vars::Misc::Movement::AutoEdgebugStrafeSamples.Value;
+	vPath.reserve(iMaxTicks + 1);
+	const int iStrafeSamples = std::max(Vars::Misc::Movement::AutoEdgebugStrafeSamples.Value, 1);
+
+	I::MoveHelper->SetHost(pLocal);
+	pLocal->m_pCurrentCommand() = &G::DummyCmd;
+	I::Prediction->m_bFirstTimePredicted = false;
+	I::Prediction->m_bInPrediction = true;
+	I::GlobalVars->frametime = I::Prediction->m_bEnginePaused ? 0.f : TICK_INTERVAL;
+	I::GlobalVars->curtime = TICKS_TO_TIME(pLocal->m_nTickBase());
+
 	for (int iStage = 0; iStage < iMaxStages; iStage++)
 	{
-		float flMaxYawDelta = abs(flYawDelta);
-		float flYawDeltaAdd = flYawDelta /= iStrafeSamples;
-		bool bEnd = false, bStrafe = iStage >= 2, bCrouch = iStage % 2 == 0;
-
-		I::MoveHelper->SetHost(pLocal);
-		while (!bEnd)
+		const bool bStrafe = iStage >= 2;
+		const bool bCrouch = iStage % 2 == 0;
+		const int iSamples = bStrafe ? iStrafeSamples : 1;
+		for (int iSample = 0; iSample < iSamples && !bSuccess; iSample++)
 		{
-			// restoring a prediction copy is ~5 times faster than calling RestoreEntityToPredictedFrame every time (plus its not even correct to use it here)
-			CPredictionCopy copy = { PC_EVERYTHING, pLocal, PC_DATA_NORMAL, pOriginalData, PC_DATA_PACKED};
-			copy.TransferData("EdgebugReset", iLocalIdx, pDataMap);
-
+			const float flSampleYawDelta = bStrafe ? flYawDelta * float(iSample + 1) / float(iSamples) : 0.f;
+			fRestore();
 			vPath.clear();
 			vPath.push_back(pLocal->m_vecOrigin());
-			bEnd = !bStrafe || abs(flYawDelta) >= flMaxYawDelta;
 
 			G::DummyCmd = *pCmd;
 			G::DummyCmd.buttons = bCrouch ? (G::DummyCmd.buttons | IN_DUCK) : (G::DummyCmd.buttons & ~IN_DUCK);
@@ -579,88 +596,83 @@ void CMisc::AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd)
 				G::DummyCmd.forwardmove = G::DummyCmd.sidemove = 0.f;
 
 			G::DummyCmd.forwardmove = std::clamp(G::DummyCmd.forwardmove * flForwardmoveMult, -450.f, 450.f);
-			G::DummyCmd.sidemove = std::clamp(G::DummyCmd.sidemove * flSidemoveMult, -450.f, 450.f);;
-			
-			pLocal->m_pCurrentCommand() = &G::DummyCmd;
-			I::Prediction->m_bFirstTimePredicted = false;
-			I::Prediction->m_bInPrediction = true;
-			I::GlobalVars->frametime = I::Prediction->m_bEnginePaused ? 0.f : TICK_INTERVAL;
-			I::GlobalVars->curtime = TICKS_TO_TIME(pLocal->m_nTickBase());
+			G::DummyCmd.sidemove = std::clamp(G::DummyCmd.sidemove * flSidemoveMult, -450.f, 450.f);
 
 			CMoveData moveData;
-			Vector vOriginalVelocity;
+			float flFallDelta = 0.f;
+			bool bHaveFallDelta = false;
+			bool bCollisionPending = false;
 			for (int iTick = 1; iTick <= iMaxTicks; iTick++)
 			{
-				Vector vPreviousVelocity = pLocal->m_vecVelocity();
-				bool bWasOnSolid = pLocal->OnSolid();
-				if (bWasOnSolid && iStage == 0)
-					m_iEdgeBugTicksUntilLand = iTick - 1;
+				const Vector vEntryVelocity = pLocal->m_vecVelocity();
+				if (pLocal->OnSolid())
+				{
+					if (iStage == 0)
+						m_iEdgeBugTicksUntilLand = iTick - 1;
+					break;
+				}
 
 				if (bStrafe)
 				{
-					G::DummyCmd.viewangles.y = Math::NormalizeAngle(pCmd->viewangles.y + flYawDelta * iTick);
-					if (abs(G::DummyCmd.viewangles.y - flStartYaw) > Vars::Misc::Movement::AutoEdgebugStrafeMaxDelta.Value)
+					G::DummyCmd.viewangles.y = Math::NormalizeAngle(pCmd->viewangles.y + flSampleYawDelta * iTick);
+					if (std::abs(Math::NormalizeAngle(G::DummyCmd.viewangles.y - flStartYaw)) > flStrafeMaxDelta)
 						break;
 				}
 
 				I::Prediction->SetLocalViewAngles(G::DummyCmd.viewangles);
 				I::Prediction->SetupMove(pLocal, &G::DummyCmd, I::MoveHelper, &moveData);
-				I::GameMovement->ProcessMovement(pLocal, &moveData); // dont mind the sudden water splashing sounds, its just your ghost copy drowning in another realm
-				I::Prediction->FinishMove(pLocal, pCmd, &moveData);
+				I::GameMovement->ProcessMovement(pLocal, &moveData);
+				I::Prediction->FinishMove(pLocal, &G::DummyCmd, &moveData);
 				vPath.push_back(pLocal->m_vecOrigin());
 
-				if (vPreviousVelocity.z >= 0.f || bWasOnSolid)
-					break;
-
-				if (iTick == 1)
+				const float flActualFallDelta = pLocal->m_vecVelocity().z - vEntryVelocity.z;
+				if (bCollisionPending)
 				{
-					// fix for non-local servers
-					vOriginalVelocity = pLocal->m_vecVelocity();
-					continue;
-				}
-
-				if (vPreviousVelocity.z > vOriginalVelocity.z)
-				{
-					float flExpectedFallSpeed = vPreviousVelocity.z + flFallPerTick;
-					float flFallSpeed = round(pLocal->m_vecVelocity().z);
-
-					if (flExpectedFallSpeed == flFallSpeed)
+					const float flExpectedFallSpeed = vEntryVelocity.z + flFallDelta;
+					if (std::abs(pLocal->m_vecVelocity().z - flExpectedFallSpeed) <= 0.5f)
 					{
 						m_iEdgeBugTicksTotal = m_iEdgeBugTicksLeft = iTick;
 						m_bEdgeBugCrouch = bCrouch;
 						if (bStrafe)
 						{
 							m_flEdgeBugStartYaw = flStartYaw;
-							m_flEdgeBugYawDelta = flYawDelta;
+							m_flEdgeBugYawDelta = flSampleYawDelta;
 							m_vEdgeBugMove = { moveData.m_flForwardMove, moveData.m_flSideMove };
 						}
-						m_vEdgebugPath = vPath;
-						m_bEdgeBug = bEnd = bSuccess = true;
+						m_vEdgebugPath = std::move(vPath);
+						m_bEdgeBug = bSuccess = true;
 						fRunStrafe();
 						m_bEdgeBugRepredict = !m_bEdgeBug;
 					}
 					break;
 				}
-			}
-			I::Prediction->m_bFirstTimePredicted = bOldIsFirstPrediction;
-			I::Prediction->m_bInPrediction = bOldInPrediction;
-			I::GlobalVars->frametime = flOldFrametime;
-			I::GlobalVars->curtime = flOldCurtime;
 
-			flYawDelta += flYawDeltaAdd;
+				if (bHaveFallDelta && flActualFallDelta > flFallDelta + 0.5f)
+				{
+					bCollisionPending = true;
+					continue;
+				}
+
+				flFallDelta = flActualFallDelta;
+				bHaveFallDelta = flFallDelta < 0.f;
+			}
 		}
-		I::MoveHelper->SetHost(nullptr);
-		pLocal->m_pCurrentCommand() = nullptr;
 
 		if (bSuccess)
 			break;
 	}
+
+	I::MoveHelper->SetHost(nullptr);
+	pLocal->m_pCurrentCommand() = pOldCurrentCommand;
+	I::Prediction->m_bFirstTimePredicted = bOldIsFirstPrediction;
+	I::Prediction->m_bInPrediction = bOldInPrediction;
+	I::GlobalVars->frametime = flOldFrametime;
+	I::GlobalVars->curtime = flOldCurtime;
+
 	const int iMaxMode = Vars::Misc::Movement::AutoEdgebugTryRandomMove.Value ? EBStageEnum::RandomInverted : EBStageEnum::NormalInverted;
 	m_iEdgeBugMoveStage = m_iEdgeBugMoveStage < iMaxMode ? m_iEdgeBugMoveStage + 1 : EBStageEnum::Normal;
 
-	CPredictionCopy copy = { PC_EVERYTHING, pLocal, PC_DATA_NORMAL, pOriginalData, PC_DATA_PACKED };
-	copy.TransferData("EdgebugReset", iLocalIdx, pDataMap);
-	I::MemAlloc->Free(pOriginalData);
+	fRestore();
 	G::DummyCmd = {};
 }
 
@@ -1349,6 +1361,7 @@ void CMisc::ResetEdgebug()
 {
 	m_iEdgeBugMoveStage = EBStageEnum::Normal;
 	m_iEdgeBugTicksLeft = m_iEdgeBugTicksTotal = 0;
+	m_iEdgeBugTicksUntilLand = 0;
 	m_flEdgeBugStartYaw = m_flEdgeBugYawDelta = 0.f;
 	m_vEdgeBugMove.Zero();
 	m_vEdgebugPath.clear();

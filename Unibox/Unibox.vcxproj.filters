@@ -59,6 +59,7 @@
     <ClCompile Include="src\Features\CheatDetection\CheatDetection.cpp" />
     <ClCompile Include="src\Features\CritHack\CritHack.cpp" />
     <ClCompile Include="src\Features\EnginePrediction\EnginePrediction.cpp" />
+    <ClCompile Include="src\Features\EnginePrediction\Doors.cpp" />
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
     <ClCompile Include="src\Features\Misc\Radio\Radio.cpp" />
     <ClCompile Include="src\Features\NetworkFix\NetworkFix.cpp" />
@@ -476,6 +477,7 @@
     <ClInclude Include="src\Features\CheatDetection\CheatDetection.h" />
     <ClInclude Include="src\Features\CritHack\CritHack.h" />
     <ClInclude Include="src\Features\EnginePrediction\EnginePrediction.h" />
+    <ClInclude Include="src\Features\EnginePrediction\Doors.h" />
     <ClInclude Include="src\Features\Misc\Misc.h" />
     <ClInclude Include="src\Features\Misc\Radio\Radio.h" />
     <ClInclude Include="src\Features\NetworkFix\NetworkFix.h" />

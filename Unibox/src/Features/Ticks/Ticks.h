@@ -102,6 +102,7 @@ public:
 	static double PacketTime(bool bLoopback);
 	void ObserveServerTick();
 	bool AdjustTickbase(CTFPlayer* pPlayer, int iCommand);
+	int CommandFrame(int iCommand) const;
 
 	bool m_bDoubletap = false;
 	bool m_bWarp = false;

@@ -3,6 +3,7 @@
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Backtrack/Backtrack.h"
+#include "../Features/EnginePrediction/Doors.h"
 #include "../Features/Ticks/Ticks.h"
 #include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
@@ -35,6 +36,7 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::Backtrack.Reset();
 	F::NetworkFix.Reset();
 	F::Ticks.Reset();
+	F::Doors.Clear();
 	F::NoSpreadHitscan.Reset();
 	F::CheatDetection.Reset();
 	F::Resolver.Reset();

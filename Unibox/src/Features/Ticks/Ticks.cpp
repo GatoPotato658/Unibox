@@ -223,6 +223,29 @@ bool CTicks::AdjustTickbase(CTFPlayer* pPlayer, int iCommand)
 	return iAfter != iBefore;
 }
 
+int CTicks::CommandFrame(int iCommand) const
+{
+	if (iCommand < 0)
+		return -1;
+
+	for (int i = iCommand; i > 0 && i > iCommand - MULTIPLAYER_BACKUP; i--)
+	{
+		const TickbaseFix_t& tBatch = m_aFixes[i % MULTIPLAYER_BACKUP];
+		if (tBatch.m_iCommand != i)
+			continue;
+		if (tBatch.m_bSent && iCommand < i + tBatch.m_iSimulationTicks)
+			return tBatch.m_iServerTick;
+		break;
+	}
+
+	if (!m_bOffsetKnown)
+		return -1;
+
+	const double dLands = m_dSendClock + (m_dOffsetLow + m_dOffsetHigh) * 0.5;
+	const int iTick = static_cast<int>(dLands);
+	return iTick < dLands ? iTick + 1 : iTick;
+}
+
 void CTicks::OnMoveSent(int iCommand, int iCommands)
 {
 	if (iCommands <= 0 || iCommand < iCommands)

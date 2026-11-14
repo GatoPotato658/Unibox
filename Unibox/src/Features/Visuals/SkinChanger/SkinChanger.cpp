@@ -1149,6 +1149,9 @@ namespace
 	};
 	std::unordered_map<uint16_t, LocalCrateProfile_t> s_mCrateProfiles;
 	std::unordered_map<int, std::vector<uint16_t>> s_mCrateSeries;
+	std::unordered_map<std::string, uint16_t> s_mCatalogueItemNames;
+	std::unordered_map<uint16_t, KeyValues*> s_mCatalogueDefinitions;
+	bool s_bCrateProfilesReady = false;
 
 	KeyValues* CrateFirstKey(KeyValues* pKey) { return pKey ? Field<KeyValues*>(pKey, 48) : nullptr; }
 	KeyValues* CrateNextKey(KeyValues* pKey) { return pKey ? Field<KeyValues*>(pKey, 40) : nullptr; }
@@ -1411,8 +1414,27 @@ namespace
 			SaveCrateCache();
 	}
 
+	bool EnsureCrateProfiles()
+	{
+		CSkinChanger::GetItems();
+		if (s_mCatalogueDefinitions.empty())
+			return false;
+		if (s_bCrateProfilesReady)
+			return true;
+		BuildCrateProfiles(s_mCatalogueItemNames, s_mCatalogueDefinitions);
+		s_bCrateProfilesReady = true;
+		return true;
+	}
+
 	void PopulateCrateAttributes(CEconItemView* pView)
 	{
+		if (!s_bCrateProfilesReady && CSkinChanger::GetCatalogueRevision())
+		{
+			const auto* pInfo = CSkinChanger::FindItem(Field<uint16_t>(pView, kViewDefIndex));
+			if (!pInfo || pInfo->sClass != "supply_crate")
+				return;
+			EnsureCrateProfiles();
+		}
 		const auto it = s_mCrateProfiles.find(Field<uint16_t>(pView, kViewDefIndex));
 		if (it == s_mCrateProfiles.end())
 			return;
@@ -1562,6 +1584,7 @@ void CSkinChanger::ProcessCrates(CTFPlayerInventory* pInventory)
 
 bool CSkinChanger::QueueLocalCrate(uint16_t iDef)
 {
+	EnsureCrateProfiles();
 	const auto itProfile = s_mCrateProfiles.find(iDef);
 	if (itProfile == s_mCrateProfiles.end() || itProfile->second.vItems.empty())
 	{
@@ -1619,6 +1642,7 @@ bool CSkinChanger::ApplyLocalPaint(CTFPlayerInventory* pInventory, const Pending
 
 bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_t& tCrate)
 {
+	EnsureCrateProfiles();
 	auto* pSchema = CEconItemSchema::GetInstance();
 	auto* pCrateView = FindItemView(pInventory, tCrate.uCrate);
 	if (!pSchema || !pCrateView)
@@ -2851,10 +2875,6 @@ namespace
 		return PrettifyItemName(sName);
 	}
 
-	bool IsUnresolvedItemName(const std::string& sName)
-	{
-		return !sName.empty() && sName[0] == '#';
-	}
 }
 
 const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
@@ -2863,8 +2883,6 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	static CEconItemSchema* s_pSchema = nullptr;
 	static int s_iSchemaCount = -1;
 	static bool s_bLocalizeReady = false;
-	static int s_iRetries = 0;
-	static bool s_bUnresolved = false;
 
 	const auto pSchema = CEconItemSchema::GetInstance();
 	const int iCount = pSchema && IsReadableMemory(pSchema, 344) ? pSchema->GetItemDefCount() : 0;
@@ -2872,16 +2890,15 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	if (iCount <= 0)
 		return s_vItems;
 
-	const bool bRetry = s_bUnresolved && ++s_iRetries <= 8;
-	if (!bRetry && iCount == s_iSchemaCount && pSchema == s_pSchema && bLocalizeReady == s_bLocalizeReady)
+	if (iCount == s_iSchemaCount && pSchema == s_pSchema && bLocalizeReady == s_bLocalizeReady)
 		return s_vItems;
 
 	s_pSchema = pSchema;
 	s_iSchemaCount = iCount;
 	s_bLocalizeReady = bLocalizeReady;
-	if (s_iRetries > 8)
-		s_iRetries = 0;
-	s_bUnresolved = false;
+	s_bCrateProfilesReady = false;
+	s_mCatalogueItemNames.clear();
+	s_mCatalogueDefinitions.clear();
 	s_vItems.clear();
 	s_vItems.reserve(iCount);
 
@@ -2959,15 +2976,12 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 		}
 		if (tItem.sName.empty())
 			continue;
-		if (IsUnresolvedItemName(tItem.sName))
-			s_bUnresolved = true;
 
 		mSeen[iDef] = true;
 		s_vItems.push_back(std::move(tItem));
 	}
 
 	BuildWeaponTypes(mWeaponNames, vWeaponBases);
-	BuildCrateProfiles(mItemNames, mDefinitions);
 	for (auto& tItem : s_vItems)
 	{
 		const auto it = mToolTargets.find(tItem.iDef);
@@ -2986,6 +3000,8 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	{
 		return a.sName < b.sName;
 	});
+	s_mCatalogueItemNames = std::move(mItemNames);
+	s_mCatalogueDefinitions = std::move(mDefinitions);
 	s_uItemCatalogueRevision++;
 	return s_vItems;
 }
@@ -3053,6 +3069,12 @@ void CSkinChanger::AddToBackpack(uint16_t iDef, int iUnusual, int iStyle)
 		return;
 
 	iUnusual = ValidUnusualEffect(iUnusual);
+	if (CSkinChanger::GetCatalogueRevision())
+	{
+		const auto* pInfo = FindItem(iDef);
+		if (pInfo && pInfo->sClass == "supply_crate")
+			EnsureCrateProfiles();
+	}
 	std::lock_guard tLock(m_tMutex);
 	if (const uint32_t uSerial = NextSerial())
 	{

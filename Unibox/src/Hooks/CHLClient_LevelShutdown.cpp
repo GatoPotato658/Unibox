@@ -2,6 +2,7 @@
 
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
+#include "../Features/EnginePrediction/Doors.h"
 #include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/Visuals/Chams/Chams.h"
@@ -27,12 +28,16 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	F::Hitmarker.Clear();
 	H::Entities.RemovePrecipitation(false);
 	H::Entities.Clear(true);
+	F::Doors.Clear();
 	F::EnginePrediction.Unload();
 	F::Spectate.Reset();
 #ifndef TEXTMODE
 	G::TriggerStorage.clear();
 	G::PasstimeGoalStorage.clear();
 #endif
+	G::DoorStorage.clear();
+	G::DoorTriggerStorage.clear();
+	SDK::InvalidateMapEntityStorage();
 	F::NavEngine.ClearRespawnRooms();
 	F::Hazards.Reset();
 	F::NavBotSupplies.ResetCachedOrigins();

@@ -1650,7 +1650,7 @@ namespace
 		static int iFrame = -1, iUploads = 0;
 		if (ImGui::GetFrameCount() != iFrame)
 			iFrame = ImGui::GetFrameCount(), iUploads = 0;
-		return iUploads++ < 3;
+		return iUploads++ < 1;
 	}
 
 	void GetAlphaBounds(const uint8_t* pData, int iWidth, int iHeight, int& iLeft, int& iTop, int& iRight, int& iBottom)

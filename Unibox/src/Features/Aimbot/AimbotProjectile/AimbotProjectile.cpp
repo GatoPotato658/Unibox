@@ -409,7 +409,13 @@ static TickRecord* GetAimRecord(CBaseEntity* pEntity)
 	if (!F::Backtrack.GetRecords(pEntity, vRecords) || vRecords.empty())
 		return nullptr;
 
-	return vRecords.front();
+	for (auto pRecord : vRecords)
+	{
+		if (!pRecord->m_bInvalid)
+			return pRecord;
+	}
+
+	return nullptr;
 }
 
 static bool GetHeadOffset(CBaseEntity* pEntity, const TickRecord* pRecord, Vec3& vOffset)
@@ -437,7 +443,7 @@ static bool GetHeadOffset(CBaseEntity* pEntity, const TickRecord* pRecord, Vec3&
 	return false;
 }
 
-static bool IsHeadshotHitbox(CBaseEntity* pEntity, const TickRecord* pRecord, const Vec3& vRecordOffset, const Vec3& vStart, const Vec3& vEnd, const Vec3& vImpact)
+static bool IsHeadshotHitbox(CBaseEntity* pEntity, const TickRecord* pRecord, const Vec3& vRecordOffset, const Vec3& vStart, const Vec3& vEnd, const Vec3& vLaunchForward)
 {
 	if (!pEntity || !pRecord
 		|| !std::isfinite(pRecord->m_flModelScale) || pRecord->m_flModelScale <= 0.f)
@@ -472,8 +478,7 @@ static bool IsHeadshotHitbox(CBaseEntity* pEntity, const TickRecord* pRecord, co
 
 	if (!pClosest)
 	{
-		const Vec3 vForward = vDirection / flLength;
-		const Vec3 vFallbackStart = vImpact + vRecordOffset + vForward * 16.f;
+		const Vec3 vFallbackStart = vOrigin + vLaunchForward * 16.f;
 		matrix3x4 mBox;
 		for (int i = 0; i < pSet->numhitboxes; i++)
 		{
@@ -488,10 +493,10 @@ static bool IsHeadshotHitbox(CBaseEntity* pEntity, const TickRecord* pRecord, co
 			if (!std::isfinite(flTraceLength) || flTraceLength <= 0.000001f)
 				continue;
 
-			float flDist = 0.f;
-			Math::MatrixInitialize(mBox, vBone, false);
-			if (!Math::RayToOBB(vFallbackStart, vTrace, pBox->bbmin, pBox->bbmax, mBox, 1.f, &flDist)
-				|| flDist > flTraceLength + 0.001f || flDist >= flClosest)
+			float flDist = flTraceLength;
+			Math::MatrixInitialize(mBox, vBone);
+			Math::RayToOBB(vFallbackStart, vTrace, pBox->bbmin, pBox->bbmax, mBox, 1.f, &flDist);
+			if (flDist > flTraceLength + 0.001f || flDist >= flClosest)
 				continue;
 
 			flClosest = flDist;
@@ -550,9 +555,13 @@ Directs_t CAimbotProjectile::GetDirects()
 				vOff.z += flAdd;
 				vOff.z = vOff.z + (vMaxs.z - vOff.z) * flLerp;
 
-				vOff.x = std::clamp(vOff.x, vMins.x + Vars::Aimbot::Projectile::HuntsmanClamp.Value, vMaxs.x - Vars::Aimbot::Projectile::HuntsmanClamp.Value);
-				vOff.y = std::clamp(vOff.y, vMins.y + Vars::Aimbot::Projectile::HuntsmanClamp.Value, vMaxs.y - Vars::Aimbot::Projectile::HuntsmanClamp.Value);
-				vOff.z = std::clamp(vOff.z, vMins.z + Vars::Aimbot::Projectile::HuntsmanClamp.Value, vMaxs.z - Vars::Aimbot::Projectile::HuntsmanClamp.Value);
+				if (Vars::Aimbot::Projectile::HuntsmanClamp.Value > 0.f)
+				{
+					const float flClamp = Vars::Aimbot::Projectile::HuntsmanClamp.Value;
+					vOff.x = std::clamp(vOff.x, vMins.x + flClamp, vMaxs.x - flClamp);
+					vOff.y = std::clamp(vOff.y, vMins.y + flClamp, vMaxs.y - flClamp);
+					vOff.z = std::clamp(vOff.z, vMins.z + flClamp, vMaxs.z - flClamp);
+				}
 				tTarget.m_pRecord = pRecord;
 				mDirects[iPriority] = { vOff, iFlags };
 			}
@@ -1525,6 +1534,8 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	if (!F::ProjSim.GetInfo(pLocal, pWeapon, vAngles, m_tProjInfo, iSimFlags)) return false;
 	if (m_iWeaponID == TF_WEAPON_LASER_POINTER) m_tProjInfo.m_vAng = Math::CalcAngle(m_tInfo.m_vLocalEye, vPoint);
 	if (!F::ProjSim.Initialize(m_tProjInfo)) return false;
+	Vec3 vLaunchForward = {};
+	Math::AngleVectors(m_tProjInfo.m_vAng, &vLaunchForward);
 
 	CGameTrace trace = {};
 	bool bWrangler = m_iWeaponID == TF_WEAPON_LASER_POINTER;
@@ -1578,6 +1589,8 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	uint8_t iTraceInterval = iFlags == PointFlagsEnum::Lob ? Vars::Aimbot::Projectile::LobTraceInterval.Value
 		: iType != PointTypeEnum::Direct ? Vars::Aimbot::Projectile::SplashTraceInterval.Value
 		: Vars::Aimbot::Projectile::DirectTraceInterval.Value;
+	if (iType == PointTypeEnum::Direct && tTarget.m_nAimedHitbox == HITBOX_HEAD)
+		iTraceInterval = 1;
 
 	const RestoreInfo_t tOriginal = { tTarget.m_pEntity->GetAbsOrigin(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
 	tTarget.m_pEntity->SetAbsOrigin(tTarget.m_vPos);
@@ -1747,7 +1760,9 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 					if (!tTarget.m_pRecord)
 						break;
 					const Vec3 vRecordOffset = tTarget.m_pRecord->m_vOrigin - tTarget.m_vPos;
-					if (!IsHeadshotHitbox(tTarget.m_pEntity, tTarget.m_pRecord, vRecordOffset, vOld, vNew, trace.endpos))
+					const Vec3 vTraceOrigin = trace.endpos;
+					const Vec3 vTraceEnd = vTraceOrigin + F::ProjSim.GetVelocity() * TICK_INTERVAL;
+					if (!IsHeadshotHitbox(tTarget.m_pEntity, tTarget.m_pRecord, vRecordOffset, vTraceOrigin, vTraceEnd, vLaunchForward))
 						break;
 				}
 

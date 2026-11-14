@@ -3,7 +3,10 @@
 #include "Definitions/Main/CUserCmd.h"
 #include "../Utils/Signatures/Signatures.h"
 #include "../Utils/Memory/Memory.h"
+#include <array>
 #include <atomic>
+#include <string>
+#include <vector>
 
 MAKE_SIGNATURE(RandomSeed, "client.dll", "0F B6 1D ? ? ? ? 89 9D", 0x0);
 
@@ -136,6 +139,41 @@ struct PasstimeMapGoalData_t
 	bool m_bStartDisabled = false;
 };
 
+inline constexpr int DOOR_MAP_MAX_COUNT = 128;
+inline constexpr int DOOR_MAP_MAX_TRIGGERS = 128;
+inline constexpr int DOOR_MAP_MAX_LINKS = 4;
+
+struct DoorMapLink_t
+{
+	int m_iTrigger = 0;
+	bool m_bAll = false;
+	bool m_bOpens = false;
+	bool m_bCloses = false;
+};
+
+struct DoorMapTrigger_t
+{
+	Vec3 m_vMins = {};
+	Vec3 m_vMaxs = {};
+	int m_iTeam = 0;
+};
+
+struct DoorMapData_t
+{
+	int m_iModel = -1;
+	Vec3 m_vPos1 = {};
+	Vec3 m_vPos2 = {};
+	Vec3 m_vDir = {};
+	Vec3 m_vMins = {};
+	Vec3 m_vMaxs = {};
+	float m_flStep = 0.f;
+	bool m_bReverses = false;
+	bool m_bPredicted = false;
+	std::array<DoorMapLink_t, DOOR_MAP_MAX_LINKS> m_aLinks = {};
+	int m_iLinkCount = 0;
+	std::string m_sTargetname = {};
+};
+
 namespace G
 {
 	inline std::atomic_bool Unload = false;
@@ -179,6 +217,9 @@ namespace G
 	inline std::vector<DrawTriangle_t> TriangleStorage = {};
 	inline std::vector<TriggerData_t> TriggerStorage = {};
 	inline std::vector<PasstimeMapGoalData_t> PasstimeGoalStorage = {};
+	inline std::vector<DoorMapData_t> DoorStorage = {};
+	inline std::vector<DoorMapTrigger_t> DoorTriggerStorage = {};
+	inline uint32_t DoorStorageRevision = 0;
 
 	inline int SavedDefIndexes[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };
 	inline int SavedWepIds[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };

@@ -8,7 +8,9 @@
 #include "../Features/Aimbot/AimbotProjectile/ProjProfiler.h"
 
 #include <Windows.h>
+#include <cctype>
 #include <charconv>
+#include <cstdio>
 #include <cstring>
 
 #pragma warning (disable : 6385)
@@ -181,9 +183,18 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 		std::string_view m_sAngles = {};
 		std::string_view m_sTeamNum = {};
 		std::string m_sTargetname = {};
+		std::string_view m_sFilterName = {};
+		std::string_view m_sMoveDir = {};
+		std::string_view m_sSpeed = {};
+		std::string_view m_sLip = {};
+		std::string_view m_sWait = {};
 		std::string_view m_sSpawnflags = {};
 		std::string_view m_sStartDisabled = {};
 		std::string_view m_sPoints = {};
+		std::string_view m_sForceClosed = {};
+		std::string_view m_sNegated = {};
+		std::string_view m_sControlPoint = {};
+		std::vector<std::pair<std::string, std::string>> m_vOutputs = {};
 	};
 
 	static bool AppendTriggerFromParsed(const ParsedEntity_t& tEnt)
@@ -247,9 +258,286 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 		G::PasstimeGoalStorage.push_back(std::move(tGoal));
 	}
 
+	static bool EqualsIgnoreCase(std::string_view sLeft, std::string_view sRight)
+	{
+		if (sLeft.size() != sRight.size())
+			return false;
+
+		for (size_t i = 0; i < sLeft.size(); i++)
+		{
+			if (static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(sLeft[i])))
+				!= static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(sRight[i]))))
+				return false;
+		}
+		return true;
+	}
+
+	static bool NamesMatch(std::string_view sTarget, std::string_view sName)
+	{
+		if (sTarget.empty() || sName.empty())
+			return false;
+
+		if (sTarget.back() != '*')
+			return EqualsIgnoreCase(sTarget, sName);
+
+		sTarget.remove_suffix(1);
+		return sName.size() >= sTarget.size() && EqualsIgnoreCase(sName.substr(0, sTarget.size()), sTarget);
+	}
+
+	static float ParseEntityFloat(std::string_view sValue)
+	{
+		float flOut = 0.f;
+		if (sValue.empty())
+			return flOut;
+
+		const char* p = sValue.data();
+		FastParseFloat(p, p + sValue.size(), flOut);
+		return flOut;
+	}
+
+	static int BrushModel(std::string_view sModel)
+	{
+		if (sModel.size() < 2 || sModel.front() != '*')
+			return -1;
+
+		sModel.remove_prefix(1);
+		return ParseEntityInt(sModel);
+	}
+
+	static bool ModelBounds(int iModel, Vector& vMins, Vector& vMaxs)
+	{
+		if (iModel < 0)
+			return false;
+
+		char szModel[32] = {};
+		std::snprintf(szModel, sizeof(szModel), "*%d", iModel);
+		const model_t* pModel = I::ModelLoader->FindModel(szModel);
+		if (!pModel)
+			return false;
+
+		I::ModelInfoClient->GetModelBounds(pModel, vMins, vMaxs);
+		return true;
+	}
+
+	static bool SplitOutput(std::string_view sValue, std::string_view* pFields, size_t uCount)
+	{
+		for (size_t i = 0; i < uCount; i++)
+		{
+			const size_t uSeparator = sValue.find_first_of(",\x1b");
+			if (uSeparator == std::string_view::npos)
+			{
+				pFields[i] = sValue;
+				return i + 1 == uCount;
+			}
+
+			pFields[i] = sValue.substr(0, uSeparator);
+			sValue.remove_prefix(uSeparator + 1);
+		}
+		return true;
+	}
+
+	static bool IsGatingInput(std::string_view sInput)
+	{
+		return EqualsIgnoreCase(sInput, "Enable")
+			|| EqualsIgnoreCase(sInput, "Disable")
+			|| EqualsIgnoreCase(sInput, "DisableAndEndTouch")
+			|| EqualsIgnoreCase(sInput, "Toggle")
+			|| EqualsIgnoreCase(sInput, "Kill")
+			|| EqualsIgnoreCase(sInput, "KillHierarchy");
+	}
+
+	static bool AddDoorLink(DoorMapData_t& tDoor, int iTrigger, bool bAll, bool bOpens, bool bCloses)
+	{
+		int iLink = 0;
+		while (iLink < tDoor.m_iLinkCount && tDoor.m_aLinks[iLink].m_iTrigger != iTrigger)
+			iLink++;
+
+		if (iLink >= DOOR_MAP_MAX_LINKS)
+			return false;
+
+		if (iLink == tDoor.m_iLinkCount)
+			tDoor.m_aLinks[tDoor.m_iLinkCount++] = { iTrigger };
+
+		DoorMapLink_t& tLink = tDoor.m_aLinks[iLink];
+		tLink.m_bAll = tLink.m_bAll || bAll;
+		tLink.m_bOpens = tLink.m_bOpens || bOpens;
+		tLink.m_bCloses = tLink.m_bCloses || bCloses;
+		return true;
+	}
+
+	static bool BuildDoorStorageFromEntities(const std::vector<ParsedEntity_t>& vEntities)
+	{
+		std::vector<std::string> vGated;
+		struct Filter_t
+		{
+			std::string m_sName;
+			int m_iTeam;
+		};
+		std::vector<Filter_t> vFilters;
+
+		for (const ParsedEntity_t& tEnt : vEntities)
+		{
+			for (const auto& [sName, sValue] : tEnt.m_vOutputs)
+			{
+				std::string_view aFields[5] = {};
+				if (!SplitOutput(sValue, aFields, 5) || !IsGatingInput(aFields[1]) || vGated.size() >= 256)
+					continue;
+				vGated.emplace_back(UnescapeEntityToken(aFields[0]));
+			}
+
+			if (EqualsIgnoreCase(tEnt.m_sClassname, "filter_activator_tfteam") && !tEnt.m_sTargetname.empty()
+				&& ParseEntityInt(tEnt.m_sNegated) == 0 && tEnt.m_sControlPoint.empty() && vFilters.size() < 64)
+				vFilters.push_back({ tEnt.m_sTargetname, ParseEntityInt(tEnt.m_sTeamNum) });
+		}
+
+		for (const ParsedEntity_t& tEnt : vEntities)
+		{
+			if (!EqualsIgnoreCase(tEnt.m_sClassname, "func_door") || G::DoorStorage.size() >= DOOR_MAP_MAX_COUNT)
+				continue;
+
+			const int iFlags = ParseEntityInt(tEnt.m_sSpawnflags);
+			const int iModel = BrushModel(tEnt.m_sModel);
+			if ((iFlags & (SF_DOOR_NONSOLID_TO_PLAYER | SF_DOOR_PASSABLE)) || !tEnt.m_sParentname.empty() || iModel < 0)
+				continue;
+
+			Vector vMins = {};
+			Vector vMaxs = {};
+			if (!ModelBounds(iModel, vMins, vMaxs))
+				continue;
+
+			DoorMapData_t tDoor = {};
+			tDoor.m_iModel = iModel;
+			tDoor.m_vPos1 = ParseEntityVector(tEnt.m_sOrigin);
+			tDoor.m_vMins = vMins + Vector(1.f, 1.f, 1.f);
+			tDoor.m_vMaxs = vMaxs - Vector(1.f, 1.f, 1.f);
+			Math::AngleVectors(ParseEntityVector(tEnt.m_sMoveDir), &tDoor.m_vDir);
+
+			const Vector vSize = vMaxs - vMins - Vector(2.f, 2.f, 2.f);
+			const float flTravel = std::fabs(tDoor.m_vDir.x * vSize.x) + std::fabs(tDoor.m_vDir.y * vSize.y)
+				+ std::fabs(tDoor.m_vDir.z * vSize.z) - ParseEntityFloat(tEnt.m_sLip);
+			tDoor.m_vPos2 = tDoor.m_vPos1 + tDoor.m_vDir * flTravel;
+
+			float flSpeed = ParseEntityFloat(tEnt.m_sSpeed);
+			if (flSpeed == 0.f)
+				flSpeed = 100.f;
+			tDoor.m_flStep = flSpeed * TICK_INTERVAL;
+
+			const float flWait = ParseEntityFloat(tEnt.m_sWait);
+			const bool bAutoReturns = flWait >= 0.f && !(iFlags & SF_DOOR_NO_AUTO_RETURN);
+			tDoor.m_bReverses = flWait >= 0.f;
+			tDoor.m_bPredicted = !(iFlags & (SF_DOOR_PTOUCH | SF_DOOR_LOCKED))
+				&& ParseEntityInt(tEnt.m_sForceClosed) == 0 && !bAutoReturns;
+			tDoor.m_sTargetname = tEnt.m_sTargetname;
+			G::DoorStorage.push_back(std::move(tDoor));
+		}
+
+		int iTriggerCount = 0;
+		for (const ParsedEntity_t& tEnt : vEntities)
+		{
+			if (!EqualsIgnoreCase(tEnt.m_sClassname, "trigger_multiple"))
+				continue;
+
+			int iTeam = 0;
+			bool bUsable = (ParseEntityInt(tEnt.m_sSpawnflags) & SF_TRIGGER_ALLOW_CLIENTS)
+				&& ParseEntityInt(tEnt.m_sStartDisabled) == 0;
+			for (const std::string& sGated : vGated)
+			{
+				if (NamesMatch(sGated, tEnt.m_sTargetname))
+				{
+					bUsable = false;
+					break;
+				}
+			}
+			if (bUsable && !tEnt.m_sFilterName.empty())
+			{
+				bUsable = false;
+				for (const Filter_t& tFilter : vFilters)
+				{
+					if (EqualsIgnoreCase(tFilter.m_sName, tEnt.m_sFilterName))
+					{
+						iTeam = tFilter.m_iTeam;
+						bUsable = true;
+						break;
+					}
+				}
+			}
+
+			Vector vMins = {};
+			Vector vMaxs = {};
+			const int iModel = BrushModel(tEnt.m_sModel);
+			const bool bBounded = bUsable && iModel >= 0 && ModelBounds(iModel, vMins, vMaxs);
+			const Vector vOrigin = ParseEntityVector(tEnt.m_sOrigin);
+			const int iTrigger = iTriggerCount;
+
+			for (const auto& [sOutputName, sOutputValue] : tEnt.m_vOutputs)
+			{
+				std::string_view aFields[5] = {};
+				if (!SplitOutput(sOutputValue, aFields, 5))
+					continue;
+
+				const bool bAll = EqualsIgnoreCase(sOutputName, "OnStartTouchAll");
+				const bool bOpens = EqualsIgnoreCase(aFields[1], "Open")
+					&& (bAll || EqualsIgnoreCase(sOutputName, "OnStartTouch"));
+				const bool bCloses = EqualsIgnoreCase(aFields[1], "Close")
+					&& EqualsIgnoreCase(sOutputName, "OnEndTouchAll");
+
+				for (DoorMapData_t& tDoor : G::DoorStorage)
+				{
+					if (!NamesMatch(aFields[0], tDoor.m_sTargetname))
+						continue;
+
+					if (!bBounded || (!bOpens && !bCloses) || ParseEntityFloat(aFields[3]) != 0.f
+						|| iTriggerCount >= DOOR_MAP_MAX_TRIGGERS)
+					{
+						tDoor.m_bPredicted = false;
+						continue;
+					}
+
+					if (!AddDoorLink(tDoor, iTrigger, bAll, bOpens, bCloses))
+					{
+						tDoor.m_bPredicted = false;
+						continue;
+					}
+
+					if (iTriggerCount == iTrigger)
+					{
+						G::DoorTriggerStorage.push_back({
+							vOrigin + vMins + Vector(1.f, 1.f, 1.f),
+							vOrigin + vMaxs - Vector(1.f, 1.f, 1.f),
+							iTeam
+						});
+						iTriggerCount++;
+					}
+				}
+			}
+		}
+
+		for (const ParsedEntity_t& tEnt : vEntities)
+		{
+			if (EqualsIgnoreCase(tEnt.m_sClassname, "trigger_multiple"))
+				continue;
+
+			for (const auto& [sOutputName, sOutputValue] : tEnt.m_vOutputs)
+			{
+				std::string_view aFields[5] = {};
+				if (!SplitOutput(sOutputValue, aFields, 5))
+					continue;
+
+				for (DoorMapData_t& tDoor : G::DoorStorage)
+				{
+					if (NamesMatch(aFields[0], tDoor.m_sTargetname))
+						tDoor.m_bPredicted = false;
+				}
+			}
+		}
+
+		return true;
+	}
+
 	static bool BuildTriggerStorageFromEntityLump(std::string_view sEntityLump, int& iOutTriggers)
 	{
 		iOutTriggers = 0;
+		std::vector<ParsedEntity_t> vEntities;
 		size_t iOffset = 0;
 		while (iOffset < sEntityLump.size())
 		{
@@ -299,19 +587,34 @@ static BOOL CALLBACK TeamFortressWindow(HWND hWindow, LPARAM lParam)
 				case FNV1A::Hash32Const("angles"):          tEnt.m_sAngles = sValue; break;
 				case FNV1A::Hash32Const("TeamNum"):         tEnt.m_sTeamNum = sValue; break;
 				case FNV1A::Hash32Const("targetname"):      tEnt.m_sTargetname = UnescapeEntityToken(sValue); break;
+				case FNV1A::Hash32Const("filtername"):      tEnt.m_sFilterName = sValue; break;
+				case FNV1A::Hash32Const("movedir"):         tEnt.m_sMoveDir = sValue; break;
+				case FNV1A::Hash32Const("speed"):           tEnt.m_sSpeed = sValue; break;
+				case FNV1A::Hash32Const("lip"):             tEnt.m_sLip = sValue; break;
+				case FNV1A::Hash32Const("wait"):            tEnt.m_sWait = sValue; break;
 				case FNV1A::Hash32Const("spawnflags"):      tEnt.m_sSpawnflags = sValue; break;
 				case FNV1A::Hash32Const("StartDisabled"):   tEnt.m_sStartDisabled = sValue; break;
 				case FNV1A::Hash32Const("points"):          tEnt.m_sPoints = sValue; break;
+				case FNV1A::Hash32Const("forceclosed"):     tEnt.m_sForceClosed = sValue; break;
+				case FNV1A::Hash32Const("Negated"):         tEnt.m_sNegated = sValue; break;
+				case FNV1A::Hash32Const("controlpoint"):    tEnt.m_sControlPoint = sValue; break;
 				default: break;
 				}
+
+				if (sKey.size() > 1 && std::tolower(static_cast<unsigned char>(sKey[0])) == 'o'
+					&& std::tolower(static_cast<unsigned char>(sKey[1])) == 'n' && tEnt.m_vOutputs.size() < 256)
+					tEnt.m_vOutputs.emplace_back(sKey, sValue);
 			}
 
 			if (bMalformed)
 				continue;
 			AppendPasstimeGoalFromParsed(tEnt);
 			iOutTriggers += AppendTriggerFromParsed(tEnt) ? 1 : 0;
+			vEntities.push_back(std::move(tEnt));
 		}
 
+		if (!BuildDoorStorageFromEntities(vEntities))
+			return false;
 		return true;
 	}
 
@@ -1469,6 +1772,14 @@ bool SDK::BuildTriggerGeometry(TriggerData_t& tTrigger)
 	return !tTrigger.m_vBrushSurfaces.empty();
 }
 
+static uint32_t s_uMapEntityStorageGeneration = 0;
+static uint32_t s_uParsedMapEntityStorageGeneration = 0;
+
+void SDK::InvalidateMapEntityStorage()
+{
+	s_uMapEntityStorageGeneration++;
+}
+
 bool SDK::RefreshTriggerStorage(bool bForce)
 {
 	if (!I::EngineClient->IsInGame())
@@ -1485,7 +1796,8 @@ bool SDK::RefreshTriggerStorage(bool bForce)
 		tRetryTimer.Update();
 	}
 
-	if (!bForce && !sLastParsedMap.empty() && sLastParsedMap == sMapName)
+	if (!bForce && !sLastParsedMap.empty() && sLastParsedMap == sMapName
+		&& s_uParsedMapEntityStorageGeneration == s_uMapEntityStorageGeneration)
 		return true;
 	if (!bForce && !tRetryTimer.Run(1.0f))
 		return false;
@@ -1501,9 +1813,13 @@ bool SDK::RefreshTriggerStorage(bool bForce)
 
 	const auto vOldTriggers = G::TriggerStorage;
 	const auto vOldPasstimeGoals = G::PasstimeGoalStorage;
+	const auto vOldDoors = G::DoorStorage;
+	const auto vOldDoorTriggers = G::DoorTriggerStorage;
 	const auto vOldRespawnRooms = F::NavEngine.GetRespawnRooms();
 	G::TriggerStorage.clear();
 	G::PasstimeGoalStorage.clear();
+	G::DoorStorage.clear();
+	G::DoorTriggerStorage.clear();
 	F::NavEngine.ClearRespawnRooms();
 
 	int iTriggerCount = 0;
@@ -1511,12 +1827,16 @@ bool SDK::RefreshTriggerStorage(bool bForce)
 	{
 		G::TriggerStorage = vOldTriggers;
 		G::PasstimeGoalStorage = vOldPasstimeGoals;
+		G::DoorStorage = vOldDoors;
+		G::DoorTriggerStorage = vOldDoorTriggers;
 		for (const auto& tRespawnRoom : vOldRespawnRooms)
 			F::NavEngine.AddRespawnRoom(tRespawnRoom.m_iTeam, tRespawnRoom.tData);
 		return false;
 	}
 
+	G::DoorStorageRevision++;
 	sLastParsedMap = sMapName;
+	s_uParsedMapEntityStorageGeneration = s_uMapEntityStorageGeneration;
 
 	if (Vars::Debug::Logging.Value)
 	{

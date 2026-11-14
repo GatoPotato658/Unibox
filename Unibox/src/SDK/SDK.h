@@ -177,6 +177,7 @@ namespace SDK
 	std::string GetLevelName();
 	bool BuildTriggerGeometry(TriggerData_t& tTrigger);
 	bool RefreshTriggerStorage(bool bForce = false);
+	void InvalidateMapEntityStorage();
 	int GetPasstimeGoalMapTeam(const Vec3& vOrigin, std::string* pTargetname = nullptr);
 	bool IsInPasstimeNoBallZone(const Vec3& vOrigin);
 

@@ -1,5 +1,6 @@
 #include "EnginePrediction.h"
 
+#include "Doors.h"
 #include "../Ticks/Ticks.h"
 #include "../Simulation/MovementSimulation/MovementSimulation.h"
 
@@ -46,9 +47,12 @@ void CEnginePrediction::Simulate(CTFPlayer* pLocal, CUserCmd* pCmd)
 	I::Prediction->SetLocalViewAngles(pCmd->viewangles);
 
 	AdjustPlayers(pLocal);
+	F::Doors.Pose(pCmd->command_number);
 	I::Prediction->SetupMove(pLocal, pCmd, I::MoveHelper, &m_tMoveData);
 	I::GameMovement->ProcessMovement(pLocal, &m_tMoveData);
 	I::Prediction->FinishMove(pLocal, pCmd, &m_tMoveData);
+	F::Doors.RecordPredicted(pCmd->command_number, pLocal);
+	F::Doors.Restore();
 	RestorePlayers();
 	
 	I::MoveHelper->SetHost(nullptr);

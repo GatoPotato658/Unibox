@@ -6,6 +6,7 @@
 #include "../Features/Binds/Binds.h"
 #include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/CritHack/CritHack.h"
+#include "../Features/EnginePrediction/Doors.h"
 #include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Players/PlayerUtils.h"
 #include "../Features/Resolver/Resolver.h"
@@ -45,6 +46,8 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 
 	CALL_ORIGINAL(rcx, curStage);
 
+	if (curStage == FRAME_NET_UPDATE_POSTDATAUPDATE_END && !G::Unload)
+		F::Doors.PostDataUpdate();
 
 #ifndef TEXTMODE
 	if (curStage == FRAME_RENDER_START)
