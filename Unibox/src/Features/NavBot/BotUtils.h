@@ -56,26 +56,31 @@ private:
 	struct LegitAim_t
 	{
 		int m_iTarget = 0;
-		int m_iPreviousTarget = 0;
-		int m_iLastTick = -1;
 		int m_iLastCommand = -1;
-		int m_iCommitUntilTick = -1;
-		Vec3 m_vExact = {};
-		Vec3 m_vError = {};
-		Vec3 m_vOvershoot = {};
-		Vec3 m_vCommitAngles = {};
+		Vec3 m_vAimPoint = {};
+		Vec3 m_vAimVel = {};
+		Vec3 m_vBias = {};
+		Vec3 m_vPrevSubjVel = {};
+		float m_flNextSample = 0.f;
+		float m_flNextBias = 0.f;
+		float m_flReactUntil = 0.f;
 		float m_flLastSeen = 0.f;
-		float m_flReactionEnd = 0.f;
-		float m_flNoisePhase = 0.f;
-		float m_flErrorBlend = 0.f;
-		bool m_bReady = false;
+		float m_flPrevErr = 0.f;
+		float m_flPrevYaw = 0.f;
+		float m_flSteadySince = 0.f;
+		float m_flFireAt = 0.f;
+		float m_flAnchorSince = 0.f;
+		float m_flResettleUntil = 0.f;
+		float m_flCommitUntil = 0.f;
+		float m_flMousepad = 0.f;
+		float m_flPhase = 0.f;
 		LegitMotion_t m_tMotion = {};
+		bool m_bReady = false;
 	};
 
 	struct LegitLook_t
 	{
 		int m_iTarget = -1;
-		int m_iLastTick = -1;
 		int m_iLastCommand = -1;
 		int m_iPathScanTick = -100;
 		Vec3 m_vTargetPoint = {};
@@ -86,10 +91,10 @@ private:
 		Vec3 m_vThreatPoint = {};
 		Vec3 m_vGlanceGoal = {};
 		Vec3 m_vGlanceCurrent = {};
+		Vec3 m_vOpening = {};
 		int m_iThreat = -1;
 		float m_flTargetSeen = 0.f;
 		float m_flTargetScore = 0.f;
-		float m_flPathScore = 0.f;
 		float m_flTargetDwell = 0.f;
 		float m_flReactionEnd = 0.f;
 		float m_flThreatUntil = 0.f;
@@ -98,6 +103,10 @@ private:
 		float m_flGlanceUntil = 0.f;
 		float m_flNextTargetScan = 0.f;
 		float m_flNextThreatScan = 0.f;
+		float m_flOpeningUntil = 0.f;
+		float m_flAnchorSince = 0.f;
+		float m_flResettleUntil = 0.f;
+		float m_flMousepad = 0.f;
 		bool m_bTargetValid = false;
 		bool m_bGlancing = false;
 		LegitMotion_t m_tMotion = {};
@@ -105,13 +114,16 @@ private:
 
 	LegitAim_t m_tLegitAim = {};
 	LegitLook_t m_tLLAP = {};
+	std::unordered_map<int, float> m_mSeenTimes;
 
-	void AdvanceLegitMotion(LegitMotion_t& tMotion, const Vec3& vGoal, float flSpeed, float flAcceleration);
+	float GetLegitSkill();
+	float GetLegitTrackInterval();
+	void AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, float flDt, float flMaxRate, float flMinRate, float flPitchScale, float* pAnchorSince, float* pResettleUntil, float* pMousepad);
 	float GetLegitReactionTime();
 	bool IsLegitShotClear(CTFPlayer* pLocal, CBaseEntity* pTarget, const Vec3& vAngles);
 	CBaseEntity* FindLegitThreat(CTFPlayer* pLocal, const Vec3& vEye);
 	CBaseEntity* FindLegitAttention(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const Vec3& vEye, const Vec3& vOrigin, const Vec3& vPathDirection, bool bHasPathTarget, bool bAllowSteep, float* pScore = nullptr);
-	Vec3 GetLegitPathGoal(CTFPlayer* pLocal, const Vec3& vEye, const Vec3& vOrigin, const Vec3& vDest, const Vec3& vPathDirection, bool bAllowSteep);
+	Vec3 GetLegitLookPoint(CTFPlayer* pLocal, const Vec3& vEye, const Vec3& vOrigin, const Vec3& vDest, const Vec3& vPathDirection, bool bAllowSteep);
 	Vec3 GetLegitActorPoint(CBaseEntity* pActor);
 
 public:

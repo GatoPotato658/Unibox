@@ -12,5 +12,6 @@ MAKE_HOOK(CMaterial_Uncache, S::CMaterial_Uncache(), void,
 	if (F::Materials.m_mMatList.contains(rcx))
 		bPreserveVars = true;
 
-	CALL_ORIGINAL(rcx, bPreserveVars);
+	__try { CALL_ORIGINAL(rcx, bPreserveVars); }
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
 }

@@ -264,6 +264,7 @@
     <ClCompile Include="src\Hooks\CModelLoader_Map_LoadModel.cpp" />
     <ClCompile Include="src\Hooks\CM_TraceToDispTree.cpp" />
     <ClCompile Include="src\Hooks\CMaterial_Uncache.cpp" />
+    <ClCompile Include="src\Hooks\CMaterial_Refresh.cpp" />
     <ClCompile Include="include\ImGui\imgui.cpp" />
     <ClCompile Include="include\ImGui\imgui_draw.cpp" />
     <ClCompile Include="include\ImGui\imgui_impl_dx9.cpp" />

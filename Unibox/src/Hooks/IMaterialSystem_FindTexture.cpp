@@ -6,7 +6,9 @@ MAKE_HOOK(IMaterialSystem_FindTexture, U::Memory.GetVirtual(I::MaterialSystem, 7
 {
 	DEBUG_RETURN(IMaterialSystem_FindTexture, rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags);
 
-	auto pReturn = CALL_ORIGINAL(rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags);
+	ITexture* pReturn;
+	__try { pReturn = CALL_ORIGINAL(rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags); }
+	__except (EXCEPTION_EXECUTE_HANDLER) { pReturn = nullptr; }
 
 	auto uHash = FNV1A::Hash32(Vars::Visuals::World::WorldTexture.Value.c_str());
 	if (uHash == FNV1A::Hash32Const("Flat"))

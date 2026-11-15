@@ -327,12 +327,16 @@ NAMESPACE_BEGIN(Vars)
 
 			NAMESPACE_BEGIN(LegitForBots, Aimbot)
 				CVar(ShowOptions, "Show legitbot options", false);
+				CVar(SkillLevel, "Human skill", 65.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 				CVar(ReactionTime, "Reaction time", 0.16f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 0.6f, 0.01f, "%gs");
 				CVar(ReactionVariation, "Reaction variation", 35.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 				CVar(TrackingSpeed, "Tracking speed", 55.f, SLIDER_CLAMP, 10.f, 120.f, 5.f);
+				CVar(FlickSpeed, "Flick speed", 700.f, SLIDER_CLAMP, 200.f, 1200.f, 25.f, "%g deg/s");
 				CVar(AimError, "Aim error", 0.75f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 3.f, 0.05f, "%g deg");
 				CVar(Overshoot, "Overshoot", 30.f, SLIDER_CLAMP, 0.f, 100.f, 5.f, "%g%%");
-				CVar(FireTolerance, "Fire tolerance", 0.55f, SLIDER_CLAMP | SLIDER_PRECISION, 0.05f, 2.f, 0.05f, "%g deg");
+				CVar(FireTolerance, "Fire tolerance", 1.1f, SLIDER_CLAMP | SLIDER_PRECISION, 0.05f, 3.f, 0.05f, "%g deg");
+				CVar(TriggerDelay, "Trigger delay", 0.05f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 0.2f, 0.01f, "%gs");
+				CVar(CorrectionRate, "Correction rate", 0.6f, SLIDER_CLAMP | SLIDER_PRECISION, 0.2f, 1.f, 0.05f);
 				CVar(AvoidFriendlyFire, "Avoid friendly fire", true);
 				CVar(ReactToEnemies, "React to enemies", true);
 				CVar(ReactToThreats, "React to threats", true);

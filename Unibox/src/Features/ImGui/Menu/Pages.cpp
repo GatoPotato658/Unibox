@@ -128,12 +128,16 @@ static void AimbotGeneral()
 			if (ShowOptions.Value)
 			{
 				Subheader("legitforbots");
+				FSlider(SkillLevel);
 				FSlider(ReactionTime);
 				FSlider(ReactionVariation);
 				FSlider(TrackingSpeed);
+				FSlider(FlickSpeed);
 				FSlider(AimError);
 				FSlider(Overshoot);
 				FSlider(FireTolerance);
+				FSlider(TriggerDelay);
+				FSlider(CorrectionRate);
 				FToggle(AvoidFriendlyFire);
 			}
 		}

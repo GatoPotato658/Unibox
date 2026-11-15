@@ -695,7 +695,10 @@ bool CAimbotHitscan::ShouldFire(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 	if (!Vars::Aimbot::General::AutoShoot.Value)
 		return false;
 	if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots
-		&& !F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex()))
+		&& !F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex())
+		&& !(pWeapon->GetWeaponID() == TF_WEAPON_SNIPERRIFLE_CLASSIC
+			&& pWeapon->As<CTFSniperRifle>()->m_flChargedDamage() > 0.f
+			&& pLocal->m_hGroundEntity()))
 		return false;
 
 	if (Vars::Aimbot::Hitscan::Modifiers.Value & Vars::Aimbot::Hitscan::ModifiersEnum::WaitForHeadshot
