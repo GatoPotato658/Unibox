@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> We are moving to GitLab, please consider migrating [there](https://gitlab.com/jamesfunction/unibox).
+
+##
+
 <div align="center">
 
   ## <img src="assets/meow.png" alt="Unibox" width="640">
