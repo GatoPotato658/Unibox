@@ -764,12 +764,13 @@ float CBotUtils::GetLegitTrackInterval()
 	return Math::Lerp(0.22f, 0.06f, flSkill) / flRate;
 }
 
-void CBotUtils::AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, float flDt, float flMaxRate, float flMinRate, float flPitchScale, float* pAnchorSince, float* pResettleUntil, float* pMousepad)
+void CBotUtils::AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, float flDt, float flMaxRate, float flMinRate, float flPitchScale, float* pAnchorSince, float* pResettleUntil, float* pMousepad, bool bAllowFlick)
 {
 	if (!tMotion.m_bInitialized)
 	{
 		tMotion.m_vAngles = I::EngineClient->GetViewAngles();
 		tMotion.m_vVelocity = {};
+		tMotion.m_vGoalPrev = vGoal;
 		tMotion.m_bInitialized = true;
 	}
 	if (flDt <= 0.f)
@@ -777,21 +778,8 @@ void CBotUtils::AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, floa
 
 	const float flNow = I::GlobalVars->curtime;
 
-	Vec3 vForward;
-	Math::AngleVectors(tMotion.m_vAngles, &vForward);
-	Vec3 vDesired;
-	Math::AngleVectors(vGoal, &vDesired);
-	const float flDot = std::clamp(vForward.Dot(vDesired), -1.f, 1.f);
-
-	float flRate = flMaxRate;
-	if (flDot > 0.7f)
-	{
-		const float flT = std::clamp((flDot - 0.7f) / 0.3f, 0.f, 1.f);
-		flRate *= std::max(sinf(1.5707963f * (1.f - flT)), 0.02f);
-	}
-	flRate = std::max(flRate, flMinRate);
-
 	const float flSpeed = tMotion.m_vVelocity.Length();
+
 	if (pAnchorSince)
 	{
 		if (flSpeed < 25.f)
@@ -811,6 +799,7 @@ void CBotUtils::AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, floa
 		{
 			*pResettleUntil = flNow + SDK::RandomFloat(0.22f, 0.38f);
 			*pMousepad = 0.f;
+			tMotion.m_flFlickStart += *pResettleUntil - flNow;
 		}
 		if (*pResettleUntil > flNow)
 		{
@@ -819,6 +808,68 @@ void CBotUtils::AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, floa
 			return;
 		}
 	}
+
+	const Vec3 vDelta = vGoal.DeltaAngle(tMotion.m_vAngles);
+	const float flDist = vDelta.Length();
+
+	if (bAllowFlick)
+	{
+		if (tMotion.m_flFlickDur <= 0.f && flDist > 18.f)
+		{
+			const float flFitts = std::clamp(0.14f + 0.13f * std::log2(flDist / 30.f + 1.f), 0.13f, 0.46f);
+			const float flSpeedScale = 700.f / std::max(flMaxRate, 200.f);
+			tMotion.m_flFlickDur = flFitts * flSpeedScale * SDK::RandomFloat(0.85f, 1.25f);
+			tMotion.m_flFlickStart = flNow;
+			tMotion.m_vFlickFrom = tMotion.m_vAngles;
+			tMotion.m_vFlickTotal = vDelta;
+		}
+	}
+	if (tMotion.m_flFlickDur > 0.f && flDist < 2.5f)
+		tMotion.m_flFlickDur = 0.f;
+
+	if (tMotion.m_flFlickDur > 0.f)
+	{
+		const float flT = std::clamp((flNow - tMotion.m_flFlickStart) / tMotion.m_flFlickDur, 0.f, 1.f);
+		const Vec3 vDrift = vGoal.DeltaAngle(tMotion.m_vFlickFrom) - tMotion.m_vFlickTotal;
+		tMotion.m_vFlickTotal += vDrift * std::clamp(flDt * 6.f, 0.f, 1.f);
+		const Vec3 vTotal = tMotion.m_vFlickTotal;
+		const float flU = flT * flT * flT * (flT * (flT * 6.f - 15.f) + 10.f);
+		const float flUP = std::clamp(flU * 1.25f - 0.08f, 0.f, 1.f);
+
+		Vec3 vNew;
+		vNew.y = tMotion.m_vFlickFrom.y + vTotal.y * flU;
+		vNew.x = tMotion.m_vFlickFrom.x + vTotal.x * flUP;
+		vNew.z = 0.f;
+		Math::ClampAngles(vNew);
+
+		const Vec3 vMoved = vNew.DeltaAngle(tMotion.m_vAngles);
+		tMotion.m_vVelocity = vMoved / flDt;
+		tMotion.m_vAngles = vNew;
+		tMotion.m_vGoalPrev = vGoal;
+		if (pMousepad)
+			*pMousepad += std::fabs(vMoved.y);
+		if (flT >= 1.f)
+			tMotion.m_flFlickDur = 0.f;
+		return;
+	}
+
+	Vec3 vForward;
+	Math::AngleVectors(tMotion.m_vAngles, &vForward);
+	Vec3 vDesired;
+	Math::AngleVectors(vGoal, &vDesired);
+	const float flDot = std::clamp(vForward.Dot(vDesired), -1.f, 1.f);
+
+	float flRate = std::min(flMaxRate * 0.35f, 240.f);
+	if (flDot > 0.7f)
+	{
+		const float flT = std::clamp((flDot - 0.7f) / 0.3f, 0.f, 1.f);
+		flRate *= std::max(sinf(1.5707963f * (1.f - flT)), 0.02f);
+	}
+	float flGoalRate = 0.f;
+	if (!tMotion.m_vGoalPrev.IsZero())
+		flGoalRate = tMotion.m_vGoalPrev.DeltaAngle(vGoal).Length() / flDt;
+	tMotion.m_vGoalPrev = vGoal;
+	flRate = std::max(flRate, std::max(flMinRate, std::min(flGoalRate * 1.05f, 170.f)));
 
 	const Vec3 vPrev = tMotion.m_vAngles;
 	tMotion.m_vAngles.x = LegitApproachAngle(vGoal.x, tMotion.m_vAngles.x, flRate * flPitchScale * flDt);
@@ -1195,6 +1246,14 @@ void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const V
 		tState.m_tMotion.m_vAngles = I::EngineClient->GetViewAngles();
 		tState.m_tMotion.m_bInitialized = true;
 	}
+	else if (flNow - tState.m_flLastSeen > 0.25f)
+	{
+		tState.m_tMotion.m_vAngles = I::EngineClient->GetViewAngles();
+		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_vGoalPrev = {};
+		tState.m_tMotion.m_flFlickDur = 0.f;
+		tState.m_vAimPoint = {};
+	}
 
 	auto pClientTarget = iTarget > 0 ? I::ClientEntityList->GetClientEntity(iTarget) : nullptr;
 	CBaseEntity* pTarget = pClientTarget ? pClientTarget->As<CBaseEntity>() : nullptr;
@@ -1202,6 +1261,7 @@ void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const V
 	auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
 	auto pWeapon = pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr;
 	const bool bZoomed = pLocal->InCond(TF_COND_ZOOMED);
+	const bool bProjectile = pWeapon && SDK::GetWeaponType(pWeapon) == EWeaponType::PROJECTILE;
 
 	const Vec3 vEye = pLocal->GetEyePosition();
 	const Vec3 vShootPos = pLocal->GetShootPos();
@@ -1269,13 +1329,19 @@ void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const V
 			vErr = vTruePoint + tState.m_vBias - tState.m_vAimPoint;
 		}
 
-		const float flLeadTime = Math::Lerp(0.02f, 0.055f, GetLegitSkill());
+		const float flLeadTime = Math::Lerp(0.008f, 0.03f, GetLegitSkill());
 		Vec3 vLead = vSubjVel * flLeadTime + vSubjAccel * (0.35f * flLeadTime * flLeadTime);
-		const float flLeadLen = std::min(vLead.Length(), flDistance * 0.08f);
+		const float flLeadLen = std::min(vLead.Length(), flDistance * 0.02f);
 		if (vLead.Normalize() > 0.f)
 			vLead *= flLeadLen;
 		const Vec3 vCatch = (vTruePoint + tState.m_vBias + vLead) - tState.m_vAimPoint;
-		tState.m_vAimVel = vCatch / std::max(flInterval, flDt) + vSubjVel * 0.9f;
+		Vec3 vNewVel = vCatch / std::max(flInterval, flDt) + vSubjVel;
+		const float flCatchCap = flDistance * Math::Lerp(2.0f, 4.5f, GetLegitSkill());
+		const float flNewLen = vNewVel.Normalize();
+		if (flNewLen > 0.f)
+			tState.m_vAimVel = vNewVel * std::min(flNewLen, flCatchCap);
+		else
+			tState.m_vAimVel = {};
 		tState.m_flNextSample = flNow + flInterval;
 	}
 
@@ -1313,7 +1379,7 @@ void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const V
 	const float flFlick = std::max(Vars::Aimbot::General::LegitForBots::FlickSpeed.Value, 200.f);
 	const float flTrack = std::max(Vars::Aimbot::General::LegitForBots::TrackingSpeed.Value, 10.f);
 	float flMaxRate = flFlick;
-	float flMinRate = flTrack * Math::Lerp(0.35f, 0.7f, GetLegitSkill());
+	float flMinRate = flTrack * Math::Lerp(0.5f, 0.9f, GetLegitSkill());
 	float flPitchScale = 0.62f;
 	if (bZoomed)
 	{
@@ -1330,8 +1396,8 @@ void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const V
 	const bool bReacting = flNow < tState.m_flReactUntil;
 	if (bReacting)
 	{
-		flMaxRate *= 0.45f;
-		flMinRate *= 0.5f;
+		flMaxRate *= 0.16f;
+		flMinRate *= 0.2f;
 	}
 	else if (tState.m_flReactUntil > 0.f)
 	{
@@ -1349,20 +1415,62 @@ void CBotUtils::AimLegit(CTFPlayer* pLocal, CUserCmd* pCmd, int iTarget, const V
 	};
 	const Vec3 vDesired = Math::CalcAngle(vEye, tState.m_vAimPoint + vTremor * flTremorAmp);
 	AdvanceLegitView(tState.m_tMotion, vDesired, flDt, flMaxRate, flMinRate, flPitchScale,
-		&tState.m_flAnchorSince, &tState.m_flResettleUntil, &tState.m_flMousepad);
+		&tState.m_flAnchorSince, &tState.m_flResettleUntil, &tState.m_flMousepad, !bReacting);
 
 	Vec3 vWish = tState.m_tMotion.m_vAngles;
+	{
+		const Vec3 vWrote = pCmd->viewangles;
+		const float flMaxStep = flMaxRate * flDt * 1.35f + 0.5f;
+		const Vec3 vStep = vWish.DeltaAngle(vWrote);
+		const float flStepLen = vStep.Length();
+		if (flStepLen > flMaxStep && flStepLen > 0.f)
+			vWish = vWrote + vStep * (flMaxStep / flStepLen);
+		tState.m_tMotion.m_vAngles = vWish;
+	}
+	if (bProjectile && !bReacting)
+	{
+		const float flReadyIn = std::max(pWeapon->m_flNextPrimaryAttack() - flNow, 0.f);
+		const auto pWeaponInfo = pWeapon->m_pWeaponInfo();
+		const float flFireDelay = pWeaponInfo ? pWeaponInfo->GetWeaponData(pWeapon->m_iWeaponMode()).m_flTimeFireDelay : 0.2f;
+		const float flSnapWindow = std::clamp(flFireDelay * 0.4f, 0.05f, 0.12f);
+		const bool bAngleValid = vToAngle.Length2D() > 0.01f;
+		if (flReadyIn > 0.f && flReadyIn <= flSnapWindow && bAngleValid)
+		{
+			if (tState.m_flSnapStart <= 0.f)
+			{
+				tState.m_flSnapStart = flNow;
+				tState.m_vSnapFrom = vWish;
+			}
+		}
+
+		if (tState.m_flSnapStart > 0.f && bAngleValid)
+		{
+			const float flT = std::clamp(1.f - flReadyIn / flSnapWindow, 0.f, 1.f);
+			const Vec3 vSnapDelta = vToAngle.DeltaAngle(tState.m_vSnapFrom);
+			if (vSnapDelta.Length() < 75.f)
+			{
+				vWish = tState.m_vSnapFrom + vSnapDelta * std::clamp(flDt / std::max(flReadyIn, 0.001f) * (0.55f + flT * 0.45f), 0.f, 1.f);
+				tState.m_tMotion.m_vAngles = vWish;
+				tState.m_tMotion.m_vVelocity = vWish.DeltaAngle(tState.m_vSnapFrom) / std::max(flDt, 0.001f);
+			}
+			if (flReadyIn > flSnapWindow || flNow - tState.m_flSnapStart > 0.15f)
+				tState.m_flSnapStart = 0.f;
+		}
+		else if (tState.m_flSnapStart > 0.f)
+			tState.m_flSnapStart = 0.f;
+	}
 	vWish.x = std::clamp(vWish.x, -89.f, 89.f);
 	Math::ClampAngles(vWish);
 
+	const float flGoalErrDeg = Math::CalcFov(tState.m_tMotion.m_vAngles, Math::CalcAngle(vEye, tState.m_vAimPoint));
 	const float flErrDeg = Math::CalcFov(vWish, vToAngle);
 	const float flAngularSize = std::atan2(24.f, std::max(flDistance, 40.f)) * 57.2958f;
 	const float flTolerance = std::max(
 		Vars::Aimbot::General::LegitForBots::FireTolerance.Value * Math::Lerp(1.5f, 0.7f, GetLegitSkill()),
 		flAngularSize * 0.45f);
 
-	bool bAligned = flErrDeg <= flTolerance;
-	const bool bCrossing = !bAligned && flErrDeg <= flTolerance * 2.2f
+	bool bAligned = flErrDeg <= flTolerance && (bProjectile || flGoalErrDeg <= flTolerance * 1.6f);
+	const bool bCrossing = !bAligned && flErrDeg <= flTolerance * 2.2f && (bProjectile || flGoalErrDeg <= flTolerance * 1.6f)
 		&& tState.m_flPrevErr != FLT_MAX && tState.m_flPrevErr - flErrDeg > 0.03f;
 	tState.m_flPrevErr = flErrDeg;
 
@@ -1438,6 +1546,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 		tState.m_iLastCommand = pCmd->command_number;
 		tState.m_tMotion.m_vAngles = vCurrent;
 		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_vGoalPrev = {};
 		tState.m_tMotion.m_flLastTime = flNow;
 		tState.m_tMotion.m_bInitialized = true;
 		m_vLastAngles = vCurrent;
@@ -1451,6 +1560,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	{
 		tState.m_tMotion.m_vAngles = I::EngineClient->GetViewAngles();
 		tState.m_tMotion.m_vVelocity = {};
+		tState.m_tMotion.m_vGoalPrev = {};
 	}
 	tState.m_tMotion.m_flLastTime = flNow;
 	tState.m_iLastCommand = pCmd->command_number;
@@ -1659,7 +1769,7 @@ void CBotUtils::LookLegit(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vDest, 
 	const float flMaxRate = std::max(flBaseSpeed * flSpeedScale * 14.f, 140.f);
 	const float flMinRate = std::max(flBaseSpeed * flSpeedScale * 1.5f, 30.f);
 	AdvanceLegitView(tState.m_tMotion, vDesired, flDt, flMaxRate, flMinRate, 0.7f,
-		&tState.m_flAnchorSince, &tState.m_flResettleUntil, &tState.m_flMousepad);
+		&tState.m_flAnchorSince, &tState.m_flResettleUntil, &tState.m_flMousepad, true);
 	Vec3 vWish = tState.m_tMotion.m_vAngles;
 	Math::ClampAngles(vWish);
 

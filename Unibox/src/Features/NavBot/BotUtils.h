@@ -49,6 +49,11 @@ private:
 	{
 		Vec3 m_vAngles = {};
 		Vec3 m_vVelocity = {};
+		Vec3 m_vGoalPrev = {};
+		Vec3 m_vFlickFrom = {};
+		Vec3 m_vFlickTotal = {};
+		float m_flFlickStart = 0.f;
+		float m_flFlickDur = 0.f;
 		float m_flLastTime = 0.f;
 		bool m_bInitialized = false;
 	};
@@ -74,6 +79,8 @@ private:
 		float m_flCommitUntil = 0.f;
 		float m_flMousepad = 0.f;
 		float m_flPhase = 0.f;
+		Vec3 m_vSnapFrom = {};
+		float m_flSnapStart = 0.f;
 		LegitMotion_t m_tMotion = {};
 		bool m_bReady = false;
 	};
@@ -118,7 +125,7 @@ private:
 
 	float GetLegitSkill();
 	float GetLegitTrackInterval();
-	void AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, float flDt, float flMaxRate, float flMinRate, float flPitchScale, float* pAnchorSince, float* pResettleUntil, float* pMousepad);
+	void AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, float flDt, float flMaxRate, float flMinRate, float flPitchScale, float* pAnchorSince, float* pResettleUntil, float* pMousepad, bool bAllowFlick = true);
 	float GetLegitReactionTime();
 	bool IsLegitShotClear(CTFPlayer* pLocal, CBaseEntity* pTarget, const Vec3& vAngles);
 	CBaseEntity* FindLegitThreat(CTFPlayer* pLocal, const Vec3& vEye);
