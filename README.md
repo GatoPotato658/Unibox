@@ -8,6 +8,7 @@
   ## <img src="assets/meow.png" alt="Unibox" width="640">
 
   [![Pipeline](https://img.shields.io/endpoint?url=https%3A%2F%2Funibox.puppyduck.boats%2Fbadge&style=for-the-badge)](https://unibox.puppyduck.boats/)
+  [![Last build](https://img.shields.io/endpoint?url=https%3A%2F%2Funibox.puppyduck.boats%2Flastbuild&style=for-the-badge)](https://unibox.puppyduck.boats/builds)
   [![Discord](https://unibox-discord-badge.puppytunnel.workers.dev/)](https://dsc.gg/unibox)
   
   [![Download](assets/download.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64Release.zip)
