@@ -6,6 +6,15 @@ class IMDLCache;
 
 MAKE_SIGNATURE(CBaseAnimating_GetModelPtr, "client.dll", "48 89 7C 24 ? 55 48 8B EC 48 83 EC 70 80 B9", 0x0);
 MAKE_SIGNATURE(CStudioHdr_Constructor, "client.dll", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 33 ED 48 8B F1 48 89 69 10", 0x0);
+MAKE_SIGNATURE(CStudioHdr_Destructor, "client.dll", "48 89 5C 24 08 57 48 83 EC 20 48 8B D9 E8 ? ? ? ? 48 8B 8B 90 00 00 00 48 85 C9 74 1A 48 8B 49 08", 0x0);
+MAKE_SIGNATURE(CStudioHdr_GetNumPoseParameters, "client.dll", "48 8B 41 08 48 85 C0 75 10 48 8B 01 48 85 C0 74 07 8B 80 2C 01 00 00 C3", 0x0);
+MAKE_SIGNATURE(Studio_Duration, "client.dll", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 49 8B D8 8B FA 48 8B F1 E8 ? ? ? ? 4C 8B CB 44 8B C7 48 8B D0 48 8B CE E8 ? ? ? ? 0F 28 C8", 0x0);
+MAKE_SIGNATURE(GetSequenceLinearMotion, "client.dll", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 50 49 8B F1 49 8B D8 8B EA 48 8B F9 48 85 C9 75 25", 0x0);
+MAKE_SIGNATURE(ActivityList_IndexForName, "client.dll", "48 83 EC 28 48 8B D1 48 8D 0D ? ? ? ? E8 ? ? ? ? 85 C0 78 19 8B C8 48 8B 05 ? ? ? ? 48 8D 04 C8 48 85 C0", 0x0);
+MAKE_SIGNATURE(CTFItemDefinition_GetActivityOverride, "client.dll", "48 89 6C 24 20 56 41 54 41 56 48 83 EC 20 48 63 EA 45 8B E0 4C 8B F1 8B C5 83 FD 04 77 0F", 0x0);
+MAKE_SIGNATURE(CEconItemView_GetStaticData_Call, "client.dll", "48 8B CD 8B D8 E8 ? ? ? ? 48 8B C8 44 8B C7 8B D3 E8", 0x5);
+MAKE_SIGNATURE(SelectWeightedSequence,"client.dll", "48 89 5C 24 10 48 89 6C 24 18 56 48 83 EC 20 41 8B F0 8B EA 48 8B D9 48 85 C9 74 57 E8 ? ? ? ? 84 C0 74 4E", 0x0);
+MAKE_SIGNATURE(CStudioHdr_pPoseParameter,"client.dll", "40 53 48 83 EC 20 48 8B D9 48 8B 49 08 48 85 C9 75 1F 4C 8B 0B 48 63 C2 4D 63 81 30 01 00 00", 0x0);
 MAKE_SIGNATURE(BoneSetup_InitPose, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 4C 8B 19 45 33 D2 41 8B F1 49 8B F8", 0x0);
 MAKE_SIGNATURE(BoneSetup_AccumulatePose, "client.dll", "44 89 4C 24 ? 55 53 57 41 54 41 57 48 8D AC 24 ? ? ? ? B8 ? ? ? ? E8", 0x0);
 MAKE_SIGNATURE(BoneSetup_CalcAutoplaySequences, "client.dll", "40 56 57 41 54 41 55 48 83 EC ? 48 8B B4 24 ? ? ? ? 4D 8B E0 4C 89", 0x0);
@@ -118,6 +127,8 @@ public:
 
 	CStudioHdr* GetModelPtr();
 	CStudioHdr* GetAimStudio();
+	bool UsesAimStudio();
+	static void ResetAimStudio();
 	mstudiohitboxset_t* GetHitboxSet();
 	mstudiohitboxset_t* GetAimHitboxSet();
 	bool SetupAimBones(matrix3x4* pBoneToWorldOut, int nMaxBones, int boneMask, float currentTime);

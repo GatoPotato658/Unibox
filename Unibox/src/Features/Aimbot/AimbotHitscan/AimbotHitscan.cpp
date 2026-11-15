@@ -422,6 +422,11 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 	const bool bOldSettingUpBones = F::Backtrack.IsSettingUpBones();
 	const Vec3 vBaseOrigin = tMoveStorage.m_MoveData.m_vecAbsOrigin;
 	const size_t uStart = m_vForwardRecords.size();
+	auto& aCachedBones = pTarget->m_CachedBoneData();
+	const int iCachedBones = aCachedBones.Count();
+	std::vector<float> vCachedBones(size_t(iCachedBones) * 12);
+	if (iCachedBones)
+		memcpy(vCachedBones.data(), aCachedBones.Base(), sizeof(matrix3x4) * iCachedBones);
 
 	F::Backtrack.SetSettingUpBones(true);
 
@@ -491,6 +496,8 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 	pTarget->SetAbsOrigin(vOldAbsOrigin);
 	pTarget->SetAbsAngles(vOldAbsAngles);
 	pTarget->InvalidateBoneCache();
+	if (iCachedBones && aCachedBones.Count() == iCachedBones)
+		memcpy(aCachedBones.Base(), vCachedBones.data(), sizeof(matrix3x4) * iCachedBones);
 
 	if (m_vForwardRecords.size() == uStart)
 		return;

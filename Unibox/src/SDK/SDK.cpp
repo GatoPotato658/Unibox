@@ -1113,10 +1113,11 @@ float SDK::AttribHookValue(float value, const char* name, void* econent, void* b
 
 float SDK::MaxSpeed(CTFPlayer* pPlayer, bool bIncludeCrouch, bool bIgnoreSpecialAbility)
 {
+	static auto tf_whip_speed_increase = H::ConVars.FindVar("tf_whip_speed_increase");
 	float flSpeed = pPlayer->CalculateMaxSpeed(bIgnoreSpecialAbility);
 
-	if (pPlayer->InCond(TF_COND_SPEED_BOOST) || pPlayer->InCond(TF_COND_HALLOWEEN_SPEED_BOOST))
-		flSpeed *= 1.35f;
+	if (flSpeed > 0.f && (pPlayer->InCond(TF_COND_SPEED_BOOST) || pPlayer->InCond(TF_COND_HALLOWEEN_SPEED_BOOST)))
+		flSpeed += std::min(flSpeed * 0.4f, tf_whip_speed_increase ? tf_whip_speed_increase->GetFloat() : 105.f);
 	if (bIncludeCrouch && pPlayer->IsDucking() && pPlayer->IsOnGround())
 		flSpeed /= 3;
 

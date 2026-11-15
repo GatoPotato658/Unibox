@@ -13,6 +13,14 @@ MAKE_SIGNATURE(CWeaponMedigun_ManageChargeEffect, "client.dll", "48 89 5C 24 ? 4
 class CTFPlayer;
 class CTFGrenadePipebombProjectile;
 
+struct acttable_t
+{
+	int baseAct;
+	int weaponAct;
+	bool required;
+};
+static_assert(sizeof(acttable_t) == 12);
+
 //credits: KGB (all weapon info stuff below)
 typedef unsigned short WEAPON_FILE_INFO_HANDLE;
 
@@ -208,6 +216,7 @@ public:
 	};
 
 	VIRTUAL(GetSlot, int, 331, this);
+	VIRTUAL_ARGS(ActivityList, acttable_t*, 353, (int& iActivityCount), this, std::ref(iActivityCount));
 	VIRTUAL(GetWeaponID, int, 383, this);
 	VIRTUAL(GetDamageType, int, 384, this);
 	VIRTUAL(IsEnergyWeapon, bool, 435, this);

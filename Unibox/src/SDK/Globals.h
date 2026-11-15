@@ -207,6 +207,7 @@ namespace G
 	inline bool AimbotSteering = false;
 
 	inline bool UpdatingAnims = false;
+	inline void* IgnoreDisguiseShared = nullptr;
 	inline bool FlipViewmodels = false;
 
 	inline std::vector<DrawLine_t> LineStorage = {};

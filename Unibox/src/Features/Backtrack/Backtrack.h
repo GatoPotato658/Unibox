@@ -83,6 +83,9 @@ struct TickRecord
 	float m_flPlaybackRate = 1.f;
 	float m_flModelScale = 1.f;
 	matrix3x4 m_aBones[MAXSTUDIOBONES];
+	std::shared_ptr<std::array<matrix3x4, MAXSTUDIOBONES>> m_pRenderBones = {};
+
+	matrix3x4* GetRenderBones() { return m_pRenderBones ? m_pRenderBones->data() : m_aBones; }
 };
 
 class CBacktrack

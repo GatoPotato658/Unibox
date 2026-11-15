@@ -31,6 +31,8 @@ MAKE_HOOK(CTFPlayerShared_InCond, S::CTFPlayerShared_InCond(), bool,
 			return false;
 		break;
 	case TF_COND_DISGUISED:
+		if (rcx == G::IgnoreDisguiseShared)
+			return false;
 		if (Vars::Visuals::Removals::Disguises.Value && pShared != rcx && !SDK::CleanScreenshot())
 			return false;
 		break;

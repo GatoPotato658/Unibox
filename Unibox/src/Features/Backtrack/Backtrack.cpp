@@ -245,7 +245,14 @@ void CBacktrack::MakeRecords()
 		pPlayer->InvalidateBoneCache();
 
 		m_bSettingUpBones = true;
-		bool bSetup = pPlayer->SetupAimBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+		bool bSetup = pPlayer->SetupBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+		std::shared_ptr<std::array<matrix3x4, MAXSTUDIOBONES>> pRenderBones = {};
+		if (bSetup && pPlayer->UsesAimStudio())
+		{
+			pRenderBones = std::make_shared<std::array<matrix3x4, MAXSTUDIOBONES>>();
+			memcpy(pRenderBones->data(), s_aBones, sizeof(s_aBones));
+			bSetup = pPlayer->SetupAimBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+		}
 		m_bSettingUpBones = false;
 
 		pPlayer->SetAbsOrigin(vOldAbsOrigin);
@@ -267,6 +274,7 @@ void CBacktrack::MakeRecords()
 		tCurRecord.m_flPlaybackRate = pPlayer->m_flPlaybackRate();
 		tCurRecord.m_flModelScale = pPlayer->m_flModelScale();
 		memcpy(tCurRecord.m_aBones, s_aBones, sizeof(tCurRecord.m_aBones));
+		tCurRecord.m_pRenderBones = pRenderBones;
 		const bool bHasLastRecord = !vRecords.empty();
 		const Vec3 vLastOrigin = bHasLastRecord ? vRecords.front().m_vOrigin : Vec3();
 		vRecords.emplace_front(tCurRecord);
@@ -297,6 +305,7 @@ void CBacktrack::MakeRecords()
 				tRecord.m_bOnShot = tCurRecord.m_bOnShot;
 				tRecord.m_flModelScale = tCurRecord.m_flModelScale;
 				memcpy(tRecord.m_aBones, tCurRecord.m_aBones, sizeof(tRecord.m_aBones));
+				tRecord.m_pRenderBones = tCurRecord.m_pRenderBones;
 			}
 		}
 

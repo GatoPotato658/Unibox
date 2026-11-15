@@ -468,7 +468,7 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 	{
 		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
 		F::Backtrack.m_tRecord.m_flModelScale = tTarget.m_pEntity->As<CBaseAnimating>()->m_flModelScale();
-		if (!tTarget.m_pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
+		if (!tTarget.m_pEntity->As<CBaseAnimating>()->SetupAimBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
 			return false;
 
 		vRecords = { &F::Backtrack.m_tRecord };

@@ -55,7 +55,7 @@ void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& p
 		for (auto pRecord : vRecords)
 		{
 			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
-				fDrawModel(pRecord->m_vOrigin, pRecord->m_aBones, flBlend);
+				fDrawModel(pRecord->m_vOrigin, pRecord->GetRenderBones(), flBlend);
 		}
 	}
 	else
@@ -64,13 +64,13 @@ void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& p
 		{
 			auto pRecord = vRecords.back();
 			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
-				fDrawModel(pRecord->m_vOrigin, pRecord->m_aBones, flBlend);
+				fDrawModel(pRecord->m_vOrigin, pRecord->GetRenderBones(), flBlend);
 		}
 		if (iFlags & BacktrackEnum::First)
 		{
 			auto pRecord = vRecords.front();
 			if (float flBlend = Math::RemapVal(vEntityOrigin.DistToSqr(pRecord->m_vOrigin), 1.f, 576.f, 0.f, 1.f))
-				fDrawModel(pRecord->m_vOrigin, pRecord->m_aBones, flBlend);
+				fDrawModel(pRecord->m_vOrigin, pRecord->GetRenderBones(), flBlend);
 		}
 	}
 
@@ -476,7 +476,7 @@ std::vector<DrawBox_t> CVisuals::GetHitboxes(matrix3x4* aBones, CBaseAnimating* 
 		&& !Vars::Colors::TargetHitboxEdge.Value.a && !Vars::Colors::TargetHitboxFace.Value.a && !Vars::Colors::TargetHitboxEdgeIgnoreZ.Value.a && !Vars::Colors::TargetHitboxFaceIgnoreZ.Value.a)
 		return {};
 
-	auto pSet = pEntity->GetHitboxSet();
+	auto pSet = pEntity->GetAimHitboxSet();
 	if (!pSet)
 		return {};
 

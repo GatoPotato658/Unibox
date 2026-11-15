@@ -33,6 +33,7 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::Spectate.Reset();
 #endif
 
+	CBaseAnimating::ResetAimStudio();
 	F::Backtrack.Reset();
 	F::NetworkFix.Reset();
 	F::Ticks.Reset();
