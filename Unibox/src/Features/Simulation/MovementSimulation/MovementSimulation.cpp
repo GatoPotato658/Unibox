@@ -8,6 +8,8 @@ static constexpr float JumpVelocity = 289.f;
 static constexpr float DuckSpeedCrop = 0.33333333f;
 static constexpr float MovementMaxSpeed = 520.f;
 static constexpr float EyeTurnFade = 0.79f;
+static constexpr float EyeTurnMax = 12.f;
+static constexpr float EyeTurnKept = 1.09f;
 static constexpr float SweepFade = 0.97f;
 static constexpr int MaxRecords = 66;
 static constexpr int MaxRecordGap = 8;
@@ -1150,10 +1152,15 @@ void CMovementSimulation::SetupController(MoveStorage& tMoveStorage, bool bStraf
 	if (bGround || bAir)
 		tMoveStorage.m_iHopTicks = tFit.m_iHopTicks, tMoveStorage.m_iGroundTicks = tFit.m_iGroundTicks;
 
-	if (vRecords.size() > 1)
+	for (size_t i = 1; i < vRecords.size(); i++)
 	{
-		const float flTurn = Math::NormalizeAngle(vRecords[0].m_flEyeYaw - vRecords[1].m_flEyeYaw) / std::max(vRecords[0].m_iTicks, 1);
-		tMoveStorage.m_tGround.m_flTurn = tMoveStorage.m_tAir.m_flTurn = std::clamp(flTurn, -45.f, 45.f);
+		const int iSpan = TIME_TO_TICKS(vRecords.front().m_flSimTime - vRecords[i].m_flSimTime);
+		if (iSpan < 2)
+			continue;
+
+		const float flTurn = Math::NormalizeAngle(vRecords.front().m_flEyeYaw - vRecords[i].m_flEyeYaw) / iSpan;
+		tMoveStorage.m_tGround.m_flTurn = std::clamp(flTurn, -EyeTurnMax, EyeTurnMax) * EyeTurnKept;
+		break;
 	}
 
 	if (pPlayer->InCond(TF_COND_STUNNED) && (pPlayer->m_iStunFlags() & TF_STUN_CONTROLS || pPlayer->m_iStunFlags() & TF_STUN_MOVEMENT && pPlayer->m_iMovementStunAmount() == 255))
