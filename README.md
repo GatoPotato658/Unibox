@@ -2,24 +2,24 @@
 
   ## <img src="assets/meow.png" alt="Unibox" width="640">
 
-  [![Pipeline](https://img.shields.io/gitlab/pipeline-status/jamesfunction%2Funibox?branch=master&style=for-the-badge)](https://gitlab.com/jamesfunction/unibox/-/pipelines)
+  [![Pipeline](https://img.shields.io/endpoint?url=https%3A%2F%2Funibox.puppyduck.boats%2Fbadge&style=for-the-badge)](https://unibox.puppyduck.boats/)
   [![Discord](https://unibox-discord-badge.puppytunnel.workers.dev/)](https://dsc.gg/unibox)
   
-  [![Download](assets/download.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64Release.zip)
-  [![PDB](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleasePDB.zip)
-  [![Download AVX2](assets/download_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2.zip)
-  [![PDB AVX2](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseAVX2PDB.zip)
+  [![Download](assets/download.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64Release.zip)
+  [![PDB](assets/pdb.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleasePDB.zip)
+  [![Download AVX2](assets/download_avx2.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleaseAVX2.zip)
+  [![PDB AVX2](assets/pdb.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleaseAVX2PDB.zip)
   <br>
-  [![Textmode](assets/textmode.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmode.zip)
-  [![PDB Textmode](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodePDB.zip)
-  [![Textmode AVX2](assets/textmode_avx2.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2.zip)
-  [![PDB Textmode AVX2](assets/pdb.svg)](https://jamesfunction.gitlab.io/unibox/downloads/Uniboxx64ReleaseTextmodeAVX2PDB.zip)
+  [![Textmode](assets/textmode.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleaseTextmode.zip)
+  [![PDB Textmode](assets/pdb.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleaseTextmodePDB.zip)
+  [![Textmode AVX2](assets/textmode_avx2.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleaseTextmodeAVX2.zip)
+  [![PDB Textmode AVX2](assets/pdb.svg)](https://unibox.puppyduck.boats/downloads/Uniboxx64ReleaseTextmodeAVX2PDB.zip)
   <br>
   <sub>AVX2 may be faster than SSE2 though not all CPUs support it (`Steam > Help > System Information > Processor Information > AVX2`). PDBs are for developer use. </sub>
   <br><br>
   <sub><strong>Ember builds are experimental.</strong> Some features may be broken or unstable.</sub>
   <br><br>
-  <sub>Binaries are built by <a href="https://gitlab.com/jamesfunction/unibox/-/pipelines">GitLab CI</a> and published to <a href="https://jamesfunction.gitlab.io/unibox/">GitLab Pages</a> on every push to master. </sub>
+  <sub>Binaries are built automatically on every push to master. </sub>
   <br><br>
   <!-- <sub>Textmode doesnt fully make the game textmode. You need to preload [TextModeTF2](https://github.com/pupnoodle/TextmodeTF2) module to make the game textmode.</sub> -->
 
