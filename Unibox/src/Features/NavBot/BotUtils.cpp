@@ -740,18 +740,6 @@ static bool TraceLegitLookPoint(CTFPlayer* pLocal, const Vec3& vEye, const Vec3&
 	return bClear;
 }
 
-static float LegitApproachAngle(float flGoal, float flCurrent, float flStep)
-{
-	float flDelta = flGoal - flCurrent;
-	while (flDelta > 180.f)
-		flDelta -= 360.f;
-	while (flDelta < -180.f)
-		flDelta += 360.f;
-	if (std::fabs(flDelta) <= flStep)
-		return flGoal;
-	return flCurrent + (flDelta > 0.f ? flStep : -flStep);
-}
-
 float CBotUtils::GetLegitSkill()
 {
 	return std::clamp(Vars::Aimbot::General::LegitForBots::SkillLevel.Value / 100.f, 0.f, 1.f);
@@ -853,31 +841,24 @@ void CBotUtils::AdvanceLegitView(LegitMotion_t& tMotion, const Vec3& vGoal, floa
 		return;
 	}
 
-	Vec3 vForward;
-	Math::AngleVectors(tMotion.m_vAngles, &vForward);
-	Vec3 vDesired;
-	Math::AngleVectors(vGoal, &vDesired);
-	const float flDot = std::clamp(vForward.Dot(vDesired), -1.f, 1.f);
-
-	float flRate = std::min(flMaxRate * 0.35f, 240.f);
-	if (flDot > 0.7f)
-	{
-		const float flT = std::clamp((flDot - 0.7f) / 0.3f, 0.f, 1.f);
-		flRate *= std::max(sinf(1.5707963f * (1.f - flT)), 0.02f);
-	}
-	float flGoalRate = 0.f;
-	if (!tMotion.m_vGoalPrev.IsZero())
-		flGoalRate = tMotion.m_vGoalPrev.DeltaAngle(vGoal).Length() / flDt;
+	Vec3 vGoalDelta = tMotion.m_vGoalPrev.IsZero() ? Vec3{} : vGoal.DeltaAngle(tMotion.m_vGoalPrev);
+	vGoalDelta.x *= flPitchScale;
 	tMotion.m_vGoalPrev = vGoal;
-	flRate = std::max(flRate, std::max(flMinRate, std::min(flGoalRate * 1.05f, 170.f)));
 
-	const Vec3 vPrev = tMotion.m_vAngles;
-	tMotion.m_vAngles.x = LegitApproachAngle(vGoal.x, tMotion.m_vAngles.x, flRate * flPitchScale * flDt);
-	tMotion.m_vAngles.y = LegitApproachAngle(vGoal.y, tMotion.m_vAngles.y, flRate * flDt);
-	tMotion.m_vAngles.z = 0.f;
-	Math::ClampAngles(tMotion.m_vAngles);
+	Vec3 vErr = vGoal.DeltaAngle(tMotion.m_vAngles);
+	const float flKCorr = std::clamp(flMinRate * 0.22f, 4.f, 14.f);
+	Vec3 vStep = vGoalDelta * 0.88f + vErr * std::clamp(flKCorr * flDt, 0.f, 1.f);
+	const float flStepCap = std::max(flMaxRate * 0.35f, flMinRate) * flDt;
+	const float flStepLen = vStep.Length();
+	if (flStepLen > flStepCap && flStepLen > 0.f)
+		vStep *= flStepCap / flStepLen;
 
-	const Vec3 vMoved = tMotion.m_vAngles.DeltaAngle(vPrev);
+	Vec3 vNew = tMotion.m_vAngles + vStep;
+	vNew.x = std::clamp(vNew.x, -89.f, 89.f);
+	Math::ClampAngles(vNew);
+
+	const Vec3 vMoved = vNew.DeltaAngle(tMotion.m_vAngles);
+	tMotion.m_vAngles = vNew;
 	tMotion.m_vVelocity = vMoved / flDt;
 	if (pMousepad)
 		*pMousepad += std::fabs(vMoved.y);

@@ -235,6 +235,9 @@ private:
 	bool m_bBestPlayerPathSet = false;
 	bool m_bBlockAimAnglesDraw = false;
 	bool m_bMainSearchComplete = false;
+	int m_iLastPreviewTick = -1;
+	Vec3 m_vPreviewAimAngles = {};
+	std::vector<Vec3> m_vPreviewPath = {};
 
 	struct GrappleInfo_t
 	{
