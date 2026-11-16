@@ -1156,6 +1156,7 @@ static void MiscAutomation()
 		FToggle(AcceptItemDrops);
 		FToggle(AntiAFK);
 		FToggle(AntiAutobalance);
+		FToggle(AntiGameBan);
 		FToggleSlider(AutoRetry, AutoRetryHealth);
 		FToggle(KartControl);
 		FToggle(AutoReport);

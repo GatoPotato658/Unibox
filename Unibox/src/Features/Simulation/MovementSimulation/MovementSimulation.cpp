@@ -1,6 +1,7 @@
 #include "MovementSimulation.h"
 
 #include "../../Aimbot/AimbotProjectile/ProjProfiler.h"
+#include <array>
 #include <numeric>
 
 static constexpr float NonGroundVelocity = 250.f;
@@ -474,14 +475,7 @@ static void WalkMove(MoveStorage& tMoveStorage)
 
 	const float flCap = GroundCap(tMoveData.m_flMaxSpeed, tMoveStorage.m_bLostFooting, tMoveStorage.m_bCharging, tPhysics.m_flChargeSpeed);
 	ClampSpeed2D(vVelocity, flCap);
-	switch (tMoveStorage.m_tGround.m_iModel)
-	{
-	case MoveModelEnum::Input:
-		ClampBackSpeed(vVelocity, tMoveData.m_vecViewAngles.y, flCap, tPhysics);
-		break;
-	case MoveModelEnum::View:
-		ClampBackSpeed(vVelocity, tMoveStorage.m_flViewYaw, flCap, tPhysics);
-	}
+	ClampBackSpeed(vVelocity, tMoveData.m_vecViewAngles.y, flCap, tPhysics);
 
 	if (vVelocity.Length() < 1.f)
 	{
@@ -558,6 +552,7 @@ static void StepFit(Vec3& vPosition, Vec3& vVelocity, const MoveController_t& tC
 		GroundFriction(vVelocity, 1.f, tPhysics);
 		GroundAccelerate(vVelocity, vWish, flWishSpeed, 1.f, false, tPhysics);
 		ClampSpeed2D(vVelocity, GroundCap(flMaxSpeed, false, false, 0.f));
+		ClampBackSpeed(vVelocity, flEyeYaw, GroundCap(flMaxSpeed, false, false, 0.f), tPhysics);
 		vPosition += vVelocity * TICK_INTERVAL;
 		return;
 	}
@@ -591,6 +586,93 @@ static float EvaluateFit(const std::vector<FitSample_t>& vSamples, bool bGround,
 		flWeight += flSampleWeight;
 	}
 	return flWeight > 0.f ? flError / flWeight : std::numeric_limits<float>::max();
+}
+
+static constexpr int ChangeTicks = 3;
+static constexpr float ChangeEvidence = 16.f;
+static constexpr float ChiMedian = 1.3862944f;
+static constexpr int KeyCount = 9;
+static const MoveController_t aKeys[KeyCount] = {
+	{ MoveModelEnum::View, 0.f }, { MoveModelEnum::View, 45.f }, { MoveModelEnum::View, 90.f }, { MoveModelEnum::View, 135.f },
+	{ MoveModelEnum::View, 180.f }, { MoveModelEnum::View, -135.f }, { MoveModelEnum::View, -90.f }, { MoveModelEnum::View, -45.f },
+	{ MoveModelEnum::None }
+};
+
+static float EvaluateGap(const FitSample_t& tFrom, const FitSample_t& tTo, bool bGround, const MoveController_t& tController, const MovePhysics_t& tPhysics)
+{
+	static constexpr float flQuantize = PLAYER_ORIGIN_COMPRESSION * PLAYER_ORIGIN_COMPRESSION / 12.f;
+
+	Vec3 vVelocity = tFrom.m_vVelocity, vPosition = tFrom.m_vOrigin;
+	if (bGround)
+		vVelocity.z = 0.f;
+	else
+		vVelocity.z -= tPhysics.m_flGravity * TICK_INTERVAL * tFrom.m_iTicks * 0.5f;
+
+	const float flEyeDelta = Math::NormalizeAngle(tTo.m_flEyeYaw - tFrom.m_flEyeYaw);
+	for (int n = 1; n <= tTo.m_iTicks; n++)
+		StepFit(vPosition, vVelocity, tController, bGround, tFrom.m_flEyeYaw + flEyeDelta * n / tTo.m_iTicks, tTo.m_flMaxSpeed, tTo.m_bDucked, tPhysics);
+
+	const float flRatio = float(tTo.m_iTicks) / tFrom.m_iTicks;
+	return (vPosition - tTo.m_vOrigin).Length2DSqr() / (flQuantize * (1.f + (1.f + flRatio) * (1.f + flRatio) + flRatio * flRatio));
+}
+
+static void FitChange(const std::vector<FitSample_t>& vSamples, bool bGround, const MovePhysics_t& tPhysics, MoveController_t& tBest)
+{
+	const size_t iLast = vSamples.size() - 1;
+	std::vector<std::array<float, KeyCount + 1>> vSums(vSamples.size());
+	for (size_t i = 1; i <= iLast; i++)
+	{
+		for (int k = 0; k < KeyCount; k++)
+			vSums[i][k] = vSums[i - 1][k] + EvaluateGap(vSamples[i - 1], vSamples[i], bGround, aKeys[k], tPhysics);
+		vSums[i][KeyCount] = vSums[i - 1][KeyCount] + EvaluateGap(vSamples[i - 1], vSamples[i], bGround, tBest, tPhysics);
+	}
+	auto fSum = [&](size_t iFrom, size_t iTo, int k) { return vSums[iTo][k] - vSums[iFrom - 1][k]; };
+
+	std::vector<float> vResidual(iLast);
+	for (size_t i = 1; i <= iLast; i++)
+	{
+		vResidual[i - 1] = fSum(i, i, 0);
+		for (int k = 1; k < KeyCount; k++)
+			vResidual[i - 1] = std::min(vResidual[i - 1], fSum(i, i, k));
+	}
+	std::nth_element(vResidual.begin(), vResidual.begin() + vResidual.size() / 2, vResidual.end());
+	const float flThreshold = ChangeEvidence * std::max(vResidual[vResidual.size() / 2] / ChiMedian, 1.f);
+
+	size_t iSince = 1, iInit = 1;
+	for (int iTicks = vSamples[1].m_iTicks; iInit < iLast && iTicks < ChangeTicks;)
+		iTicks += vSamples[++iInit].m_iTicks;
+
+	int iKey = 0;
+	for (int k = 1; k < KeyCount; k++)
+	{
+		if (fSum(1, iInit, k) < fSum(1, iInit, iKey))
+			iKey = k;
+	}
+
+	int iSeen = 0;
+	for (size_t i = iInit + 1; i <= iLast; i++)
+	{
+		int iTop = -1; size_t iTopFrom = i; float flTop = flThreshold;
+		int iTicks = 0;
+		for (size_t j = i; j > iSince && iTicks < ChangeTicks; j--)
+		{
+			iTicks += vSamples[j].m_iTicks;
+			for (int k = 0; k < KeyCount; k++)
+			{
+				if (const float flEvidence = fSum(j, i, iKey) - fSum(j, i, k); flEvidence >= flTop)
+					iTop = k, iTopFrom = j, flTop = flEvidence;
+			}
+		}
+		if (iTop != -1)
+			iSeen |= 1 << iKey, iKey = iTop, iSince = iTopFrom;
+	}
+
+	if (iSeen & 1 << iKey || fSum(iSince, iLast, KeyCount) - fSum(iSince, iLast, iKey) < flThreshold)
+		return;
+
+	tBest = aKeys[iKey];
+	if (bGround && tBest.m_iModel == MoveModelEnum::None)
+		tBest.m_iModel = MoveModelEnum::Stop;
 }
 
 static MoveController_t OptimizeFit(const std::vector<FitSample_t>& vSamples, bool bGround, std::initializer_list<MoveController_t> lSeeds, bool bScale, const MovePhysics_t& tPhysics, float& flError)
@@ -718,6 +800,7 @@ static MoveController_t FitGround(const std::vector<FitSample_t>& vSamples, bool
 			tBest = tWorld, flBest = flWorld;
 	}
 
+	FitChange(vSamples, true, tPhysics, tBest);
 	tBest.m_flConfidence = FitConfidence(flBest);
 	return tBest;
 }
@@ -775,6 +858,7 @@ static MoveController_t FitAir(const std::vector<FitSample_t>& vSamples, bool bC
 		fConsider(tWorld, flError, 1.1f);
 	}
 
+	FitChange(vSamples, false, tPhysics, tBest);
 	tBest.m_flConfidence = FitConfidence(flBest);
 	return tBest;
 }
@@ -1022,6 +1106,8 @@ const MoveFit_t& CMovementSimulation::GetFit(CTFPlayer* pPlayer, bool bStrafe)
 		tFit.m_tGround = FitGround(vSamples, tFit.m_bGroundCurrent, tPhysics.m_tPhysics);
 	if (GatherSegment(vRecords, MoveEnum::Air, Vars::Aimbot::Projectile::AirSamples.Value, vSamples, tFit.m_bAirCurrent))
 		tFit.m_tAir = FitAir(vSamples, tFit.m_bAirCurrent, tPhysics.m_tPhysics);
+	else if (tFit.m_tGround.m_iModel == MoveModelEnum::View)
+		tFit.m_tAir = tFit.m_tGround;
 	FitHop(vRecords, tFit);
 
 	SDK::Output("MovementSimulation", std::format("{}: ground {} ({:.2f}, {:.0f}%), air {} ({:.2f}, {:.0f}%), hop {}",

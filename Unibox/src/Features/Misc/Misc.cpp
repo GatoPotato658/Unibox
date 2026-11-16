@@ -3515,6 +3515,69 @@ void CMisc::OnChatMessage(int iEntIndex, const std::string& sName, const std::st
 	if (iEntIndex == I::EngineClient->GetLocalPlayer())
 		return;
 
+	if (Vars::Misc::Automation::AntiGameBan.Value && !I::EngineClient->IsPlayingDemo())
+	{
+		static const std::vector<std::string> vTriggers =
+		{
+			"hack", "hax", "cheat", "aimbot", "aim bot", "aimlock", "aim lock",
+			"aimassist", "aim assist", "autoaim", "auto aim", "aimsnap", "aim snap",
+			"wallhack", "wall hack", "spinbot", "spin bot",
+			"triggerbot", "trigger bot", "silent aim", "silentaim", "psilent",
+			"backtrack", "antiaim", "anti-aim", "anti aim", "doubletap", "double tap",
+			"tickbase", "fakelag", "fake lag", "speedhack", "speed hack",
+			"norecoil", "no recoil", "nospread", "no spread", "crithack", "crit hack",
+			"radarhack", "radar hack", "flyhack", "fly hack", "noclip", "godmode", "god mode",
+			"script", "exploit", "inject", "catbot", "cat bot", "bot host", "omnibot",
+			"lmaobox", "aimware", "nullcore", "null core", "onshot", "cathook",
+			"royalhack", "royal hack", "ragehack", "rage hack",
+			"vacban", "vac ban", "report", "votekick", "vote kick",
+			"kick him", "kick the", "blatant", "smurf"
+		};
+		static const std::vector<std::string> vWords = { "bot", "bots", "botting", "botter", "botted" };
+
+		std::string sCleanMsg;
+		for (char c : sMsg)
+		{
+			if (c > 0 && c < 32)
+				continue;
+			sCleanMsg += char(std::tolower(static_cast<unsigned char>(c)));
+		}
+
+		auto fContains = [&](const std::string& sTrigger, bool bWhole)
+			{
+				for (size_t iPos = sCleanMsg.find(sTrigger); iPos != std::string::npos; iPos = sCleanMsg.find(sTrigger, iPos + 1))
+				{
+					const size_t iEnd = iPos + sTrigger.length();
+					if ((!iPos || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iPos - 1])))
+						&& (!bWhole || iEnd == sCleanMsg.length() || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iEnd]))))
+						return true;
+				}
+				return false;
+			};
+
+		bool bTriggered = std::any_of(vTriggers.begin(), vTriggers.end(), [&](const std::string& sTrigger) { return fContains(sTrigger, false); })
+			|| std::any_of(vWords.begin(), vWords.end(), [&](const std::string& sTrigger) { return fContains(sTrigger, true); });
+
+		if (!bTriggered)
+		{
+			player_info_t tInfo = {};
+			if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &tInfo))
+			{
+				std::string sLocalName = tInfo.name;
+				std::transform(sLocalName.begin(), sLocalName.end(), sLocalName.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+				if (sLocalName.length() >= 3 && sCleanMsg.find(sLocalName) != std::string::npos)
+					bTriggered = true;
+			}
+		}
+
+		if (bTriggered)
+		{
+			SDK::Output("AntiGameBan", std::format("{}: {}", sName, sMsg).c_str(), WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			I::EngineClient->ClientCmd_Unrestricted("retry");
+			return;
+		}
+	}
+
 	if (Vars::Misc::Automation::ChatSpam::AutoReply.Value)
 	{
 		static Timer tReloadTimer{};

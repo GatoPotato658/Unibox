@@ -1002,6 +1002,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AcceptItemDrops, "Auto accept item drops", false);
 			CVar(AntiAFK, "Anti-AFK", false);
 			CVar(AntiAutobalance, "Anti-autobalance", false);
+			CVar(AntiGameBan, "Anti-gameban", false);
 			CVar(AutoRetry, "Auto retry", false);
 			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 			CVar(TauntControl, "Taunt control", false);

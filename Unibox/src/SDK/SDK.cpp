@@ -1458,9 +1458,14 @@ void SDK::WalkTo(CUserCmd* pCmd, CTFPlayer* pLocal, Vec3 vTo, float flScale)
 
 void SDK::GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vOffset, Vec3& vPosOut, Vec3& vAngOut, float flForward, float flCutoff, bool bInterp, bool bAllowFlip, FireSetup_t* pSetup)
 {
-	static auto cl_flipviewmodels = H::ConVars.FindVar("cl_flipviewmodels");
-	if (bAllowFlip && cl_flipviewmodels->GetBool())
-		vOffset.y *= -1.f;
+	if (bAllowFlip)
+	{
+		bool bFlipped = pPlayer->m_bFlipViewModels();
+		if (auto pWeapon = pPlayer->m_hActiveWeapon()->As<CBaseCombatWeapon>())
+			bFlipped = pWeapon->m_bFlipViewModel() != bFlipped;
+		if (bFlipped)
+			vOffset.y *= -1.f;
+	}
 
 	const FireSetup_t tSetup = { bInterp ? pPlayer->GetEyePosition() : pPlayer->GetShootPos(), vOffset, flForward, flCutoff, 0.f, true };
 	ApplyProjectileFireSetup(pPlayer, tSetup, vAngIn, vPosOut, vAngOut);

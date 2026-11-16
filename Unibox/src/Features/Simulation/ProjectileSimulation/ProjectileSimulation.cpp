@@ -302,7 +302,7 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 	{
 		bool bCowMangler = pWeapon->GetWeaponID() == TF_WEAPON_PARTICLE_CANNON;
 
-		SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, 8.f, bDucking ? 8.f : -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
+		SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, bDucking ? 8.f : -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
 		if (pWeapon->GetWeaponID() == TF_WEAPON_DRG_POMSON)
 			vPos.z -= 13.f, m_tFireSetup.m_flHeight = -13.f;
 
@@ -370,11 +370,11 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 
 			if (bNoRandomAngles)
 				vAngles -= { flAddX, flAddY };
-			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, 8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
+			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
 			vAngle += { flAddX, flAddY };
 		}
 		else
-			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, 8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
+			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
 
 		auto uType = FNV1A::Hash32Const("models/weapons/w_models/w_arrow.mdl");
 		float flCharge = pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f ? I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() : 0.f;
@@ -388,7 +388,7 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 	{
 		bool bCrossbow = pWeapon->GetWeaponID() == TF_WEAPON_CROSSBOW;
 
-		SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, 8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
+		SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
 		
 		auto uType = bCrossbow ? FNV1A::Hash32Const("models/weapons/w_models/w_syringe_proj.mdl") : FNV1A::Hash32Const("models/weapons/w_models/w_repair_claw.mdl");
 		Vec3 vHull = pWeapon->GetWeaponID() == TF_WEAPON_CROSSBOW ? Vec3(3.f, 3.f, 3.f) : Vec3(1.f, 1.f, 1.f);
