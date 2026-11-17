@@ -88,7 +88,7 @@ CStudioHdr* CBaseAnimating::GetAimStudio()
 
 bool CBaseAnimating::UsesAimStudio()
 {
-	if (!IsPlayer() || As<CTFPlayer>()->m_iClass() != TF_CLASS_SPY)
+	if (!Vars::Debug::SpyAimModel.Value || !IsPlayer() || As<CTFPlayer>()->m_iClass() != TF_CLASS_SPY)
 		return false;
 
 	auto pSourceStudio = GetModelPtr();
@@ -460,7 +460,7 @@ mstudiohitboxset_t* CBaseAnimating::GetHitboxSet()
 mstudiohitboxset_t* CBaseAnimating::GetAimHitboxSet()
 {
 	auto pHDR = GetStudiomodel();
-	if (IsPlayer() && As<CTFPlayer>()->m_iClass() == TF_CLASS_SPY)
+	if (Vars::Debug::SpyAimModel.Value && IsPlayer() && As<CTFPlayer>()->m_iClass() == TF_CLASS_SPY)
 	{
 		CMDLCacheCriticalSection tLock(I::MDLCache);
 		auto pSpyHDR = GetSpyStudiomodel();

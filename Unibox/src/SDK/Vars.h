@@ -1465,5 +1465,6 @@ NAMESPACE_BEGIN(Vars)
 #endif
 
 		CVar(DrawHitboxes, "Show hitboxes", false, NOSAVE);
+		CVar(SpyAimModel, "Spy aim model", false, NOSAVE | DEBUGVAR);
 	NAMESPACE_END(Debug)
 NAMESPACE_END(Vars)

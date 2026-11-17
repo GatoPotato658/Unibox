@@ -428,7 +428,9 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 	if (iCachedBones)
 		memcpy(vCachedBones.data(), aCachedBones.Base(), sizeof(matrix3x4) * iCachedBones);
 
-	F::Backtrack.SetSettingUpBones(true);
+	const bool bMutateModel = Vars::Debug::SpyAimModel.Value;
+	if (bMutateModel)
+		F::Backtrack.SetSettingUpBones(true);
 
 	for (int tick = 1; tick <= iLead; tick++)
 	{
@@ -467,15 +469,20 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 			predRecord.m_vAngles.y = Math::NormalizeAngle(predRecord.m_vAngles.y + flPredictedYaw - flInitialYaw);
 		}
 
-		pTarget->m_vecOrigin() = predRecord.m_vOrigin;
-		pTarget->m_angRotation() = predRecord.m_vAngles;
-		pTarget->SetAbsOrigin(predRecord.m_vOrigin);
-		pTarget->SetAbsAngles(predRecord.m_vAngles);
-		pTarget->m_flCycle() = predRecord.m_flCycle;
-		pTarget->InvalidateBoneCache();
+		bool bSetup = false;
+		if (bMutateModel)
+		{
+			pTarget->m_vecOrigin() = predRecord.m_vOrigin;
+			pTarget->m_angRotation() = predRecord.m_vAngles;
+			pTarget->SetAbsOrigin(predRecord.m_vOrigin);
+			pTarget->SetAbsAngles(predRecord.m_vAngles);
+			pTarget->m_flCycle() = predRecord.m_flCycle;
+			pTarget->InvalidateBoneCache();
 
-		if (!pTarget->SetupAimBones(predRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING,
-			predRecord.m_flSimTime))
+			bSetup = pTarget->SetupAimBones(predRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, predRecord.m_flSimTime);
+		}
+
+		if (!bSetup)
 		{
 			const Vec3 vDelta = predRecord.m_vOrigin - vBaseOrigin;
 			for (int b = 0; b < MAXSTUDIOBONES; b++)
@@ -488,16 +495,19 @@ void CAimbotHitscan::BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRe
 		}
 	}
 
-	F::Backtrack.SetSettingUpBones(bOldSettingUpBones);
+	if (bMutateModel)
+	{
+		F::Backtrack.SetSettingUpBones(bOldSettingUpBones);
 
-	pTarget->m_vecOrigin() = vOldOrigin;
-	pTarget->m_angRotation() = vOldAngles;
-	pTarget->m_flCycle() = flOldCycle;
-	pTarget->SetAbsOrigin(vOldAbsOrigin);
-	pTarget->SetAbsAngles(vOldAbsAngles);
-	pTarget->InvalidateBoneCache();
-	if (iCachedBones && aCachedBones.Count() == iCachedBones)
-		memcpy(aCachedBones.Base(), vCachedBones.data(), sizeof(matrix3x4) * iCachedBones);
+		pTarget->m_vecOrigin() = vOldOrigin;
+		pTarget->m_angRotation() = vOldAngles;
+		pTarget->m_flCycle() = flOldCycle;
+		pTarget->SetAbsOrigin(vOldAbsOrigin);
+		pTarget->SetAbsAngles(vOldAbsAngles);
+		pTarget->InvalidateBoneCache();
+		if (iCachedBones && aCachedBones.Count() == iCachedBones)
+			memcpy(aCachedBones.Base(), vCachedBones.data(), sizeof(matrix3x4) * iCachedBones);
+	}
 
 	if (m_vForwardRecords.size() == uStart)
 		return;
