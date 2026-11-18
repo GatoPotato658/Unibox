@@ -159,6 +159,9 @@ private:
 	bool m_aFireSetupPrimed[2] = {};
 
 	bool m_bLastTickHeld = false;
+	bool m_bLowerBow = false;
+	TickRecord m_tCurrentRecord = {};
+	std::vector<Vec3> m_vTargetPath = {};
 
 	int m_iLaunchDelay = 0;
 	float m_flSpecialDrag = 0.f;

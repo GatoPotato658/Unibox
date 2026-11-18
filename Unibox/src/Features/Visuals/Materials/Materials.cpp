@@ -317,6 +317,18 @@ void CMaterials::LoadMaterials()
 			  "\n}",
 		true);
 
+	for (int iEffect = 1; iEffect <= ChamsEffectCount; iEffect++)
+	{
+		const std::string sName = std::format("{}{}", ChamsShaderPrefix, ChamsEffectNames[iEffect]);
+		StoreStruct(sName,
+			"\"UnlitGeneric\""
+			"\n{"
+			"\n\t$basetexture \"white\""
+			"\n}",
+			true);
+		m_mMaterials[FNV1A::Hash32(sName.c_str())].m_iEffect = iEffect;
+	}
+
 	std::error_code tError;
 	for (std::filesystem::directory_iterator tIterator(F::Configs.m_sMaterialsPath, tError), tEnd; !tError && tIterator != tEnd; tIterator.increment(tError))
 	{

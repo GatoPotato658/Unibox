@@ -5,13 +5,14 @@
 
 namespace ImGui
 {
-	inline void FMaterialPresets(ChamsMaterial_t* pVar)
+	struct MaterialPreset_t
 	{
-		struct MaterialPreset_t
-		{
-			const char* m_sName;
-			ChamsMaterial_t m_tMaterial;
-		};
+		const char* m_sName;
+		ChamsMaterial_t m_tMaterial;
+	};
+
+	inline const auto& MaterialPresets()
+	{
 		static const std::array<MaterialPreset_t, 24> vPresets = {{
 			{ "Arctic chrome", { .tColor = { 195, 225, 245, 255 }, .iEffect = 8, .tSecondary = { 65, 155, 255, 255 }, .flRoughness = 0.12f, .flReflectivity = 0.95f, .flIntensity = 1.1f, .flRimPower = 4.f } },
 			{ "Opal silk", { .tColor = { 235, 220, 250, 255 }, .iEffect = 4, .tSecondary = { 100, 235, 215, 255 }, .flRoughness = 0.28f, .flReflectivity = 0.7f, .flScale = 1.5f, .flSpeed = 0.3f, .flRimPower = 2.5f } },
@@ -38,7 +39,29 @@ namespace ImGui
 			{ "Circuit board", { .tColor = { 10, 60, 40, 255 }, .iEffect = 34, .tSecondary = { 60, 255, 200, 255 }, .flReflectivity = 0.5f, .flScale = 1.5f, .flSpeed = 1.f, .flIntensity = 1.2f } },
 			{ "Storm", { .tColor = { 60, 90, 255, 255 }, .iEffect = 35, .tSecondary = { 200, 230, 255, 255 }, .flScale = 1.2f, .flSpeed = 1.f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 1 } }
 		}};
+		return vPresets;
+	}
 
+	inline ChamsMaterial_t ShaderLayer(int iEffect)
+	{
+		for (const auto& tPreset : MaterialPresets())
+		{
+			if (tPreset.m_tMaterial.iEffect == iEffect)
+				return tPreset.m_tMaterial;
+		}
+		ChamsMaterial_t tMaterial;
+		tMaterial.iEffect = iEffect;
+		return tMaterial;
+	}
+
+	inline std::string MaterialLabel(const std::string& sName)
+	{
+		return sName.starts_with(ChamsShaderPrefix) ? sName.substr(std::strlen(ChamsShaderPrefix)) : sName;
+	}
+
+	inline void FMaterialPresets(ChamsMaterial_t* pVar)
+	{
+		const auto& vPresets = MaterialPresets();
 		int iSelected = -1;
 		for (int i = 0; i < int(vPresets.size()); i++)
 		{
@@ -106,7 +129,7 @@ namespace ImGui
 			auto fLabel = [uID](const char* sName) { return std::format("{}##{}", sName, uID); };
 
 			enum EffectControl_t { Roughness = 1 << 0, Reflectivity = 1 << 1, Pattern = 1 << 2, Animated = 1 << 3, Rim = 1 << 4, Secondary = 1 << 5 };
-			static constexpr std::array<int, 40> vControls = {
+			static constexpr std::array<int, ChamsEffectCount + 1> vControls = {
 				0,
 				0,
 				Reflectivity | Rim | Secondary | Roughness,
@@ -150,8 +173,7 @@ namespace ImGui
 			};
 
 			bool bHovered = false;
-			FDropdown("Effect", &pVar->iEffect, { "Source", "Flat", "Shaded", "Metallic", "Pearlescent", "Glass", "Holographic", "Iridescent", "Chrome", "Gradient", "Wireframe", "Crystal", "Emissive", "Plasma", "Nebula", "Carbon", "Brushed", "Hex", "Digital",
-				"Lava", "Bubble", "Neon", "Network", "Soap", "Aurora", "Aquarium", "Daydream", "Fresnel", "Galaxy", "Matrix", "Fire", "Frost", "Toon", "Cells", "Circuit", "Electric", "Spectrum", "Marble", "Thermal", "Camo" }, {}, FDropdownEnum::None, 0, "Source", &bHovered);
+			FDropdown("Effect", &pVar->iEffect, std::vector<const char*>(std::begin(ChamsEffectNames), std::end(ChamsEffectNames)), {}, FDropdownEnum::None, 0, "Source", &bHovered);
 			FTooltip("Source uses the selected engine material. Custom effects are independent of its name; this engine material remains the fallback when custom rendering is unavailable. Select other material names to add independent effect layers.", bHovered);
 			FMaterialPresets(pVar);
 
@@ -279,6 +301,9 @@ namespace ImGui
 
 		std::sort(vMaterials.begin(), vMaterials.end(), [&](const auto& a, const auto& b) -> bool
 		{
+			if (a.m_iEffect || b.m_iEffect)
+				return a.m_iEffect != b.m_iEffect && (!a.m_iEffect || (b.m_iEffect && a.m_iEffect < b.m_iEffect));
+
 			// keep locked materials higher
 			if (a.m_bLocked && !b.m_bLocked)
 				return true;
@@ -289,8 +314,12 @@ namespace ImGui
 		});
 
 		std::vector<std::string> vEntries = { "Original" };
+		std::vector<int> vEffects = { 0 };
 		for (auto& pair : vMaterials)
+		{
 			vEntries.push_back(pair.m_sName.c_str());
+			vEffects.push_back(pair.m_iEffect);
+		}
 
 		bool bReturn = false;
 
@@ -303,7 +332,7 @@ namespace ImGui
 
 		std::vector<std::string> vSelected = {};
 		for (auto& pair : *pVar)
-			vSelected.push_back(pair.first);
+			vSelected.push_back(MaterialLabel(pair.first));
 
 		auto tRow = BeginFieldRow(sLabel, iFlags, iSizeOffset);
 		if (pHovered)
@@ -316,6 +345,18 @@ namespace ImGui
 			for (int i = 0; i < vEntries.size(); i++)
 			{
 				auto& sEntry = vEntries[i];
+				const std::string sLabelText = MaterialLabel(sEntry);
+				if (vEffects[i] && !vEffects[i - 1])
+				{
+					DebugDummy({ 0, H::Draw.Scale(4) });
+					SetCursorPosX(GetCursorPosX() + H::Draw.Scale(12));
+					PushFont(F::Render.FontSmall);
+					PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
+					TextUnformatted("Custom shaders");
+					PopStyleColor();
+					PopFont();
+					DebugDummy({ 0, H::Draw.Scale(2) });
+				}
 
 				auto it = mIts.find(sEntry);
 				bool bFlagActive = it != mIts.end();
@@ -344,7 +385,7 @@ namespace ImGui
 					FOptionText(tOption, std::format("{}", iEntry).c_str(), H::Draw.Scale(14), FadeColor(F::Render.Accent));
 					PopFont();
 				}
-				FOptionText(tOption, (bHovered ? sEntry : TruncateText(sEntry, int(flPopupWidth - H::Draw.Scale(bFlagActive ? 84 : 52)))).c_str(), H::Draw.Scale(32 + 6 * int(log10(std::max(pVar->size(), 1ui64)))), FadeColor(bFlagActive || tOption.m_bHovered ? F::Render.Active.Value : MixColor(F::Render.Inactive, F::Render.Active, 0.5f)));
+				FOptionText(tOption, (bHovered ? sLabelText : TruncateText(sLabelText, int(flPopupWidth - H::Draw.Scale(bFlagActive ? 84 : 52)))).c_str(), H::Draw.Scale(32 + 6 * int(log10(std::max(pVar->size(), 1ui64)))), FadeColor(bFlagActive || tOption.m_bHovered ? F::Render.Active.Value : MixColor(F::Render.Inactive, F::Render.Active, 0.5f)));
 			}
 			if (!sModified.empty())
 			{
@@ -352,11 +393,14 @@ namespace ImGui
 				if (it != mIts.end())
 					pVar->erase(it->second);
 				else
-					pVar->emplace_back(sModified, ChamsMaterial_t());
+				{
+					auto pMaterial = F::Materials.GetMaterial(FNV1A::Hash32(sModified.c_str()));
+					pVar->emplace_back(sModified, pMaterial && pMaterial->m_iEffect ? ShaderLayer(pMaterial->m_iEffect) : ChamsMaterial_t());
+				}
 				bReturn = true;
 				vSelected.clear();
 				for (const auto& tMaterial : *pVar)
-					vSelected.push_back(tMaterial.first);
+					vSelected.push_back(MaterialLabel(tMaterial.first));
 			}
 			DebugDummy({ 0, H::Draw.Scale(2) });
 			EndFieldPopup();

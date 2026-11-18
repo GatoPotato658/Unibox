@@ -300,6 +300,9 @@ public:
 	NETVAR(m_flChargeBeginTime, float, "CTFPipebombLauncher", "m_flChargeBeginTime");
 
 	NETVAR_OFF(m_Pipebombs, CUtlVector<CHandle<CTFGrenadePipebombProjectile>>, "CTFPipebombLauncher", "m_flChargeBeginTime", -40);
+	NETVAR_OFF_EMBED(m_pChargeUpWeapon, void*, "CTFPipebombLauncher", "m_flChargeBeginTime", -64);
+
+	VIRTUAL(GetChargeMaxTime, float, 2, m_pChargeUpWeapon());
 
 	int GetDetonateType();
 };

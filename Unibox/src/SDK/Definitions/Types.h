@@ -1095,6 +1095,13 @@ struct Gradient_t
 	}
 };
 
+inline constexpr const char* ChamsEffectNames[] = {
+	"Source", "Flat", "Shaded", "Metallic", "Pearlescent", "Glass", "Holographic", "Iridescent", "Chrome", "Gradient", "Wireframe", "Crystal", "Emissive", "Plasma", "Nebula", "Carbon", "Brushed", "Hex", "Digital",
+	"Lava", "Bubble", "Neon", "Network", "Soap", "Aurora", "Aquarium", "Daydream", "Fresnel", "Galaxy", "Matrix", "Fire", "Frost", "Toon", "Cells", "Circuit", "Electric", "Spectrum", "Marble", "Thermal", "Camo"
+};
+inline constexpr int ChamsEffectCount = int(std::size(ChamsEffectNames)) - 1;
+inline constexpr const char* ChamsShaderPrefix = "D3D ";
+
 struct ChamsMaterial_t
 {
 	Color_t tColor = Color_t();
@@ -1121,7 +1128,7 @@ struct ChamsMaterial_t
 		};
 		flStart = fClamp(flStart, 0.f, 0.f, 1048576.f);
 		flEnd = fClamp(flEnd, 8192.f, flStart, 1048576.f);
-		iEffect = std::clamp(iEffect, 0, 39);
+		iEffect = std::clamp(iEffect, 0, ChamsEffectCount);
 		flRoughness = fClamp(flRoughness, 0.35f, 0.f, 1.f);
 		flReflectivity = fClamp(flReflectivity, 0.65f, 0.f, 1.f);
 		flScale = fClamp(flScale, 1.f, 0.05f, 16.f);

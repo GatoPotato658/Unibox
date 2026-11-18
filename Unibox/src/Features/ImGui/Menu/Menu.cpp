@@ -3096,7 +3096,10 @@ void CMenu::MenuSettings(int iTab)
 
 			std::vector<Material_t> vMaterials;
 			for (auto& tMaterial : F::Materials.m_mMaterials | std::views::values)
-				vMaterials.push_back(tMaterial);
+			{
+				if (!tMaterial.m_iEffect)
+					vMaterials.push_back(tMaterial);
+			}
 
 			std::sort(vMaterials.begin(), vMaterials.end(), [&](const auto& a, const auto& b) -> bool
 			{

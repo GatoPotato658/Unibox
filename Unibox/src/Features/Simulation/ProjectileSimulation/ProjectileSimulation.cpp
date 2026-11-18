@@ -362,24 +362,15 @@ bool CProjectileSimulation::GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeap
 	}
 	case TF_WEAPON_COMPOUND_BOW:
 	{
-		if (!bInterp && G::CurrentUserCmd && pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f
-			&& I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() >= TF_ARROW_MAX_CHARGE_TIME)
-		{
-			float flAddX = float(SDK::RandomInt()) / VALVE_RAND_MAX * 12.f - 6.f;
-			float flAddY = float(SDK::RandomInt()) / VALVE_RAND_MAX * 12.f - 6.f;
-
-			if (bNoRandomAngles)
-				vAngles -= { flAddX, flAddY };
-			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
-			vAngle += { flAddX, flAddY };
-		}
-		else
-			SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
+		SDK::GetProjectileFireSetup(pPlayer, vAngles, { 23.5f, -8.f, -3.f }, vPos, vAngle, bRedirect ? 2000.f : 0.f, 0.1f, bInterp, true, &m_tFireSetup);
 
 		auto uType = FNV1A::Hash32Const("models/weapons/w_models/w_arrow.mdl");
-		float flCharge = pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f ? I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() : 0.f;
-		float flSpeed = bMaxSpeed ? 2600.f : Math::RemapVal(flCharge, 0.f, 1.f, 1800.f, 2600.f);
-		flGravity = Math::RemapVal(flCharge, 0.f, 1.f, 0.5f, 0.1f) * flGravity;
+		auto pBow = pWeapon->As<CTFPipebombLauncher>();
+		float flCharge = pBow->m_flChargeBeginTime() != 0.f ? std::min(I::GlobalVars->curtime - pBow->m_flChargeBeginTime(), 1.f) : 0.f;
+		float flChargeMaxTime = pBow->GetChargeMaxTime();
+		float flRatio = flChargeMaxTime != 0.f ? std::clamp(flCharge / flChargeMaxTime, 0.f, 1.f) : flCharge < flChargeMaxTime ? 0.f : 1.f;
+		float flSpeed = bMaxSpeed ? 2600.f : 1800.f + 800.f * flRatio;
+		flGravity = (0.5f - 0.4f * flRatio) * flGravity;
 		tProjInfo = { pPlayer, pWeapon, uType, vPos, vAngle, { 1.f, 1.f, 1.f }, flSpeed, flGravity, 10.f };
 		return true;
 	}

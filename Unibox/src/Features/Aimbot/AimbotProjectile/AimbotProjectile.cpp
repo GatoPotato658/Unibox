@@ -34,6 +34,15 @@ static inline Vec3 GetLastNetworkedOrigin(CBaseEntity* pEntity)
 	return pEntity->m_vecOrigin();
 }
 
+static inline float GetLatency()
+{
+	auto pNetChan = I::EngineClient->GetNetChannelInfo();
+	if (!pNetChan)
+		return 0.f;
+
+	return pNetChan->GetLatency(FLOW_OUTGOING) + pNetChan->GetTimeSinceLastReceived() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke());
+}
+
 static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	std::vector<Target_t> vTargets;
@@ -418,6 +427,38 @@ static TickRecord* GetAimRecord(CBaseEntity* pEntity)
 	return nullptr;
 }
 
+static TickRecord* GetCurrentRecord(CBaseEntity* pEntity, TickRecord& tRecord)
+{
+	if (!pEntity || !pEntity->IsPlayer())
+		return nullptr;
+
+	auto pPlayer = pEntity->As<CTFPlayer>();
+	const Vec3 vOldAbsOrigin = pPlayer->GetAbsOrigin();
+	const Vec3 vOldAbsAngles = pPlayer->GetAbsAngles();
+	const bool bOldSettingUpBones = F::Backtrack.IsSettingUpBones();
+	pPlayer->SetAbsOrigin(pPlayer->m_vecOrigin());
+	pPlayer->SetAbsAngles(pPlayer->m_angRotation());
+	pPlayer->InvalidateBoneCache();
+
+	F::Backtrack.SetSettingUpBones(true);
+	const bool bSetup = pPlayer->SetupAimBones(tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+	F::Backtrack.SetSettingUpBones(bOldSettingUpBones);
+
+	pPlayer->SetAbsOrigin(vOldAbsOrigin);
+	pPlayer->SetAbsAngles(vOldAbsAngles);
+	pPlayer->InvalidateBoneCache();
+	if (!bSetup)
+		return nullptr;
+
+	tRecord.m_flSimTime = pPlayer->m_flSimulationTime();
+	tRecord.m_vOrigin = pPlayer->m_vecOrigin();
+	tRecord.m_vMins = pPlayer->m_vecMins();
+	tRecord.m_vMaxs = pPlayer->m_vecMaxs();
+	tRecord.m_vAngles = pPlayer->m_angRotation();
+	tRecord.m_flModelScale = pPlayer->m_flModelScale();
+	return &tRecord;
+}
+
 static bool GetHeadOffset(CBaseEntity* pEntity, const TickRecord* pRecord, Vec3& vOffset)
 {
 	if (!pEntity || !pEntity->IsPlayer() || !pRecord
@@ -532,6 +573,8 @@ Directs_t CAimbotProjectile::GetDirects()
 			if (tTarget.m_nAimedHitbox == HITBOX_HEAD)
 			{
 				auto pRecord = GetAimRecord(tTarget.m_pEntity);
+				if (!pRecord)
+					pRecord = GetCurrentRecord(tTarget.m_pEntity, m_tCurrentRecord);
 				if (!pRecord)
 					break;
 
@@ -1589,8 +1632,10 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	uint8_t iTraceInterval = iFlags == PointFlagsEnum::Lob ? Vars::Aimbot::Projectile::LobTraceInterval.Value
 		: iType != PointTypeEnum::Direct ? Vars::Aimbot::Projectile::SplashTraceInterval.Value
 		: Vars::Aimbot::Projectile::DirectTraceInterval.Value;
-	if (iType == PointTypeEnum::Direct && tTarget.m_nAimedHitbox == HITBOX_HEAD)
+	const bool bTargetPath = iType == PointTypeEnum::Direct && tTarget.m_nAimedHitbox == HITBOX_HEAD;
+	if (bTargetPath)
 		iTraceInterval = 1;
+	Vec3 vTargetPos = tTarget.m_vPos;
 
 	const RestoreInfo_t tOriginal = { tTarget.m_pEntity->GetAbsOrigin(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
 	tTarget.m_pEntity->SetAbsOrigin(tTarget.m_vPos);
@@ -1664,6 +1709,12 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 		}
 		if (iTraceInterval != 1 && n % iTraceInterval && n != iSimTime)
 			continue;
+
+		if (bTargetPath && n + m_tInfo.m_iLaunchDelay < int(m_vTargetPath.size()))
+		{
+			vTargetPos = m_vTargetPath[n + m_tInfo.m_iLaunchDelay];
+			tTarget.m_pEntity->SetAbsOrigin(vTargetPos);
+		}
 
 		Vec3 vOld = vNew; vNew = F::ProjSim.GetOrigin();
 		SDK::TraceHull(vOld, vNew, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
@@ -1759,7 +1810,7 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 				{
 					if (!tTarget.m_pRecord)
 						break;
-					const Vec3 vRecordOffset = tTarget.m_pRecord->m_vOrigin - tTarget.m_vPos;
+					const Vec3 vRecordOffset = tTarget.m_pRecord->m_vOrigin - vTargetPos;
 					const Vec3 vTraceOrigin = trace.endpos;
 					const Vec3 vTraceEnd = vTraceOrigin + F::ProjSim.GetVelocity() * TICK_INTERVAL;
 					if (!IsHeadshotHitbox(tTarget.m_pEntity, tTarget.m_pRecord, vRecordOffset, vTraceOrigin, vTraceEnd, vLaunchForward))
@@ -1861,7 +1912,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 		case Vars::Aimbot::General::AimTypeEnum::Assistive:
 		{
 			PROJ_COUNT(SecondTests);
-			if (TestAngle(vPoint, m_vPlainAngles, iSimTime, iType, true))
+			if (TestAngle(vPoint, m_vPlainAngles, iSimTime, iType, iFlags, true))
 			{
 				bReturn = true;
 				m_iResult = 2;
@@ -2047,7 +2098,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	// The sentrygun's rocket firing position is fixed based on its current angles, so its not quite correct when testing with different angles
 	m_tInfo.m_vLocalEye = m_iWeaponID == TF_WEAPON_LASER_POINTER ? m_tProjInfo.m_vPos : m_vShootPos;
 	m_tInfo.m_vTargetEye = tTarget.m_pEntity->As<CTFPlayer>()->GetViewOffset();
-	m_tInfo.m_flLatency = bAccountPing ? F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke()) : 0.f;
+	m_tInfo.m_flLatency = bAccountPing ? GetLatency() : 0.f;
 	tTarget.m_vPos = vTargetOrigin;
 
 	Vec3 vVelocity = F::ProjSim.GetVelocity();
@@ -2103,6 +2154,9 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	const int iDirectOffsets = int(mDirects.size()), iSplashModes = int(vSplashes.size());
 	int iLastTick = 0;
 	const int iPreRoll = std::clamp(TIME_TO_TICKS(m_tInfo.m_flLatency), 0, iMaxTime);
+	m_vTargetPath.clear();
+	if (!iPreRoll)
+		m_vTargetPath.push_back(tTarget.m_vPos);
 	for (int i = 1 - iPreRoll; i <= iMaxTime; i++)
 	{
 		iLastTick = i;
@@ -2111,6 +2165,8 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 			F::MoveSim.RunTick(m_tMoveStorage);
 			tTarget.m_vPos = m_tMoveStorage.m_vPredictedOrigin;
 		}
+		if (i >= 0)
+			m_vTargetPath.push_back(tTarget.m_vPos);
 		if (i < 0 || i < m_tInfo.m_iLaunchDelay)
 			continue;
 
@@ -2476,6 +2532,13 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 		&& (m_iWeaponID == TF_WEAPON_COMPOUND_BOW || m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER || m_iWeaponID == TF_WEAPON_CANNON && G::LastUserCmd->buttons & IN_ATTACK))
 	{
 		pCmd->buttons |= IN_ATTACK;
+		if (m_iWeaponID == TF_WEAPON_COMPOUND_BOW && pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f
+			&& I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() >= TF_ARROW_MAX_CHARGE_TIME)
+		{
+			pCmd->buttons |= IN_ATTACK2;
+			m_bLowerBow = true;
+			return false;
+		}
 		if (!G::CanPrimaryAttack && !G::Reloading && Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::Silent)
 			return false;
 	}
@@ -2560,7 +2623,8 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 			case TF_WEAPON_COMPOUND_BOW:
 			case TF_WEAPON_PIPEBOMBLAUNCHER:
 				pCmd->buttons |= IN_ATTACK;
-				if (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f)
+				if (pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() > 0.f
+					&& (m_iWeaponID != TF_WEAPON_COMPOUND_BOW || I::GlobalVars->curtime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() < TF_ARROW_MAX_CHARGE_TIME))
 					pCmd->buttons &= ~IN_ATTACK;
 				break;
 			case TF_WEAPON_CANNON:
@@ -2873,7 +2937,11 @@ void CAimbotProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd*
 		Vars::Aimbot::General::AutoShoot.Value = true;
 	}
 
+	const bool bLoweredBow = m_bLowerBow;
+	m_bLowerBow = false;
 	const bool bSuccess = m_iWeaponID == TF_WEAPON_MECHANICAL_ARM ? RunMechArm(pLocal, pWeapon, pCmd) : RunMain(pLocal, pWeapon, pCmd);
+	if (bLoweredBow && m_iWeaponID == TF_WEAPON_COMPOUND_BOW && pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() <= 0.f)
+		pCmd->buttons &= ~(IN_ATTACK | IN_ATTACK2);
 	if (!bSuccess)
 	{
 		if (Vars::Visuals::Prediction::BestPath.Value && !m_vBestPlayerPath.empty())
@@ -3371,7 +3439,7 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 
 	m_tInfo = { pLocal, m_tProjInfo.m_pWeapon, &tTarget, pProjectile };
 	m_aFireSetupPrimed[0] = m_aFireSetupPrimed[1] = false;
-	m_tInfo.m_flLatency = bAccountPing ? F::Backtrack.GetReal() + TICKS_TO_TIME(F::Backtrack.GetAnticipatedChoke()) : 0.f;
+	m_tInfo.m_flLatency = bAccountPing ? GetLatency() : 0.f;
 	m_tInfo.m_vHull = pProjectile->m_vecMaxs().Min(3);
 	{
 		CGameTrace trace = {};
@@ -3432,7 +3500,7 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 			Vec3 vPoint = tTarget.m_vPos + vOffset;
 			if (Vars::Aimbot::Projectile::HuntsmanPullPoint.Value && tTarget.m_nAimedHitbox == HITBOX_HEAD)
 			{
-				vPoint = PullPoint(vPoint, m_tInfo.m_vLocalEye, m_tInfo, tTarget.m_pEntity->m_vecMins() + m_tInfo.m_vHull, tTarget.m_pEntity->m_vecMaxs() - m_tInfo.m_vHull, tTarget.m_vPos);
+				vPoint = PullPoint(vPoint, m_tInfo.m_vLocalEye, m_tInfo, tTarget.m_vPos, tTarget.m_pEntity->m_vecMins() + m_tInfo.m_vHull, tTarget.m_pEntity->m_vecMaxs() - m_tInfo.m_vHull);
 				if (Vars::Aimbot::Projectile::HuntsmanPullNoZ.Value)
 					vPoint.z = tTarget.m_vPos.z + vOffset.z;
 			}

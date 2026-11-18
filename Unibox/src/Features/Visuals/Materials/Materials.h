@@ -16,6 +16,7 @@ struct Material_t
 	IMaterialVar* m_envmaptint = nullptr;
 	bool m_bInvertCull = false;
 	bool m_bBlockOccluded = false;
+	int m_iEffect = 0;
 };
 
 class CMaterials

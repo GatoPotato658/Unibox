@@ -39,13 +39,6 @@ void CNoSpreadProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		Vec3 vAngAdd = pLocal->EyeAngles() - pWeapon->GetSpreadAngles();
 		switch (pWeapon->GetWeaponID())
 		{
-		case TF_WEAPON_COMPOUND_BOW:
-			if (flCurTime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() >= TF_ARROW_MAX_CHARGE_TIME)
-			{
-				vAngAdd.x -= float(SDK::RandomInt()) / VALVE_RAND_MAX * 12.f - 6.f;
-				vAngAdd.y -= float(SDK::RandomInt()) / VALVE_RAND_MAX * 12.f - 6.f;
-			}
-			break;
 		case TF_WEAPON_SYRINGEGUN_MEDIC:
 			vAngAdd.x -= SDK::RandomFloat(-1.5f, 1.5f);
 			vAngAdd.y -= SDK::RandomFloat(-1.5f, 1.5f);
