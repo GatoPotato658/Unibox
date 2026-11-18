@@ -182,7 +182,7 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 		if (!pPlayer || !pPlayer->IsAlive() || pPlayer == pLocal || F::VSHController.IsBoss(pPlayer->entindex())) continue;
 
 		const bool bDormant = pPlayer->IsDormant();
-		const bool bInvuln = pPlayer->InCond(TF_COND_INVULNERABLE) || pPlayer->InCond(TF_COND_PHASE);
+		const bool bInvuln = pPlayer->IsInvulnerable();
 
 		HazardKind eKind = bInvuln ? HazardKind::EnemyInvuln
 			: bDormant ? HazardKind::EnemyDormant
@@ -204,10 +204,11 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 		}
 		if (vOrigin.IsZero()) continue;
 
+		const Vector vEye = bDormant ? Vector() : pPlayer->GetEyePosition();
 		pMap->CollectAreasAround(vOrigin, flRadius, vAreas);
 		for (auto* pArea : vAreas)
 		{
-			if (!pArea || (!bDormant && !F::NavEngine.IsVectorVisibleNavigation(vOrigin + Vector(0, 0, 60), pArea->m_vCenter + Vector(0, 0, 40))))
+			if (!pArea || (!bDormant && !F::NavEngine.IsVectorVisibleNavigation(vEye, pArea->m_vCenter + Vector(0, 0, 40))))
 				continue;
 
 			const float flDistFactor = 1.0f - std::clamp(pArea->m_vCenter.DistTo(vOrigin) / flRadius, 0.f, 1.f);

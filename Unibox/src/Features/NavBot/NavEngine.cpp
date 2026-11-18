@@ -423,6 +423,7 @@ bool CNavEngine::StoreValidatedCrumbs(const std::vector<CachedPathCrumb_t>& vCru
 		m_vHullDebug.clear();
 
 	ResetFollowVariation();
+	m_tLastCrumb = {};
 	m_vCrumbs = std::move(vValidated);
 	return true;
 }
@@ -2377,6 +2378,26 @@ void CNavEngine::FollowCrumbs(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 	bool bJumpCrumb = false;
 	size_t nConsumed = 0;
 	int iLoopLimit = 32;
+
+	constexpr size_t kSkipAheadScan = 6;
+	if (m_pLocalArea && pLocal->OnSolid() && m_tLastCrumb.m_bRequiresJump && m_tLastCrumb.m_pNavArea == m_pLocalArea
+		&& !m_vCrumbs.empty() && m_vCrumbs.front().m_pNavArea != m_pLocalArea && !m_vCrumbs.front().IsTransition())
+	{
+		m_vCrumbs.push_front(m_tLastCrumb);
+		m_tLastCrumb = {};
+	}
+	else if (m_pLocalArea && pLocal->OnSolid())
+	{
+		for (size_t i = std::min(m_vCrumbs.size(), kSkipAheadScan); i-- > 1;)
+		{
+			if (m_vCrumbs[i].m_pNavArea == m_pLocalArea && m_vCrumbs[i - 1].m_pNavArea != m_pLocalArea)
+			{
+				m_tLastCrumb = m_vCrumbs[i - 1];
+				nConsumed = i;
+				break;
+			}
+		}
+	}
 
 	while (iLoopLimit-- > 0)
 	{

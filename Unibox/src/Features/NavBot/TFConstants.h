@@ -60,6 +60,8 @@ namespace TFGame
 	inline constexpr float MAX_SAFE_DROP_HEIGHT = MAX_SAFE_FALL_SPEED * MAX_SAFE_FALL_SPEED / (2.f * GRAVITY);
 
 	inline constexpr float SENTRY_MAX_RANGE = 1100.f;
+	inline constexpr float DAMAGE_OPTIMAL_DISTANCE = 512.f;
+	inline constexpr float DAMAGE_FALLOFF_END = DAMAGE_OPTIMAL_DISTANCE * 2.f;
 	inline constexpr float SENTRY_EYE_OFFSET_L1 = 32.f;
 	inline constexpr float SENTRY_EYE_OFFSET_L2 = 40.f;
 	inline constexpr float SENTRY_EYE_OFFSET_L3 = 46.f;

@@ -440,10 +440,10 @@ int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& 
 			const float flGap = (tPoints.m_vCenterNext - tPoints.m_vCenter).Length2D();
 			const bool bJumpArea = (pTo->m_iAttributeFlags & NAV_MESH_JUMP) != 0;
 			const bool bJumpUp = flRise > PLAYER_STEP_HEIGHT + 1.f && flRise <= PLAYER_JUMP_HEIGHT + 1.f;
-			const Vector vTakeoff = tPoints.m_vCenter;
 			const Vector vLanding = GetSafePointOnArea(pTo, tPoints.m_vCenterNext);
 			const bool bGapJump = flGap > PLAYER_STEP_HEIGHT * 2.f && !m_setWalkableBridges.contains(tKey)
 				&& TFGame::CanJumpAcross(flGap, flRise, tCtx.m_flRunSpeed);
+			const Vector vTakeoff = bGapJump ? tPoints.m_vCenter : GetSafePointOnArea(pFrom, tPoints.m_vCenter);
 			if (tDropdown.m_bRequiresJump || bJumpArea || bJumpUp || bGapJump)
 			{
 				CachedPathCrumb_t& tTakeoff = vOutPath.back();

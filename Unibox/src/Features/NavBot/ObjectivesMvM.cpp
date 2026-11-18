@@ -34,7 +34,7 @@ static float GetPrimaryRange(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	case TF_CLASS_SNIPER:
 		return 1800.f;
 	default:
-		return std::max(300.f, pWeapon->GetRange());
+		return std::clamp(pWeapon->GetRange(), 300.f, TFGame::DAMAGE_FALLOFF_END);
 	}
 }
 
