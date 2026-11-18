@@ -32,6 +32,11 @@ enum class HazardPolicy : uint8_t
 	TempForbid,
 };
 
+inline constexpr bool IsSentryHazard(HazardKind eKind)
+{
+	return eKind == HazardKind::Sentry || eKind == HazardKind::SentryMedium || eKind == HazardKind::SentryLow;
+}
+
 struct Hazard_t
 {
 	HazardKind m_eKind = HazardKind::None;
@@ -52,13 +57,23 @@ private:
 		int m_iLocalClass = 0;
 		bool m_bMini = false;
 		float m_flTargetEye = 0.f;
+		float m_flRange = 0.f;
 		int m_iExpireTick = 0;
 		int m_iSeenTick = 0;
 		std::vector<std::pair<CNavArea*, HazardKind>> m_vAreas;
 	};
 
 	std::unordered_map<CNavArea*, Hazard_t> m_mAreaHazards;
+	struct StickyCoverage_t
+	{
+		Vector m_vOrigin = {};
+		float m_flRadius = 0.f;
+		int m_iSeenTick = 0;
+		std::vector<CNavArea*> m_vAreas;
+	};
+
 	std::unordered_map<int, SentryCoverage_t> m_mSentryCoverage;
+	std::unordered_map<int, StickyCoverage_t> m_mStickyCoverage;
 	float m_flStandingEyeHeight = TFGame::VIEW_HEIGHT_DEFAULT;
 
 	int m_iLastUpdateTick = 0;
@@ -83,11 +98,13 @@ public:
 	float GetCost(CNavArea* pArea) const;
 	const Hazard_t* GetHazard(CNavArea* pArea) const;
 	bool HasHazard(CNavArea* pArea) const;
+	static float GetSentryRange(CBaseEntity* pBuilding);
+	static bool IsPipebombResting(CBaseEntity* pPipebomb);
 
 	void SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const;
 
 	void SetIgnoreSentries(bool b) { m_bIgnoreSentries = b; }
-	bool IgnoresSentries() const { return m_bIgnoreSentries; }
+	bool IsIgnored(const Hazard_t& tHazard) const { return m_bIgnoreSentries && IsSentryHazard(tHazard.m_eKind); }
 
 	void UpdateBotStanding(CNavArea* pLocalArea);
 	bool BotStandingOnHazard() const { return m_pStandingHazardArea != nullptr; }

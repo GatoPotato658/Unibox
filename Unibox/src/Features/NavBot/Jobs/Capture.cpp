@@ -2,6 +2,7 @@
 #include "../../Players/PlayerUtils.h"
 #include "../../Aimbot/AimbotProjectile/AimbotProjectile.h"
 #include "../Objectives.h"
+#include "../TFConstants.h"
 #include "../../Misc/NamedPipe/NamedPipe.h"
 
 static CCaptureFlag* FindClosestWorldFlag(const Vector& vLocalOrigin)
@@ -10,7 +11,7 @@ static CCaptureFlag* FindClosestWorldFlag(const Vector& vLocalOrigin)
 	float flBestDist = FLT_MAX;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || !pEntity->IsCaptureFlag())
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();
@@ -23,6 +24,42 @@ static CCaptureFlag* FindClosestWorldFlag(const Vector& vLocalOrigin)
 	}
 
 	return pBestFlag;
+}
+
+static const TriggerData_t* FindCaptureTrigger(const Vector& vPoint)
+{
+	constexpr float flMaxMatchDist = 256.f;
+	const TriggerData_t* pBest = nullptr;
+	float flBestDistSqr = flMaxMatchDist * flMaxMatchDist;
+	for (const auto& tTrigger : G::TriggerStorage)
+	{
+		if (tTrigger.m_eType != TriggerTypeEnum::CaptureArea || !tTrigger.m_pModel)
+			continue;
+
+		const Vector vClamped = { std::clamp(vPoint.x, tTrigger.m_vMins.x, tTrigger.m_vMaxs.x),
+			std::clamp(vPoint.y, tTrigger.m_vMins.y, tTrigger.m_vMaxs.y),
+			std::clamp(vPoint.z, tTrigger.m_vMins.z, tTrigger.m_vMaxs.z) };
+		const float flDistSqr = vClamped.DistToSqr(vPoint);
+		if (flDistSqr < flBestDistSqr)
+		{
+			flBestDistSqr = flDistSqr;
+			pBest = &tTrigger;
+		}
+	}
+	return pBest;
+}
+
+static bool IsInsideCaptureTrigger(const TriggerData_t* pTrigger, const Vector& vFeet)
+{
+	if (!pTrigger)
+		return true;
+
+	const Vector vBody = vFeet + Vector(0.f, 0.f, TFGame::HULL_HEIGHT * 0.5f);
+	if (vBody.x < pTrigger->m_vMins.x || vBody.x > pTrigger->m_vMaxs.x
+		|| vBody.y < pTrigger->m_vMins.y || vBody.y > pTrigger->m_vMaxs.y
+		|| vBody.z < pTrigger->m_vMins.z || vBody.z > pTrigger->m_vMaxs.z)
+		return false;
+	return pTrigger->PointIsWithin(vBody);
 }
 
 static Vector AdjustCaptureCandidateToNav(Vector vCandidate)
@@ -42,7 +79,7 @@ static Vector AdjustCaptureCandidateToNav(Vector vCandidate)
 
 bool CNavBotCapture::CanCaptureObjective()
 {
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives))
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives))
 		return false;
 
 	const auto pGameRules = I::TFGameRules();
@@ -126,7 +163,7 @@ bool CNavBotCapture::GetCtfGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam,
 
 	if (F::BotUtils.ShouldAssist(pLocal, iCarrierIdx))
 	{
-		if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::HelpCaptureObjectives))
+		if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::HelpCaptureObjectives))
 			return false;
 
 		m_sCaptureStatus = L"Assist";
@@ -337,6 +374,7 @@ bool CNavBotCapture::GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam
 
 			std::vector<Vector> vFallbackCandidates;
 			vFallbackCandidates.reserve(iSlots + 12);
+			const TriggerData_t* pCaptureTrigger = FindCaptureTrigger(vPosition);
 
 			auto TryCandidate = [&](float flAngle, float flRadius) -> bool
 				{
@@ -348,6 +386,9 @@ bool CNavBotCapture::GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam
 					}
 
 					vCandidate = AdjustCaptureCandidateToNav(vCandidate);
+					if (!IsInsideCaptureTrigger(pCaptureTrigger, vCandidate))
+						return false;
+
 					vFallbackCandidates.push_back(vCandidate);
 					if (SpotTakenByOther(vCandidate))
 						return false;
@@ -817,7 +858,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	}
 
 	const float flRetargetThresholdSq = bPasstimeCarrier ? 180.0f * 180.0f : 256.0f;
-	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Capture && F::NavEngine.IsPathing()
+	if (F::NavEngine.IsPathingFor(PriorityListEnum::Capture)
 		&& vTarget.DistToSqr(m_vPreviousTarget) <= flRetargetThresholdSq)
 		return true;
 

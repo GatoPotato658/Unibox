@@ -72,12 +72,8 @@ static auto GetProjectileEscapeScore(CTFPlayer* pLocal) -> float
 	float flClosestThreat = FLT_MAX;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 	{
-		float flThreatRadius = 0.f;
-		if (!CNavBotDanger::GetProjectileThreatRange(pEntity, pLocal->m_iTeamNum(), flThreatRadius))
-			continue;
-
-		const float flDist = pEntity->m_vecOrigin().DistTo(vLocalOrigin);
-		if (flDist < flThreatRadius)
+		float flDist = 0.f;
+		if (CNavBotDanger::ThreatensPosition(pEntity, pLocal->m_iTeamNum(), vLocalOrigin, flDist))
 			flClosestThreat = std::min(flClosestThreat, flDist);
 	}
 
@@ -102,7 +98,7 @@ auto CNavBotJobSystem::GetEscapeDangerScore(CTFPlayer* pLocal) -> float
 	if (NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::DontEscapeDangerIntel) &&
 		F::GameObjectiveController.m_eGameMode == TF_GAMETYPE_CTF)
 	{
-		const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
+		const int iEnemyTeam = NavRuntime::GetEnemyTeam(pLocal);
 		if (F::FlagController.GetCarrier(iEnemyTeam) == pLocal->entindex())
 			return Decline();
 	}
@@ -140,7 +136,7 @@ auto CNavBotJobSystem::GetEscapeDangerScore(CTFPlayer* pLocal) -> float
 		return GetActivePriorityScore(PriorityListEnum::EscapeDanger, 0.f);
 	}
 
-	const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+	const float flHealth = NavJobUtils::GetHealthFraction(pLocal);
 	const int iPersonality = Vars::Misc::Movement::NavBot::Personality.Value;
 	const bool bVSHBoss = F::VSHController.IsBossLocal();
 	const float flMedHpThreshold = bVSHBoss ? 0.f : iPersonality == Vars::Misc::Movement::NavBot::PersonalityEnum::Yolo ? 0.25f
@@ -201,7 +197,7 @@ static auto GetHealthScore(CTFPlayer* pLocal, bool bLowPrio) -> float
 	if (!pLocal || F::VSHController.IsBossLocal() || !NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::SearchHealth))
 		return GetActivePriorityScore(ePriority, 0.f);
 
-	const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+	const float flHealth = NavJobUtils::GetHealthFraction(pLocal);
 	const bool bActive = F::NavEngine.m_eCurrentPriority == ePriority;
 	const bool bHealing = NavJobUtils::IsBeingHealed(pLocal);
 	float flScore = 0.f;
@@ -427,46 +423,25 @@ auto CNavBotJobSystem::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWe
 	if (!pCmd || !pLocal || !pWeapon)
 		return tResult;
 
+	const bool bZombie = F::ZIController.IsZombie();
 	std::array aCandidates =
 	{
 		JobCandidate_t{ EJobKind::EscapeSpawn, GetEscapeSpawnScore(pLocal) },
 		JobCandidate_t{ EJobKind::EscapeProjectiles, GetProjectileEscapeScore(pLocal) },
 		JobCandidate_t{ EJobKind::EscapeDanger, GetEscapeDangerScore(pLocal) },
-		JobCandidate_t{ EJobKind::GetHealth, GetHealthScore(pLocal, false) },
-		JobCandidate_t{ EJobKind::Engineer, GetEngineerScore(pLocal) },
-		JobCandidate_t{ EJobKind::RunReload, GetRunReloadScore(pLocal) },
+		JobCandidate_t{ EJobKind::GetHealth, bZombie ? 0.f : GetHealthScore(pLocal, false) },
+		JobCandidate_t{ EJobKind::Engineer, bZombie ? 0.f : GetEngineerScore(pLocal) },
+		JobCandidate_t{ EJobKind::RunReload, bZombie ? 0.f : GetRunReloadScore(pLocal) },
 		JobCandidate_t{ EJobKind::Melee, GetMeleeScore(pLocal) },
-		JobCandidate_t{ EJobKind::GetAmmo, GetAmmoScore(pLocal) },
+		JobCandidate_t{ EJobKind::GetAmmo, bZombie ? 0.f : GetAmmoScore(pLocal) },
 		JobCandidate_t{ EJobKind::Capture, GetCaptureScore(pLocal) },
-		JobCandidate_t{ EJobKind::SnipeSentry, GetSnipeSentryScore(pLocal) },
-		JobCandidate_t{ EJobKind::SafeReload, GetSafeReloadScore(pLocal) },
-		JobCandidate_t{ EJobKind::StayNear, GetStayNearScore(pLocal, pWeapon) },
-		JobCandidate_t{ EJobKind::LowPrioHealth, GetHealthScore(pLocal, true) },
+		JobCandidate_t{ EJobKind::SnipeSentry, bZombie ? 0.f : GetSnipeSentryScore(pLocal) },
+		JobCandidate_t{ EJobKind::SafeReload, bZombie ? 0.f : GetSafeReloadScore(pLocal) },
+		JobCandidate_t{ EJobKind::StayNear, bZombie ? 0.f : GetStayNearScore(pLocal, pWeapon) },
+		JobCandidate_t{ EJobKind::LowPrioHealth, bZombie ? 0.f : GetHealthScore(pLocal, true) },
 		JobCandidate_t{ EJobKind::GroupWithOthers, GetGroupWithOthersScore() },
 		JobCandidate_t{ EJobKind::Roam, GetRoamScore() }
 	};
-
-	if (F::ZIController.IsZombie())
-	{
-		for (auto& tCandidate : aCandidates)
-		{
-			switch (tCandidate.m_eKind)
-			{
-			case EJobKind::GetHealth:
-			case EJobKind::Engineer:
-			case EJobKind::RunReload:
-			case EJobKind::GetAmmo:
-			case EJobKind::SnipeSentry:
-			case EJobKind::SafeReload:
-			case EJobKind::StayNear:
-			case EJobKind::LowPrioHealth:
-				tCandidate.m_flScore = 0.f;
-				break;
-			default:
-				break;
-			}
-		}
-	}
 
 	while (auto pCandidate = FindBestCandidate(aCandidates))
 	{

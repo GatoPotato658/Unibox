@@ -82,9 +82,7 @@ void CNavBotCore::ResetRuntimeState(CUserCmd* pCmd)
 	F::NavBotStayNear.m_iStayNearTargetIdx = -1;
 	F::NavBotReload.m_iLastReloadSlot = -1;
 	F::CritHack.m_bForce = false;
-	m_tIdleTimer.Update();
-	m_tAntiStuckTimer.Update();
-	UpdateRunReloadInput(pCmd, false);
+	ResetBusy(pCmd);
 }
 
 void CNavBotCore::ResetBusy(CUserCmd* pCmd)

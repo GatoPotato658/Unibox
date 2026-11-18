@@ -7,8 +7,6 @@ Enum(EBStage, Normal = 0, NormalInverted, Random, RandomInverted);
 class CMisc
 {
 private:
-	bool JumpReleased(CTFPlayer* pLocal);
-	bool CanGroundJump(CTFPlayer* pLocal);
 	void AutoJump(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AutoJumpbug(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AutoEdgebug(CTFPlayer* pLocal, CUserCmd* pCmd);
@@ -112,6 +110,8 @@ private:
 	float m_flBuybotStallClock = 0.f;
 
 public:
+	bool JumpReleased(CTFPlayer* pLocal);
+	bool CanGroundJump(CTFPlayer* pLocal);
 	struct ProfileDumpResult_t
 	{
 		bool m_bResourceAvailable = false;

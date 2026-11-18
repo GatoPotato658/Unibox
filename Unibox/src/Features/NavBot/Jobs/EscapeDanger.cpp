@@ -55,14 +55,14 @@ const Hazard_t* CNavBotDanger::GetHazardAhead(CTFPlayer* pLocal) const
 {
 	if (!pLocal || !F::NavEngine.IsPathing())
 		return nullptr;
-	auto pCrumbs = F::NavEngine.GetCrumbs();
-	if (!pCrumbs || pCrumbs->size() < 2)
+	const auto& vCrumbs = F::NavEngine.GetCrumbs();
+	if (vCrumbs.size() < 2)
 		return nullptr;
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	const Hazard_t* pWorst = nullptr;
 	int iWorstRank = 0;
 	size_t nChecked = 0;
-	for (const auto& tCrumb : *pCrumbs)
+	for (const auto& tCrumb : vCrumbs)
 	{
 		if (nChecked >= 6)
 			break;
@@ -75,8 +75,7 @@ const Hazard_t* CNavBotDanger::GetHazardAhead(CTFPlayer* pLocal) const
 		const Hazard_t* pHazard = F::Hazards.GetHazard(tCrumb.m_pNavArea);
 		if (!pHazard || !std::isfinite(F::Hazards.GetCost(tCrumb.m_pNavArea)))
 			continue;
-		if (F::Hazards.IgnoresSentries()
-			&& (pHazard->m_eKind == HazardKind::Sentry || pHazard->m_eKind == HazardKind::SentryMedium || pHazard->m_eKind == HazardKind::SentryLow))
+		if (F::Hazards.IsIgnored(*pHazard))
 			continue;
 		const int iRank = IsHighDanger(*pHazard) ? 3 : IsMediumDanger(*pHazard) ? 2
 			: pHazard->m_eKind == HazardKind::SentryLow ? 1 : 0;
@@ -98,7 +97,7 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 
 	if (NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::DontEscapeDangerIntel) && F::GameObjectiveController.m_eGameMode == TF_GAMETYPE_CTF)
 	{
-		const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
+		const int iEnemyTeam = NavRuntime::GetEnemyTeam(pLocal);
 		if (F::FlagController.GetCarrier(iEnemyTeam) == pLocal->entindex())
 			return false;
 	}
@@ -160,10 +159,10 @@ bool CNavBotDanger::EscapeDanger(CTFPlayer* pLocal)
 		Vector vReferencePosition;
 		bool bHasTarget = false;
 
-		auto pCrumbs = F::NavEngine.GetCrumbs();
-		if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::None && F::NavEngine.m_eCurrentPriority != PriorityListEnum::EscapeDanger && !pCrumbs->empty())
+		const auto& vCrumbs = F::NavEngine.GetCrumbs();
+		if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::None && F::NavEngine.m_eCurrentPriority != PriorityListEnum::EscapeDanger && !vCrumbs.empty())
 		{
-			vReferencePosition = pCrumbs->back().m_vPos;
+			vReferencePosition = vCrumbs.back().m_vPos;
 			bHasTarget = true;
 		}
 		else
@@ -337,12 +336,27 @@ bool CNavBotDanger::GetProjectileThreatRange(CBaseEntity* pEntity, int iLocalTea
 	}
 }
 
+bool CNavBotDanger::ThreatensPosition(CBaseEntity* pEntity, int iLocalTeam, const Vector& vPos, float& flOutDist)
+{
+	float flThreatRange = 0.f;
+	if (!GetProjectileThreatRange(pEntity, iLocalTeam, flThreatRange))
+		return false;
+
+	flOutDist = pEntity->m_vecOrigin().DistTo(vPos);
+	if (flOutDist >= flThreatRange)
+		return false;
+
+	return pEntity->GetClassID() != ETFClassID::CTFGrenadePipebombProjectile
+		|| !CHazards::IsPipebombResting(pEntity)
+		|| F::NavEngine.IsVectorVisibleNavigation(pEntity->m_vecOrigin(), vPos + Vector(0.f, 0.f, TFGame::HULL_HEIGHT * 0.5f), MASK_SHOT & ~CONTENTS_HITBOX);
+}
+
 static bool IsPositionSafe(const Vector& vPos, int iLocalTeam)
 {
+	float flDist = 0.f;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 	{
-		float flThreatRange = 0.f;
-		if (CNavBotDanger::GetProjectileThreatRange(pEntity, iLocalTeam, flThreatRange) && pEntity->m_vecOrigin().DistTo(vPos) < flThreatRange)
+		if (CNavBotDanger::ThreatensPosition(pEntity, iLocalTeam, vPos, flDist))
 			return false;
 	}
 	return true;
@@ -359,8 +373,7 @@ bool CNavBotDanger::EscapeProjectiles(CTFPlayer* pLocal)
 	if (IsPositionSafe(pLocal->GetAbsOrigin(), pLocal->m_iTeamNum()))
 	{
 		m_pProjectileTargetArea = nullptr;
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeDanger)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::EscapeDanger);
 		return false;
 	}
 
@@ -435,8 +448,7 @@ bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 	if (!NavJobUtils::IsSpawnArea(pLocalArea))
 	{
 		m_iSpawnExitAttempt = 0;
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::EscapeSpawn)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::EscapeSpawn);
 		return false;
 	}
 
@@ -444,7 +456,7 @@ bool CNavBotDanger::EscapeSpawn(CTFPlayer* pLocal)
 	if (bActive || !m_tSpawnEscape.Run(2.f))
 		return bActive;
 
-	auto vExitAreas = *F::NavEngine.GetRespawnRoomExitAreas();
+	auto vExitAreas = F::NavEngine.GetRespawnRoomExitAreas();
 	if (vExitAreas.empty())
 		return false;
 

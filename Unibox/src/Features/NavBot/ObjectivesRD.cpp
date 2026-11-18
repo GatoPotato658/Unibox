@@ -10,7 +10,7 @@ namespace
 	CCaptureFlag* GetCarriedRobotDestructionFlag(CTFPlayer* pPlayer)
 	{
 		auto pItem = pPlayer ? pPlayer->m_hItem().Get() : nullptr;
-		if (!pItem || pItem->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pItem || !pItem->IsCaptureFlag())
 			return nullptr;
 
 		auto pFlag = pItem->As<CCaptureFlag>();
@@ -74,7 +74,7 @@ void CRDController::Update()
 	m_vPickups = m_vPacks;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || !pEntity->IsCaptureFlag())
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();

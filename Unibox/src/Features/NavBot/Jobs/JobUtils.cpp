@@ -1,4 +1,5 @@
 #include "NavBotJobs.h"
+#include "../Hazards.h"
 
 #include <algorithm>
 #include <queue>
@@ -62,7 +63,7 @@ namespace NavAreaUtils
 
 			Vector vAreaOrigin = pCurrentArea->m_vCenter;
 			vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
-			if (!F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vVischeckPoint))
+			if (!F::Hazards.HasHazard(pCurrentArea) && !F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vVischeckPoint))
 			{
 				tOut = { pCurrentArea, iDepth };
 				return true;

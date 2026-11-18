@@ -255,7 +255,7 @@ float CVSHController::GetHuntScore(CTFPlayer* pTarget, float flDist)
 		}
 	}
 
-	flScore += static_cast<float>(pTarget->m_iHealth()) / std::max(1, pTarget->GetMaxHealth()) * 150.f;
+	flScore += NavJobUtils::GetHealthFraction(pTarget) * 150.f;
 	if (iTargetIdx == m_iHuntIdx)
 		flScore -= 200.f;
 	return flScore;

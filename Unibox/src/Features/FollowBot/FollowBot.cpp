@@ -35,9 +35,9 @@ static bool ShouldCancelFollowNav(const FollowTarget_t& tTarget, const Vec3& vLo
 	if (!tTarget.m_bNew && bClose)
 		return true;
 
-	auto pCrumbs = F::NavEngine.GetCrumbs();
-	return !tTarget.m_vLastKnownPos.IsZero() && !pCrumbs->empty() &&
-		tTarget.m_vLastKnownPos.DistTo(pCrumbs->back().m_vPos) >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value;
+	const auto& vCrumbs = F::NavEngine.GetCrumbs();
+	return !tTarget.m_vLastKnownPos.IsZero() && !vCrumbs.empty() &&
+		tTarget.m_vLastKnownPos.DistTo(vCrumbs.back().m_vPos) >= Vars::Misc::Movement::FollowBot::AbandonDistance.Value;
 }
 
 static bool ShouldStartFollowNav(const FollowTarget_t& tTarget, size_t nCurrentPathSize)
@@ -163,19 +163,6 @@ void CFollowBot::UpdateLockedTarget(CTFPlayer* pLocal)
 		return;
 	}
 
-	// Did our target leave and someone took their uid? 
-	// Should never happen unless we had a huge network lag
-	// Actually i dont think this will ever happen in any case as i havent seen uids being reused in the same match
-	/*
-	auto pResource = H::Entities.GetResource();
-	if (pResource && pResource->m_bValid(m_tLockedTarget.m_iEntIndex) &&
-		FNV1A::Hash32(F::PlayerUtils.GetPlayerName(m_tLockedTarget.m_iEntIndex, pResource->GetName(m_tLockedTarget.m_iEntIndex))) != m_tLockedTarget.m_uNameHash)
-	{
-		Reset(FB_RESET_NAV);
-		return;
-	}
-	*/
-
 	auto pEntity = I::ClientEntityList->GetClientEntity(m_tLockedTarget.m_iEntIndex);
 	if (!(m_tLockedTarget.m_pPlayer = pEntity ? pEntity->As<CTFPlayer>() : nullptr))
 		return;
@@ -249,9 +236,8 @@ bool CFollowBot::IsAfkTarget(CTFPlayer* pPlayer)
 	const bool bMoved = m_aLastOrigins[iEntIndex].IsZero() || vOrigin.DistTo(m_aLastOrigins[iEntIndex]) > 8.f;
 	const bool bLooked = vAngles.DeltaAngle(m_aLastAngles[iEntIndex]).Length() > 2.f;
 	const bool bVelocity = pPlayer->m_vecVelocity().Length2D() > 10.f;
-	const bool bButtons = pPlayer->m_nButtons() & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT | IN_JUMP | IN_DUCK | IN_ATTACK | IN_ATTACK2);
 
-	if (bMoved || bLooked || bVelocity || bButtons || m_aLastActiveTimes[iEntIndex] <= 0.f)
+	if (bMoved || bLooked || bVelocity || m_aLastActiveTimes[iEntIndex] <= 0.f)
 		m_aLastActiveTimes[iEntIndex] = I::GlobalVars->curtime;
 
 	m_aLastOrigins[iEntIndex] = vOrigin;
@@ -334,7 +320,6 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 		const bool bClose = vLocalOrigin.DistTo(m_tLockedTarget.m_vLastKnownPos) < Vars::Misc::Movement::FollowBot::FollowDistance.Value + 150.f;
 		if (bClose && m_tLockedTarget.m_bDormant)
 		{
-			// We reached our goal but the target is nowhere to be found
 			Reset(FB_RESET_NAV);
 			return;
 		}
@@ -366,7 +351,6 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 	{
 		SyncBestSlot(pLocal);
 
-		// Already pathing, no point in running everything else
 		return;
 	}
 
@@ -428,7 +412,6 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 		auto begin = m_vCurrentPath.rbegin();
 		auto eraseAt = begin;
 
-		// Iterate in reverse so we can optimize the path by erasing nodes older than a close one
 		for (auto it = begin, end = m_vCurrentPath.rend(); it != end; ++it)
 		{
 			if (vLocalOrigin.DistTo2D(it->m_vOrigin) <= 20.f)
@@ -508,17 +491,20 @@ void CFollowBot::Run(CTFPlayer* pLocal, CUserCmd* pCmd)
 	}
 
 	const float flRise = vDest.z - vLocalOrigin.z;
-	if (flRise > PLAYER_STEP_HEIGHT && flRise <= PLAYER_CROUCHED_JUMP_HEIGHT + 4.f
-		&& vLocalOrigin.DistTo2D(vDest) <= 96.f && pLocal->OnSolid())
+	if (flRise > PLAYER_STEP_HEIGHT && flRise <= PLAYER_CROUCHED_JUMP_HEIGHT + 4.f && vLocalOrigin.DistTo2D(vDest) <= 96.f)
 	{
-		pCmd->buttons |= IN_JUMP;
-		if (flRise > TFGame::JUMP_APEX)
-			pCmd->buttons |= IN_DUCK;
+		if (!pLocal->OnSolid())
+		{
+			if (flRise > TFGame::JUMP_APEX)
+				pCmd->buttons |= IN_DUCK;
+		}
+		else if (F::Misc.CanGroundJump(pLocal))
+			pCmd->buttons |= IN_JUMP;
 	}
 
 	if (m_tStuckTimer.Run(1.25f))
 	{
-		if (m_vLastStuckPos.DistTo2D(vLocalOrigin) < 16.f && pLocal->OnSolid())
+		if (m_vLastStuckPos.DistTo2D(vLocalOrigin) < 16.f && pLocal->OnSolid() && F::Misc.CanGroundJump(pLocal))
 			pCmd->buttons |= IN_JUMP;
 		m_vLastStuckPos = vLocalOrigin;
 	}

@@ -16,8 +16,12 @@ MAKE_SIGNATURE(Con_NXPrintf, "engine.dll", "48 89 54 24 ? 4C 89 44 24 ? 4C 89 4C
 
 void CTicks::Reset()
 {
-	m_bDoubletap = m_bRecharge = m_bWarp = false;
-	m_iShiftedTicks = m_iShiftedGoal = 0;
+	m_bDoubletap = m_bRecharge = m_bWarp = m_bRechargeQueue = m_bAntiWarp = m_bTimingUnsure = m_bShifted = false;
+	m_bGoalReached = true;
+	m_iShiftedTicks = m_iShiftedGoal = m_iShiftStart = 0;
+	m_iWait = m_iDeficit = 0;
+	m_vShootPos = {};
+	m_vShootAngle = std::nullopt;
 
 	m_aFixes = {};
 	m_aBatches = {};
@@ -66,7 +70,7 @@ double CTicks::ClockNow()
 	return PacketTime(false) / TICK_INTERVAL;
 }
 
-int CTicks::ArrivalTick(double dClock)
+int CTicks::ArrivalTick(double dClock) const
 {
 	const double dLands = dClock + (m_dOffsetLow + m_dOffsetHigh) * 0.5;
 	const int iTick = int(dLands);
@@ -241,9 +245,7 @@ int CTicks::CommandFrame(int iCommand) const
 	if (!m_bOffsetKnown)
 		return -1;
 
-	const double dLands = m_dSendClock + (m_dOffsetLow + m_dOffsetHigh) * 0.5;
-	const int iTick = static_cast<int>(dLands);
-	return iTick < dLands ? iTick + 1 : iTick;
+	return ArrivalTick(m_dSendClock);
 }
 
 void CTicks::OnMoveSent(int iCommand, int iCommands)
@@ -322,9 +324,7 @@ void CTicks::Doubletap(CTFPlayer* pLocal, CUserCmd* pCmd)
 		|| m_iWait || m_bWarp || m_bRecharge)
 		return;
 
-	int iTicks = std::min(m_iShiftedTicks + 1, 22);
-	auto pWeapon = H::Entities.GetWeapon();
-	if (!(iTicks >= Vars::Doubletap::TickLimit.Value || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
+	if (!CanShift(H::Entities.GetWeapon()))
 		return;
 
 	bool bAttacking = G::PrimaryWeaponType == EWeaponType::MELEE ? pCmd->buttons & IN_ATTACK : G::Attacking;
@@ -448,9 +448,7 @@ void CTicks::MoveFunc(float accumulated_extra_samples, bool bFinalTick)
 	if (m_iWait > 0)
 		m_iWait--;
 
-	int iTicks = std::min(m_iShiftedTicks + 1, 22);
-	auto pWeapon = H::Entities.GetWeapon();
-	if (!(iTicks >= Vars::Doubletap::TickLimit.Value || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
+	if (!CanShift(H::Entities.GetWeapon()))
 		m_iWait = -1;
 
 	m_bGoalReached = bFinalTick && m_iShiftedTicks == m_iShiftedGoal;
@@ -714,11 +712,16 @@ int CTicks::GetTicks(CTFWeaponBase* pWeapon)
 		|| m_iWait || m_bWarp || m_bRecharge || F::AutoRocketJump.IsRunning())
 		return 0;
 
-	int iTicks = std::min(m_iShiftedTicks + 1, 22);
-	if (!(iTicks >= Vars::Doubletap::TickLimit.Value || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
+	if (!CanShift(pWeapon))
 		return 0;
-	
+
 	return std::min(Vars::Doubletap::TickLimit.Value - 1, m_iMaxShift);
+}
+
+bool CTicks::CanShift(CTFWeaponBase* pWeapon)
+{
+	const int iTicks = std::min(m_iShiftedTicks + 1, MAX_PACKET_COMMANDS);
+	return iTicks >= Vars::Doubletap::TickLimit.Value || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1;
 }
 
 int CTicks::GetShotsWithinPacket(CTFWeaponBase* pWeapon, int iTicks)
@@ -734,7 +737,11 @@ int CTicks::GetShotsWithinPacket(CTFWeaponBase* pWeapon, int iTicks)
 		iDelay = 2;
 	}
 
-	return 1 + (iTicks - iDelay) / std::ceilf(pWeapon->GetFireRate() / TICK_INTERVAL);
+	const int iFireTicks = static_cast<int>(std::ceilf(pWeapon->GetFireRate() / TICK_INTERVAL));
+	if (iFireTicks <= 0)
+		return 1;
+
+	return 1 + (iTicks - iDelay) / iFireTicks;
 }
 
 void CTicks::SaveShootPos(CTFPlayer* pLocal)

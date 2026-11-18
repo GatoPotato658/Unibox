@@ -8,7 +8,7 @@ CCaptureFlag* CDoomsdayController::GetFlag()
 {
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || !pEntity->IsCaptureFlag())
 			continue;
 
 		return pEntity->As<CCaptureFlag>();
@@ -171,7 +171,7 @@ static CCaptureFlag* GetHaarpFlag(const Vector& vRelativePos = Vector())
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || !pEntity->IsCaptureFlag())
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();
@@ -213,7 +213,7 @@ static bool GetHaarpCapturePos(int iLocalTeam, Vector& vOut)
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureZone)
+		if (!pEntity || !pEntity->IsCaptureZone())
 			continue;
 
 		if (pEntity->As<CCaptureZone>()->m_bDisabled())
@@ -304,7 +304,7 @@ bool CHaarpController::GetCapturePos(Vector& vOut)
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity->IsCaptureFlag())
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();

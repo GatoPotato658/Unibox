@@ -22,6 +22,16 @@ private:
 	};
 	std::vector<ObjectiveMarker_t> m_vObjectiveMarkers = {};
 
+	struct BlockedDraw_t
+	{
+		Vector m_vCurrent = {};
+		Vector m_vNext = {};
+		Vector m_vSelfCenter = {};
+		bool m_bSelf = false;
+	};
+	std::vector<BlockedDraw_t> m_vBlockedDraw = {};
+	Timer m_tBlockedRefresh = {};
+
 	void DrawPath();
 	void DrawLocalArea(CTFPlayer* pLocal);
 	void DrawBlacklist();

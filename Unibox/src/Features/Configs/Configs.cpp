@@ -284,14 +284,26 @@ template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::s
 template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const std::vector<std::pair<std::string, ChamsMaterial_t>>& v)
 {
 	boost::property_tree::ptree tChild;
-	for (auto& [sName, tMaterial] : v)
+	for (const auto& [sName, tValue] : v)
 	{
+		auto tMaterial = tValue;
+		tMaterial.Sanitize();
 		boost::property_tree::ptree tLayer;
 		SaveJson(tLayer, "Material", sName);
 		SaveJson(tLayer, "Color", tMaterial.tColor);
 		SaveJson(tLayer, "Start", tMaterial.flStart);
 		SaveJson(tLayer, "End", tMaterial.flEnd);
 		SaveJson(tLayer, "SmoothAlpha", tMaterial.bSmoothAlpha);
+		SaveJson(tLayer, "Effect", tMaterial.iEffect);
+		SaveJson(tLayer, "Secondary", tMaterial.tSecondary);
+		SaveJson(tLayer, "Roughness", tMaterial.flRoughness);
+		SaveJson(tLayer, "Reflectivity", tMaterial.flReflectivity);
+		SaveJson(tLayer, "Scale", tMaterial.flScale);
+		SaveJson(tLayer, "Speed", tMaterial.flSpeed);
+		SaveJson(tLayer, "Intensity", tMaterial.flIntensity);
+		SaveJson(tLayer, "RimPower", tMaterial.flRimPower);
+		SaveJson(tLayer, "Blend", tMaterial.iBlend);
+		SaveJson(tLayer, "DepthWrite", tMaterial.bDepthWrite);
 
 		tChild.push_back({ "", tLayer });
 	}
@@ -352,12 +364,24 @@ template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::s
 
 template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const Glow_t& v)
 {
+	auto tGlow = v;
+	tGlow.Sanitize();
 	boost::property_tree::ptree tChild;
-	SaveJson(tChild, "Stencil", v.Stencil);
-	SaveJson(tChild, "Blur", v.Blur);
-	SaveJson(tChild, "Start", v.Start);
-	SaveJson(tChild, "End", v.End);
-	SaveJson(tChild, "SmoothAlpha", v.SmoothAlpha);
+	SaveJson(tChild, "Style", tGlow.Style);
+	SaveJson(tChild, "Stencil", tGlow.Stencil);
+	SaveJson(tChild, "Blur", tGlow.Blur);
+	SaveJson(tChild, "Start", tGlow.Start);
+	SaveJson(tChild, "End", tGlow.End);
+	SaveJson(tChild, "SmoothAlpha", tGlow.SmoothAlpha);
+	SaveJson(tChild, "Intensity", tGlow.Intensity);
+	SaveJson(tChild, "Opacity", tGlow.Opacity);
+	SaveJson(tChild, "Falloff", tGlow.Falloff);
+	SaveJson(tChild, "Bloom", tGlow.Bloom);
+	SaveJson(tChild, "Layers", tGlow.Layers);
+	SaveJson(tChild, "Blend", tGlow.Blend);
+	SaveJson(tChild, "Depth", tGlow.Depth);
+	SaveJson(tChild, "CustomOuter", tGlow.CustomOuter);
+	SaveJson(tChild, "OuterColor", tGlow.OuterColor);
 
 	t.put_child(s, tChild);
 }
@@ -412,6 +436,22 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 	}
 }
 
+static void LoadEffectColor(const boost::property_tree::ptree& t, const std::string& s, Color_t& tColor)
+{
+	if (auto tChild = t.get_child_optional(s))
+	{
+		auto fChannel = [&](const char* sChannel, byte& iChannel)
+		{
+			if (auto o = tChild->get_optional<float>(sChannel); o && std::isfinite(*o))
+				iChannel = byte(std::clamp(*o, 0.f, 255.f));
+		};
+		fChannel("r", tColor.r);
+		fChannel("g", tColor.g);
+		fChannel("b", tColor.b);
+		fChannel("a", tColor.a);
+	}
+}
+
 template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s, std::vector<std::pair<std::string, ChamsMaterial_t>>& v)
 {
 	if (auto tChild = t.get_child_optional(s))
@@ -419,40 +459,41 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 		v.clear();
 		for (auto& tLayer : *tChild | std::views::values)
 		{
+			if (v.size() >= 32)
+				break;
 			if (auto o = tLayer.get_optional<std::string>("Material"))
 			{
-				std::string& m = *o;
-				Color_t c; LoadJson(tLayer, "Color", c);
-				float flStart = 0.f; LoadJson(tLayer, "Start", flStart);
-				float flEnd = 8192.f; LoadJson(tLayer, "End", flEnd);
-				bool bSmoothAlpha = false; LoadJson(tLayer, "SmoothAlpha", bSmoothAlpha);
-				v.emplace_back(m, ChamsMaterial_t{ c, flStart, flEnd, bSmoothAlpha});
+				auto uHash = FNV1A::Hash32(o->c_str());
+				if (o->empty() || uHash == FNV1A::Hash32Const("None")
+					|| (F::Materials.m_bLoaded && uHash != FNV1A::Hash32Const("Original") && !F::Materials.m_mMaterials.contains(uHash))
+					|| std::ranges::any_of(v, [&](const auto& tMaterial) { return FNV1A::Hash32(tMaterial.first.c_str()) == uHash; }))
+					continue;
+
+				ChamsMaterial_t tMaterial;
+				LoadEffectColor(tLayer, "Color", tMaterial.tColor);
+				LoadJson(tLayer, "Start", tMaterial.flStart);
+				LoadJson(tLayer, "End", tMaterial.flEnd);
+				LoadJson(tLayer, "SmoothAlpha", tMaterial.bSmoothAlpha);
+				LoadJson(tLayer, "Effect", tMaterial.iEffect);
+				LoadEffectColor(tLayer, "Secondary", tMaterial.tSecondary);
+				LoadJson(tLayer, "Roughness", tMaterial.flRoughness);
+				LoadJson(tLayer, "Reflectivity", tMaterial.flReflectivity);
+				LoadJson(tLayer, "Scale", tMaterial.flScale);
+				LoadJson(tLayer, "Speed", tMaterial.flSpeed);
+				LoadJson(tLayer, "Intensity", tMaterial.flIntensity);
+				LoadJson(tLayer, "RimPower", tMaterial.flRimPower);
+				LoadJson(tLayer, "Blend", tMaterial.iBlend);
+				LoadJson(tLayer, "DepthWrite", tMaterial.bDepthWrite);
+				tMaterial.Sanitize();
+				v.emplace_back(*o, tMaterial);
 			}
 		}
 	}
 
-	// remove invalid/duplicate materials
-	for (auto it = v.begin(); it != v.end();)
-	{
-		auto uHash = FNV1A::Hash32(it->first.c_str());
-		bool bValid = uHash != FNV1A::Hash32Const("None")
-			&& (!F::Materials.m_bLoaded || uHash == FNV1A::Hash32Const("Original") || F::Materials.m_mMaterials.contains(uHash));
-		if (bValid)
-		{
-			int i = 0; for (auto& s : v | std::views::keys)
-			{
-				auto uHash2 = FNV1A::Hash32(s.c_str());
-				if (uHash == uHash2)
-					i++;
-			}
-			bValid = i <= 1;
-		}
-
-		if (bValid)
-			++it;
-		else
-			it = v.erase(it);
-	}
+	if (v.size() > 32)
+		v.resize(32);
+	for (auto& tMaterial : v | std::views::values)
+		tMaterial.Sanitize();
 }
 
 template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s, std::vector<int>& v)
@@ -507,12 +548,24 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 {
 	if (auto tChild = t.get_child_optional(s))
 	{
+		v = {};
+		LoadJson(*tChild, "Style", v.Style);
 		LoadJson(*tChild, "Stencil", v.Stencil);
 		LoadJson(*tChild, "Blur", v.Blur);
 		LoadJson(*tChild, "Start", v.Start);
 		LoadJson(*tChild, "End", v.End);
 		LoadJson(*tChild, "SmoothAlpha", v.SmoothAlpha);
+		LoadJson(*tChild, "Intensity", v.Intensity);
+		LoadJson(*tChild, "Opacity", v.Opacity);
+		LoadJson(*tChild, "Falloff", v.Falloff);
+		LoadJson(*tChild, "Bloom", v.Bloom);
+		LoadJson(*tChild, "Layers", v.Layers);
+		LoadJson(*tChild, "Blend", v.Blend);
+		LoadJson(*tChild, "Depth", v.Depth);
+		LoadJson(*tChild, "CustomOuter", v.CustomOuter);
+		LoadEffectColor(*tChild, "OuterColor", v.OuterColor);
 	}
+	v.Sanitize();
 }
 
 template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s,ESP_t& v)

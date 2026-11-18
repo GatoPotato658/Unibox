@@ -67,6 +67,7 @@ void CHazards::Reset()
 {
 	m_mAreaHazards.clear();
 	m_mSentryCoverage.clear();
+	m_mStickyCoverage.clear();
 	m_flStandingEyeHeight = TFGame::VIEW_HEIGHT_DEFAULT;
 	m_iLastUpdateTick = 0;
 	m_pStandingHazardArea = nullptr;
@@ -81,10 +82,7 @@ float CHazards::GetCost(CNavArea* pArea) const
 	if (it == m_mAreaHazards.end()) return 0.f;
 
 	const auto& tHazard = it->second;
-	if (m_bIgnoreSentries
-		&& (tHazard.m_eKind == HazardKind::Sentry
-		|| tHazard.m_eKind == HazardKind::SentryMedium
-		|| tHazard.m_eKind == HazardKind::SentryLow))
+	if (IsIgnored(tHazard))
 		return 0.f;
 
 	if (tHazard.m_ePolicy == HazardPolicy::HardBlock || tHazard.m_ePolicy == HazardPolicy::TempForbid)
@@ -105,12 +103,7 @@ void CHazards::SnapshotCosts(std::unordered_map<CNavArea*, float>& mOut) const
 	mOut.reserve(m_mAreaHazards.size());
 	for (const auto& [pArea, tHazard] : m_mAreaHazards)
 	{
-		if (pArea == m_pStandingHazardArea)
-			continue;
-		if (m_bIgnoreSentries
-			&& (tHazard.m_eKind == HazardKind::Sentry
-			|| tHazard.m_eKind == HazardKind::SentryMedium
-			|| tHazard.m_eKind == HazardKind::SentryLow))
+		if (pArea == m_pStandingHazardArea || IsIgnored(tHazard))
 			continue;
 
 		if (tHazard.m_ePolicy == HazardPolicy::HardBlock || tHazard.m_ePolicy == HazardPolicy::TempForbid)
@@ -179,12 +172,14 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 		return;
 
 	auto* pMap = F::NavEngine.GetNavMap();
-	if (!pMap) return;
+	if (!pMap || F::VSHController.IsBossLocal()) return;
 
+	const float flRadius = m_flPlayerScanRadius;
+	std::vector<CNavArea*> vAreas;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
 		auto pPlayer = pEntity->As<CTFPlayer>();
-		if (!pPlayer || !pPlayer->IsAlive() || pPlayer == pLocal || F::VSHController.IsBossLocal() || F::VSHController.IsBoss(pPlayer->entindex())) continue;
+		if (!pPlayer || !pPlayer->IsAlive() || pPlayer == pLocal || F::VSHController.IsBoss(pPlayer->entindex())) continue;
 
 		const bool bDormant = pPlayer->IsDormant();
 		const bool bInvuln = pPlayer->InCond(TF_COND_INVULNERABLE) || pPlayer->InCond(TF_COND_PHASE);
@@ -209,21 +204,14 @@ void CHazards::UpdatePlayers(CTFPlayer* pLocal)
 		}
 		if (vOrigin.IsZero()) continue;
 
-		const float flRadius = m_flPlayerScanRadius;
-		std::vector<CNavArea*> vAreas;
 		pMap->CollectAreasAround(vOrigin, flRadius, vAreas);
-
 		for (auto* pArea : vAreas)
 		{
-			if (!pArea) continue;
-			const float flDist = pArea->m_vCenter.DistTo(vOrigin);
-			const float flDistFactor = 1.0f - std::clamp(flDist / flRadius, 0.f, 1.f);
-			const float flFinal = flBaseScore * (0.5f + 0.5f * flDistFactor);
-
-			if (!bDormant && !F::NavEngine.IsVectorVisibleNavigation(vOrigin + Vector(0, 0, 60), pArea->m_vCenter + Vector(0, 0, 40)))
+			if (!pArea || (!bDormant && !F::NavEngine.IsVectorVisibleNavigation(vOrigin + Vector(0, 0, 60), pArea->m_vCenter + Vector(0, 0, 40))))
 				continue;
 
-			RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flFinal, vOrigin, 0);
+			const float flDistFactor = 1.0f - std::clamp(pArea->m_vCenter.DistTo(vOrigin) / flRadius, 0.f, 1.f);
+			RecordHazard(pArea, eKind, HazardPolicy::SoftCost, flBaseScore * (0.5f + 0.5f * flDistFactor), vOrigin, 0);
 		}
 	}
 }
@@ -251,12 +239,12 @@ void CHazards::UpdateBoss(CTFPlayer* pLocal)
 	F::VSHController.GetBossZones(pLocal, vZones);
 	const int iExpireTick = I::GlobalVars->tickcount + TIME_TO_TICKS(0.35f);
 
+	std::vector<CNavArea*> vAreas;
 	for (const auto& tZone : vZones)
 	{
 		const Vector vCenter = tZone.m_bLane ? (tZone.m_vFrom + tZone.m_vTo) * 0.5f : tZone.m_vFrom;
 		const float flReach = tZone.m_bLane ? tZone.m_vFrom.DistTo(tZone.m_vTo) * 0.5f + tZone.m_flRadius : tZone.m_flRadius;
 
-		std::vector<CNavArea*> vAreas;
 		pMap->CollectAreasAround(vCenter, flReach, vAreas);
 
 		for (auto* pArea : vAreas)
@@ -287,17 +275,34 @@ void CHazards::UpdateBoss(CTFPlayer* pLocal)
 	}
 }
 
+bool CHazards::IsPipebombResting(CBaseEntity* pPipebomb)
+{
+	return pPipebomb->As<CTFGrenadePipebombProjectile>()->m_bTouched() || pPipebomb->GetAbsVelocity().IsZero(1.f);
+}
+
+float CHazards::GetSentryRange(CBaseEntity* pBuilding)
+{
+	if (!pBuilding || pBuilding->GetClassID() != ETFClassID::CObjectSentrygun)
+		return TFGame::SENTRY_MAX_RANGE;
+
+	auto pSentry = pBuilding->As<CObjectSentrygun>();
+	auto pBuilder = pSentry->m_hBuilder().Get();
+	if (!pBuilder || pSentry->m_bDisposableBuilding())
+		return TFGame::SENTRY_MAX_RANGE;
+	return SDK::AttribHookValue(TFGame::SENTRY_MAX_RANGE, "mult_sentry_range", pBuilder);
+}
+
 static bool IsLocalIgnoredBySentry(CTFPlayer* pLocal, CObjectSentrygun* pSentry)
 {
 	if (pLocal->m_iClass() != TF_CLASS_SPY)
 		return false;
 
+	if (pLocal->m_flInvisibility() > TFGame::SENTRY_IGNORE_INVIS || pLocal->InCond(TF_COND_DISGUISED_AS_DISPENSER))
+		return true;
+
 	auto pEnemy = pSentry->m_hEnemy().Get();
 	if (pEnemy && pEnemy->entindex() == pLocal->entindex())
 		return false;
-
-	if (pLocal->m_flInvisibility() > TFGame::SENTRY_IGNORE_INVIS)
-		return true;
 
 	return pLocal->InCond(TF_COND_DISGUISED) && pLocal->m_nDisguiseTeam() == pSentry->m_iTeamNum();
 }
@@ -319,10 +324,6 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 	const int iNow = I::GlobalVars->tickcount;
 	const int iLocalClass = pLocal->m_iClass();
 	const bool bStrongClass = iLocalClass == TF_CLASS_HEAVY || iLocalClass == TF_CLASS_SOLDIER;
-
-	constexpr float flHighRadius = 900.0f;
-	constexpr float flMedRadius = TFGame::SENTRY_MAX_RANGE;
-	constexpr float flLowRadius = TFGame::SENTRY_MAX_RANGE + 100.0f;
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::BuildingEnemy))
 	{
@@ -349,6 +350,10 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 		if (IsLocalIgnoredBySentry(pLocal, pSentry))
 			continue;
 
+		const float flRange = GetSentryRange(pSentry);
+		const float flHighRadius = std::min(900.f, flRange);
+		const float flLowRadius = flRange + 100.f;
+
 		const Vector vOrigin = pSentry->GetAbsOrigin();
 		auto& tCoverage = m_mSentryCoverage[pSentry->entindex()];
 		tCoverage.m_iSeenTick = iNow;
@@ -359,7 +364,8 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 			&& tCoverage.m_iLevel == iLevel
 			&& tCoverage.m_bMini == bMini
 			&& tCoverage.m_iLocalClass == iLocalClass
-			&& std::fabs(tCoverage.m_flTargetEye - flTargetEye) <= 1.f;
+			&& std::fabs(tCoverage.m_flTargetEye - flTargetEye) <= 1.f
+			&& tCoverage.m_flRange == flRange;
 
 		if (!bCacheValid)
 		{
@@ -368,6 +374,7 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 			tCoverage.m_bMini = bMini;
 			tCoverage.m_iLocalClass = iLocalClass;
 			tCoverage.m_flTargetEye = flTargetEye;
+			tCoverage.m_flRange = flRange;
 			tCoverage.m_iExpireTick = iNow + TIME_TO_TICKS(1.0f);
 			tCoverage.m_vAreas.clear();
 
@@ -385,7 +392,7 @@ void CHazards::UpdateBuildings(CTFPlayer* pLocal)
 
 				HazardKind eKind = HazardKind::SentryLow;
 				if (flDist <= flHighRadius) eKind = HazardKind::Sentry;
-				else if (flDist <= flMedRadius) eKind = HazardKind::SentryMedium;
+				else if (flDist <= flRange) eKind = HazardKind::SentryMedium;
 				else if (bStrongClass) continue;
 
 				if (!F::NavEngine.IsVectorVisibleNavigation(vEyePos, vTargetEye, MASK_SHOT | CONTENTS_GRATE))
@@ -412,30 +419,54 @@ void CHazards::UpdateProjectiles(CTFPlayer* pLocal)
 {
 	const auto eBlMask = Vars::Misc::Movement::NavBot::Blacklist.Value;
 	if (!(eBlMask & Vars::Misc::Movement::NavBot::BlacklistEnum::Stickies))
+	{
+		m_mStickyCoverage.clear();
 		return;
+	}
 
 	auto* pMap = F::NavEngine.GetNavMap();
 	if (!pMap) return;
 
 	const int iExpireTick = TICKCOUNT_TIMESTAMP(Vars::Misc::Movement::NavEngine::StickyIgnoreTime.Value);
+	const float flRadius = static_cast<float>(Vars::Misc::Movement::NavBot::StickyDangerRange.Value);
+	const Vector vBodyOffset = { 0.f, 0.f, TFGame::HULL_HEIGHT * 0.5f };
+	const int iNow = I::GlobalVars->tickcount;
 
+	std::vector<CNavArea*> vAreas;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldProjectile))
 	{
 		if (pEntity->GetClassID() != ETFClassID::CTFGrenadePipebombProjectile) continue;
 		if (pEntity->m_iTeamNum() == pLocal->m_iTeamNum()) continue;
 
 		auto pPipe = pEntity->As<CTFGrenadePipebombProjectile>();
-		if (!pPipe || !pPipe->HasStickyEffects() || pPipe->IsDormant() || !pPipe->m_vecVelocity().IsZero(1.f))
+		if (!pPipe || !pPipe->HasStickyEffects() || pPipe->IsDormant() || !IsPipebombResting(pPipe))
 			continue;
 
-		const float flRadius = static_cast<float>(Vars::Misc::Movement::NavBot::StickyDangerRange.Value);
-		std::vector<CNavArea*> vAreas;
-		pMap->CollectAreasAround(pPipe->GetAbsOrigin(), flRadius, vAreas);
-
-		for (auto* pArea : vAreas)
+		const Vector vOrigin = pPipe->GetAbsOrigin();
+		auto& tCoverage = m_mStickyCoverage[pPipe->entindex()];
+		tCoverage.m_iSeenTick = iNow;
+		if (tCoverage.m_vOrigin.DistToSqr(vOrigin) > 1.f || tCoverage.m_flRadius != flRadius)
 		{
-			if (!pArea) continue;
-			RecordHazard(pArea, HazardKind::Sticky, HazardPolicy::SoftCost, HAZARD_COST_STICKY, pPipe->GetAbsOrigin(), iExpireTick);
+			tCoverage.m_vOrigin = vOrigin;
+			tCoverage.m_flRadius = flRadius;
+			tCoverage.m_vAreas.clear();
+
+			pMap->CollectAreasAround(vOrigin, flRadius, vAreas);
+			for (auto* pArea : vAreas)
+			{
+				if (!pArea)
+					continue;
+
+				const Vector vNearest = pArea->GetNearestPoint(Vector2D(vOrigin.x, vOrigin.y));
+				if (F::NavEngine.IsVectorVisibleNavigation(vOrigin, vNearest + vBodyOffset, MASK_SHOT & ~CONTENTS_HITBOX)
+					|| F::NavEngine.IsVectorVisibleNavigation(vOrigin, pArea->m_vCenter + vBodyOffset, MASK_SHOT & ~CONTENTS_HITBOX))
+					tCoverage.m_vAreas.push_back(pArea);
+			}
 		}
+
+		for (auto* pArea : tCoverage.m_vAreas)
+			RecordHazard(pArea, HazardKind::Sticky, HazardPolicy::SoftCost, HAZARD_COST_STICKY, vOrigin, iExpireTick);
 	}
+
+	std::erase_if(m_mStickyCoverage, [iNow](const auto& tEntry) { return tEntry.second.m_iSeenTick != iNow; });
 }

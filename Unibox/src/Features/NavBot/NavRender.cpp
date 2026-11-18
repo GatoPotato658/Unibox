@@ -67,14 +67,14 @@ static float OverlayExpireTime()
 
 void CNavRender::DrawPath()
 {
-	auto pCrumbs = F::NavEngine.GetCrumbs();
-	if (pCrumbs->empty())
+	const auto& vCrumbs = F::NavEngine.GetCrumbs();
+	if (vCrumbs.empty())
 		return;
 
 	const auto& tColor = Vars::Colors::NavbotPath.Value;
-	for (size_t i = 0; i + 1 < pCrumbs->size(); ++i)
-		H::Draw.RenderLine((*pCrumbs)[i].m_vPos, (*pCrumbs)[i + 1].m_vPos, tColor, false);
-	for (const auto& tCrumb : *pCrumbs)
+	for (size_t i = 0; i + 1 < vCrumbs.size(); ++i)
+		H::Draw.RenderLine(vCrumbs[i].m_vPos, vCrumbs[i + 1].m_vPos, tColor, false);
+	for (const auto& tCrumb : vCrumbs)
 		DrawMarker(tCrumb.m_vPos, Vector(3.f, 3.f, 3.f), tColor);
 }
 
@@ -97,36 +97,36 @@ void CNavRender::DrawBlacklist()
 	if (!pMap)
 		return;
 
-	struct BlockedDraw_t
+	if (m_tBlockedRefresh.Check(0.1f))
 	{
-		Vector m_vCurrent = {};
-		Vector m_vNext = {};
-		CNavArea* m_pSelfArea = nullptr;
-	};
-
-	std::vector<BlockedDraw_t> vBlocked;
-	{
-		std::lock_guard lock(pMap->m_mutex);
-		vBlocked.reserve(pMap->m_mVischeckCache.size());
-		const int iNow = I::GlobalVars->tickcount;
-		for (auto& [tKey, tEntry] : pMap->m_mVischeckCache)
+		std::unique_lock lock(pMap->m_mutex, std::try_to_lock);
+		if (lock)
 		{
-			if (tEntry.m_eVischeckState != VischeckStateEnum::NotVisible) continue;
-			if (tEntry.m_iExpireTick != 0 && tEntry.m_iExpireTick <= iNow) continue;
-
-			BlockedDraw_t tDraw{};
-			if (tEntry.m_bHasPoints)
+			m_tBlockedRefresh.Update();
+			m_vBlockedDraw.clear();
+			const int iNow = I::GlobalVars->tickcount;
+			for (auto& [tKey, tEntry] : pMap->m_mVischeckCache)
 			{
-				tDraw.m_vCurrent = tEntry.m_tPoints.m_vCurrent;
-				tDraw.m_vNext = tEntry.m_tPoints.m_vNext;
+				if (tEntry.m_eVischeckState != VischeckStateEnum::NotVisible) continue;
+				if (tEntry.m_iExpireTick != 0 && tEntry.m_iExpireTick <= iNow) continue;
+
+				BlockedDraw_t tDraw{};
+				if (tEntry.m_bHasPoints)
+				{
+					tDraw.m_vCurrent = tEntry.m_tPoints.m_vCurrent;
+					tDraw.m_vNext = tEntry.m_tPoints.m_vNext;
+				}
+				if (tKey.first == tKey.second && tKey.first)
+				{
+					tDraw.m_vSelfCenter = tKey.first->m_vCenter;
+					tDraw.m_bSelf = true;
+				}
+				m_vBlockedDraw.push_back(tDraw);
 			}
-			if (tKey.first == tKey.second)
-				tDraw.m_pSelfArea = tKey.first;
-			vBlocked.push_back(tDraw);
 		}
 	}
 
-	for (const auto& tDraw : vBlocked)
+	for (const auto& tDraw : m_vBlockedDraw)
 	{
 		if (tDraw.m_vCurrent.Length() > 0.f && tDraw.m_vNext.Length() > 0.f)
 		{
@@ -135,8 +135,8 @@ void CNavRender::DrawBlacklist()
 			DrawMarker(tDraw.m_vNext, Vector(2.f, 2.f, 2.f), kColorBlocked);
 		}
 
-		if (tDraw.m_pSelfArea)
-			DrawMarker(tDraw.m_pSelfArea->m_vCenter, Vector(6.f, 6.f, 2.f), kColorBlocked, true);
+		if (tDraw.m_bSelf)
+			DrawMarker(tDraw.m_vSelfCenter, Vector(6.f, 6.f, 2.f), kColorBlocked, true);
 	}
 }
 
@@ -229,9 +229,19 @@ void CNavRender::DrawHullCheck()
 		else if (tSegment.m_bAdjusted)
 			tColor = kColorHullAdjusted;
 
-		H::Draw.RenderLine(tSegment.m_vStart, tSegment.m_vEnd, tColor, false);
-		DrawHull(tSegment.m_vStart, tSegment.m_vMins, tSegment.m_vMaxs, tColor);
-		DrawHull(tSegment.m_vEnd, tSegment.m_vMins, tSegment.m_vMaxs, tColor);
+		if (tSegment.m_vProfile.size() > 1)
+		{
+			for (size_t i = 0; i + 1 < tSegment.m_vProfile.size(); ++i)
+				H::Draw.RenderLine(tSegment.m_vProfile[i], tSegment.m_vProfile[i + 1], tColor, false);
+		}
+		else
+			H::Draw.RenderLine(tSegment.m_vStart, tSegment.m_vEnd, tColor, false);
+		const bool bFlagged = tSegment.m_bBlocked || tSegment.m_bGap || tSegment.m_bTight || tSegment.m_bSnug || tSegment.m_bAdjusted;
+		if (bFlagged)
+		{
+			DrawHull(tSegment.m_vStart, tSegment.m_vMins, tSegment.m_vMaxs, tColor);
+			DrawHull(tSegment.m_vEnd, tSegment.m_vMins, tSegment.m_vMaxs, tColor);
+		}
 
 		if (tSegment.m_bBlocked)
 		{
@@ -559,7 +569,7 @@ void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 		if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
 		{
 			iAreaFlags = pLocalArea->m_iTFAttributeFlags;
-			iInSpawn = iAreaFlags & (TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_RED);
+			iInSpawn = iAreaFlags & TF_NAV_SPAWN_ROOM_ANY;
 		}
 	}
 
@@ -569,7 +579,7 @@ void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 	if (F::NavEngine.IsPathing())
 	{
 		const float flDist = pLocal->GetAbsOrigin().DistTo(F::NavEngine.m_vLastDestination);
-		vCachedLines.push_back({ std::format("Nodes: {} (Dist: {:.0f})", F::NavEngine.GetCrumbs()->size(), flDist), tColor });
+		vCachedLines.push_back({ std::format("Nodes: {} (Dist: {:.0f})", F::NavEngine.GetCrumbs().size(), flDist), tColor });
 	}
 
 	const float flIdleTime = SDK::PlatFloatTime() - F::NavBotCore.GetIdleLastUpdate();
@@ -583,6 +593,11 @@ void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 	{
 		vCachedLines.push_back({ std::format("Is ready: {}", static_cast<int>(bIsReady)), tReadyColor });
 		vCachedLines.push_back({ std::format("Priority: {}", static_cast<int>(F::NavEngine.m_eCurrentPriority)), tReadyColor });
+		const auto& tStats = F::NavEngine.GetStats();
+		vCachedLines.push_back({ std::format("Solves: {} Hull rejects: {} Shortcuts: {}", tStats.m_iSubmitted, tStats.m_iHullRejects, tStats.m_iShortcuts), tReadyColor });
+		vCachedLines.push_back({ std::format("Abandons: {} (stuck {})", tStats.m_iAbandons, tStats.m_iStuck), tReadyColor });
+		if (!tStats.m_sLastAbandon.empty())
+			vCachedLines.push_back({ std::format("Last abandon: {} ({:.1f}s ago)", tStats.m_sLastAbandon, I::GlobalVars->curtime - tStats.m_flLastAbandonTime), tReadyColor });
 		vCachedLines.push_back({ std::format("In spawn: {}", iInSpawn), tReadyColor });
 		vCachedLines.push_back({ std::format("Area flags: {}", iAreaFlags), tReadyColor });
 

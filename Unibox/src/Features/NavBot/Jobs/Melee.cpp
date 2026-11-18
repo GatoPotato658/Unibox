@@ -36,8 +36,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const Close
 {
 	const auto Release = []() -> bool
 		{
-			if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MeleeAttack)
-				F::NavEngine.CancelPath();
+			F::NavEngine.CancelPathIf(PriorityListEnum::MeleeAttack);
 			return false;
 		};
 
@@ -65,7 +64,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const Close
 
 		CGameTrace trace;
 		CTraceFilterHitscan filter(pLocal);
-		SDK::TraceHull(pLocal->GetShootPos(), pPlayer->GetAbsOrigin(), pLocal->m_vecMins() * 0.3f, pLocal->m_vecMaxs() * 0.3f, MASK_PLAYERSOLID, &filter, &trace);
+		SDK::TraceHull(pLocal->GetShootPos(), pPlayer->GetCenter(), pLocal->m_vecMins() * 0.3f, pLocal->m_vecMaxs() * 0.3f, MASK_PLAYERSOLID, &filter, &trace);
 		m_bTargetVisible = trace.DidHit() ? trace.m_pEnt && trace.m_pEnt == pPlayer : true;
 	}
 
@@ -75,7 +74,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const Close
 	if (pLocal->m_iClass() == TF_CLASS_SPY)
 	{
 		auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
-		const bool bReadyToBackstab = pKnife && pKnife->GetWeaponID() == TF_WEAPON_KNIFE && pKnife->As<CTFKnife>()->m_bReadyToBackstab();
+		const bool bReadyToBackstab = NavRuntime::IsBackstabReady(pKnife);
 		const bool bKnifeLethal = pKnife && pPlayer->m_iHealth() <= pKnife->GetDamage(false);
 		const bool bCanSwing = bReadyToBackstab || bKnifeLethal;
 		if (!bCanSwing)

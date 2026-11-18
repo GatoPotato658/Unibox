@@ -279,6 +279,19 @@ static inline bool ShouldTarget(Group_t& tGroup, CBaseEntity* pEntity, CTFPlayer
 	else if (pEntity->IsDormant())
 		return false;
 
+	if (bModels && !pEntity->IsWearableVM())
+	{
+		const int iTarget = pEntity->IsBaseCombatWeapon() ? TargetsEnum::Weapons
+			: pEntity->IsWearable() ? TargetsEnum::Wearables : 0;
+		if (iTarget && tGroup.m_iTargets & iTarget)
+		{
+			auto pOwner = pEntity->m_hOwnerEntity().Get();
+			return pOwner && pOwner->IsPlayer()
+				? ShouldTargetPlayer(tGroup, iTarget, pOwner, pLocal)
+				: ShouldTargetTeam(tGroup, iTarget, pEntity, pLocal);
+		}
+	}
+
 	switch (pEntity->GetClassID())
 	{
 	// players

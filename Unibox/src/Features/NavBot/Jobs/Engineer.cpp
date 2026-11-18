@@ -1,5 +1,6 @@
 #include "NavBotJobs.h"
 #include "../Objectives.h"
+#include "../TFConstants.h"
 
 #include <algorithm>
 
@@ -15,8 +16,12 @@ constexpr float kHelpProgressTimeout = 6.f;
 constexpr float kHelpFailMemory = 30.f;
 constexpr float kHelpStallMemory = 20.f;
 constexpr float kHelpSupplyRetryTime = 5.f;
-constexpr float kWrenchReach = 64.f;
-constexpr float kWrenchHull = 16.f;
+constexpr float kWrenchReach = 70.f;
+constexpr float kWrenchHull = 18.f;
+constexpr float kSmackApproachDist = 150.f;
+constexpr float kBuildHalfWidth = 20.f;
+constexpr float kBuildDistance = kBuildHalfWidth * 1.41421356f + TFGame::HULL_HALF_WIDTH * 1.41421356f + 4.f;
+constexpr float kBuildDistanceTolerance = 12.f;
 
 enum HelpNeedEnum
 {
@@ -28,19 +33,46 @@ enum HelpNeedEnum
 	HelpNeed_Upgrade = 1 << 4
 };
 
+static int GetObjectCost(CTFPlayer* pLocal, bool bDispenser)
+{
+	if (auto pGameRules = I::TFGameRules(); pGameRules && pGameRules->m_bPlayingMannVsMachine())
+	{
+		auto pObjectiveResource = H::Entities.GetObjectiveResource();
+		if (pGameRules->m_bInSetup() || pObjectiveResource && pObjectiveResource->m_bMannVsMachineBetweenWaves())
+			return 0;
+	}
+
+	const int iBaseCost = bDispenser || G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger ? 100 : 130;
+	return static_cast<int>(SDK::AttribHookValue(static_cast<float>(iBaseCost), "building_cost_reduction", pLocal));
+}
+
 static bool CanBuildAtPosition(CTFPlayer* pLocal, const Vector& vPos)
 {
+	constexpr float flHeight = 66.f;
+	constexpr float flGroundClearance = 32.f;
+	constexpr float flMinGroundNormalZ = 0.65f;
+
 	CGameTrace trace;
 	CTraceFilterNavigation filter(pLocal);
-	const Vector vMins(-20.f, -20.f, 0.f);
-	const Vector vMaxs(20.f, 20.f, 48.f);
+	const Vector vFlatMins = { -kBuildHalfWidth, -kBuildHalfWidth, 0.f };
+	const Vector vFlatMaxs = { kBuildHalfWidth, kBuildHalfWidth, 0.f };
+	SDK::TraceHull(vPos + Vector(0, 0, PLAYER_STEP_HEIGHT), vPos - Vector(0, 0, flGroundClearance), vFlatMins, vFlatMaxs, MASK_PLAYERSOLID_BRUSHONLY, &filter, &trace);
+	if (trace.startsolid || trace.fraction >= 1.f)
+		return false;
 
-	SDK::TraceHull(vPos + Vector(0, 0, 5), vPos + Vector(0, 0, 5), vMins, vMaxs, MASK_PLAYERSOLID, &filter, &trace);
+	const Vector vRaised = trace.endpos + Vector(0, 0, 2);
+	SDK::TraceHull(vRaised, vRaised, vFlatMins, { kBuildHalfWidth, kBuildHalfWidth, flHeight }, MASK_PLAYERSOLID, &filter, &trace);
 	if (trace.DidHit())
 		return false;
 
-	SDK::Trace(vPos + Vector(0, 0, 10), vPos - Vector(0, 0, 10), MASK_PLAYERSOLID, &filter, &trace);
-	return trace.DidHit();
+	for (const auto& vCorner : { Vector(-kBuildHalfWidth, -kBuildHalfWidth, 0), Vector(kBuildHalfWidth, kBuildHalfWidth, 0), Vector(kBuildHalfWidth, -kBuildHalfWidth, 0), Vector(-kBuildHalfWidth, kBuildHalfWidth, 0) })
+	{
+		const Vector vStart = vRaised + vCorner;
+		SDK::Trace(vStart, vStart - Vector(0, 0, flGroundClearance), MASK_PLAYERSOLID_BRUSHONLY, &filter, &trace);
+		if (trace.startsolid || trace.fraction >= 1.f || trace.plane.normal.z < flMinGroundNormalZ)
+			return false;
+	}
+	return true;
 }
 
 static int GetAutoEngieFlag(CBaseObject* pBuilding)
@@ -189,8 +221,7 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 		return false;
 	}
 
-	const int iRequiredMetal = (bDispenser || G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger) ? 100 : 130;
-	if (pLocal->m_iMetalCount() < iRequiredMetal)
+	if (pLocal->m_iMetalCount() < GetObjectCost(pLocal, bDispenser))
 		return F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
 
 	if (bDispenser && m_pMySentryGun && !m_pMySentryGun->m_bPlacing())
@@ -217,12 +248,24 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 		if (tClosestEnemy.m_flDist < 500.f && tClosestEnemy.m_pPlayer && tClosestEnemy.m_pPlayer->IsAlive() && !pLocal->m_bCarryingObject())
 			return false;
 
+		const Vector vToSpot = m_tCurrentBuildingSpot.m_vPos - pLocal->GetCenter();
+		const float flSpotDist2D = vToSpot.Length2D();
 		pCmd->viewangles.x = 20.f;
-		pCmd->viewangles.y = m_flBuildYaw;
+		pCmd->viewangles.y = Math::VectorAngles(vToSpot.To2D()).y + m_flBuildYaw;
 		I::EngineClient->SetViewAngles(pCmd->viewangles);
 
-		if (m_tBuildRotation.Run(0.3f))
-			m_flBuildYaw += 45.f;
+		const Vector vOrigin = pLocal->GetAbsOrigin();
+		if (flSpotDist2D > kBuildDistance + kBuildDistanceTolerance)
+			SDK::WalkTo(pCmd, pLocal, m_tCurrentBuildingSpot.m_vPos);
+		else if (flSpotDist2D < kBuildDistance - kBuildDistanceTolerance)
+			SDK::WalkTo(pCmd, pLocal, vOrigin + vOrigin - m_tCurrentBuildingSpot.m_vPos);
+		else
+		{
+			pCmd->forwardmove = pCmd->sidemove = 0.f;
+			pCmd->buttons |= IN_ATTACK;
+			if (m_tBuildRotation.Run(0.3f))
+				m_flBuildYaw += 45.f;
+		}
 
 		if (m_tBuildAttempt.Run(0.3f))
 			m_iBuildAttempts++;
@@ -233,16 +276,12 @@ bool CNavBotEngineer::BuildBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEn
 				I::EngineClient->ClientCmd_Unrestricted(std::format("build {}", bDispenser ? 0 : 2).c_str());
 		}
 
-		pCmd->buttons |= IN_ATTACK;
-		pCmd->forwardmove = 20.f;
-		if (pCmd->sidemove == 0.f)
-			pCmd->sidemove = 1.f;
 		return true;
 	}
 
 	if (bDispenser && bHasSpot)
 	{
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer && F::NavEngine.IsPathing())
+		if (F::NavEngine.IsPathingFor(PriorityListEnum::Engineer))
 			return true;
 
 		if (F::NavEngine.NavTo(m_tCurrentBuildingSpot.m_vPos, PriorityListEnum::Engineer))
@@ -264,19 +303,17 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 	m_iBuildAttempts = 0;
 	if (!bHelp && !pLocal->m_iMetalCount())
 	{
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
 		return F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
 	}
 
 	m_eTaskStage = bHelp ? EngineerTaskStageEnum::HelpBuilding
 		: pBuilding->GetClassID() == ETFClassID::CObjectDispenser ? EngineerTaskStageEnum::SmackDispenser : EngineerTaskStageEnum::SmackSentry;
 
-	const bool bInRange = bHelp ? CanWrenchBuilding(pLocal, pBuilding) : pBuilding->GetAbsOrigin().DistTo(pLocal->GetAbsOrigin()) <= 100.f;
+	const bool bInRange = CanWrenchBuilding(pLocal, pBuilding);
 	if (bInRange && F::BotUtils.m_iCurrentSlot == SLOT_MELEE)
 	{
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::Engineer)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
 		F::NavEngine.m_eCurrentPriority = PriorityListEnum::Engineer;
 
 		if (bHelp && !m_bHelpReached)
@@ -293,8 +330,15 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 		else
 			pCmd->buttons |= IN_ATTACK;
 	}
-	else if (F::NavEngine.m_eCurrentPriority != PriorityListEnum::Engineer)
-		return F::NavEngine.NavTo(pBuilding->GetAbsOrigin(), PriorityListEnum::Engineer);
+	else if (!bInRange)
+	{
+		if (F::NavEngine.IsPathingFor(PriorityListEnum::Engineer))
+			return true;
+		if (pBuilding->GetAbsOrigin().DistTo(pLocal->GetAbsOrigin()) <= kSmackApproachDist)
+			SDK::WalkTo(pCmd, pLocal, pBuilding->GetCenter());
+		else
+			return F::NavEngine.NavTo(pBuilding->GetAbsOrigin(), PriorityListEnum::Engineer);
+	}
 
 	return true;
 }
@@ -792,7 +836,7 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 		if (!pArea)
 			continue;
 
-		if (pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_EXIT))
+		if (pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_ANY | TF_NAV_SPAWN_ROOM_EXIT))
 			continue;
 
 		if (pArea->m_vCenter.DistTo(tFocus.m_vPos) > 2000.f)
@@ -801,12 +845,12 @@ void CNavBotEngineer::RefreshBuildingSpots(CTFPlayer* pLocal, ClosestEnemy_t& tC
 		if (pArea->IsBlocked(pLocal->m_iTeamNum()))
 			continue;
 
+		if (tFocus.m_pArea && (!bHasFocusCost || F::NavEngine.GetFieldCost(vFocusCost, pArea) > 4000.f))
+			continue;
+
 		auto AddSpot = [&](const Vector& vPos, float flBonus = 0.f)
 			{
 				if (IsBuildSpotFailed(vPos))
-					return;
-
-				if (tFocus.m_pArea && (!bHasFocusCost || F::NavEngine.GetFieldCost(vFocusCost, pArea) > 4000.f))
 					return;
 
 				const float flDistToFocus = vPos.DistTo(tFocus.m_vPos);

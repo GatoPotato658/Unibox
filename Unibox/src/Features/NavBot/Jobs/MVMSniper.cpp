@@ -87,7 +87,7 @@ bool CNavBotMVMSniper::CampAt(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseEntity* pA
 	if (flDist > 150.f)
 		return F::NavEngine.NavTo(vAnchorOrigin, PriorityListEnum::MVMSniper);
 
-	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
+	if (F::NavEngine.IsPathingFor(PriorityListEnum::MVMSniper))
 		F::NavEngine.CancelPath();
 
 	if (flDist > 40.f)
@@ -160,7 +160,7 @@ bool CNavBotMVMSniper::Run(CUserCmd* pCmd, CTFPlayer* pLocal)
 			return F::NavEngine.NavTo(pEntrance->GetAbsOrigin(), PriorityListEnum::MVMSniper);
 		}
 
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMSniper && F::NavEngine.IsPathing())
+		if (F::NavEngine.IsPathingFor(PriorityListEnum::MVMSniper))
 			F::NavEngine.CancelPath();
 
 		if (!m_flOnEntranceSince && flDist <= 100.f)

@@ -7,6 +7,8 @@
 #include "../Features/ImGui/Overlay/CaptureOverlay.h"
 #include "../Features/Visuals/ESP/ESP.h"
 #include "../Features/Players/SteamProfileCache.h"
+#include "../Features/Visuals/Chams/D3DMaterials.h"
+#include "../Features/Visuals/Glow/Glow.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -17,11 +19,14 @@ MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), H
 
 	if (!G::Unload)
 	{
+		F::D3DMaterials.Initialize(pDevice);
 		F::Render.Render(pDevice);
 		SDK::TickCleanScreenshot();
 	}
 	else
 	{
+		F::D3DMaterials.Unload();
+		F::Glow.OnDeviceLost();
 		F::CaptureOverlay.ReleaseDeviceObjects();
 		F::SteamProfileCache.ReleaseTextures();
 	}
@@ -34,6 +39,8 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 {
 	DEBUG_RETURN(Direct3DDevice9_Reset, pDevice, pPresentationParameters);
 
+	F::D3DMaterials.Unload();
+	F::Glow.OnDeviceLost();
 	F::CaptureOverlay.ReleaseDeviceObjects();
 	InvalidateESPIconTextures();
 	F::SteamProfileCache.ReleaseTextures();

@@ -283,7 +283,7 @@ bool CMVMController::RunTank(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* p
 
 	if (flDistance > flRange * 0.85f)
 		F::NavEngine.NavTo(pTank->GetAbsOrigin(), PriorityListEnum::MVMTank);
-	else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMTank && F::NavEngine.IsPathing())
+	else if (F::NavEngine.IsPathingFor(PriorityListEnum::MVMTank))
 		F::NavEngine.CancelPath();
 
 	if (F::BotUtils.m_iCurrentSlot == SLOT_PRIMARY && PrimaryHasAmmo() && flDistance <= flRange && IsVisibleToShoot(pLocal, pTank))
@@ -340,7 +340,7 @@ bool CMVMController::RunCombat(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase*
 			vFwd.z = 0.f; Vec3 vToLocal = pLocal->GetAbsOrigin() - pTargPlayer->GetAbsOrigin(); vToLocal.z = 0.f;
 			bool bBehind = vFwd.Normalize() > 0.01f && vToLocal.Normalize() > 0.01f && vFwd.Dot(vToLocal) < -0.3f;
 			auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
-			bool bReady = pKnife && pKnife->GetWeaponID() == TF_WEAPON_KNIFE && pKnife->As<CTFKnife>()->m_bReadyToBackstab();
+			bool bReady = NavRuntime::IsBackstabReady(pKnife);
 			if ((bReady || bBehind) && flDistance < 200.f)
 				F::BotUtils.SetSlot(pLocal, SLOT_MELEE);
 			else
@@ -362,14 +362,14 @@ bool CMVMController::RunCombat(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase*
 	{
 		if (flDistance > 85.f)
 			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat);
-		else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
+		else if (F::NavEngine.IsPathingFor(PriorityListEnum::MVMCombat))
 			F::NavEngine.CancelPath();
 	}
 	else
 	{
 		if (flDistance > flRange * 0.8f)
 			F::NavEngine.NavTo(pTarget->GetAbsOrigin(), PriorityListEnum::MVMCombat);
-		else if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat && F::NavEngine.IsPathing())
+		else if (F::NavEngine.IsPathingFor(PriorityListEnum::MVMCombat))
 			F::NavEngine.CancelPath();
 	}
 
@@ -475,7 +475,7 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (!m_bActive || !IsSupportedClass(pLocal) || !pCmd || !pWeapon)
 		return false;
 
-	const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+	const float flHealth = NavJobUtils::GetHealthFraction(pLocal);
 	const int iClass = pLocal->m_iClass();
 	const bool bScoutPyro = iClass == TF_CLASS_SCOUT || iClass == TF_CLASS_PYRO;
 	const bool bSpy = iClass == TF_CLASS_SPY;

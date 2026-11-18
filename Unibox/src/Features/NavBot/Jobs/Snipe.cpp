@@ -1,23 +1,37 @@
 #include "NavBotJobs.h"
 #include "../NavBotCore.h"
+#include "../Hazards.h"
 
 #include <algorithm>
 
-static float GetSnipeMinDistance(bool bShortRangeClass)
+static float GetSnipeMinDistance(int iEntIdx, bool bShortRangeClass)
 {
-	const bool bLowRangeAllowed = (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange) && bShortRangeClass;
-	return bLowRangeAllowed ? 0.f : TFGame::SENTRY_MAX_RANGE + HALF_PLAYER_WIDTH;
+	const bool bLowRangeAllowed = NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange) && bShortRangeClass;
+	if (bLowRangeAllowed)
+		return 0.f;
+
+	auto pEntity = I::ClientEntityList->GetClientEntity(iEntIdx);
+	return CHazards::GetSentryRange(pEntity ? pEntity->As<CBaseEntity>() : nullptr) + HALF_PLAYER_WIDTH;
 }
 
-bool CNavBotSnipe::IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bool bShortRangeClass)
+static Vector GetSnipeTargetPoint(const Vector& vEntOrigin)
 {
-	vEntOrigin.z += 40.f;
-	vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
+	return vEntOrigin + Vector(0.f, 0.f, 40.f);
+}
 
-	if (vEntOrigin.DistTo(vAreaOrigin) <= GetSnipeMinDistance(bShortRangeClass))
+static Vector GetSnipeEyePoint(const Vector& vAreaOrigin)
+{
+	return vAreaOrigin + Vector(0.f, 0.f, PLAYER_CROUCHED_JUMP_HEIGHT);
+}
+
+bool CNavBotSnipe::IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, float flMinDist)
+{
+	const Vector vTarget = GetSnipeTargetPoint(vEntOrigin);
+	const Vector vEye = GetSnipeEyePoint(vAreaOrigin);
+	if (vTarget.DistTo(vEye) <= flMinDist)
 		return false;
 
-	return F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vEntOrigin, MASK_SHOT | CONTENTS_GRATE);
+	return F::NavEngine.IsVectorVisibleNavigation(vEye, vTarget, MASK_SHOT | CONTENTS_GRATE);
 }
 
 bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
@@ -33,23 +47,18 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 	if (!F::NavEngine.IsPriorityAllowed(PriorityListEnum::SnipeSentry))
 		return false;
 
-	const float flMinDist = GetSnipeMinDistance(bShortRangeClass);
+	const float flMinDist = GetSnipeMinDistance(iEntIdx, bShortRangeClass);
 	const float flMaxDist = std::max(flMinDist + 512.f, static_cast<float>(F::NavBotCore.m_tSelectedConfig.m_flMax));
 
 	std::vector<NavAreaScore_t> vCandidates;
 	std::vector<CNavArea*> vAreas;
 	pNavFile->QueryOverlapping(vOrigin, flMaxDist, vAreas);
 	vCandidates.reserve(vAreas.size());
+	const Vector vTarget = GetSnipeTargetPoint(vOrigin);
 	for (CNavArea* pArea : vAreas)
 	{
-		if (!pArea)
-			continue;
-
-		Vector vAreaOrigin = pArea->m_vCenter;
-		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
-		if (vOrigin.DistTo(vAreaOrigin) <= flMinDist)
-			continue;
-		vCandidates.push_back({ pArea, pArea->m_vCenter.DistTo(vOrigin) });
+		if (pArea && GetSnipeEyePoint(pArea->m_vCenter).DistTo(vTarget) > flMinDist)
+			vCandidates.push_back({ pArea, pArea->m_vCenter.DistTo(vOrigin) });
 	}
 
 	const bool bLowestFirst = !F::NavBotCore.m_tSelectedConfig.m_bPreferFar;
@@ -62,9 +71,7 @@ bool CNavBotSnipe::TryToSnipe(int iEntIdx, bool bShortRangeClass)
 	for (size_t i = 0; i < nTraceCandidates; ++i)
 	{
 		const auto& tCandidate = vCandidates[i];
-		Vector vAreaOrigin = tCandidate.m_pArea->m_vCenter;
-		vAreaOrigin.z += PLAYER_CROUCHED_JUMP_HEIGHT;
-		if (!F::NavEngine.IsVectorVisibleNavigation(vAreaOrigin, vOrigin, MASK_SHOT | CONTENTS_GRATE))
+		if (!IsAreaValidForSnipe(vOrigin, tCandidate.m_pArea->m_vCenter, flMinDist))
 			continue;
 		if (F::NavEngine.NavTo(tCandidate.m_pArea->m_vCenter, PriorityListEnum::SnipeSentry))
 			return true;
@@ -78,16 +85,15 @@ bool CNavBotSnipe::Run(CTFPlayer* pLocal)
 	const auto Release = [this]() -> bool
 		{
 			m_iTargetIdx = -1;
-			if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::SnipeSentry)
-				F::NavEngine.CancelPath();
+			F::NavEngine.CancelPathIf(PriorityListEnum::SnipeSentry);
 			return false;
 		};
 
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentries))
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentries))
 		return Release();
 
 	const bool bShortRangeClass = NavJobUtils::IsShortRangeClass(pLocal);
-	if (bShortRangeClass && !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange))
+	if (bShortRangeClass && !NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::TargetSentriesLowRange))
 		return Release();
 
 	if (!m_tSnipeCooldown.Run(2.f))
@@ -102,7 +108,7 @@ bool CNavBotSnipe::Run(CTFPlayer* pLocal)
 		if (F::BotUtils.GetDormantOrigin(m_iTargetIdx, &vOrigin))
 		{
 			auto pLocalArea = F::NavEngine.GetLocalNavArea();
-			if (pLocalArea && IsAreaValidForSnipe(vOrigin, pLocalArea->m_vCenter, bShortRangeClass))
+			if (pLocalArea && IsAreaValidForSnipe(vOrigin, pLocalArea->m_vCenter, GetSnipeMinDistance(m_iTargetIdx, bShortRangeClass)))
 				return true;
 			if (TryToSnipe(m_iTargetIdx, bShortRangeClass))
 				return true;

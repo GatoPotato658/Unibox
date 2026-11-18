@@ -74,6 +74,7 @@
     <ClCompile Include="src\Features\Simulation\ProjectileSimulation\ProjectileSimulation.cpp" />
     <ClCompile Include="src\Features\Ticks\Ticks.cpp" />
     <ClCompile Include="src\Features\Visuals\Chams\Chams.cpp" />
+    <ClCompile Include="src\Features\Visuals\Chams\D3DMaterials.cpp" />
     <ClCompile Include="src\Features\Visuals\ESP\ESP.cpp" />
     <ClCompile Include="src\Features\Visuals\FakeAngle\FakeAngle.cpp" />
     <ClCompile Include="src\Features\Visuals\Glow\Glow.cpp" />
@@ -204,6 +205,7 @@
     <ClCompile Include="src\Features\AutoJoin\AutoJoin.cpp" />
     <ClCompile Include="src\Features\Killstreak\Killstreak.cpp" />
     <ClCompile Include="src\Features\Misc\AutoItem\AutoItem.cpp" />
+    <ClCompile Include="src\Features\NavBot\NavHull.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine.cpp" />
     <ClCompile Include="src\Features\NavBot\Objectives.cpp" />
     <ClCompile Include="src\Features\NavBot\ObjectivesMvM.cpp" />
@@ -494,6 +496,9 @@
     <ClInclude Include="src\Features\Simulation\ProjectileSimulation\ProjectileSimulation.h" />
     <ClInclude Include="src\Features\Ticks\Ticks.h" />
     <ClInclude Include="src\Features\Visuals\Chams\Chams.h" />
+    <ClInclude Include="src\Features\Visuals\Chams\D3DMaterials.h" />
+    <ClInclude Include="src\Features\Visuals\Chams\D3DMaterialShaders.h" />
+    <ClInclude Include="src\Features\Visuals\Chams\RenderQueue.h" />
     <ClInclude Include="src\Features\Visuals\ESP\ESP.h" />
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
@@ -564,6 +569,7 @@
     <ClInclude Include="src\Features\AutoJoin\AutoJoin.h" />
     <ClInclude Include="src\Features\Killstreak\Killstreak.h" />
     <ClInclude Include="src\Features\Misc\AutoItem\AutoItem.h" />
+    <ClInclude Include="src\Features\NavBot\NavHull.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine.h" />
     <ClInclude Include="src\Features\NavBot\Objectives.h" />
     <ClInclude Include="src\Features\NavBot\NavArea.h" />

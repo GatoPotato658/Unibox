@@ -1,7 +1,7 @@
 #pragma once
 #include "../../../SDK/SDK.h"
 
-Enum(Targets, Players = 1 << 0, Buildings = 1 << 1, Projectiles = 1 << 2, Ragdolls = 1 << 3, Objective = 1 << 4, NPCs = 1 << 5, Health = 1 << 6, Ammo = 1 << 7, Money = 1 << 8, Powerups = 1 << 9, Spellbook = 1 << 10, Bombs = 1 << 11, Gargoyle = 1 << 12, FakeAngle = 1 << 13, ViewmodelWeapon = 1 << 14, ViewmodelHands = 1 << 15, ESP = ~(Ragdolls | FakeAngle | ViewmodelWeapon | ViewmodelHands), Occluded = ~(ViewmodelWeapon | ViewmodelHands))
+Enum(Targets, Players = 1 << 0, Buildings = 1 << 1, Projectiles = 1 << 2, Ragdolls = 1 << 3, Objective = 1 << 4, NPCs = 1 << 5, Health = 1 << 6, Ammo = 1 << 7, Money = 1 << 8, Powerups = 1 << 9, Spellbook = 1 << 10, Bombs = 1 << 11, Gargoyle = 1 << 12, FakeAngle = 1 << 13, ViewmodelWeapon = 1 << 14, ViewmodelHands = 1 << 15, Weapons = 1 << 16, Wearables = 1 << 17, ESP = ~(Ragdolls | FakeAngle | ViewmodelWeapon | ViewmodelHands | Weapons | Wearables), Occluded = ~(ViewmodelWeapon | ViewmodelHands))
 Enum(Conditions, Enemy = 1 << 0, Team = 1 << 1, BLU = 1 << 2, RED = 1 << 3, Local = 1 << 4, Friends = 1 << 5, Party = 1 << 6, Priority = 1 << 7, Target = 1 << 8, Dormant = 1 << 9)
 Enum(Player, Scout = 1 << 0, Soldier = 1 << 1, Pyro = 1 << 2, Demoman = 1 << 3, Heavy = 1 << 4, Engineer = 1 << 5, Medic = 1 << 6, Sniper = 1 << 7, Spy = 1 << 8, Invulnerable = 1 << 9, Crits = 1 << 10, Invisible = 1 << 11, Disguise = 1 << 12, Hurt = 1 << 13, NotInvis = 1 << 14, Classes = Scout | Soldier | Pyro | Demoman | Heavy | Engineer | Medic | Sniper | Spy, Conds = Invulnerable | Crits | Invisible | Disguise | Hurt | NotInvis)
 Enum(Building, Sentry = 1 << 0, Dispenser = 1 << 1, Teleporter = 1 << 2, Hurt = 1 << 3, Classes = Sentry | Dispenser | Teleporter, Conds = Hurt)

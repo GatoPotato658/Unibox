@@ -9,6 +9,7 @@ namespace TFGame
 	inline constexpr float VIEW_HEIGHT_DEFAULT = 72.f;
 
 	inline constexpr float STEP_HEIGHT = 18.f;
+	inline constexpr float MIN_FLOOR_NORMAL_Z = 0.7f;
 	inline constexpr float GRAVITY = 800.f;
 
 	inline constexpr float JUMP_SPEED = 289.f;

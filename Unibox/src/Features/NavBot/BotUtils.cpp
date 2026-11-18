@@ -8,6 +8,7 @@
 #include "../Aimbot/AimbotGlobal/AimbotGlobal.h"
 #include "../Misc/NamedPipe/NamedPipe.h"
 #include "../Ticks/Ticks.h"
+#include "../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include "../Simulation/MovementSimulation/MovementSimulation.h"
 
 static int GetRangedFallbackSlot(CTFPlayer* pLocal)
@@ -104,7 +105,7 @@ static int SelectBestSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy
 	{
 		const bool bIsBehind = IsTargetBehindLocal(pLocal, tClosestEnemy.m_pPlayer);
 		auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
-		const bool bReadyToBackstab = pKnife && pKnife->GetWeaponID() == TF_WEAPON_KNIFE && pKnife->As<CTFKnife>()->m_bReadyToBackstab();
+		const bool bReadyToBackstab = NavRuntime::IsBackstabReady(pKnife);
 		const bool bKnifeLethal = pKnife && bHasEnemy && tClosestEnemy.m_pPlayer->m_iHealth() <= pKnife->GetDamage(false);
 		if (bMeleeReachable && flEnemyDist <= 250.f && (bReadyToBackstab || bKnifeLethal))
 			return SLOT_MELEE;
@@ -257,11 +258,7 @@ ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTarget(CTFPlayer* pLocal, CT
 	if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Friends && H::Entities.IsFriend(iEntIdx)
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Party && H::Entities.InParty(iEntIdx)
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Invulnerable && pPlayer->IsInvulnerable() && G::SavedDefIndexes[SLOT_MELEE] != Heavy_t_TheHolidayPunch
-		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Invisible
-			&& !pPlayer->InCond(TF_COND_BURNING) && !pPlayer->InCond(TF_COND_BURNING_PYRO)
-			&& !pPlayer->InCond(TF_COND_MAD_MILK) && !pPlayer->InCond(TF_COND_URINE)
-			&& Vars::Aimbot::General::IgnoreInvisible.Value > 0.f
-			&& pPlayer->GetEffectiveInvisibilityLevel() >= Vars::Aimbot::General::IgnoreInvisible.Value / 100.f
+		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Invisible && pPlayer->IsInvisible(Vars::Aimbot::General::IgnoreInvisible.Value / 100.f)
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::DeadRinger && pPlayer->m_bFeignDeathReady()
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Taunting && pPlayer->IsTaunting()
 		|| Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Disguised && pPlayer->InCond(TF_COND_DISGUISED))
@@ -270,23 +267,8 @@ ShouldTargetEnum::ShouldTargetEnum CBotUtils::ShouldTarget(CTFPlayer* pLocal, CT
 	if (pPlayer->m_iTeamNum() == pLocal->m_iTeamNum())
 		return ShouldTargetEnum::DontTarget;
 
-	if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Vaccinator)
-	{
-		switch (SDK::GetWeaponType(pWeapon))
-		{
-		case EWeaponType::HITSCAN:
-			if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST) && SDK::AttribHookValue(0, "mod_pierce_resists_absorbs", pWeapon) == 0)
-				return ShouldTargetEnum::DontTarget;
-			break;
-		case EWeaponType::PROJECTILE:
-			if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST) && (G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_FLAMETHROWER && G::SavedWepIds[SLOT_SECONDARY] == TF_WEAPON_FLAREGUN))
-				return ShouldTargetEnum::DontTarget;
-			else if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST) && G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_COMPOUND_BOW)
-				return ShouldTargetEnum::DontTarget;
-			else if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST))
-				return ShouldTargetEnum::DontTarget;
-		}
-	}
+	if (Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Vaccinator && SDK::IsResistedByVaccinatorUber(pPlayer, pWeapon))
+		return ShouldTargetEnum::DontTarget;
 
 	return ShouldTargetEnum::Target;
 }
@@ -458,15 +440,7 @@ void CBotUtils::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 
 	if (!Vars::Misc::Movement::NavBot::Enabled.Value && !(Vars::Misc::Movement::FollowBot::Enabled.Value && Vars::Misc::Movement::FollowBot::Targets.Value))
 	{
-		m_mAutoScopeCache.clear();
-		m_mAutoRevCache.clear();
-		m_bScopeKeep = m_bScopeClearCache = m_bRevKeep = m_bRevClearCache = false;
-		m_tClosestEnemy = {};
-		m_iBestSlot = -1;
-		m_iCurrentSlot = -1;
-		m_eJumpState = STATE_AWAITING_JUMP;
-		m_vPredictedJumpPos = {};
-		m_vJumpPeakPos = {};
+		ResetBotState();
 		return;
 	}
 
@@ -485,7 +459,7 @@ void CBotUtils::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	AutoRev(pLocal, pWeapon, pCmd);
 }
 
-void CBotUtils::Reset()
+void CBotUtils::ResetBotState()
 {
 	m_mAutoScopeCache.clear();
 	m_mAutoRevCache.clear();
@@ -496,6 +470,11 @@ void CBotUtils::Reset()
 	m_eJumpState = STATE_AWAITING_JUMP;
 	m_vPredictedJumpPos = {};
 	m_vJumpPeakPos = {};
+}
+
+void CBotUtils::Reset()
+{
+	ResetBotState();
 	m_vDebugLook = {};
 	m_flDebugLookExpire = 0.f;
 	m_tLegitAim = {};
@@ -505,9 +484,7 @@ void CBotUtils::Reset()
 
 bool CBotUtils::IsSurfaceWalkable(const Vector& vNormal)
 {
-	static const Vector vUp = { 0.f, 0.f, 1.f };
-	float flAngle = Math::Rad2Deg(std::acos(vNormal.Dot(vUp)));
-	return flAngle < 50.f;
+	return vNormal.z >= TFGame::MIN_FLOOR_NORMAL_Z;
 }
 
 bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
@@ -546,14 +523,14 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 				if (vJumpDirection.Dot(vPathDir) < 0.5f)
 					return false;
 
-				auto pCrumbs = F::NavEngine.GetCrumbs();
-				if (pCrumbs->size() > 1)
+				const auto& vCrumbs = F::NavEngine.GetCrumbs();
+				if (vCrumbs.size() > 1)
 				{
-					Vector vNextDir = ((*pCrumbs)[1].m_vPos - (*pCrumbs)[0].m_vPos);
+					Vector vNextDir = (vCrumbs[1].m_vPos - vCrumbs[0].m_vPos);
 					vNextDir.z = 0.f;
 					if (vNextDir.Normalize() > 0.1f && vPathDir.Dot(vNextDir) < 0.707f)
 					{
-						if (pLocal->GetAbsOrigin().DistTo((*pCrumbs)[0].m_vPos) < 100.f)
+						if (pLocal->GetAbsOrigin().DistTo(vCrumbs[0].m_vPos) < 100.f)
 							return false;
 					}
 				}
@@ -564,12 +541,12 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 		Vector vJumpPeakPos = pLocal->GetAbsOrigin() + vJumpDirection * flDistTravelled;
 		m_vJumpPeakPos = vJumpPeakPos;
 
-		const Vector vHullMin = { -23.99f, -23.99f, 0.f };
-		const Vector vHullMax = { 23.99f, 23.99f, 62.f };
+		const Vector vHullMin = { -TFGame::HULL_HALF_WIDTH, -TFGame::HULL_HALF_WIDTH, 0.f };
+		const Vector vHullMax = { TFGame::HULL_HALF_WIDTH, TFGame::HULL_HALF_WIDTH, TFGame::HULL_DUCK_HEIGHT };
 		const Vector vHullMinSjump = { -16.f, -16.f, 0.f };
-		const Vector vHullMaxSjump = { 16.f, 16.f, 62.f };
-		const Vector vStepHeight = { 0.f, 0.f, 18.f };
-		const Vector vMaxJumpHeight = { 0.f, 0.f, 72.f };
+		const Vector vHullMaxSjump = { 16.f, 16.f, TFGame::HULL_DUCK_HEIGHT };
+		const Vector vStepHeight = { 0.f, 0.f, TFGame::STEP_HEIGHT };
+		const Vector vMaxJumpHeight = { 0.f, 0.f, TFGame::CROUCH_JUMP_REACH };
 
 		Vector vTraceStart = pLocal->GetAbsOrigin() + vStepHeight;
 		Vector vTraceEnd = vTraceStart + vJumpDirection * flDistTravelled;
@@ -607,8 +584,14 @@ bool CBotUtils::SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CBotUtils::HandleSmartJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (F::NavEngine.IsUnstucking() || F::VSHController.IsMovementHeld())
+	if (F::VSHController.IsMovementHeld())
 		return;
+
+	if (F::NavEngine.IsControllingJumpInput())
+	{
+		m_eJumpState = STATE_AWAITING_JUMP;
+		return;
+	}
 
 	if (!pLocal || !pLocal->IsAlive() || !Vars::Misc::Movement::NavEngine::Enabled.Value
 		|| !Vars::Misc::Movement::NavBot::SmartJump.Value || F::AutoRocketJump.IsRunning())
@@ -976,7 +959,7 @@ CBaseEntity* CBotUtils::FindLegitThreat(CTFPlayer* pLocal, const Vec3& vEye)
 
 		const Vec3 vOrigin = pProjectile->GetAbsOrigin();
 		const Vec3 vRelativeOrigin = vOrigin - vEye;
-		const Vec3 vRelativeVelocity = pProjectile->GetAbsVelocity() - vVelocity;
+		const Vec3 vRelativeVelocity = F::ProjSim.GetVelocity(pProjectile) - vVelocity;
 		const float flRelativeSpeed = vRelativeVelocity.LengthSqr();
 		if (flRelativeSpeed < 100.f * 100.f)
 			continue;
@@ -1135,27 +1118,24 @@ Vec3 CBotUtils::GetLegitLookPoint(CTFPlayer* pLocal, const Vec3& vEye, const Vec
 	Vec3 vBest = {};
 	float flBestDist = 0.f;
 
-	if (auto pCrumbs = F::NavEngine.GetCrumbs())
+	for (const Crumb_t& tCrumb : F::NavEngine.GetCrumbs())
 	{
-		for (const Crumb_t& tCrumb : *pCrumbs)
+		Vec3 vPoint = tCrumb.m_vPos;
+		vPoint.z += flEyeLift;
+		if (vPoint.DistToSqr(vEye) < 130.f * 130.f)
+			continue;
+		if (!bAllowSteep && std::fabs(vPoint.z - vEye.z) > 140.f)
+			continue;
+		float flDist = 0.f;
+		if (!TraceLegitLookPoint(pLocal, vEye, vPoint, &flDist))
+			break;
+		if (flDist > flBestDist)
 		{
-			Vec3 vPoint = tCrumb.m_vPos;
-			vPoint.z += flEyeLift;
-			if (vPoint.DistToSqr(vEye) < 130.f * 130.f)
-				continue;
-			if (!bAllowSteep && std::fabs(vPoint.z - vEye.z) > 140.f)
-				continue;
-			float flDist = 0.f;
-			if (!TraceLegitLookPoint(pLocal, vEye, vPoint, &flDist))
-				break;
-			if (flDist > flBestDist)
-			{
-				vBest = vPoint;
-				flBestDist = flDist;
-			}
-			if (flBestDist > 500.f)
-				break;
+			vBest = vPoint;
+			flBestDist = flDist;
 		}
+		if (flBestDist > 500.f)
+			break;
 	}
 
 	if (vBest.IsZero() && !vDest.IsZero())
@@ -1786,9 +1766,9 @@ static void RefreshAutoCache(std::unordered_map<int, bool>& mCache, bool& bClear
 static bool GetAutoViewOrigin(CTFPlayer* pLocal, Vector& vOut)
 {
 	CNavArea* pArea = nullptr;
-	auto pCrumbs = F::NavEngine.GetCrumbs();
-	if (pCrumbs->size() > 4)
-		pArea = (*pCrumbs)[4].m_pNavArea;
+	const auto& vCrumbs = F::NavEngine.GetCrumbs();
+	if (vCrumbs.size() > 4)
+		pArea = vCrumbs[4].m_pNavArea;
 	if (!pArea)
 		pArea = F::NavEngine.FindClosestNavArea(pLocal->GetAbsOrigin());
 	if (!pArea)
@@ -1840,6 +1820,67 @@ static std::vector<std::pair<CBaseEntity*, float>> GatherAutoTargets(CTFPlayer* 
 	return vTargets;
 }
 
+template <class FnEngage>
+static void ScanAutoTargets(const std::vector<std::pair<CBaseEntity*, float>>& vTargets, const Vector& vLocalOrigin, const Vector& vFrom,
+	std::unordered_map<int, bool>& mCache, bool bMoveSim, bool bLinearPredict, int iMaxTicks, FnEngage&& Engage)
+{
+	const bool bUseCache = Vars::Misc::Movement::BotUtils::AutoScopeUseCachedResults.Value;
+	auto CheckVisibility = [&](const Vec3& vTo, int iEntIndex) -> bool
+		{
+			const bool bHit = IsAutoTargetVisible(vLocalOrigin, vFrom, vTo);
+			if (iEntIndex != -1)
+				mCache[iEntIndex] = bHit;
+			if (bHit)
+				Engage();
+			return bHit;
+		};
+
+	MoveStorage tStorage{};
+	for (auto [pEntity, _] : vTargets)
+	{
+		const int iEntIndex = bUseCache ? pEntity->entindex() : -1;
+		if (const auto it = mCache.find(iEntIndex); it != mCache.end())
+		{
+			if (!it->second)
+				continue;
+			Engage();
+			return;
+		}
+
+		Vector vCurrent = pEntity->GetAbsOrigin();
+		vCurrent.z += PLAYER_JUMP_HEIGHT;
+		if (CheckVisibility(vCurrent, iEntIndex))
+			return;
+
+		if ((!bMoveSim && !bLinearPredict) || !pEntity->IsPlayer())
+			continue;
+
+		auto pPlayer = pEntity->As<CTFPlayer>();
+		Vector vPredicted;
+		if (bMoveSim)
+		{
+			if (!F::MoveSim.Initialize(pPlayer, tStorage, false) || tStorage.m_bFailed)
+				continue;
+			for (int i = 0; i < iMaxTicks; i++)
+				F::MoveSim.RunTick(tStorage);
+			vPredicted = tStorage.m_vPredictedOrigin;
+		}
+		else
+			vPredicted = pPlayer->GetAbsOrigin() + pPlayer->GetAbsVelocity() * TICKS_TO_TIME(iMaxTicks);
+
+		auto pTargetNav = F::NavEngine.FindClosestNavArea(vPredicted, false);
+		if (!pTargetNav)
+			continue;
+
+		Vector vTo = pTargetNav->m_vCenter;
+		if (!pPlayer->OnSolid() && vTo.DistToSqr(vPredicted) >= 400.f * 400.f)
+			vTo = vPredicted;
+		vTo.z += PLAYER_JUMP_HEIGHT;
+		if (CheckVisibility(vTo, iEntIndex))
+			return;
+	}
+}
+
 void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	const int iWeaponID = pWeapon->GetWeaponID();
@@ -1880,7 +1921,6 @@ void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 	if (vEnemiesSorted.empty())
 		return;
 
-	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	auto Engage = [&]
 		{
 			if (bIsClassic)
@@ -1891,63 +1931,9 @@ void CBotUtils::AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 			m_tScopeTimer.Update();
 			m_bScopeKeep = true;
 		};
-	auto CheckVisibility = [&](const Vec3& vTo, int iEntIndex) -> bool
-		{
-			const bool bHit = IsAutoTargetVisible(vLocalOrigin, vFrom, vTo);
-			if (iEntIndex != -1)
-				m_mAutoScopeCache[iEntIndex] = bHit;
-			if (bHit)
-				Engage();
-			return bHit;
-		};
 
-	const bool bSimple = Vars::Misc::Movement::BotUtils::AutoScope.Value == Vars::Misc::Movement::BotUtils::AutoScopeEnum::Simple;
-	const int iMaxTicks = TIME_TO_TICKS(0.5f);
-	MoveStorage tStorage{};
-	for (auto [pEnemy, _] : vEnemiesSorted)
-	{
-		const int iEntIndex = Vars::Misc::Movement::BotUtils::AutoScopeUseCachedResults.Value ? pEnemy->entindex() : -1;
-		if (const auto it = m_mAutoScopeCache.find(iEntIndex); it != m_mAutoScopeCache.end())
-		{
-			if (!it->second)
-				continue;
-			Engage();
-			break;
-		}
-
-		Vector vNonPredictedPos = pEnemy->GetAbsOrigin();
-		vNonPredictedPos.z += PLAYER_JUMP_HEIGHT;
-		if (CheckVisibility(vNonPredictedPos, iEntIndex))
-			return;
-
-		if (!bSimple)
-		{
-			F::MoveSim.Initialize(pEnemy, tStorage, false);
-			if (tStorage.m_bFailed)
-				continue;
-
-			for (int i = 0; i < iMaxTicks; i++)
-				F::MoveSim.RunTick(tStorage);
-		}
-
-		bool bResult = false;
-		Vector vPredictedPos = bSimple ? pEnemy->GetAbsOrigin() + pEnemy->GetAbsVelocity() * TICKS_TO_TIME(iMaxTicks) : tStorage.m_vPredictedOrigin;
-
-		auto pTargetNav = F::NavEngine.FindClosestNavArea(vPredictedPos, false);
-		if (pTargetNav)
-		{
-			Vector vTo = pTargetNav->m_vCenter;
-
-			if (!pEnemy->As<CBasePlayer>()->OnSolid() && vTo.DistToSqr(vPredictedPos) >= pow(400.f, 2))
-				vTo = vPredictedPos;
-
-			vTo.z += PLAYER_JUMP_HEIGHT;
-			bResult = CheckVisibility(vTo, iEntIndex);
-		}
-
-		if (bResult)
-			break;
-	}
+	const bool bMoveSim = Vars::Misc::Movement::BotUtils::AutoScope.Value == Vars::Misc::Movement::BotUtils::AutoScopeEnum::MoveSim;
+	ScanAutoTargets(vEnemiesSorted, pLocal->GetAbsOrigin(), vFrom, m_mAutoScopeCache, bMoveSim, !bMoveSim, TIME_TO_TICKS(0.5f), Engage);
 }
 
 void CBotUtils::AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
@@ -1980,69 +1966,15 @@ void CBotUtils::AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCm
 	if (vTargetsSorted.empty())
 		return;
 
-	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 	auto Engage = [&]
 		{
 			pCmd->buttons |= IN_ATTACK2;
 			m_tRevTimer.Update();
 			m_bRevKeep = true;
 		};
-	auto CheckVisibility = [&](const Vec3& vTo, int iEntIndex) -> bool
-		{
-			const bool bHit = IsAutoTargetVisible(vLocalOrigin, vFrom, vTo);
-			if (iEntIndex != -1)
-				m_mAutoRevCache[iEntIndex] = bHit;
-			if (bHit)
-				Engage();
-			return bHit;
-		};
 
-	const bool bSimple = Vars::Misc::Movement::BotUtils::AutoScope.Value != Vars::Misc::Movement::BotUtils::AutoScopeEnum::MoveSim;
-	const int iMaxTicks = TIME_TO_TICKS(0.4f);
-	MoveStorage tStorage{};
-	for (auto [pEntity, _] : vTargetsSorted)
-	{
-		const int iEntIndex = Vars::Misc::Movement::BotUtils::AutoScopeUseCachedResults.Value ? pEntity->entindex() : -1;
-		if (const auto it = m_mAutoRevCache.find(iEntIndex); it != m_mAutoRevCache.end())
-		{
-			if (!it->second)
-				continue;
-			Engage();
-			break;
-		}
-
-		Vector vNonPredictedPos = pEntity->GetAbsOrigin();
-		vNonPredictedPos.z += PLAYER_JUMP_HEIGHT;
-		if (CheckVisibility(vNonPredictedPos, iEntIndex))
-			return;
-
-		if (bSimple || !pEntity->IsPlayer())
-			continue;
-
-		auto pEnemyPlayer = pEntity->As<CTFPlayer>();
-		F::MoveSim.Initialize(pEnemyPlayer, tStorage, false);
-		if (tStorage.m_bFailed)
-			continue;
-
-		for (int i = 0; i < iMaxTicks; i++)
-			F::MoveSim.RunTick(tStorage);
-
-		bool bResult = false;
-		Vector vPredictedPos = tStorage.m_vPredictedOrigin;
-		auto pTargetNav = F::NavEngine.FindClosestNavArea(vPredictedPos, false);
-		if (pTargetNav)
-		{
-			Vector vTo = pTargetNav->m_vCenter;
-			if (!pEnemyPlayer->OnSolid() && vTo.DistToSqr(vPredictedPos) >= pow(400.f, 2))
-				vTo = vPredictedPos;
-
-			vTo.z += PLAYER_JUMP_HEIGHT;
-			bResult = CheckVisibility(vTo, iEntIndex);
-		}
-
-		if (bResult)
-			break;
-	}
+	const bool bMoveSim = Vars::Misc::Movement::BotUtils::AutoScope.Value == Vars::Misc::Movement::BotUtils::AutoScopeEnum::MoveSim;
+	ScanAutoTargets(vTargetsSorted, pLocal->GetAbsOrigin(), vFrom, m_mAutoRevCache, bMoveSim, false, TIME_TO_TICKS(0.4f), Engage);
 }
 
 namespace NavRuntime
@@ -2089,8 +2021,7 @@ namespace NavRuntime
 		if (!pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_MINIGUN)
 			return false;
 
-		const int iState = pWeapon->As<CTFMinigun>()->m_iWeaponState();
-		return iState == AC_STATE_STARTFIRING || iState == AC_STATE_FIRING || iState == AC_STATE_SPINNING || (pCmd && (pCmd->buttons & IN_ATTACK2));
+		return pWeapon->As<CTFMinigun>()->m_iWeaponState() != AC_STATE_IDLE || (pCmd && (pCmd->buttons & IN_ATTACK2));
 	}
 
 	bool CanUseNavJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
@@ -2103,8 +2034,6 @@ namespace NavRuntime
 		if (IsMinigunJumpLocked(pWeapon, G::LastUserCmd))
 			return false;
 
-		return pWeapon->GetWeaponID() == TF_WEAPON_SNIPERRIFLE_CLASSIC
-			? !pWeapon->As<CTFSniperRifleClassic>()->m_bCharging()
-			: !pLocal->InCond(TF_COND_ZOOMED);
+		return pWeapon->GetWeaponID() != TF_WEAPON_COMPOUND_BOW || pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime() <= 0.f;
 	}
 }

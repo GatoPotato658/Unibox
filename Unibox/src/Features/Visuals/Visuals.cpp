@@ -5,6 +5,7 @@
 #include "../Aimbot/Aimbot.h"
 #include "CameraWindow/CameraWindow.h"
 #include "Groups/Groups.h"
+#include "Chams/Chams.h"
 #include "../Backtrack/Backtrack.h"
 #include "../Spectate/Spectate.h"
 #include "../CritHack/CritHack.h"
@@ -45,6 +46,9 @@ void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& p
 				return;
 
 			I::RenderView->SetBlend(flBlend * flOriginalBlend);
+			if (F::Chams.RenderMaterial(pState, pInfo, pBoneToWorld))
+				return;
+
 			static auto IVModelRender_DrawModelExecute = U::Hooks.Get("IVModelRender_DrawModelExecute");
 			IVModelRender_DrawModelExecute->As<DrawModelExecuteFn>()(pModelRender, pState, pInfo, pBoneToWorld);
 		};

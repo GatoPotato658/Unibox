@@ -1102,15 +1102,37 @@ struct ChamsMaterial_t
 	float flEnd = 8192.f;
 	bool bSmoothAlpha = false;
 
-	inline bool operator!=(const ChamsMaterial_t& t) const
+	int iEffect = 0;
+	Color_t tSecondary = { 60, 180, 255, 255 };
+	float flRoughness = 0.35f;
+	float flReflectivity = 0.65f;
+	float flScale = 1.f;
+	float flSpeed = 1.f;
+	float flIntensity = 1.f;
+	float flRimPower = 3.f;
+	int iBlend = 0;
+	bool bDepthWrite = false;
+
+	inline void Sanitize()
 	{
-		return tColor != t.tColor || flStart != t.flStart || flEnd != t.flEnd || bSmoothAlpha != t.bSmoothAlpha;
+		auto fClamp = [](float flValue, float flDefault, float flMin, float flMax)
+		{
+			return std::clamp(std::isfinite(flValue) ? flValue : flDefault, flMin, flMax);
+		};
+		flStart = fClamp(flStart, 0.f, 0.f, 1048576.f);
+		flEnd = fClamp(flEnd, 8192.f, flStart, 1048576.f);
+		iEffect = std::clamp(iEffect, 0, 39);
+		flRoughness = fClamp(flRoughness, 0.35f, 0.f, 1.f);
+		flReflectivity = fClamp(flReflectivity, 0.65f, 0.f, 1.f);
+		flScale = fClamp(flScale, 1.f, 0.05f, 16.f);
+		flSpeed = fClamp(flSpeed, 1.f, 0.f, 8.f);
+		flIntensity = fClamp(flIntensity, 1.f, 0.f, 4.f);
+		flRimPower = fClamp(flRimPower, 3.f, 0.25f, 8.f);
+		iBlend = std::clamp(iBlend, 0, 2);
 	}
 
-	inline bool operator==(const ChamsMaterial_t& t) const
-	{
-		return tColor == t.tColor && flStart == t.flStart && flEnd == t.flEnd && bSmoothAlpha == t.bSmoothAlpha;
-	}
+	inline bool operator==(const ChamsMaterial_t& t) const = default;
+	inline bool operator!=(const ChamsMaterial_t& t) const = default;
 };
 
 struct Chams_t
@@ -1177,6 +1199,7 @@ struct ESP_t
 
 struct Glow_t
 {
+	int Style = 0;
 	int Stencil = 0;
 	float Blur = 0;
 
@@ -1184,19 +1207,45 @@ struct Glow_t
 	float	End = 8192.f;
 	bool	SmoothAlpha = true;
 
-	inline bool operator==(const Glow_t& t) const
+	float Intensity = 1.f;
+	float Opacity = 1.f;
+	float Falloff = 1.f;
+	float Bloom = 1.f;
+	int Layers = 1;
+	int Blend = 0;
+	int Depth = 0;
+	bool CustomOuter = false;
+	Color_t OuterColor = { 100, 180, 255, 255 };
+
+	inline void Sanitize()
 	{
-		return Stencil == t.Stencil && Blur == t.Blur && Start == t.Start && End == t.End && SmoothAlpha == t.SmoothAlpha;
+		auto fClamp = [](float flValue, float flDefault, float flMin, float flMax)
+		{
+			return std::clamp(std::isfinite(flValue) ? flValue : flDefault, flMin, flMax);
+		};
+		Style = std::clamp(Style, 0, 1);
+		Stencil = std::clamp(Stencil, 0, 16);
+		Blur = fClamp(Blur, 0.f, 0.f, 16.f);
+		Start = fClamp(Start, 0.f, 0.f, 1048576.f);
+		End = fClamp(End, 8192.f, Start, 1048576.f);
+		Intensity = fClamp(Intensity, 1.f, 0.f, 4.f);
+		Opacity = fClamp(Opacity, 1.f, 0.f, 1.f);
+		Falloff = fClamp(Falloff, 1.f, 0.25f, 4.f);
+		Bloom = fClamp(Bloom, 1.f, 0.f, 4.f);
+		Layers = std::clamp(Layers, 1, 4);
+		Blend = std::clamp(Blend, 0, 2);
+		Depth = std::clamp(Depth, 0, 2);
 	}
 
-	inline bool operator!=(const Glow_t& t) const
-	{
-		return Stencil != t.Stencil || Blur != t.Blur || Start != t.Start || End != t.End || SmoothAlpha != t.SmoothAlpha;
-	}
+	inline bool operator==(const Glow_t& t) const = default;
+	inline bool operator!=(const Glow_t& t) const = default;
 
 	inline bool operator()() const
 	{
-		return Stencil || Blur;
+		if (!Style)
+			return Stencil > 0 || (std::isfinite(Blur) && Blur > 0.f);
+		return std::isfinite(Intensity) && Intensity > 0.f && std::isfinite(Opacity) && Opacity > 0.f
+			&& (Stencil > 0 || (std::isfinite(Blur) && Blur > 0.f && std::isfinite(Bloom) && Bloom > 0.f));
 	}
 };
 

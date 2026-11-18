@@ -77,7 +77,7 @@ namespace ObjectiveUtils
 		vOut.clear();
 		for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 		{
-			if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureZone)
+			if (!pEntity || !pEntity->IsCaptureZone())
 				continue;
 
 			auto pZone = pEntity->As<CCaptureZone>();
@@ -392,7 +392,7 @@ void CFlagController::Update()
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || !pEntity->IsCaptureFlag())
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();

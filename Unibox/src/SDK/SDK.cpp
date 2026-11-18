@@ -1619,82 +1619,21 @@ bool SDK::WeaponDoesNotUseAmmo(CTFWeaponBase* pWeapon, bool bIncludeInfiniteAmmo
 	return WeaponDoesNotUseAmmo(pWeapon->GetWeaponID(), pWeapon->m_iItemDefinitionIndex(), bIncludeInfiniteAmmo);
 }
 
-// Is there a way of doing this without hardcoded numbers???
-int SDK::GetWeaponMaxReserveAmmo(int WeaponID, int DefIdx)
+bool SDK::IsResistedByVaccinatorUber(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon)
 {
-	switch (DefIdx)
-	{
-	case Engi_m_TheWidowmaker:
-	case Engi_s_TheShortCircuit:
-		return 200;
-	case Scout_m_ForceANature:
-	case Scout_m_FestiveForceANature:
-	case Scout_m_BackcountryBlaster:
-		return 32;
-	case Demoman_s_TheQuickiebombLauncher:
-		return 24;
-	case Demoman_s_TheScottishResistance:
-		return 36;
-	case Demoman_s_StickyJumper:
-		return 72;
-	case Soldier_m_RocketJumper:
-		return 60;
-	default:
-	{
-		switch (WeaponID)
-		{
-		case TF_WEAPON_MINIGUN:
-		case TF_WEAPON_PISTOL:
-		case TF_WEAPON_FLAMETHROWER:
-			return 200;
-		case TF_WEAPON_SYRINGEGUN_MEDIC:
-			return 150;
-		case TF_WEAPON_SMG:
-			return 75;
-		case TF_WEAPON_FLAME_BALL:
-			return 40;
-		case TF_WEAPON_CROSSBOW:
-			return 38;
-		case TF_WEAPON_HANDGUN_SCOUT_SECONDARY:
-		case TF_WEAPON_PISTOL_SCOUT:
-		case TF_WEAPON_HANDGUN_SCOUT_PRIMARY:
-			return 36;
-		case TF_WEAPON_SCATTERGUN:
-		case TF_WEAPON_PEP_BRAWLER_BLASTER:
-		case TF_WEAPON_SODA_POPPER:
-		case TF_WEAPON_SHOTGUN_HWG:
-		case TF_WEAPON_SHOTGUN_PRIMARY:
-		case TF_WEAPON_SHOTGUN_PYRO:
-		case TF_WEAPON_SHOTGUN_SOLDIER:
-			return 32;
-		case TF_WEAPON_SNIPERRIFLE:
-		case TF_WEAPON_SNIPERRIFLE_CLASSIC:
-		case TF_WEAPON_SNIPERRIFLE_DECAP:
-			return 25;
-		case TF_WEAPON_STICKBOMB:
-		case TF_WEAPON_STICKY_BALL_LAUNCHER:
-		case TF_WEAPON_REVOLVER:
-			return 24;
-		case TF_WEAPON_ROCKETLAUNCHER:
-		case TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT:
-			return 20;
-		case TF_WEAPON_CANNON:
-		case TF_WEAPON_SHOTGUN_BUILDING_RESCUE:
-		case TF_WEAPON_GRENADELAUNCHER:
-		case TF_WEAPON_FLAREGUN:
-			return 16;
-		case TF_WEAPON_COMPOUND_BOW:
-			return 12;
-		default:
-			break;
-		}
-		break;
-	}
-	}
+	if (!pPlayer || !pWeapon)
+		return false;
 
-	return 32;
+	const int iDamageType = pWeapon->GetDamageType();
+	if (iDamageType & (DMG_BULLET | DMG_BUCKSHOT) && pPlayer->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST)
+		&& AttribHookValue(0, "mod_pierce_resists_absorbs", pWeapon) == 0)
+		return true;
+	if (iDamageType & DMG_BLAST && pPlayer->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST))
+		return true;
+	return iDamageType & (DMG_BURN | DMG_IGNITE) && pPlayer->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST);
 }
 
+// Is there a way of doing this without hardcoded numbers???
 bool SDK::BuildTriggerGeometry(TriggerData_t& tTrigger)
 {
 	if (!tTrigger.m_pModel)
@@ -1927,7 +1866,7 @@ bool TriggerData_t::PointIsWithin(Vec3 vPoint) const
 	CGameTrace trace;
 	Ray_t ray;
 	ray.Init(vPoint, vPoint);
-	S::CM_TransformedBoxTrace.Call<void>(ray, m_pModel->brush.firstnode, 0x0/*i dont think mask matters here*/, m_vOrigin, Vec3(), &trace);
+	S::CM_TransformedBoxTrace.Call<void>(ray, m_pModel->brush.firstnode, 0x0, m_vOrigin, m_vRotate, &trace);
 	return trace.startsolid;
 }
 
@@ -2124,12 +2063,12 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 
 			if (iActualWeaponSlot < SLOT_MELEE)
 			{
-				G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->m_iClip1();
+				G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->IsEnergyWeapon() ? static_cast<int>(pWeaponInSlot->m_flEnergy()) : pWeaponInSlot->m_iClip1();
 				G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
+				G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->GetMaxClip1() : 0;
+				G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = pWeaponInSlot->m_iPrimaryAmmoType() > 0 ? pLocal->GetMaxAmmo(pWeaponInSlot->m_iPrimaryAmmoType()) : 0;
 				if (bWeaponChanged)
 				{
-					G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->m_pWeaponInfo()->iMaxClip1 : 0;
-					G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = SDK::GetWeaponMaxReserveAmmo(iWeaponID, iDefIndex);
 					G::AmmoInSlot[iActualWeaponSlot].m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIndex);
 				}
 			}

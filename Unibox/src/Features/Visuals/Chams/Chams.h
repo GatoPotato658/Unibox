@@ -33,12 +33,16 @@ private:
 	float m_flCurrentDistance = -1.f;
 
 	int m_iFlags = false;
+	ChamsMaterial_t m_tCurrentMaterial = {};
+	bool m_bOccludedMaterial = false;
+	bool m_bViewmodelMaterial = false;
 
 public:
 	void Reset();
 	void Store(CTFPlayer* pLocal);
 	void RenderMain();
 	void RenderHandler(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
+	bool RenderMaterial(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);
 
 	bool RenderViewmodel(CBaseAnimating* rcx, int flags, int* iReturn);
 	bool RenderViewmodel(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, matrix3x4* pBoneToWorld);

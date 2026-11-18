@@ -262,6 +262,11 @@ CCore::UnloadResult_t CCore::Unload()
 	F::Materials.RequestUnload();
 	for (int i = 0; i < 200 && !F::Materials.IsUnloadComplete(); ++i)
 		Sleep(10);
+	if (!F::Materials.IsUnloadComplete())
+	{
+		AppendFailText("Material renderer shutdown timed out; retaining module");
+		bUnloadFailed = true;
+	}
 #endif
 
 #ifndef TEXTMODE

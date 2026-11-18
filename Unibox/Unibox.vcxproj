@@ -477,6 +477,7 @@
     <ClCompile Include="src\Features\NavBot\NavBotCore.cpp" />
     <ClCompile Include="src\Features\NavBot\NavRender.cpp" />
     <ClCompile Include="src\Features\NavBot\NavBotConfig.cpp" />
+    <ClCompile Include="src\Features\NavBot\NavHull.cpp" />
     <ClCompile Include="src\Features\NavBot\NavEngine.cpp" />
     <ClCompile Include="src\Features\NavBot\Objectives.cpp" />
     <ClCompile Include="src\Features\NavBot\ObjectivesMvM.cpp" />
@@ -539,6 +540,7 @@
     <ClCompile Include="src\Features\Spectate\Spectate.cpp" />
     <ClCompile Include="src\Features\Ticks\Ticks.cpp" />
     <ClCompile Include="src\Features\Visuals\Chams\Chams.cpp" />
+    <ClCompile Include="src\Features\Visuals\Chams\D3DMaterials.cpp" />
     <ClCompile Include="src\Features\Visuals\ESP\ESP.cpp" />
     <ClCompile Include="src\Features\Visuals\FakeAngle\FakeAngle.cpp" />
     <ClCompile Include="src\Features\Visuals\Glow\Glow.cpp" />
@@ -761,6 +763,7 @@
     <ClInclude Include="src\Features\NavBot\NavBotCore.h" />
     <ClInclude Include="src\Features\NavBot\NavRender.h" />
     <ClInclude Include="src\Features\NavBot\NavBotConfig.h" />
+    <ClInclude Include="src\Features\NavBot\NavHull.h" />
     <ClInclude Include="src\Features\NavBot\NavEngine.h" />
     <ClInclude Include="src\Features\NavBot\Objectives.h" />
     <ClInclude Include="src\Features\NavBot\PathWorker.h" />
@@ -799,9 +802,14 @@
     <ClInclude Include="src\Features\Spectate\Spectate.h" />
     <ClInclude Include="src\Features\Ticks\Ticks.h" />
     <ClInclude Include="src\Features\Visuals\Chams\Chams.h" />
+    <ClInclude Include="src\Features\Visuals\Chams\D3DMaterials.h" />
+    <ClInclude Include="src\Features\Visuals\Chams\D3DMaterialShaders.h" />
+    <ClInclude Include="src\Features\Visuals\Chams\RenderQueue.h" />
     <ClInclude Include="src\Features\Visuals\ESP\ESP.h" />
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
+    <ClInclude Include="src\Features\Visuals\Glow\D3DGlow.h" />
+    <ClInclude Include="src\Features\Visuals\Glow\GlowShaders.h" />
     <ClInclude Include="src\Features\Visuals\SkinChanger\SkinChanger.h" />
     <ClInclude Include="src\Features\Visuals\SkinChanger\SkinData.h" />
     <ClInclude Include="src\Features\Visuals\Groups\Groups.h" />
@@ -1091,6 +1099,10 @@
   <ItemGroup>
     <None Include="cpp.hint" />
     <None Include="packages.config" />
+    <None Include="src\Features\Visuals\Chams\D3DMaterials.hlsl" />
+    <None Include="src\Features\Visuals\Chams\build_shaders.py" />
+    <None Include="src\Features\Visuals\Glow\GlowPost.hlsl" />
+    <None Include="src\Features\Visuals\Glow\BuildShaders.ps1" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

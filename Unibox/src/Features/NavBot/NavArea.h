@@ -76,6 +76,8 @@ enum TFNavAttributeType
     TF_NAV_PERSISTENT_ATTRIBUTES = TF_NAV_SNIPER_SPOT | TF_NAV_SENTRY_SPOT | TF_NAV_NO_SPAWNING | TF_NAV_BLUE_SETUP_GATE | TF_NAV_RED_SETUP_GATE | TF_NAV_BLOCKED_AFTER_POINT_CAPTURE | TF_NAV_BLOCKED_UNTIL_POINT_CAPTURE | TF_NAV_BLUE_ONE_WAY_DOOR | TF_NAV_RED_ONE_WAY_DOOR | TF_NAV_DOOR_NEVER_BLOCKS | TF_NAV_DOOR_ALWAYS_BLOCKS | TF_NAV_UNBLOCKABLE | TF_NAV_WITH_SECOND_POINT | TF_NAV_WITH_THIRD_POINT | TF_NAV_WITH_FOURTH_POINT | TF_NAV_WITH_FIFTH_POINT | TF_NAV_RESCUE_CLOSET
 };
 
+inline constexpr int TF_NAV_SPAWN_ROOM_ANY = TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE;
+
 class CNavArea;
 struct NavLadder_t;
 struct NavPlace_t
@@ -191,7 +193,6 @@ public:
 	std::vector<SpotEncounter_t> m_vSpotEncounters;
 	std::vector<CHidingSpot> m_vHidingSpots;
 	std::vector<uint32_t> m_vLadders[2];
-	std::vector<NavLadder_t*> m_vLadderLinks[2];
 
 	uint32_t m_uConnectionCount;
 	uint32_t m_uVisibleAreaCount;

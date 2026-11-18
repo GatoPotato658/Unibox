@@ -167,6 +167,14 @@ public:
 	{
 		return GetClassID() == ETFClassID::CObjectTeleporter;
 	}
+	inline bool IsCaptureFlag()
+	{
+		return GetClassID() == ETFClassID::CCaptureFlag;
+	}
+	inline bool IsCaptureZone()
+	{
+		return GetClassID() == ETFClassID::CCaptureZone;
+	}
 	inline bool IsProjectile()
 	{
 		switch (GetClassID())

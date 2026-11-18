@@ -16,10 +16,9 @@ static bool TryNavToHiddenSpot(const Vector& vVischeckPoint, PriorityListEnum::P
 
 bool CNavBotReload::Run()
 {
-	if (!HasTask() || !(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
+	if (!HasTask() || !NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
 	{
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::RunReload);
 		return false;
 	}
 
@@ -29,7 +28,7 @@ bool CNavBotReload::Run()
 	if (!m_tRunReloadCooldown.Run(1.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload;
 
-	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunReload && F::NavEngine.IsPathing())
+	if (F::NavEngine.IsPathingFor(PriorityListEnum::RunReload))
 		return true;
 
 	const auto& tClosestEnemy = F::BotUtils.m_tClosestEnemy;
@@ -44,23 +43,22 @@ bool CNavBotReload::Run()
 
 bool CNavBotReload::RunSafe()
 {
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) || !HasTask())
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) || !HasTask())
 	{
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::RunSafeReload);
 		return false;
 	}
 
 	if (!m_tSafeReloadCooldown.Run(1.f))
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload;
 
-	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::RunSafeReload && F::NavEngine.IsPathing())
+	if (F::NavEngine.IsPathingFor(PriorityListEnum::RunSafeReload))
 		return true;
 
 	Vector vHideFrom;
-	auto pCrumbs = F::NavEngine.GetCrumbs();
-	if (pCrumbs->size() > 4)
-		vHideFrom = pCrumbs->at(4).m_vPos;
+	const auto& vCrumbs = F::NavEngine.GetCrumbs();
+	if (vCrumbs.size() > 4)
+		vHideFrom = vCrumbs.at(4).m_vPos;
 	else if (F::BotUtils.m_tClosestEnemy.m_pPlayer)
 		vHideFrom = F::BotUtils.m_tClosestEnemy.m_vOrigin;
 	else
@@ -79,7 +77,7 @@ void CNavBotReload::Reset()
 
 int CNavBotReload::GetReloadWeaponSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy)
 {
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) || F::VSHController.IsBossLocal())
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) || F::VSHController.IsBossLocal())
 		return -1;
 
 	if (G::Reloading && F::BotUtils.m_iCurrentSlot >= SLOT_PRIMARY && F::BotUtils.m_iCurrentSlot <= SLOT_SECONDARY)
@@ -98,15 +96,11 @@ int CNavBotReload::GetReloadWeaponSlot(CTFPlayer* pLocal, const ClosestEnemy_t& 
 			if (SDK::WeaponDoesNotUseAmmo(G::SavedWepIds[iSlot], G::SavedDefIndexes[iSlot], false))
 				return false;
 
-			auto pSlotWeapon = pLocal->GetWeaponFromSlot(iSlot);
-			auto pWeaponInfo = pSlotWeapon ? pSlotWeapon->m_pWeaponInfo() : nullptr;
-			if (!pWeaponInfo)
+			const auto& tAmmo = G::AmmoInSlot[iSlot];
+			if (!bIgnoreReserve && (tAmmo.m_iMaxClip < 0 || !tAmmo.m_iReserve))
 				return false;
 
-			if (!bIgnoreReserve && (pWeaponInfo->iMaxClip1 < 0 || !pLocal->GetAmmoCount(pSlotWeapon->m_iPrimaryAmmoType())))
-				return false;
-
-			return G::AmmoInSlot[iSlot].m_iClip < pWeaponInfo->iMaxClip1 / flDivider;
+			return tAmmo.m_iClip < tAmmo.m_iMaxClip / flDivider;
 		};
 
 	if (SlotNeedsReload(SLOT_PRIMARY, G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_PARTICLE_CANNON || G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_DRG_POMSON))

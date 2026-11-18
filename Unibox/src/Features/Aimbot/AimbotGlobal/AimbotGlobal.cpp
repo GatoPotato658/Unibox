@@ -354,34 +354,7 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 			|| iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Disguised && pPlayer->InCond(TF_COND_DISGUISED))
 			return true;
 
-		if (iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Vaccinator)
-		{
-			switch (G::PrimaryWeaponType)
-			{
-			case EWeaponType::HITSCAN:
-				if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST) && SDK::AttribHookValue(0, "mod_pierce_resists_absorbs", pWeapon) == 0)
-					return true;
-				break;
-			case EWeaponType::PROJECTILE:
-				switch (pWeapon->GetWeaponID())
-				{
-				case TF_WEAPON_FLAMETHROWER:
-				case TF_WEAPON_FLAREGUN:
-					if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST))
-						return true;
-					break;
-				case TF_WEAPON_COMPOUND_BOW:
-					if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST))
-						return true;
-					break;
-				default:
-					if (pPlayer->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST))
-						return true;
-				}
-			}
-		}
-
-		return false;
+		return iIgnoreFlags & Vars::Aimbot::General::IgnoreEnum::Vaccinator && SDK::IsResistedByVaccinatorUber(pPlayer, pWeapon);
 	}
 	case ETFClassID::CObjectSentrygun:
 	case ETFClassID::CObjectDispenser:

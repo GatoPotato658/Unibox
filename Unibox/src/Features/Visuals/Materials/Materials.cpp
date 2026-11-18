@@ -1,6 +1,7 @@
 #include "Materials.h"
 
 #include "../Glow/Glow.h"
+#include "../Chams/D3DMaterials.h"
 #include "../CameraWindow/CameraWindow.h"
 #include "../../Configs/Configs.h"
 #include "../../Binds/Binds.h"
@@ -419,7 +420,11 @@ void CMaterials::LoadMaterials()
 void CMaterials::UnloadMaterials()
 {
 	m_bLoaded = false;
+	const auto iThreadMode = I::MaterialSystem->GetThreadMode();
+	const bool bAllowThreading = I::MaterialSystem->AllowThreading(false, -1);
+	const auto hLock = I::MaterialSystem->Lock();
 
+	F::D3DMaterials.Unload();
 	F::Glow.Unload();
 	F::CameraWindow.Unload();
 
@@ -427,6 +432,9 @@ void CMaterials::UnloadMaterials()
 		Remove(tMaterial.m_pMaterial);
 	m_mMaterials.clear();
 	m_mMatList.clear();
+	I::MaterialSystem->Unlock(hLock);
+	I::MaterialSystem->AllowThreading(bAllowThreading, -1);
+	I::MaterialSystem->SetThreadMode(iThreadMode);
 }
 
 void CMaterials::RefreshMaterials()

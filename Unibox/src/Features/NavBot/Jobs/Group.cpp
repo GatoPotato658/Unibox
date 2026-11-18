@@ -10,7 +10,7 @@ bool CNavBotGroup::GetFormationOffset(CTFPlayer* pLeader, int iPositionIndex, Ve
 
 	Vector vDirection = pLeader->m_vecVelocity();
 	if (vDirection.Length() < 10.f)
-		Math::AngleVectors(pLeader->GetEyeAngles(), &vDirection);
+		Math::AngleVectors(Vec3(0.f, pLeader->GetEyeAngles().y, 0.f), &vDirection);
 
 	vOut = NavJobUtils::NormalizePlanar(vDirection) * -m_flFormationDistance * static_cast<float>(iPositionIndex);
 	return true;
@@ -59,7 +59,7 @@ void CNavBotGroup::UpdateLocalBots(CTFPlayer* pLocal)
 
 bool CNavBotGroup::Run(CTFPlayer* pLocal)
 {
-	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::GroupWithOthers))
+	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::GroupWithOthers))
 		return false;
 
 	if (m_iPositionInFormation <= 0 || m_vLocalBotUserIds.empty())

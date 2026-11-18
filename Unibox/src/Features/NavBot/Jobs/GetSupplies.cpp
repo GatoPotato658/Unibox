@@ -18,6 +18,51 @@ static PriorityListEnum::PriorityListEnum GetSupplyPriority(int iFlags)
 	return PriorityListEnum::GetAmmo;
 }
 
+static SupplyData_t* SelectClosestByPath(CTFPlayer* pLocal, const Vector& vLocalOrigin, std::vector<SupplyData_t>& vSupplies)
+{
+	constexpr size_t kMaxCandidates = 8;
+	std::vector<SupplyData_t*> vCandidates;
+	std::vector<CNavArea*> vTargets;
+	for (auto& tSupply : vSupplies)
+	{
+		if (tSupply.m_flRespawnTime)
+			continue;
+
+		auto pArea = F::NavEngine.FindClosestNavArea(tSupply.m_vOrigin, false);
+		if (!pArea)
+			continue;
+
+		vCandidates.push_back(&tSupply);
+		vTargets.push_back(pArea);
+		if (vCandidates.size() >= kMaxCandidates)
+			break;
+	}
+
+	if (vCandidates.size() <= 1)
+		return vCandidates.empty() ? nullptr : vCandidates.front();
+
+	CNavArea* pLocalArea = F::NavEngine.GetLocalNavArea(vLocalOrigin);
+	if (!pLocalArea)
+		pLocalArea = F::NavEngine.GetPathStartArea(pLocal, vLocalOrigin);
+
+	std::vector<float> vField;
+	if (!pLocalArea || !F::NavEngine.GetPathCostField(pLocalArea, vField, FLT_MAX, &vTargets))
+		return vCandidates.front();
+
+	SupplyData_t* pBest = vCandidates.front();
+	float flBestCost = FLT_MAX;
+	for (size_t i = 0; i < vCandidates.size(); i++)
+	{
+		const float flCost = F::NavEngine.GetFieldCost(vField, vTargets[i]);
+		if (std::isfinite(flCost) && flCost < flBestCost)
+		{
+			flBestCost = flCost;
+			pBest = vCandidates[i];
+		}
+	}
+	return pBest;
+}
+
 static bool HasSupplyAt(const std::vector<SupplyData_t>& vSupplies, const Vector& vOrigin, float flRadius = 32.f)
 {
 	for (const auto& tSupply : vSupplies)
@@ -126,7 +171,7 @@ bool CNavBotSupplies::ShouldSearchHealth(CTFPlayer* pLocal, bool bLowPrio)
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::GetHealth)
 		return false;
 
-	const float flHealthPercent = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+	const float flHealthPercent = NavJobUtils::GetHealthFraction(pLocal);
 	const bool bAlreadyGettingHealth = F::NavEngine.m_eCurrentPriority == PriorityListEnum::GetHealth || F::NavEngine.m_eCurrentPriority == PriorityListEnum::LowPrioGetHealth;
 
 	if (bAlreadyGettingHealth)
@@ -264,7 +309,7 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 	const bool bActiveHealthJob = eCurrentPriority == PriorityListEnum::GetHealth || eCurrentPriority == PriorityListEnum::LowPrioGetHealth;
 	const bool bActiveSupplyJob = bIsAmmo ? eCurrentPriority == PriorityListEnum::GetAmmo : bActiveHealthJob;
 
-	const float flHealthPercent = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
+	const float flHealthPercent = NavJobUtils::GetHealthFraction(pLocal);
 	const bool bNeedsHealthStill = flHealthPercent < (bLowPrio ? NavJobTuning::HEALTH_RESUME_LOW_PRIO : NavJobTuning::HEALTH_RESUME);
 	const bool bCanKeepStickyLock = bIsAmmo || bNeedsHealthStill;
 
@@ -332,16 +377,7 @@ bool CNavBotSupplies::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iFlags)
 		SortSuppliesByDistance(m_vTempMain, vLocalOrigin);
 	}
 
-	SupplyData_t* pBest = nullptr;
-	for (auto& tSupplyData : m_vTempMain)
-	{
-		if (!tSupplyData.m_flRespawnTime)
-		{
-			pBest = &tSupplyData;
-			break;
-		}
-	}
-
+	SupplyData_t* pBest = SelectClosestByPath(pLocal, vLocalOrigin, m_vTempMain);
 	if (!pBest && bGotDispensers)
 		pBest = &m_vTempDispensers.front();
 	if (!pBest)

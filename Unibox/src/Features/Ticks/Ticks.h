@@ -24,6 +24,8 @@ struct SentBatch_t
 	int m_iBy = -1;
 };
 
+constexpr int MAX_PACKET_COMMANDS = 22;
+
 class CTicks
 {
 private:
@@ -55,7 +57,7 @@ private:
 	bool m_bTimingUnsure = false; // we aren't sure when we'll actually fire, hold aim
 
 	double ClockNow();
-	int ArrivalTick(double dClock);
+	int ArrivalTick(double dClock) const;
 	void LocateOffset();
 	int ProcessTickLimit();
 	bool RecordFix(int iCommand, int iCommands);
@@ -91,6 +93,7 @@ public:
 	bool CanChoke(bool bCanShift, int iMaxTicks);
 	bool CanChoke(bool bCanShift = false);
 	int GetTicks(CTFWeaponBase* pWeapon = nullptr);
+	bool CanShift(CTFWeaponBase* pWeapon);
 	int GetShotsWithinPacket(CTFWeaponBase* pWeapon, int iTicks = Vars::Doubletap::TickLimit.Value);
 
 	void SaveShootPos(CTFPlayer* pLocal);

@@ -23,14 +23,14 @@ inline constexpr float PLAYER_DEATH_DROP_HEIGHT = 1000.0f;
 // Source nav generation (nav.h HalfHumanWidth) builds areas for a 32-wide hull, so areas may reach 16u from walls; the TF hull is 48 wide.
 inline constexpr float NAV_GEN_HALF_WIDTH = 16.0f;
 inline constexpr float NAV_WALL_CLEARANCE = 12.0f;
-inline constexpr float LADDER_APPROACH_DISTANCE = 32.0f;
-inline constexpr float LADDER_DISMOUNT_DISTANCE = 24.0f;
 
 static_assert(HALF_PLAYER_WIDTH == TFGame::HULL_HALF_WIDTH && PLAYER_WIDTH == 2.f * TFGame::HULL_HALF_WIDTH);
 static_assert(PLAYER_HEIGHT == TFGame::HULL_HEIGHT && PLAYER_DUCK_HEIGHT == TFGame::HULL_DUCK_HEIGHT);
 static_assert(PLAYER_STEP_HEIGHT == TFGame::STEP_HEIGHT);
 static_assert(PLAYER_JUMP_HEIGHT <= TFGame::CROUCH_JUMP_REACH + 0.5f && PLAYER_JUMP_HEIGHT >= TFGame::CROUCH_JUMP_REACH - 0.5f);
 #define TICKCOUNT_TIMESTAMP(seconds) (I::GlobalVars->tickcount + static_cast<int>((seconds) / I::GlobalVars->interval_per_tick))
+
+Vector GetSafePointOnArea(CNavArea* pArea, const Vector& vPos);
 
 class CNavFile
 {
@@ -113,11 +113,12 @@ struct CachedPathCrumb_t
 	bool m_bRequiresDrop = false;
 	bool m_bRequiresJump = false;
 	bool m_bRequiresCrouch = false;
-	bool m_bRequiresLadder = false;
 	float m_flDropHeight = 0.f;
 	float m_flJumpHeight = 0.f;
 	float m_flApproachDistance = 0.f;
 };
+
+using AreaPair_t = std::pair<CNavArea*, CNavArea*>;
 
 struct CachedConnection_t
 {
@@ -165,10 +166,10 @@ public:
 
 	std::recursive_mutex m_mutex;
 
-	std::unordered_map<std::pair<CNavArea*, CNavArea*>, CachedConnection_t, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_mVischeckCache;
-	std::unordered_map<std::pair<CNavArea*, CNavArea*>, CachedStucktime_t, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_mConnectionStuckTime;
+	std::unordered_map<AreaPair_t, CachedConnection_t, boost::hash<AreaPair_t>> m_mVischeckCache;
+	std::unordered_map<AreaPair_t, CachedStucktime_t, boost::hash<AreaPair_t>> m_mConnectionStuckTime;
 	std::unordered_map<CNavArea*, CachedStucktime_t> m_mAreaStuckTime;
-	std::unordered_set<std::pair<CNavArea*, CNavArea*>, boost::hash<std::pair<CNavArea*, CNavArea*>>> m_setWalkableBridges;
+	std::unordered_set<AreaPair_t, boost::hash<AreaPair_t>> m_setWalkableBridges;
 
 	explicit CMap(const char* sMapName)
 		: m_navfile(sMapName), m_sMapName(sMapName)
@@ -192,8 +193,8 @@ public:
 
 	bool HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const;
 
-	enum class AreaBlock : uint8_t { None, Soft, Stuck };
-	AreaBlock GetAreaBlock(CNavArea* pArea, int iTick) const;
+	bool IsConnectionBlocked(CNavArea* pFrom, CNavArea* pTo, int iTick) const;
+	bool IsAreaBlocked(CNavArea* pArea, int iTick) const { return IsConnectionBlocked(pArea, pArea, iTick); }
 	bool HasUsableExit(CNavArea* pArea, int iTick) const;
 	void ShortenExitBlocks(CNavArea* pArea, int iExpireTick);
 	void ClearDynamicBlocks();

@@ -27,7 +27,7 @@ static std::pair<CBaseEntity*, float> FindClosestThreatToArea(CTFPlayer* pLocal,
 
 bool CNavBotRoam::GetDefendTarget(CTFPlayer* pLocal, Vector& vOut)
 {
-	const int iEnemyTeam = pLocal->m_iTeamNum() == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
+	const int iEnemyTeam = NavRuntime::GetEnemyTeam(pLocal);
 	const Vector vLocalOrigin = pLocal->GetAbsOrigin();
 
 	F::NavBotCapture.m_bOverwriteCapture = false;
@@ -58,8 +58,7 @@ bool CNavBotRoam::RunDefend(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const Vec
 	if (!pClosestNav)
 		return false;
 
-	if (m_pDefendSpotArea && F::NavEngine.m_eCurrentPriority == PriorityListEnum::Patrol
-		&& F::NavEngine.IsPathing()
+	if (m_pDefendSpotArea && F::NavEngine.IsPathingFor(PriorityListEnum::Patrol)
 		&& F::NavEngine.m_vLastDestination.DistToSqr(m_pDefendSpotArea->m_vCenter) <= 128.f * 128.f
 		&& m_pDefendSpotArea->m_vCenter.DistTo(vLocalOrigin) > 250.f)
 	{
@@ -132,7 +131,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	Vector vObjectiveAnchor = {};
 	bool bHasObjectiveAnchor = false;
 
-	if (Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::DefendObjectives)
+	if (NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::DefendObjectives))
 	{
 		bHasObjectiveAnchor = GetDefendTarget(pLocal, vObjectiveAnchor);
 		if (F::NavBotCapture.m_bOverwriteCapture)
@@ -161,7 +160,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		bool bBlacklisted = false;
 		{
 			std::lock_guard lock(pMap->m_mutex);
-			bBlacklisted = pMap->GetAreaBlock(m_pCurrentTargetArea, I::GlobalVars->tickcount) == CMap::AreaBlock::Stuck;
+			bBlacklisted = pMap->IsAreaBlocked(m_pCurrentTargetArea, I::GlobalVars->tickcount);
 		}
 		const bool bReached = F::NavEngine.GetLocalNavArea() == m_pCurrentTargetArea;
 		const bool bPathTargetsArea = F::NavEngine.m_vLastDestination.DistToSqr(m_pCurrentTargetArea->m_vCenter) <= 128.f * 128.f;
@@ -186,7 +185,6 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	{
 		CNavArea* m_pArea = nullptr;
 		float m_flDangerCost = 0.f;
-		bool m_bSoftBlocked = false;
 	};
 
 	std::vector<RoamCandidate_t> vCandidates;
@@ -198,13 +196,12 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			if (NavJobUtils::IsSpawnArea(&tArea))
 				continue;
 
-			const auto eBlock = pMap->GetAreaBlock(&tArea, iNowTick);
-			if (eBlock == CMap::AreaBlock::Stuck)
+			if (pMap->IsAreaBlocked(&tArea, iNowTick))
 				continue;
 
 			const float flDangerCost = F::Hazards.GetCost(&tArea);
 			if (std::isfinite(flDangerCost))
-				vCandidates.push_back({ &tArea, flDangerCost, eBlock == CMap::AreaBlock::Soft });
+				vCandidates.push_back({ &tArea, flDangerCost });
 		}
 	}
 
@@ -227,9 +224,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			flObjectiveScore = std::clamp((flLocalToObjective - flAreaToObjective) / 1200.f, -1.f, 1.f) * 900.f;
 		}
 
-		float flSafetyPenalty = std::clamp(tCandidate.m_flDangerCost, 0.f, 8000.f) * 0.08f;
-		if (tCandidate.m_bSoftBlocked)
-			flSafetyPenalty += 450.f;
+		const float flSafetyPenalty = std::clamp(tCandidate.m_flDangerCost, 0.f, 8000.f) * 0.08f;
 
 		const float flDistanceFit = 1.f - std::clamp(std::fabs(flDist - flPreferredPatrolDistance) / flPreferredPatrolDistance, 0.f, 1.f);
 		float flDistanceScore = flDistanceFit * 650.f;

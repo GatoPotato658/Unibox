@@ -11,7 +11,7 @@ namespace
 
 	int GetPlayerDestructionPoints(CBaseEntity* pItem)
 	{
-		if (!pItem || pItem->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pItem || !pItem->IsCaptureFlag())
 			return 0;
 
 		auto pFlag = pItem->As<CCaptureFlag>();
@@ -50,7 +50,7 @@ void CPDController::Update()
 	m_vPickups.clear();
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::WorldObjective))
 	{
-		if (!pEntity || pEntity->GetClassID() != ETFClassID::CCaptureFlag)
+		if (!pEntity || !pEntity->IsCaptureFlag())
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();

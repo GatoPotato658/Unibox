@@ -173,7 +173,7 @@ namespace SDK
 	float CalculateSplashRadiusDamage(CTFWeaponBase* pWeapon, CTFPlayer* pAttacker, CTFWeaponBaseGrenadeProj* pProjectile, float flRadius, float flDist, float& flDamageNoBuffs, bool bSelf = false);
 	bool WeaponDoesNotUseAmmo(int iWeaponID, int iDefIdx, bool bIncludeInfiniteAmmo = true);
 	bool WeaponDoesNotUseAmmo(CTFWeaponBase* pWeapon, bool bIncludeInfiniteAmmo = true);
-	int GetWeaponMaxReserveAmmo(int iWeaponID, int iDefIdx);
+	bool IsResistedByVaccinatorUber(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon);
 	std::string GetLevelName();
 	bool BuildTriggerGeometry(TriggerData_t& tTrigger);
 	bool RefreshTriggerStorage(bool bForce = false);

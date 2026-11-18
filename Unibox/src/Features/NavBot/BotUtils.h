@@ -39,6 +39,7 @@ private:
 	void UpdateBestSlot(CTFPlayer* pLocal);
 	void DoSlowAim(Vec3& vWishAngles, float flSpeed, Vec3 vPreviousAngles);
 	bool IsSurfaceWalkable(const Vector& vNormal);
+	void ResetBotState();
 	bool SmartJump(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void AutoScope(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void AutoRev(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -173,6 +174,9 @@ namespace NavRuntime
 	bool IsMinigunJumpLocked(CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	bool CanUseNavJump(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	inline bool CanIssueNavJump(CTFWeaponBase* pWeapon, CUserCmd* pCmd) { return !IsMinigunJumpLocked(pWeapon, pCmd); }
+	inline int CurrentTick() { return I::GlobalVars ? I::GlobalVars->tickcount : 0; }
+	inline int GetEnemyTeam(CTFPlayer* pLocal) { return pLocal->m_iTeamNum() == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE; }
+	inline bool IsBackstabReady(CTFWeaponBase* pWeapon) { return pWeapon && pWeapon->GetWeaponID() == TF_WEAPON_KNIFE && pWeapon->As<CTFKnife>()->m_bReadyToBackstab(); }
 }
 
 ADD_FEATURE(CBotUtils, BotUtils);

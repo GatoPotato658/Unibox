@@ -44,7 +44,7 @@ static float GetRouteVariation(uint64_t uSeed, uint32_t uFrom, uint32_t uTo)
 	return static_cast<float>(uHash & 0xffffu) / 65535.f;
 }
 
-static Vector GetSafePointOnArea(CNavArea* pArea, const Vector& vPos)
+Vector GetSafePointOnArea(CNavArea* pArea, const Vector& vPos)
 {
 	if (!pArea) return vPos;
 
@@ -71,7 +71,7 @@ bool CMap::CanFallToNavArea(const Vector& vPos, const CNavArea& tArea)
 	const float flNearestY = std::clamp(vPos.y, tArea.m_vNwCorner.y, tArea.m_vSeCorner.y);
 	const float flAreaZ = tArea.GetZ(flNearestX, flNearestY);
 	const float flDelta = vPos.z - flAreaZ;
-	if (flDelta < -18.0f)
+	if (flDelta < -PLAYER_STEP_HEIGHT)
 		return false;
 
 	Vector vStart = vPos;
@@ -81,7 +81,7 @@ bool CMap::CanFallToNavArea(const Vector& vPos, const CNavArea& tArea)
 	CTraceFilterNavigation filter(pLocal);
 	SDK::TraceHull(vStart, vEnd, pLocal->m_vecMins(), pLocal->m_vecMaxs(), MASK_PLAYERSOLID, &filter, &trace);
 	return !trace.startsolid && !trace.allsolid
-		&& (trace.fraction >= 1.0f || (std::fabs(trace.endpos.z - vEnd.z) <= 18.0f
+		&& (trace.fraction >= 1.0f || (std::fabs(trace.endpos.z - vEnd.z) <= PLAYER_STEP_HEIGHT
 			&& trace.endpos.DistTo2DSqr(vEnd) <= HALF_PLAYER_WIDTH * HALF_PLAYER_WIDTH));
 }
 
@@ -110,7 +110,7 @@ static float GetNearestAreaScore(const CNavArea& tArea, const Vector& vPos, bool
 	if (bLocalOrigin)
 	{
 		const float flDelta = vPos.z - flNearestZ;
-		if (flDelta < -18.0f)
+		if (flDelta < -PLAYER_STEP_HEIGHT)
 			flScore += flDelta * flDelta * 28.0f;
 		else if (flDelta < -6.0f)
 			flScore += flDelta * flDelta * 10.0f;
@@ -139,7 +139,7 @@ int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std:
 
 	const size_t uStartIdx = GetAreaIndex(pStart);
 	const size_t uEndIdx = GetAreaIndex(pEnd);
-	constexpr uint32_t uSpawnFlags = TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE;
+	constexpr uint32_t uSpawnFlags = TF_NAV_SPAWN_ROOM_ANY;
 	const bool bSkipSpawn = !(pStart->m_iTFAttributeFlags & uSpawnFlags) && !(pEnd->m_iTFAttributeFlags & uSpawnFlags);
 
 	PathNode_t& tStart = m_vPathNodes[uStartIdx];
@@ -214,7 +214,7 @@ void CMap::SolveCostField(CNavArea* pStart, const SolveContext& tCtx, std::vecto
 	if (!IsAreaValid(pStart))
 		return;
 
-	const bool bSkipSpawn = !(pStart->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
+	const bool bSkipSpawn = !(pStart->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_ANY);
 
 	std::vector<size_t> vTargets;
 	if (pTargets)
@@ -270,12 +270,23 @@ void CMap::SolveCostField(CNavArea* pStart, const SolveContext& tCtx, std::vecto
 	}
 }
 
+static float GetSurvivableDropHeight(CTFPlayer* pLocal)
+{
+	const int iMaxHealth = pLocal->GetMaxHealth();
+	if (iMaxHealth <= 0)
+		return PLAYER_DEATH_DROP_HEIGHT;
+
+	const float flLethalSpeed = 5000.f * static_cast<float>(pLocal->m_iHealth()) / static_cast<float>(iMaxHealth);
+	const float flHeight = flLethalSpeed * flLethalSpeed / (2.f * TFGame::GRAVITY);
+	return std::clamp(flHeight, TFGame::MAX_SAFE_DROP_HEIGHT, PLAYER_DEATH_DROP_HEIGHT);
+}
+
 SolveContext CMap::BuildSolveContext(bool bIgnoreTraces)
 {
 	SolveContext tCtx{};
 	auto pLocal = H::Entities.GetLocal();
 	tCtx.m_iTeam = pLocal ? pLocal->m_iTeamNum() : 0;
-	tCtx.m_iTickcount = I::GlobalVars ? I::GlobalVars->tickcount : 0;
+	tCtx.m_iTickcount = NavRuntime::CurrentTick();
 	tCtx.m_flTickInterval = I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.0f);
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
 	tCtx.m_bIgnoreTraces = bIgnoreTraces;
@@ -300,6 +311,7 @@ SolveContext CMap::BuildSolveContext(bool bIgnoreTraces)
 		auto pWeaponEntity = pLocal->m_hActiveWeapon().Get();
 		tCtx.m_bCanJump = NavRuntime::CanUseNavJump(pLocal, pWeaponEntity ? pWeaponEntity->As<CTFWeaponBase>() : nullptr);
 		tCtx.m_flRunSpeed = std::clamp(pLocal->m_flMaxspeed(), 200.f, 520.f);
+		tCtx.m_flDeathDropHeight = GetSurvivableDropHeight(pLocal);
 	}
 	tCtx.m_tPolicy = NavPolicy::Snapshot(tCtx.m_iTeam);
 	F::Hazards.SnapshotCosts(tCtx.m_mHazardCosts);
@@ -346,16 +358,10 @@ int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& 
 					vOutPath.back().m_pNavArea = tCrumb.m_pNavArea;
 				vOutPath.back().m_bRequiresCrouch |= tCrumb.m_bRequiresCrouch;
 				vOutPath.back().m_bRequiresJump |= tCrumb.m_bRequiresJump;
-				vOutPath.back().m_bRequiresLadder |= tCrumb.m_bRequiresLadder;
 				if (tCrumb.m_bRequiresJump)
 				{
 					vOutPath.back().m_vLanding = tCrumb.m_vLanding;
 					vOutPath.back().m_flJumpHeight = tCrumb.m_flJumpHeight;
-				}
-				if (tCrumb.m_bRequiresLadder)
-				{
-					vOutPath.back().m_vLanding = tCrumb.m_vLanding;
-					vOutPath.back().m_vApproachDir = tCrumb.m_vApproachDir;
 				}
 				if (tCrumb.m_bRequiresDrop)
 				{
@@ -420,65 +426,11 @@ int CMap::SolveCrumbs(const Vector& vStart, CNavArea* pStartArea, const Vector& 
 	{
 		CNavArea* pFrom = vAreas[i];
 		CNavArea* pTo = vAreas[i + 1];
-		const auto tKey = std::pair<CNavArea*, CNavArea*>(pFrom, pTo);
+		const auto tKey = AreaPair_t(pFrom, pTo);
 		const auto it = m_mVischeckCache.find(tKey);
 		const bool bHasCachedPoints = it != m_mVischeckCache.end() && it->second.m_bHasPoints;
 		const NavPoints_t tPoints = bHasCachedPoints ? it->second.m_tPoints : DeterminePoints(pFrom, pTo);
 		const DropdownHint_t tDropdown = bHasCachedPoints ? it->second.m_tDropdown : HandleDropdown(tPoints);
-
-		NavLadder_t* pLadder = nullptr;
-		bool bLadderUp = false;
-		const bool bWalkableDirect = HasDirectConnection(pFrom, pTo)
-			&& tPoints.m_vCenterNext.z - tPoints.m_vCenter.z <= PLAYER_JUMP_HEIGHT + 1.f;
-		if (!bWalkableDirect)
-		{
-			for (NavLadder_t* pCandidate : pFrom->m_vLadderLinks[0])
-			{
-				if (pCandidate && (pCandidate->m_pTopForwardArea == pTo || pCandidate->m_pTopLeftArea == pTo
-					|| pCandidate->m_pTopRightArea == pTo))
-				{
-					pLadder = pCandidate;
-					bLadderUp = true;
-					break;
-				}
-			}
-			if (!pLadder)
-			{
-				for (NavLadder_t* pCandidate : pFrom->m_vLadderLinks[1])
-				{
-					if (pCandidate && pCandidate->m_pBottomArea == pTo)
-					{
-						pLadder = pCandidate;
-						break;
-					}
-				}
-			}
-		}
-
-		if (pLadder)
-		{
-			const Vector vClimbDir = bLadderUp ? -pLadder->m_vNormal : pLadder->m_vNormal;
-			const Vector vLadderStart = bLadderUp ? pLadder->m_vBottom : pLadder->m_vTop;
-			const Vector vLadderEnd = bLadderUp ? pLadder->m_vTop : pLadder->m_vBottom;
-			const Vector vLadderApproach = GetSafePointOnArea(pFrom, vLadderStart - vClimbDir * LADDER_APPROACH_DISTANCE);
-			AppendAreaSegment(vAreaEntry, vLadderApproach, pFrom);
-
-			CachedPathCrumb_t tLadderCrumb{};
-			tLadderCrumb.m_pNavArea = pFrom;
-			tLadderCrumb.m_vPos = vLadderStart;
-			tLadderCrumb.m_vLanding = vLadderEnd;
-			tLadderCrumb.m_vApproachDir = vClimbDir;
-			tLadderCrumb.m_bRequiresLadder = true;
-			AppendCrumb(tLadderCrumb);
-
-			CachedPathCrumb_t tAreaEntry{};
-			tAreaEntry.m_pNavArea = pTo;
-			tAreaEntry.m_vPos = GetSafePointOnArea(pTo, vLadderEnd + vClimbDir * LADDER_DISMOUNT_DISTANCE);
-			tAreaEntry.m_bRequiresCrouch = (pTo->m_iAttributeFlags & NAV_MESH_CROUCH) != 0;
-			AppendCrumb(tAreaEntry);
-			vAreaEntry = tAreaEntry.m_vPos;
-			continue;
-		}
 
 		AppendAreaSegment(vAreaEntry, tDropdown.m_vAdjustedPos, pFrom, tDropdown.m_bRequiresDrop ? &tDropdown : nullptr);
 
@@ -533,6 +485,36 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 			auto it = tCtx.m_mHazardCosts.find(pArea);
 			return it == tCtx.m_mHazardCosts.end() ? 0.f : it->second;
 		};
+	auto MarkUnreachable = [&](CachedConnection_t& tEntry, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown)
+		{
+			tEntry.m_iExpireTick = iCacheExpiry;
+			tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
+			tEntry.m_bPassable = false;
+			tEntry.m_bStuckBlacklist = false;
+			tEntry.m_flCachedCost = std::numeric_limits<float>::max();
+			tEntry.m_tPoints = tPoints;
+			tEntry.m_tDropdown = tDropdown;
+			tEntry.m_bHasPoints = true;
+			tEntry.m_flReachSpeed = tCtx.m_flRunSpeed;
+		};
+	auto StuckPenalty = [&](const AreaPair_t& tKey) -> float
+		{
+			auto itStuck = m_mConnectionStuckTime.find(tKey);
+			if (itStuck == m_mConnectionStuckTime.end())
+				return 0.f;
+			if (itStuck->second.m_iExpireTick != 0 && itStuck->second.m_iExpireTick <= iNow)
+			{
+				m_mConnectionStuckTime.erase(itStuck);
+				return 0.f;
+			}
+			return std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 120.f, 80.f, 800.f);
+		};
+	auto RouteVariation = [&](CNavArea* pNextArea, float flBase) -> float
+		{
+			const uint32_t uFromId = pCurrentArea->m_uId ? pCurrentArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pCurrentArea));
+			const uint32_t uToId = pNextArea->m_uId ? pNextArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pNextArea));
+			return GetRouteVariation(tCtx.m_uRouteSeed, uFromId, uToId) * std::clamp(flBase * 0.09f, 6.f, 36.f) * tCtx.m_flVariation;
+		};
 
 	for (NavConnect_t& tConnection : pCurrentArea->m_vConnections)
 	{
@@ -544,16 +526,17 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 		if (pCurrentArea->m_flMinZ - pNextArea->m_flMaxZ > tCtx.m_flDeathDropHeight) continue;
 		if (!NavPolicy::IsAreaTraversable(*pNextArea, tCtx.m_tPolicy)) continue;
 
-		const bool bTouchesSpawn = pCurrentArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)
-			|| pNextArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE);
+		const bool bTouchesSpawn = pCurrentArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_ANY
+			|| pNextArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_ANY;
 
-		if (!std::isfinite(LookupHazard(pNextArea)))
+		const float flHazard = LookupHazard(pNextArea);
+		if (!std::isfinite(flHazard))
 			continue;
 
-		if (GetAreaBlock(pNextArea, iNow) == AreaBlock::Stuck)
+		if (IsAreaBlocked(pNextArea, iNow))
 			continue;
 
-		const auto tKey = std::pair<CNavArea*, CNavArea*>(pCurrentArea, pNextArea);
+		const auto tKey = AreaPair_t(pCurrentArea, pNextArea);
 		CachedConnection_t& tEntry = m_mVischeckCache[tKey];
 		const bool bStaleReach = !tEntry.m_bStuckBlacklist && tEntry.m_flReachSpeed > 0.f && tEntry.m_flReachSpeed != tCtx.m_flRunSpeed;
 		const bool bValidCache = tEntry.m_iExpireTick != 0 && tEntry.m_iExpireTick > iNow && !bStaleReach;
@@ -587,15 +570,7 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 				: TFGame::CanJumpAcross(flGap, flRise, tCtx.m_flRunSpeed);
 			if (!bReachable && !bWalkableBridge)
 			{
-				tEntry.m_iExpireTick = iCacheExpiry;
-				tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
-				tEntry.m_bPassable = false;
-				tEntry.m_bStuckBlacklist = false;
-				tEntry.m_flCachedCost = std::numeric_limits<float>::max();
-				tEntry.m_tPoints = tPoints;
-				tEntry.m_tDropdown = tDropdown;
-				tEntry.m_bHasPoints = true;
-				tEntry.m_flReachSpeed = tCtx.m_flRunSpeed;
+				MarkUnreachable(tEntry, tPoints, tDropdown);
 				continue;
 			}
 			if (!tDropdown.m_bRequiresDrop)
@@ -609,17 +584,9 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 
 			const float flUpDelta = tPoints.m_vCenterNext.z - tPoints.m_vCenter.z;
 
-			if (flUpDelta > PLAYER_JUMP_HEIGHT || flUpDelta < -tCtx.m_flDeathDropHeight)
+			if (flUpDelta > PLAYER_JUMP_HEIGHT || flUpDelta < -PLAYER_DEATH_DROP_HEIGHT)
 			{
-				tEntry.m_iExpireTick = iCacheExpiry;
-				tEntry.m_eVischeckState = VischeckStateEnum::NotVisible;
-				tEntry.m_bPassable = false;
-				tEntry.m_bStuckBlacklist = false;
-				tEntry.m_flCachedCost = std::numeric_limits<float>::max();
-				tEntry.m_tPoints = tPoints;
-				tEntry.m_tDropdown = tDropdown;
-				tEntry.m_bHasPoints = true;
-				tEntry.m_flReachSpeed = tCtx.m_flRunSpeed;
+				MarkUnreachable(tEntry, tPoints, tDropdown);
 				continue;
 			}
 
@@ -645,6 +612,8 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 
 		if (!bPassable || !std::isfinite(flBaseCost) || flBaseCost <= 0.f)
 			continue;
+		if (tPoints.m_vCenterNext.z - tPoints.m_vCenter.z < -tCtx.m_flDeathDropHeight)
+			continue;
 
 		float flFinalCost = std::max(flBaseCost, 1.f);
 		if (bSkipSpawn && bTouchesSpawn)
@@ -653,86 +622,15 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, bool bS
 		if (!tCtx.m_bCanJump && (tDropdown.m_bRequiresJump || tPoints.m_vCenterNext.z - tPoints.m_vCenter.z > PLAYER_STEP_HEIGHT))
 			flFinalCost += 4000.f;
 
-		flFinalCost += std::clamp(LookupHazard(pNextArea) * 0.75f * tCtx.m_flHazardScale, 0.f, 650.f * tCtx.m_flHazardScale);
+		flFinalCost += std::clamp(flHazard * 0.75f * tCtx.m_flHazardScale, 0.f, 650.f * tCtx.m_flHazardScale);
 
-		if (auto itStuck = m_mConnectionStuckTime.find(tKey); itStuck != m_mConnectionStuckTime.end())
-		{
-			if (itStuck->second.m_iExpireTick == 0 || itStuck->second.m_iExpireTick > iNow)
-				flFinalCost += std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 120.f, 80.f, 800.f);
-			else
-				m_mConnectionStuckTime.erase(itStuck);
-		}
-
-		const uint32_t uFromId = pCurrentArea->m_uId ? pCurrentArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pCurrentArea));
-		const uint32_t uToId = pNextArea->m_uId ? pNextArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pNextArea));
-		flFinalCost += GetRouteVariation(tCtx.m_uRouteSeed, uFromId, uToId)
-			* std::clamp(flBaseCost * 0.09f, 6.f, 36.f) * tCtx.m_flVariation;
+		flFinalCost += StuckPenalty(tKey);
+		flFinalCost += RouteVariation(pNextArea, flBaseCost);
 
 		if (!std::isfinite(flFinalCost) || flFinalCost <= 0.f)
 			continue;
 
 		vOut.push_back({ pNextArea, flFinalCost });
-	}
-
-	for (int iLink = 0; iLink < 2; ++iLink)
-	{
-		for (NavLadder_t* pLadder : pCurrentArea->m_vLadderLinks[iLink])
-		{
-			if (!pLadder)
-				continue;
-
-			auto AddLadderEdge = [&](CNavArea* pNextArea)
-				{
-					if (!pNextArea || pNextArea == pCurrentArea || !IsAreaValid(pNextArea))
-						return;
-					if (!NavPolicy::IsAreaTraversable(*pNextArea, tCtx.m_tPolicy))
-						return;
-
-					const float flHazard = LookupHazard(pNextArea);
-					if (!std::isfinite(flHazard))
-						return;
-					if (GetAreaBlock(pNextArea, iNow) == AreaBlock::Stuck)
-						return;
-					if (const auto itCache = m_mVischeckCache.find(std::pair<CNavArea*, CNavArea*>(pCurrentArea, pNextArea));
-						itCache != m_mVischeckCache.end() && itCache->second.m_iExpireTick > iNow
-						&& itCache->second.m_eVischeckState == VischeckStateEnum::NotVisible && itCache->second.m_flReachSpeed == 0.f)
-						return;
-
-					const bool bTouchesSpawn = pCurrentArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE)
-						|| pNextArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE);
-
-					float flCost = std::max(pLadder->m_flLength, 1.f) + 120.f;
-					if (bSkipSpawn && bTouchesSpawn)
-						flCost += 5000.f;
-
-					flCost += std::clamp(flHazard * 0.75f * tCtx.m_flHazardScale, 0.f, 650.f * tCtx.m_flHazardScale);
-
-					if (auto itStuck = m_mConnectionStuckTime.find(std::pair<CNavArea*, CNavArea*>(pCurrentArea, pNextArea));
-						itStuck != m_mConnectionStuckTime.end())
-					{
-						if (itStuck->second.m_iExpireTick == 0 || itStuck->second.m_iExpireTick > iNow)
-							flCost += std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 120.f, 80.f, 800.f);
-						else
-							m_mConnectionStuckTime.erase(itStuck);
-					}
-
-					const uint32_t uFromId = pCurrentArea->m_uId ? pCurrentArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pCurrentArea));
-					const uint32_t uToId = pNextArea->m_uId ? pNextArea->m_uId : static_cast<uint32_t>(GetAreaIndex(pNextArea));
-					flCost += GetRouteVariation(tCtx.m_uRouteSeed, uFromId, uToId)
-						* std::clamp(pLadder->m_flLength * 0.09f, 6.f, 36.f) * tCtx.m_flVariation;
-
-					vOut.push_back({ pNextArea, flCost });
-				};
-
-			if (iLink == 0)
-			{
-				AddLadderEdge(pLadder->m_pTopForwardArea);
-				AddLadderEdge(pLadder->m_pTopLeftArea);
-				AddLadderEdge(pLadder->m_pTopRightArea);
-			}
-			else
-				AddLadderEdge(pLadder->m_pBottomArea);
-		}
 	}
 }
 
@@ -781,19 +679,14 @@ DropdownHint_t CMap::HandleDropdown(const NavPoints_t& tPoints)
 	return tHint;
 }
 
-CMap::AreaBlock CMap::GetAreaBlock(CNavArea* pArea, int iTick) const
+bool CMap::IsConnectionBlocked(CNavArea* pFrom, CNavArea* pTo, int iTick) const
 {
-	const auto it = m_mVischeckCache.find(std::pair<CNavArea*, CNavArea*>(pArea, pArea));
+	const auto it = m_mVischeckCache.find(AreaPair_t(pFrom, pTo));
 	if (it == m_mVischeckCache.end())
-		return AreaBlock::None;
+		return false;
 
 	const auto& tEntry = it->second;
-	if (!tEntry.m_bPassable && tEntry.m_iExpireTick == 0)
-		return AreaBlock::None;
-	if (tEntry.m_bPassable || (tEntry.m_iExpireTick != 0 && tEntry.m_iExpireTick <= iTick))
-		return AreaBlock::None;
-
-	return tEntry.m_bStuckBlacklist ? AreaBlock::Stuck : AreaBlock::Soft;
+	return tEntry.m_bStuckBlacklist && !tEntry.m_bPassable && tEntry.m_iExpireTick > iTick;
 }
 
 bool CMap::HasUsableExit(CNavArea* pArea, int iTick) const
@@ -803,32 +696,9 @@ bool CMap::HasUsableExit(CNavArea* pArea, int iTick) const
 		CNavArea* pNextArea = tConnection.m_pArea;
 		if (!pNextArea || pNextArea == pArea || !IsAreaValid(pNextArea) || !HasDirectConnection(pArea, pNextArea))
 			continue;
-		if (GetAreaBlock(pNextArea, iTick) == AreaBlock::Stuck)
-			continue;
-
-		const auto it = m_mVischeckCache.find(std::pair<CNavArea*, CNavArea*>(pArea, pNextArea));
-		if (it != m_mVischeckCache.end() && it->second.m_bStuckBlacklist && !it->second.m_bPassable
-			&& (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > iTick))
+		if (IsAreaBlocked(pNextArea, iTick) || IsConnectionBlocked(pArea, pNextArea, iTick))
 			continue;
 		return true;
-	}
-
-	for (int iLink = 0; iLink < 2; ++iLink)
-	{
-		for (NavLadder_t* pLadder : pArea->m_vLadderLinks[iLink])
-		{
-			if (!pLadder)
-				continue;
-
-			CNavArea* aLinked[] = { pLadder->m_pTopForwardArea, pLadder->m_pTopLeftArea,
-				pLadder->m_pTopRightArea, pLadder->m_pBottomArea };
-			for (CNavArea* pNextArea : aLinked)
-			{
-				if (pNextArea && pNextArea != pArea && IsAreaValid(pNextArea)
-					&& GetAreaBlock(pNextArea, iTick) != AreaBlock::Stuck)
-					return true;
-			}
-		}
 	}
 	return false;
 }
@@ -837,9 +707,8 @@ void CMap::ShortenExitBlocks(CNavArea* pArea, int iExpireTick)
 {
 	auto Shorten = [&](CNavArea* pFrom, CNavArea* pTo)
 		{
-			const auto it = m_mVischeckCache.find(std::pair<CNavArea*, CNavArea*>(pFrom, pTo));
-			if (it != m_mVischeckCache.end() && it->second.m_bStuckBlacklist
-				&& (it->second.m_iExpireTick == 0 || it->second.m_iExpireTick > iExpireTick))
+			const auto it = m_mVischeckCache.find(AreaPair_t(pFrom, pTo));
+			if (it != m_mVischeckCache.end() && it->second.m_bStuckBlacklist && it->second.m_iExpireTick > iExpireTick)
 				it->second.m_iExpireTick = iExpireTick;
 		};
 
@@ -998,25 +867,6 @@ void CMap::CollectAreasAround(const Vector& vOrigin, float flRadius, std::vector
 			if (setVisited.insert(pNextArea).second)
 				qAreas.emplace(pNextArea, flNextDist);
 		}
-
-		for (int iLink = 0; iLink < 2; ++iLink)
-		{
-			for (NavLadder_t* pLadder : pArea->m_vLadderLinks[iLink])
-			{
-				if (!pLadder)
-					continue;
-
-				CNavArea* aLinked[] = { pLadder->m_pTopForwardArea, pLadder->m_pTopLeftArea, pLadder->m_pTopRightArea, pLadder->m_pBottomArea };
-				for (CNavArea* pNextArea : aLinked)
-				{
-					if (!pNextArea) continue;
-					const float flNextDist = (pNextArea->m_vCenter - vOrigin).LengthSqr();
-					if (flNextDist > flExpansionLimit) continue;
-					if (setVisited.insert(pNextArea).second)
-						qAreas.emplace(pNextArea, flNextDist);
-				}
-			}
-		}
 	}
 
 	if (vOutAreas.empty())
@@ -1028,44 +878,37 @@ CNavArea* CMap::FindClosestNavArea(const Vector& vPos, bool bLocalOrigin)
 	if (m_navfile.m_vAreas.empty())
 		return nullptr;
 
-	std::vector<CNavArea*> vCandidates;
-	m_navfile.QueryOverlapping(vPos, 2048.f, vCandidates);
+	static thread_local std::vector<CNavArea*> vCandidates;
 	if (!bLocalOrigin)
 	{
-		if (vCandidates.empty())
-			m_navfile.QueryOverlapping(vPos, 65536.f, vCandidates);
-
 		CNavArea* pBest = nullptr;
 		float flBestScore = FLT_MAX;
-		for (CNavArea* pArea : vCandidates)
+		for (const float flRadius : { 256.f, 2048.f, 65536.f })
 		{
-			const float flScore = GetNearestAreaScore(*pArea, vPos, false);
-			if (flScore < flBestScore)
+			m_navfile.QueryOverlapping(vPos, flRadius, vCandidates);
+			for (CNavArea* pArea : vCandidates)
 			{
-				flBestScore = flScore;
-				pBest = pArea;
+				const float flScore = GetNearestAreaScore(*pArea, vPos, false);
+				if (flScore < flBestScore)
+				{
+					flBestScore = flScore;
+					pBest = pArea;
+				}
 			}
+			if (flBestScore <= flRadius * flRadius)
+				break;
 		}
 		return pBest;
 	}
 
-	std::vector<std::pair<float, CNavArea*>> vScored;
-	vScored.reserve(vCandidates.size());
+	m_navfile.QueryOverlapping(vPos, HALF_PLAYER_WIDTH, vCandidates);
+
+	static thread_local std::vector<std::pair<float, CNavArea*>> vScored;
+	vScored.clear();
 	for (CNavArea* pArea : vCandidates)
 	{
 		if (pArea->IsOverlapping(vPos, HALF_PLAYER_WIDTH))
 			vScored.emplace_back(GetNearestAreaScore(*pArea, vPos, true), pArea);
-	}
-
-	if (vScored.empty())
-	{
-		m_navfile.QueryOverlapping(vPos, 65536.f, vCandidates);
-		vScored.reserve(vCandidates.size());
-		for (CNavArea* pArea : vCandidates)
-		{
-			if (pArea->IsOverlapping(vPos, HALF_PLAYER_WIDTH))
-				vScored.emplace_back(GetNearestAreaScore(*pArea, vPos, true), pArea);
-		}
 	}
 
 	constexpr size_t kMaxFallbackTraces = 32;
@@ -1394,26 +1237,6 @@ bool CNavFile::Load(const char* szLevelname)
 				tLadder.m_pTopBehindArea = FindArea(uTopBehind);
 				tLadder.m_pBottomArea = FindArea(uBottom);
 				m_vLadders.push_back(tLadder);
-			}
-		}
-	}
-
-	{
-		std::unordered_map<uint32_t, NavLadder_t*> mLaddersById;
-		mLaddersById.reserve(m_vLadders.size());
-		for (auto& tLadder : m_vLadders)
-			mLaddersById.emplace(tLadder.m_uId, &tLadder);
-
-		for (auto& tArea : m_vAreas)
-		{
-			for (int iDir = 0; iDir < 2; ++iDir)
-			{
-				for (uint32_t uLadderId : tArea.m_vLadders[iDir])
-				{
-					const auto it = mLaddersById.find(uLadderId);
-					if (it != mLaddersById.end())
-						tArea.m_vLadderLinks[iDir].push_back(it->second);
-				}
 			}
 		}
 	}

@@ -87,8 +87,8 @@ bool CTFPlayer::IsInvisible(float flValue)
 		|| InCond(TF_COND_URINE))
 		return false;
 
-	float flInvis = GetEffectiveInvisibilityLevel();
-	return flInvis && flInvis >= 1.f;
+	const float flInvis = GetEffectiveInvisibilityLevel();
+	return flInvis > 0.f && flInvis >= flValue;
 }
 
 bool CTFPlayer::IsInvulnerable()

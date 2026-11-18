@@ -285,7 +285,9 @@ void CMenu::MenuESP()
 	{
 		FColorPicker("Color", &tGroup.m_tColor, FColorPickerEnum::Full);
 		FToggle("Tags override color", &tGroup.m_bTagsOverrideColor);
-		FDropdown("Targets", &tGroup.m_iTargets, { "Players", "Buildings", "Projectiles", "Ragdolls", "Objective", "NPCs", "Health", "Ammo", "Money", "Powerups", "Spellbook", "Bombs", "Gargoyle", "##Divider", "Fake angle", "Viewmodel weapon", "Viewmodel hands" }, {}, FDropdownEnum::Multi);
+		FDropdown("Targets", &tGroup.m_iTargets,
+			{ "Players", "Buildings", "Weapons", "Wearables", "Projectiles", "Ragdolls", "Objective", "NPCs", "Health", "Ammo", "Money", "Powerups", "Spellbook", "Bombs", "Gargoyle", "##Divider", "Fake angle", "Viewmodel weapon", "Viewmodel hands" },
+			{ TargetsEnum::Players, TargetsEnum::Buildings, TargetsEnum::Weapons, TargetsEnum::Wearables, TargetsEnum::Projectiles, TargetsEnum::Ragdolls, TargetsEnum::Objective, TargetsEnum::NPCs, TargetsEnum::Health, TargetsEnum::Ammo, TargetsEnum::Money, TargetsEnum::Powerups, TargetsEnum::Spellbook, TargetsEnum::Bombs, TargetsEnum::Gargoyle, TargetsEnum::FakeAngle, TargetsEnum::ViewmodelWeapon, TargetsEnum::ViewmodelHands }, FDropdownEnum::Multi);
 	} EndSection();
 	if (Section("Conditions"))
 	{
@@ -328,19 +330,7 @@ void CMenu::MenuESP()
 			FMDropdown("Occluded material## Backtrack", &tGroup.m_tBacktrackChams.Occluded);
 
 			Subheader("Glow");
-			PushTransparent(!tGroup.m_tBacktrackGlow.Stencil);
-			{
-				FSlider("Stencil scale## Backtrack", &tGroup.m_tBacktrackGlow.Stencil, 0, 10, 1, "%i", FSliderEnum::Min);
-			}
-			PopTransparent();
-			PushTransparent(!tGroup.m_tBacktrackGlow.Blur);
-			{
-				FSlider("Blur scale## Backtrack", &tGroup.m_tBacktrackGlow.Blur, 0.f, 10.f, 1.f, "%g", FSliderEnum::Min | FSliderEnum::Precision);
-			}
-			PopTransparent();
-			FSlider("Render start## Backtrack", &tGroup.m_tBacktrackGlow.Start, 0.f, 2048.f, 128, "%.fHU", FSliderEnum::Min);
-			FSlider("Render end## Backtrack", &tGroup.m_tBacktrackGlow.End, 512.f, 8192.f, 128.f, "%.fHU", FSliderEnum::Min);
-			FToggle("Distance to alpha## Backtrack", &tGroup.m_tBacktrackGlow.SmoothAlpha);
+			FGlowControls("Backtrack glow", &tGroup.m_tBacktrackGlow);
 
 			EndPopup();
 		}
@@ -442,19 +432,7 @@ void CMenu::MenuESP()
 	} EndSection();
 	if (Section("Glow"))
 	{
-		PushTransparent(!tGroup.m_tGlow.Stencil);
-		{
-			FSlider("Stencil scale", &tGroup.m_tGlow.Stencil, 0, 10, 1, "%i", FSliderEnum::Min);
-		}
-		PopTransparent();
-		PushTransparent(!tGroup.m_tGlow.Blur);
-		{
-			FSlider("Blur scale", &tGroup.m_tGlow.Blur, 0.f, 10.f, 1.f, "%g", FSliderEnum::Min | FSliderEnum::Precision);
-		}
-		PopTransparent();
-		FSlider("Render start## Glow", &tGroup.m_tGlow.Start, 0.f, 2048.f, 128, "%.fHU", FSliderEnum::Clamp);
-		FSlider("Render end## Glow", &tGroup.m_tGlow.End, 512.f, 8192.f, 128.f, "%.fHU", FSliderEnum::Min);
-		FToggle("Distance to alpha## Glow", &tGroup.m_tGlow.SmoothAlpha);
+		FGlowControls("Group glow", &tGroup.m_tGlow);
 	} EndSection();
 
 	EndTable();

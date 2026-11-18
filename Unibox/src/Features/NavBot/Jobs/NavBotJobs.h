@@ -82,7 +82,7 @@ namespace NavJobUtils
 
 	inline bool IsSpawnArea(const CNavArea* pArea)
 	{
-		return pArea && (pArea->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
+		return pArea && (pArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_ANY);
 	}
 
 	inline bool IsShortRangeClass(CTFPlayer* pLocal)
@@ -93,6 +93,11 @@ namespace NavJobUtils
 	inline bool IsBeingHealed(CTFPlayer* pLocal)
 	{
 		return pLocal->InCond(TF_COND_HEALTH_BUFF);
+	}
+
+	inline float GetHealthFraction(CTFPlayer* pPlayer)
+	{
+		return static_cast<float>(pPlayer->m_iHealth()) / std::max(1, pPlayer->GetMaxHealth());
 	}
 
 	inline bool HasPreference(int iFlag)
@@ -288,6 +293,7 @@ public:
 	std::wstring m_sDangerStatus = {};
 public:
 	static bool GetProjectileThreatRange(CBaseEntity* pEntity, int iLocalTeam, float& flOutRange);
+	static bool ThreatensPosition(CBaseEntity* pEntity, int iLocalTeam, const Vector& vPos, float& flOutDist);
 	bool EscapeDanger(CTFPlayer* pLocal);
 	const Hazard_t* GetHazardAhead(CTFPlayer* pLocal) const;
 	bool EscapeProjectiles(CTFPlayer* pLocal);
@@ -406,7 +412,7 @@ private:
 	Timer m_tSnipeCooldown{};
 	Timer m_tInvalidTargetTimer{};
 
-	bool IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, bool bShortRangeClass);
+	bool IsAreaValidForSnipe(Vector vEntOrigin, Vector vAreaOrigin, float flMinDist);
 	bool TryToSnipe(int iEntIdx, bool bShortRangeClass);
 public:
 	bool Run(CTFPlayer* pLocal);

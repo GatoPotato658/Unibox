@@ -173,7 +173,7 @@ static float GetHidingSpotCoverScore(CNavArea* pArea, const Vector& vTargetOrigi
 static float GetFaceCoverScore(std::unordered_map<uint64_t, CoverCache_t>& tCoverCache, int iEntIndex, CNavArea* pArea, const Vector& vTargetOrigin, bool bPreferSightline)
 {
 	const uint64_t uKey = (static_cast<uint64_t>(iEntIndex) << 32) ^ pArea->m_uId;
-	const int iNow = I::GlobalVars ? I::GlobalVars->tickcount : 0;
+	const int iNow = NavRuntime::CurrentTick();
 	auto it = tCoverCache.find(uKey);
 	if (it != tCoverCache.end() && iNow - it->second.m_iTick <= TIME_TO_TICKS(0.35f))
 		return it->second.m_flScore;
@@ -412,8 +412,7 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::StalkEnemies))
 	{
 		m_iStayNearTargetIdx = -1;
-		if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear)
-			F::NavEngine.CancelPath();
+		F::NavEngine.CancelPathIf(PriorityListEnum::StayNear);
 		return false;
 	}
 
@@ -435,8 +434,8 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		{
 			if (F::NavEngine.IsPathing())
 			{
-				auto pCrumbs = F::NavEngine.GetCrumbs();
-				if (pCrumbs->size() > 2 && IsAreaValidForStayNear(vOrigin, (*pCrumbs)[pCrumbs->size() - 2].m_pNavArea))
+				const auto& vCrumbs = F::NavEngine.GetCrumbs();
+				if (vCrumbs.size() > 2 && IsAreaValidForStayNear(vOrigin, vCrumbs[vCrumbs.size() - 2].m_pNavArea))
 					return true;
 			}
 			else if (F::NavBotCore.m_tSelectedConfig.m_bPreferFar && IsAreaValidForStayNear(vOrigin, F::NavEngine.GetLocalNavArea()))
@@ -453,8 +452,7 @@ bool CNavBotStayNear::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	m_iStayNearTargetIdx = -1;
 	m_tInvalidTarget.Update();
 
-	if (F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear)
-		F::NavEngine.CancelPath();
+	F::NavEngine.CancelPathIf(PriorityListEnum::StayNear);
 
 	const int iDefaultPriority = F::PlayerUtils.m_vTags[F::PlayerUtils.TagToIndex(DEFAULT_TAG)].m_iPriority;
 	std::vector<std::pair<int, float>> vPriorityPlayers{};
