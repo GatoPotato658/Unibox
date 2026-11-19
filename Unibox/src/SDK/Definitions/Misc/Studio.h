@@ -732,8 +732,8 @@ struct mstudiotexture_t
 	int flags;
 	int used;
 	int unused1;
-	IMaterial* material;
-	void* clientmaterial;
+	int material;
+	int clientmaterial;
 	int unused[10];
 };
 
@@ -789,13 +789,13 @@ struct mstudiomodel_t;
 
 struct mstudio_modelvertexdata_t
 {
-	void* pVertexData;
-	void* pTangentData;
+	int pVertexData;
+	int pTangentData;
 };
 
 struct mstudio_meshvertexdata_t
 {
-	mstudio_modelvertexdata_t* modelvertexdata;
+	int modelvertexdata;
 	int numLODVertexes[MAX_NUM_LODS];
 };
 
@@ -1148,17 +1148,17 @@ struct studiohdr_t
 	int numincludemodels;
 	int includemodelindex;
 	inline mstudiomodelgroup_t* pModelGroup(int i) const { return (mstudiomodelgroup_t*)(((byte*)this) + includemodelindex) + i; };
-	void* virtualModel;
+	int virtualModel;
 	int szanimblocknameindex;
 	inline char* const pszAnimBlockName(void) const { return ((char*)this) + szanimblocknameindex; }
 	int numanimblocks;
 	int animblockindex;
 	inline mstudioanimblock_t* pAnimBlock(int i) const { return (mstudioanimblock_t*)(((byte*)this) + animblockindex) + i; };
-	void* animblockModel;
+	int animblockModel;
 	int bonetablebynameindex;
 	inline const byte* GetBoneTableSortedByName() const { return (byte*)this + bonetablebynameindex; }
-	void* pVertexBase;
-	void* pIndexBase;
+	int pVertexBase;
+	int pIndexBase;
 	byte constdirectionallightdot;
 	byte rootLOD;
 	byte numAllowedRootLODs;
