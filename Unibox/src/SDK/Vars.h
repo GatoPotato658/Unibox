@@ -810,6 +810,8 @@ NAMESPACE_BEGIN(Vars)
 				Enabled = Rockets | Stickies | Pipes | Flares);
 			CVar(ProjectileCamera, "Projectile camera", false, VISUAL);
 			CVar(ProjectileWindow, "Projectile window", WindowBox_t(), VISUAL | NOBIND);
+			CVar(SpyCamera, "Spy camera", false, VISUAL);
+			CVar(SpyWindow, "Spy window", WindowBox_t(), VISUAL | NOBIND);
 			CVar(Box, VA_LIST("Box", "Path box"), true, VISUAL);
 		NAMESPACE_END(Simulation)
 
@@ -850,6 +852,21 @@ NAMESPACE_BEGIN(Vars)
 			CVar(MaxAngularVelocity, "Max angular velocity", 0.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 7200.f, 50.f);
 		NAMESPACE_END(ProjectileTrajectory)
 	NAMESPACE_END(Visuals)
+
+	NAMESPACE_BEGIN(Radar)
+		CVar(Enabled, "Enabled", false, VISUAL);
+		CVar(DrawOutOfRange, "Draw out of range", true, VISUAL);
+		CVarEnum(Style, "Style", 0, VISUAL, nullptr,
+			VA_LIST("Circle", "Rectangle"),
+			Circle, Rectangle);
+		CVar(Window, "Window", WindowBox_t(), VISUAL | NOBIND);
+		CVar(Range, "Range", 1500, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 50, 3000, 50);
+		CVar(BackgroundAlpha, "Background alpha", 128, VISUAL | SLIDER_CLAMP, 0, 255, 5);
+		CVar(LineAlpha, "Line alpha", 255, VISUAL | SLIDER_CLAMP, 0, 255, 5);
+		CVar(Size, "Icon size", 16, VISUAL | SLIDER_CLAMP, 8, 32, 1);
+		CVar(HealthBar, "Health bar", false, VISUAL);
+		CVar(HeightIndicator, "Height indicator", false, VISUAL);
+	NAMESPACE_END(Radar);
 
 	NAMESPACE_BEGIN(Misc)
 

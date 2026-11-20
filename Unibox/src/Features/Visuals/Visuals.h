@@ -54,6 +54,7 @@ public:
 	void Tick();
 
 	void ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const bool bInterp = true);
+	void SpyCamera(CTFPlayer* pLocal);
 	void DrawPickupTimers();
 	void Triggers(CTFPlayer* pLocal);
 

@@ -320,6 +320,8 @@ void CMenu::MenuESP()
 			EndPopup();
 		}
 
+		FToggle("Radar", &tGroup.m_bRadar);
+
 		FToggle("Pickup timer", &tGroup.m_bPickupTimer);
 
 		FToggle("Backtrack", &tGroup.m_iBacktrack, BacktrackEnum::Enabled);
@@ -3953,6 +3955,8 @@ void CMenu::Render()
 		AddDraggable("Radio", Vars::Menu::RadioDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Radio),
 			{ H::Draw.IndicatorScale(180.f), H::Draw.IndicatorScale(29.f) });
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, m_bIsOpen && FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
+		AddResizableDraggable("Spy camera", Vars::Visuals::Simulation::SpyWindow, m_bIsOpen && FGet(Vars::Visuals::Simulation::SpyCamera), OptionalConstraints);
+		AddResizableDraggable("Radar", Vars::Radar::Window, m_bIsOpen && FGet(Vars::Radar::Enabled), SquareConstraints);
 
 		DrawMenu();
 		if (m_bNoticePending)

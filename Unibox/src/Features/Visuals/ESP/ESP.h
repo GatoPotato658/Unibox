@@ -5,6 +5,10 @@
 
 struct ImDrawList;
 void InvalidateESPIconTextures();
+const char* GetClassIconTexture(int iClassNum);
+#ifndef TEXTMODE
+IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
+#endif
 
 struct Text_t
 {

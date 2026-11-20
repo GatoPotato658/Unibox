@@ -311,6 +311,40 @@ void CVisuals::ProjectileTrace(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, const
 	}
 }
 
+void CVisuals::SpyCamera(CTFPlayer* pLocal)
+{
+	F::CameraWindow.m_bShouldDrawSpy = false;
+	F::CameraWindow.m_pSpyTarget = nullptr;
+
+	if (!Vars::Visuals::Simulation::SpyCamera.Value || !pLocal || !pLocal->IsAlive() || I::EngineVGui->IsGameUIVisible())
+		return;
+
+	CTFPlayer* pClosest = nullptr;
+	float flBest = FLT_MAX;
+	const Vec3 vLocalPos = pLocal->GetAbsOrigin();
+	for (int n = 1; n <= I::EngineClient->GetMaxClients(); n++)
+	{
+		auto pPlayer = I::ClientEntityList->GetClientEntity(n)->As<CTFPlayer>();
+		if (!pPlayer || pPlayer->IsDormant() || !pPlayer->IsAlive() || pPlayer->IsAGhost()
+			|| pPlayer->m_iClass() != TF_CLASS_SPY || pPlayer->m_iTeamNum() == pLocal->m_iTeamNum())
+			continue;
+
+		const float flDist = pPlayer->GetAbsOrigin().DistToSqr(vLocalPos);
+		if (flDist < flBest)
+		{
+			flBest = flDist;
+			pClosest = pPlayer;
+		}
+	}
+	if (!pClosest)
+		return;
+
+	F::CameraWindow.m_bShouldDrawSpy = true;
+	F::CameraWindow.m_vSpyOrigin = pClosest->GetShootPos();
+	F::CameraWindow.m_vSpyAngles = pClosest->GetEyeAngles();
+	F::CameraWindow.m_pSpyTarget = pClosest;
+}
+
 void CVisuals::DrawPickupTimers()
 {
 	if (!F::Groups.GroupsActive())

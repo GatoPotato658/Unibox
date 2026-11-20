@@ -845,7 +845,7 @@ void CESP::Store(CTFPlayer* pLocal)
 static matrix3x4 s_aBones[MAXSTUDIOBONES];
 static matrix3x4 s_mTransform = {};
 
-static const char* GetClassIconTexture(int iClassNum)
+const char* GetClassIconTexture(int iClassNum)
 {
 	switch (iClassNum)
 	{
@@ -864,7 +864,7 @@ static const char* GetClassIconTexture(int iClassNum)
 
 #ifndef TEXTMODE
 static bool s_bCaptureIcons = false;
-static IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
+IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
 #endif
 
 void CESP::CacheDrawInfo(CTFPlayer* pLocal)
@@ -1927,7 +1927,7 @@ static bool UploadIcon(IDirect3DDevice9* pDevice, ESPIcon_t& tIcon)
 	return true;
 }
 
-static IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
+IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
 {
 	if (sTexture.empty())
 		return nullptr;

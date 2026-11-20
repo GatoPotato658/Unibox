@@ -550,6 +550,7 @@
     <ClCompile Include="src\Features\Visuals\Materials\Materials.cpp" />
     <ClCompile Include="src\Features\ImGui\Notifications\Notifications.cpp" />
     <ClCompile Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.cpp" />
+    <ClCompile Include="src\Features\Visuals\Radar\Radar.cpp" />
     <ClCompile Include="src\Features\Visuals\Hitmarker\Hitmarker.cpp" />
     <ClCompile Include="src\Features\Aimbot\AimbotHitscan\SpreadOptimizer.cpp" />
     <ClCompile Include="src\Features\Visuals\SpectatorList\SpectatorList.cpp" />
@@ -815,6 +816,7 @@
     <ClInclude Include="src\Features\Visuals\Groups\Groups.h" />
     <ClInclude Include="src\Features\Visuals\PlayerConditions\PlayerConditions.h" />
     <ClInclude Include="src\Features\Visuals\OffscreenArrows\OffscreenArrows.h" />
+    <ClInclude Include="src\Features\Visuals\Radar\Radar.h" />
     <ClInclude Include="src\Features\Visuals\Hitmarker\Hitmarker.h" />
     <ClInclude Include="src\Features\Aimbot\AimbotHitscan\SpreadOptimizer.h" />
     <ClInclude Include="src\Features\Visuals\SpectatorList\SpectatorList.h" />

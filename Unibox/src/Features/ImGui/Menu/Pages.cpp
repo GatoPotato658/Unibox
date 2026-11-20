@@ -634,6 +634,7 @@ static void AimbotDraw()
 		FDropdown(Vars::Visuals::Simulation::SplashRadius, FDropdownEnum::None, -56);
 		PathColors(Vars::Colors::SplashRadius, Vars::Colors::SplashRadiusIgnoreZ);
 		FToggle(Vars::Visuals::Simulation::ProjectileCamera);
+		FToggle(Vars::Visuals::Simulation::SpyCamera);
 		FToggle(Vars::Visuals::Simulation::Box);
 	} EndSection();
 
@@ -673,6 +674,22 @@ static void VisualsView()
 		PushTransparent(!Vars::Visuals::UI::AspectRatio.Value);
 		{
 			FSlider(Vars::Visuals::UI::AspectRatio);
+		}
+		PopTransparent();
+	} EndSection();
+	if (Section("Radar"))
+	{
+		FToggle(Vars::Radar::Enabled);
+		PushTransparent(!Vars::Radar::Enabled.Value);
+		{
+			FDropdown(Vars::Radar::Style);
+			FSlider(Vars::Radar::Range);
+			FToggle(Vars::Radar::DrawOutOfRange);
+			FSlider(Vars::Radar::Size);
+			FSlider(Vars::Radar::BackgroundAlpha);
+			FSlider(Vars::Radar::LineAlpha);
+			FToggle(Vars::Radar::HealthBar);
+			FToggle(Vars::Radar::HeightIndicator);
 		}
 		PopTransparent();
 	} EndSection();

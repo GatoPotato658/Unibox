@@ -23,6 +23,7 @@ MAKE_HOOK(CClientModeShared_DoPostScreenSpaceEffects, U::Memory.GetVirtual(I::Cl
 	
 	auto pLocal = H::Entities.GetLocal();
 	F::Visuals.ProjectileTrace(pLocal, H::Entities.GetWeapon());
+	F::Visuals.SpyCamera(pLocal);
 	if (F::CameraWindow.m_bDrawing)
 		return CALL_ORIGINAL(rcx, pSetup);
 	

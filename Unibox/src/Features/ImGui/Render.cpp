@@ -15,6 +15,7 @@
 #include "../NavBot/NavRender.h"
 #include "../Aimbot/AutoHeal/AutoHeal.h"
 #include "../Visuals/ESP/ESP.h"
+#include "../Visuals/Radar/Radar.h"
 #include "../Visuals/Visuals.h"
 #include "../Visuals/Hitmarker/Hitmarker.h"
 #include "../Aimbot/Aimbot.h"
@@ -89,6 +90,7 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 		F::Radio.Draw();
 
 		F::ESP.Draw(pBackground);
+		F::Radar.Draw(pBackground, H::Entities.GetLocal());
 		F::Aimbot.Draw(pBackground);
 		F::Visuals.DrawBestAimPos(pBackground);
 		F::Hitmarker.Draw(pBackground);
