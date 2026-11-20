@@ -131,6 +131,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	if (fdwReason == DLL_PROCESS_ATTACH)
 	{
+		if (hinstDLL)
+			DisableThreadLibraryCalls(hinstDLL);
+
 		const uintptr_t uBase = GetCurrentModuleBase(hinstDLL);
 		InitializeManualMap(uBase);
 

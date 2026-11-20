@@ -211,12 +211,28 @@ void CRadio::StartConnect(size_t uStation)
 
 void CRadio::Connect(int iGeneration, size_t uStation)
 {
-	m_pConnectThread.store(GetCurrentThread());
+	HANDLE hThread = nullptr;
+	if (DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &hThread, 0, FALSE, DUPLICATE_SAME_ACCESS))
+	{
+		std::lock_guard tLock(m_tCancelMutex);
+		m_pConnectThread = hThread;
+	}
 	struct ThreadHandleScope_t
 	{
-		std::atomic<void*>& m_pHandle;
-		~ThreadHandleScope_t() { m_pHandle.store(nullptr); }
-	} tHandleScope{ m_pConnectThread };
+		std::mutex& m_tMutex;
+		void*& m_pHandle;
+		~ThreadHandleScope_t()
+		{
+			HANDLE hClose = nullptr;
+			{
+				std::lock_guard tLock(m_tMutex);
+				hClose = static_cast<HANDLE>(m_pHandle);
+				m_pHandle = nullptr;
+			}
+			if (hClose)
+				CloseHandle(hClose);
+		}
+	} tHandleScope{ m_tCancelMutex, m_pConnectThread };
 
 	const char* sUrl = RadioStationUrl(uStation);
 
@@ -317,8 +333,9 @@ void CRadio::Silence()
 
 void CRadio::CancelConnect()
 {
-	if (void* pThread = m_pConnectThread.load())
-		CancelSynchronousIo(static_cast<HANDLE>(pThread));
+	std::lock_guard tLock(m_tCancelMutex);
+	if (m_pConnectThread)
+		CancelSynchronousIo(static_cast<HANDLE>(m_pConnectThread));
 }
 
 void CRadio::FailStream()

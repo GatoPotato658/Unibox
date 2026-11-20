@@ -9,6 +9,7 @@ class CRender : public CMenuTheme
 public:
 	void Render(IDirect3DDevice9* pDevice);
 	void Initialize(IDirect3DDevice9* pDevice);
+	void Unload();
 	void Reload();
 
 	void LoadColors();

@@ -82,6 +82,7 @@ private:
 public:
 	bool Initialize();
 	bool Unload();
+	bool IsInitialized() const { return m_bInitialized; }
 	CHook* Get(const std::string& sName) const;
 };
 

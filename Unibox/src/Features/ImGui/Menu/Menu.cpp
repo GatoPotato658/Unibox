@@ -404,6 +404,7 @@ void CMenu::MenuESP()
 		PushTransparent(tGroup.m_iTargets && !(tGroup.m_iTargets & TargetsEnum::ESP));
 		{
 			FDropdown("Draw", &tGroup.m_tESP.Draw, vEntries, vValues, FDropdownEnum::Multi);
+			const float flPopupWidth = GetWindowWidth();
 			if (FPopupButton("ESP positions"))
 			{
 				auto& tPos = tGroup.m_tESP.Positions;
@@ -416,14 +417,16 @@ void CMenu::MenuESP()
 				auto fPosition = [&](const char* sLabel, int* pVar, int iFlag, const std::vector<const char*>& vElements, const std::vector<int>& vVals)
 				{
 					PushTransparent(Transparent || !(tGroup.m_tESP.Draw & iFlag));
-					FDropdown(sLabel, pVar, vElements, vVals);
+					FDropdown(sLabel, pVar, vElements, vVals, FDropdownEnum::None, GetScrollMaxY() > 0.f ? -8 : 0);
 					PopTransparent();
 				};
 
-				const float flMaxHeight = std::min(H::Draw.Scale(380), GetIO().DisplaySize.y * 0.6f);
-				SetNextWindowSizeConstraints({ 0.f, 0.f }, { FLT_MAX, flMaxHeight });
+				const float flChildWidth = std::max(flPopupWidth - GetStyle().WindowPadding.x * 2.f, H::Draw.Scale(160));
+				const float flAvailBelow = GetIO().DisplaySize.y - GetWindowPos().y - H::Draw.Scale(64);
+				const float flMaxHeight = std::clamp(flAvailBelow, H::Draw.Scale(140), H::Draw.Scale(320));
+				SetNextWindowSizeConstraints({ flChildWidth, 0.f }, { flChildWidth, flMaxHeight });
 				PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
-				if (BeginChild("##ESPPositions", { GetContentRegionAvail().x, 0.f }, ImGuiChildFlags_AutoResizeY))
+				if (BeginChild("##ESPPositions", { flChildWidth, 0.f }, ImGuiChildFlags_AutoResizeY))
 				{
 					Subheader("Text");
 					fPosition("Name", &tPos.Name, ESPEnum::Name, vTextPositions, vTextValues);

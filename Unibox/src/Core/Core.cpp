@@ -18,6 +18,9 @@
 #include "../Features/NavBot/NavEngine.h"
 #ifndef TEXTMODE
 #include "../Features/ImGui/Overlay/CaptureOverlay.h"
+#include "../Features/ImGui/Render.h"
+#include "../Features/Visuals/Chams/D3DMaterials.h"
+#include "../Features/Visuals/Glow/Glow.h"
 #endif
 #include "../SDK/Events/Events.h"
 #ifdef TEXTMODE
@@ -259,18 +262,24 @@ CCore::UnloadResult_t CCore::Unload()
 	F::Radio.Shutdown();
 
 #ifndef TEXTMODE
-	F::Materials.RequestUnload();
-	for (int i = 0; i < 200 && !F::Materials.IsUnloadComplete(); ++i)
-		Sleep(10);
-	if (!F::Materials.IsUnloadComplete())
+	bool bMaterialsUnloaded = !U::Hooks.IsInitialized() || !F::Materials.m_bLoaded;
+	if (!bMaterialsUnloaded)
 	{
-		AppendFailText("Material renderer shutdown timed out; retaining module");
-		bUnloadFailed = true;
+		F::Materials.RequestUnload();
+		for (int i = 0; i < 200 && !F::Materials.IsUnloadComplete(); ++i)
+			Sleep(10);
+		bMaterialsUnloaded = F::Materials.IsUnloadComplete();
 	}
 #endif
 
 #ifndef TEXTMODE
 	bUnloadFailed = !U::Hooks.Unload() || bUnloadFailed;
+	if (!bMaterialsUnloaded)
+		F::Materials.UnloadMaterials();
+	F::D3DMaterials.Unload();
+	F::Glow.OnDeviceLost();
+	F::SteamProfileCache.ReleaseTextures();
+	F::Render.Unload();
 	F::SkinChanger.Unload();
 	if (!F::CaptureOverlay.Shutdown())
 	{

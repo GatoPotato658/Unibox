@@ -690,6 +690,8 @@ static void VisualsView()
 			FSlider(Vars::Radar::LineAlpha);
 			FToggle(Vars::Radar::HealthBar);
 			FToggle(Vars::Radar::HeightIndicator);
+			FToggle(Vars::Radar::ViewCone);
+			FToggle(Vars::Radar::PlayerDirection);
 		}
 		PopTransparent();
 	} EndSection();

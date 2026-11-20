@@ -866,6 +866,8 @@ NAMESPACE_BEGIN(Vars)
 		CVar(Size, "Icon size", 16, VISUAL | SLIDER_CLAMP, 8, 32, 1);
 		CVar(HealthBar, "Health bar", false, VISUAL);
 		CVar(HeightIndicator, "Height indicator", false, VISUAL);
+		CVar(ViewCone, "View cone", true, VISUAL);
+		CVar(PlayerDirection, "Player direction", true, VISUAL);
 	NAMESPACE_END(Radar);
 
 	NAMESPACE_BEGIN(Misc)

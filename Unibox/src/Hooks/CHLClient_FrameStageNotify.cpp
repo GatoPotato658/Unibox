@@ -19,6 +19,7 @@
 #include "../Features/Visuals/Groups/Groups.h"
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
+#include "../Features/Visuals/Radar/Radar.h"
 #ifndef TEXTMODE
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
 #include "../Features/Ticks/Ticks.h"
@@ -85,6 +86,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		F::Chams.Store(pLocal);
 		F::Glow.Store(pLocal);
 		F::OffscreenArrows.Store();
+		F::Radar.Store(pLocal);
 		F::Visuals.Store();
 #endif
 

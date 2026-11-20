@@ -180,6 +180,18 @@ void CRender::Initialize(IDirect3DDevice9* pDevice)
 	m_bLoaded = true;
 }
 
+void CRender::Unload()
+{
+	if (!m_bLoaded)
+		return;
+
+	m_bLoaded = false;
+	ImGui_ImplDX9_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+	m_pDevice = nullptr;
+}
+
 void CRender::Reload()
 {
 	m_bLoaded = false;

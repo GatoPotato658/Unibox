@@ -79,6 +79,8 @@ DWORD WINAPI CCaptureOverlay::WindowThread(LPVOID pParam)
 	}
 
 	pThis->m_hWindow = nullptr;
+	if (IsWindow(hWindow))
+		DestroyWindow(hWindow);
 	UnregisterClassW(s_szClassName, hInstance);
 	return 0;
 }
@@ -416,6 +418,9 @@ void CCaptureOverlay::ReleaseDeviceObjects()
 bool CCaptureOverlay::Shutdown()
 {
 	ReleaseDeviceObjects();
+
+	if (m_hThread && m_hReady)
+		WaitForSingleObject(m_hReady, 500);
 
 	if (const HWND hWindow = m_hWindow)
 		PostMessageW(hWindow, WM_CLOSE, 0, 0);
