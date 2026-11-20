@@ -1699,17 +1699,43 @@ void Pages::Search(const std::string& sSearch)
 	if (sSearch.empty())
 		return;
 
+	static const std::unordered_map<const BaseVar*, BaseVar*> mTogglePairs = []
+	{
+		std::unordered_map<const BaseVar*, BaseVar*> mPairs;
+		const auto fPair = [&mPairs](BaseVar& tToggle, BaseVar& tSlider) { mPairs[&tToggle] = &tSlider; };
+		fPair(Vars::Aimbot::Healing::AutoSwitch, Vars::Aimbot::Healing::AutoSwitchHealth);
+		fPair(Vars::Misc::Movement::NavBot::DangerOverlay, Vars::Misc::Movement::NavBot::DangerOverlayMaxDist);
+		fPair(Vars::Misc::Automation::AutoRetry, Vars::Misc::Automation::AutoRetryHealth);
+		fPair(Vars::Misc::Automation::AutoVoteMap, Vars::Misc::Automation::AutoVoteMapOption);
+		fPair(Vars::Misc::Automation::AutoTaunt, Vars::Misc::Automation::AutoTauntChance);
+		fPair(Vars::Misc::Automation::ChatSpam::Enable, Vars::Misc::Automation::ChatSpam::Interval);
+		fPair(Vars::Misc::Automation::KillSay::Enable, Vars::Misc::Automation::KillSay::Chance);
+		fPair(Vars::Misc::Queueing::AutoDumpProfiles, Vars::Misc::Queueing::AutoDumpDelay);
+		fPair(Vars::Misc::MannVsMachine::BuyBot, Vars::Misc::MannVsMachine::MaxCash);
+		fPair(Vars::Misc::Exploits::PingReducer, Vars::Misc::Exploits::PingTarget);
+		return mPairs;
+	}();
+
 	static std::vector<BaseVar*> vVars = {};
 	static uint32_t uStaticHash = 0;
-	if (const uint32_t uCurrHash = FNV1A::Hash32(sSearch.c_str()); uCurrHash != uStaticHash)
+	static bool bStaticDebug = false;
+	const bool bDebug = Vars::Debug::Options[DEFAULT_BIND];
+	if (const uint32_t uCurrHash = FNV1A::Hash32(sSearch.c_str()); uCurrHash != uStaticHash || bDebug != bStaticDebug)
 	{
-		std::string sSearch2 = sSearch;
-		std::transform(sSearch2.begin(), sSearch2.end(), sSearch2.begin(), ::tolower);
+		const auto fLower = [](std::string sText)
+		{
+			std::transform(sText.begin(), sText.end(), sText.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+			return sText;
+		};
+		const std::string sSearch2 = fLower(sSearch);
 
 		vVars.clear();
 		for (auto& pBase : G::Vars())
 		{
-			if (!Vars::Debug::Options[DEFAULT_BIND] && pBase->m_iFlags & DEBUGVAR)
+			if (!bDebug && pBase->m_iFlags & DEBUGVAR)
+				continue;
+
+			if (pBase->As<DragBox_t>() || pBase->As<WindowBox_t>())
 				continue;
 
 			std::vector<const char*> vSearch = { pBase->Name(), pBase->Section() };
@@ -1722,8 +1748,7 @@ void Pages::Search(const std::string& sSearch)
 					sSearch3 = sSearch3.replace(iFind, strlen("Vars::"), "");
 				if (auto iFind = sSearch3.find("##"); iFind != std::string::npos)
 					sSearch3 = sSearch3.replace(iFind, strlen("##"), "");
-				std::transform(sSearch3.begin(), sSearch3.end(), sSearch3.begin(), ::tolower);
-				if (sSearch3.find(sSearch2) != std::string::npos)
+				if (fLower(std::move(sSearch3)).find(sSearch2) != std::string::npos)
 				{
 					vVars.push_back(pBase);
 					break;
@@ -1732,6 +1757,7 @@ void Pages::Search(const std::string& sSearch)
 		}
 
 		uStaticHash = uCurrHash;
+		bStaticDebug = bDebug;
 	}
 
 	if (vVars.empty())
@@ -1765,34 +1791,111 @@ void Pages::Search(const std::string& sSearch)
 		}
 	}
 
+	std::unordered_set<const BaseVar*> vConsumed = {};
 	auto fDrawVar = [&](BaseVar* pBase)
 	{
+		if (vConsumed.contains(pBase))
+			return;
+
 		if (auto pVar = pBase->As<bool>())
 		{
-			if (FToggle(*pVar) && FNV1A::Hash32(pVar->Name()) == FNV1A::Hash32Const("Vars::Debug::Options"))
-				uStaticHash = 0;
+			const auto it = mTogglePairs.find(pBase);
+			if (it != mTogglePairs.end())
+			{
+				vConsumed.insert(it->second);
+				if (auto pSlider = it->second->As<int>())
+					FToggleSlider(*pVar, *pSlider);
+				else if (auto pSlider = it->second->As<float>())
+					FToggleSlider(*pVar, *pSlider);
+				else
+					FToggle(*pVar);
+			}
+			else
+				FToggle(*pVar);
 		}
 		else if (auto pVar = pBase->As<int>())
 		{
-			if (!pVar->m_vValues.empty() || FNV1A::Hash32(pVar->Name()) == FNV1A::Hash32Const("Vars::ESP::ActiveGroups"))
-				FDropdown(*pVar);
+			const uint32_t uHash = FNV1A::Hash32(pVar->Name());
+			if (!pVar->m_vValues.empty() || uHash == FNV1A::Hash32Const("Vars::ESP::ActiveGroups"))
+			{
+				if (uHash == FNV1A::Hash32Const("Vars::Misc::Queueing::ForceRegions"))
+				{
+					using namespace Vars::Misc::Queueing;
+					dropdown_with_group_headers(*pVar, FDropdownEnum::None, 0,
+					{
+						{ 0, "North America", ForceRegionsEnum::ATL | ForceRegionsEnum::ORD | ForceRegionsEnum::DFW | ForceRegionsEnum::LAX | ForceRegionsEnum::SEA | ForceRegionsEnum::IAD },
+						{ 6, "Europe", ForceRegionsEnum::AMS | ForceRegionsEnum::FSN | ForceRegionsEnum::FRA | ForceRegionsEnum::HEL | ForceRegionsEnum::LHR | ForceRegionsEnum::MAD | ForceRegionsEnum::PAR | ForceRegionsEnum::STO | ForceRegionsEnum::VIE | ForceRegionsEnum::WAW },
+						{ 16, "South America", ForceRegionsEnum::EZE | ForceRegionsEnum::LIM | ForceRegionsEnum::SCL | ForceRegionsEnum::GRU },
+						{ 20, "Asia", ForceRegionsEnum::MAA | ForceRegionsEnum::DXB | ForceRegionsEnum::HKG | ForceRegionsEnum::BOM | ForceRegionsEnum::SEO | ForceRegionsEnum::SGP | ForceRegionsEnum::TYO },
+						{ 27, "Australia", ForceRegionsEnum::SYD },
+						{ 28, "Africa", ForceRegionsEnum::JNB }
+					});
+				}
+				else
+					FDropdown(*pVar);
+			}
 			else if (pVar->m_sExtra)
 			{
 				const char* sFormat = nullptr;
-				if (FNV1A::Hash32(pVar->Name()) == FNV1A::Hash32Const("Vars::Aimbot::Projectile::SplashAirCount") && !pVar->Map[DEFAULT_BIND])
-					sFormat = "random";
+				switch (uHash)
+				{
+				case FNV1A::Hash32Const("Vars::Aimbot::Projectile::SplashAirCount"):
+					if (!pVar->Map[DEFAULT_BIND])
+						sFormat = "random";
+					break;
+				case FNV1A::Hash32Const("Vars::Misc::Automation::AutoTauntSlot"):
+					if (!pVar->Map[DEFAULT_BIND])
+						sFormat = "weapon";
+				}
 				FSlider(*pVar, FSliderEnum::None, sFormat);
 			}
-			else
+			else if (pVar->m_iFlags & NOBIND)
 			{
 				std::vector<int> vIgnore;
-				switch (FNV1A::Hash32(pVar->Name()))
+				switch (uHash)
 				{
 				case FNV1A::Hash32Const("Vars::Menu::PrimaryKey"): vIgnore = { Vars::Menu::SecondaryKey[DEFAULT_BIND], VK_LBUTTON, VK_RBUTTON }; break;
 				case FNV1A::Hash32Const("Vars::Menu::SecondaryKey"): vIgnore = { Vars::Menu::PrimaryKey[DEFAULT_BIND], VK_LBUTTON, VK_RBUTTON }; break;
 				default: vIgnore = { Vars::Menu::PrimaryKey[DEFAULT_BIND], Vars::Menu::SecondaryKey[DEFAULT_BIND] };
 				}
-				FKeybind(pVar->m_vNames.front(), pVar->Map[DEFAULT_BIND], FKeybindEnum::None, vIgnore);
+				FKeybind(*pVar, FKeybindEnum::None, vIgnore);
+			}
+			else
+			{
+				switch (uHash)
+				{
+				case FNV1A::Hash32Const("Vars::Misc::Automation::AchievementSpamID"):
+					FDropdown(*pVar, Vars::Misc::Automation::GetAchievementSpamDropdownEntries(), Vars::Misc::Automation::GetAchievementSpamDropdownIDs());
+					break;
+				case FNV1A::Hash32Const("Vars::Misc::Automation::ForceClass"):
+					FDropdown(*pVar, { "Off", "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" }, { 0, 1, 3, 7, 4, 6, 9, 5, 2, 8 });
+					break;
+				case FNV1A::Hash32Const("Vars::Misc::MannVsMachine::BuyBotClass"):
+					FDropdown(*pVar, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Sniper", "Spy" }, { 1, 3, 7, 4, 6, 9, 2, 8 });
+					break;
+				case FNV1A::Hash32Const("Vars::Misc::MannVsMachine::ChatCommands::Tag"):
+				{
+					std::vector<const char*> vEntries = { "None" };
+					std::vector<int> vValues = { -1 };
+					for (int i = 0; i < F::PlayerUtils.m_vTags.size(); i++)
+					{
+						if (!F::PlayerUtils.m_vTags[i].m_bAssignable)
+							continue;
+						vEntries.push_back(F::PlayerUtils.m_vTags[i].m_sName.c_str());
+						vValues.push_back(i);
+					}
+					FDropdown(*pVar, vEntries, vValues);
+					break;
+				}
+				case FNV1A::Hash32Const("Vars::Misc::Queueing::MannUpTourIndex"):
+					FDropdown(*pVar, F::MvmQueue.m_tTourDropdown.m_vEntries, {}, FDropdownEnum::NoSanitization);
+					break;
+				case FNV1A::Hash32Const("Vars::Misc::Queueing::BootcampMissionBits"):
+					FDropdown(*pVar, F::MvmQueue.m_tBootcampDropdown.m_vEntries, {}, FDropdownEnum::Multi | FDropdownEnum::NoSanitization);
+					break;
+				default:
+					FSDropdown(*pVar);
+				}
 			}
 		}
 		else if (auto pVar = pBase->As<float>())
@@ -1809,6 +1912,18 @@ void Pages::Search(const std::string& sSearch)
 			case FNV1A::Hash32Const("Vars::Aimbot::Projectile::SplashRotateY"):
 				if (pVar->Map[DEFAULT_BIND] < 0.f)
 					sFormat = "random";
+				break;
+			case FNV1A::Hash32Const("Vars::Aimbot::Zombie::MaxDistance"):
+			case FNV1A::Hash32Const("Vars::Aimbot::Passtime::MaxGoalDistance"):
+			case FNV1A::Hash32Const("Vars::Aimbot::Passtime::PreferGoalDistance"):
+			case FNV1A::Hash32Const("Vars::Aimbot::Passtime::MinPassGain"):
+			case FNV1A::Hash32Const("Vars::Aimbot::Passtime::PressureRange"):
+				if (pVar->Map[DEFAULT_BIND] <= 0.f)
+					sFormat = "Auto";
+				break;
+			case FNV1A::Hash32Const("Vars::Aimbot::Healing::ActivationHealthPercent"):
+				if (pVar->Map[DEFAULT_BIND] <= 0.f)
+					sFormat = "Off";
 			}
 			FSlider(*pVar, FSliderEnum::None, sFormat);
 		}

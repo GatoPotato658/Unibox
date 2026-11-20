@@ -370,8 +370,14 @@ namespace Shell
 			vMenuTargetPos = vDrawPos;
 			vMenuDragOffset = vMousePos - vDrawPos;
 		}
-		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && !IsAnyItemHovered() && IsMouseWithin(vDrawPos.x + flSideWidth, vDrawPos.y + flTopHeight, vWindowSize.x - flSideWidth, flBodyBottom - flTopHeight))
+		static bool bClickedEmpty = false;
+		const bool bInContent = IsMouseWithin(vDrawPos.x + flSideWidth, vDrawPos.y + flTopHeight, vWindowSize.x - flSideWidth, flBodyBottom - flTopHeight);
+		if (bSearch && IsMouseClicked(ImGuiMouseButton_Left))
+			bClickedEmpty = bInContent && !IsAnyItemHovered() && !IsAnyItemActive();
+		if (bSearch && bClickedEmpty && IsMouseReleased(ImGuiMouseButton_Left) && bInContent && !IsAnyItemHovered() && !IsAnyItemActive())
 			sSearch.clear();
+		if (!IsMouseDown(ImGuiMouseButton_Left))
+			bClickedEmpty = false;
 
 		const float flGutter = H::Draw.Scale(10);
 		PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
