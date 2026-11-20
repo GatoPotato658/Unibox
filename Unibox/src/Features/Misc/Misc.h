@@ -1,6 +1,7 @@
 #pragma once
 #include "../../SDK/SDK.h"
 #include <filesystem>
+#include <unordered_map>
 
 Enum(EBStage, Normal = 0, NormalInverted, Random, RandomInverted);
 
@@ -33,6 +34,9 @@ private:
 
 	void AutoReport();
 	void AutoRetry(CTFPlayer* pLocal);
+	void AntiGameBan(CTFPlayer* pLocal);
+	void AntiGameBanTrigger(const std::string& sAnnounce, const std::string& sLog);
+	bool IsPlayerTrusted(int iIndex);
 	void CheatsBypass();
 	void WeaponSway();
 
@@ -93,6 +97,23 @@ private:
 	std::string m_sAchievementSpamName = "";
 	Timer m_tCallVoteSpamTimer;
 	bool m_bAutoBalanceTeamChangePending = false;
+
+	struct AimWatch_t
+	{
+		std::string m_sName;
+		float m_flLastMove = 0.f;
+		float m_flLastTurn = 0.f;
+		bool m_bHasForward = false;
+		Vec3 m_vPrevForward = {};
+		bool m_bOnUs = false;
+		float m_flOnUsSince = 0.f;
+		bool m_bOnUsActive = false;
+		float m_flYellowUntil = 0.f;
+		bool m_bCrossMoving = false;
+		bool m_bCrossTurning = false;
+	};
+	std::unordered_map<int, AimWatch_t> m_mAimWatch;
+	Timer m_tAntiGameBanTrigger;
 
 	int m_iBuybotStep = 1;
 	int m_iBuybotUpgradeSlotStep = 0;
