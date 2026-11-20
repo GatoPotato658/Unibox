@@ -8,6 +8,7 @@
 #include "../../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../../Features/Output/Output.h"
 #include "../../Features/Resolver/Resolver.h"
+#include "../../Features/Simulation/NeuralPrediction/NeuralPrediction.h"
 #include "../../Features/Visuals/Visuals.h"
 #include "../../Features/Visuals/Hitmarker/Hitmarker.h"
 #include "../../Features/Killstreak/Killstreak.h"
@@ -75,6 +76,8 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 	{
 	case FNV1A::Hash32Const("client_disconnect"):
 	case FNV1A::Hash32Const("game_newmap"):
+		F::NeuralPred.OnLevelChange();
+		[[fallthrough]];
 	case FNV1A::Hash32Const("teamplay_round_start"):
 	case FNV1A::Hash32Const("mvm_reset_stats"):
 	{
@@ -107,6 +110,16 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 	case FNV1A::Hash32Const("player_hurt"):
 	{
 		F::Resolver.PlayerHurt(pEvent);
+		const int iVictim = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
+		if (iVictim > 0 && iVictim < CNeuralPrediction::kMaxPlayers)
+			F::NeuralPred.OnPlayerEvent(iVictim, false);
+		return;
+	}
+	case FNV1A::Hash32Const("player_death"):
+	{
+		const int iVictim = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
+		if (iVictim > 0 && iVictim < CNeuralPrediction::kMaxPlayers)
+			F::NeuralPred.OnPlayerEvent(iVictim, true);
 		return;
 	}
 	case FNV1A::Hash32Const("player_spawn"):

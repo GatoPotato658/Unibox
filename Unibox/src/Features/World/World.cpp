@@ -570,6 +570,140 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 	return vFaces;
 }
 
+void CWorld::ProbePlayerGeometry(const Vec3& vOrigin, float flEyeYawDeg, bool bDucked, ITraceFilter* pFilter, float& flGroundDist, Vec3& vGroundNormal, float& flCeilingDist, float aWallDists[8], float aLedgeDepths[8], bool& bWallContact)
+{
+	CTraceFilterWorldAndPropsOnly tDefaultFilter;
+	ITraceFilter* pUseFilter = pFilter ? pFilter : &tDefaultFilter;
+
+	const float flHullMaxZ = bDucked ? 62.f : 82.f;
+	const Vec3 vMins = { -24.f, -24.f, 0.f };
+	const Vec3 vMaxs = { 24.f, 24.f, flHullMaxZ };
+
+	const Vec3 vGroundStart = { vOrigin.x, vOrigin.y, vOrigin.z + 2.f };
+	const Vec3 vGroundEnd = { vOrigin.x, vOrigin.y, vOrigin.z - 512.f };
+	CGameTrace tGroundTrace = {};
+	SDK::TraceHull(vGroundStart, vGroundEnd, vMins, vMaxs, MASK_PLAYERSOLID, pUseFilter, &tGroundTrace);
+	if (tGroundTrace.startsolid)
+	{
+		flGroundDist = 0.f;
+		vGroundNormal = { 0.f, 0.f, 1.f };
+	}
+	else if (tGroundTrace.fraction < 1.f)
+	{
+		const float flHitZ = vGroundStart.z + (vGroundEnd.z - vGroundStart.z) * tGroundTrace.fraction;
+		flGroundDist = std::max(vOrigin.z - flHitZ, 0.f);
+		vGroundNormal = tGroundTrace.plane.normal;
+	}
+	else
+	{
+		flGroundDist = 512.f;
+		vGroundNormal = {};
+	}
+
+	const Vec3 vCeilStart = vOrigin;
+	const Vec3 vCeilEnd = { vOrigin.x, vOrigin.y, vOrigin.z + 512.f };
+	CGameTrace tCeilTrace = {};
+	SDK::TraceHull(vCeilStart, vCeilEnd, vMins, vMaxs, MASK_PLAYERSOLID, pUseFilter, &tCeilTrace);
+	if (tCeilTrace.startsolid)
+		flCeilingDist = 0.f;
+	else if (tCeilTrace.fraction < 1.f)
+		flCeilingDist = std::max(512.f * tCeilTrace.fraction, 0.f);
+	else
+		flCeilingDist = 512.f;
+
+	const Vec3 vBoxMins = { vOrigin.x - 260.f, vOrigin.y - 260.f, vOrigin.z - 520.f };
+	const Vec3 vBoxMaxs = { vOrigin.x + 260.f, vOrigin.y + 260.f, vOrigin.z + 520.f };
+	const std::vector<Face_t> vFaces = GetFacesInAABB(vBoxMins, vBoxMaxs, MASK_PLAYERSOLID, pUseFilter, FaceTypeEnum::All);
+
+	auto fTraceFacesRay = [&](const Vec3& vStart, const Vec3& vEnd, bool& bStartSolid) -> float
+	{
+		bStartSolid = false;
+		if (vFaces.empty())
+		{
+			CGameTrace tTrace = {};
+			SDK::Trace(vStart, vEnd, MASK_PLAYERSOLID, pUseFilter, &tTrace);
+			bStartSolid = tTrace.startsolid;
+			return tTrace.startsolid ? 0.f : tTrace.fraction;
+		}
+
+		const Vec3 vDir = vEnd - vStart;
+		float flBest = 1.f;
+		for (const auto& tFace : vFaces)
+		{
+			const size_t n = tFace.m_vVertices.size();
+			if (n < 3)
+				continue;
+
+			const float flDenom = tFace.m_vNormal.Dot(vDir);
+			if (fabsf(flDenom) < 1e-6f)
+				continue;
+
+			const float t = tFace.m_vNormal.Dot(tFace.m_vVertices[0] - vStart) / flDenom;
+			if (t < 0.f || t >= flBest)
+				continue;
+
+			const Vec3 vHit = vStart + vDir * t;
+			bool bHasPos = false, bHasNeg = false;
+			for (size_t i = 0; i < n; ++i)
+			{
+				const Vec3& vA = tFace.m_vVertices[i];
+				const Vec3& vB = tFace.m_vVertices[(i + 1) % n];
+				const float flSide = (vB - vA).Cross(vHit - vA).Dot(tFace.m_vNormal);
+				if (flSide < -0.05f)
+					bHasNeg = true;
+				else if (flSide > 0.05f)
+					bHasPos = true;
+				if (bHasNeg && bHasPos)
+					break;
+			}
+			if (!(bHasNeg && bHasPos))
+				flBest = t;
+		}
+		if (flBest <= 1e-5f)
+			bStartSolid = true;
+		return flBest;
+	};
+
+	const Vec3 vWaist = { vOrigin.x, vOrigin.y, vOrigin.z + 36.f };
+	const float flYawRad = Math::Deg2Rad(flEyeYawDeg);
+	float flMinWall = 256.f;
+	for (int k = 0; k < 8; ++k)
+	{
+		const float flAng = flYawRad + float(k) * (Math::PI * 0.25f);
+		const float flDx = cosf(flAng);
+		const float flDy = sinf(flAng);
+		const Vec3 vWallEnd = { vWaist.x + flDx * 256.f, vWaist.y + flDy * 256.f, vWaist.z };
+		bool bWallSolid = false;
+		const float flWallFrac = fTraceFacesRay(vWaist, vWallEnd, bWallSolid);
+		const float flWallDist = bWallSolid ? 0.f : (flWallFrac < 1.f ? flWallFrac * 256.f : 256.f);
+		aWallDists[k] = flWallDist;
+		if (flWallDist < flMinWall)
+			flMinWall = flWallDist;
+
+		if (flWallDist < 64.f)
+		{
+			aLedgeDepths[k] = -1.f;
+		}
+		else
+		{
+			const Vec3 vLedgeStart = { vOrigin.x + flDx * 64.f, vOrigin.y + flDy * 64.f, vOrigin.z + 36.f };
+			const Vec3 vLedgeEnd = { vLedgeStart.x, vLedgeStart.y, vOrigin.z - 512.f };
+			bool bLedgeSolid = false;
+			const float flLedgeFrac = fTraceFacesRay(vLedgeStart, vLedgeEnd, bLedgeSolid);
+			if (bLedgeSolid)
+				aLedgeDepths[k] = -36.f;
+			else if (flLedgeFrac < 1.f)
+			{
+				const float flHitZ = vLedgeStart.z + (vLedgeEnd.z - vLedgeStart.z) * flLedgeFrac;
+				aLedgeDepths[k] = vOrigin.z - flHitZ;
+			}
+			else
+				aLedgeDepths[k] = 512.f;
+		}
+	}
+	bWallContact = flMinWall < 26.5f;
+}
+
 #ifdef WORLD_DEBUG
 void CWorld::DrawFace(const Face_t& tFace, int iFlags, std::optional<Color_t> tColor)
 {

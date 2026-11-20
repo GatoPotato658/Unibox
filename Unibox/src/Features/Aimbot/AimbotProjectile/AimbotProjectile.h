@@ -196,6 +196,10 @@ private:
 		Vec3 m_vPredicted;
 		Vec3 m_vProjectileEnd;
 		bool m_bHasProjectileEnd;
+		uint32_t m_uSteamId32;
+		int m_iStartTick;
+		bool m_bHasSpread;
+		bool m_bNeuralUsed;
 	};
 	std::deque<ShotDiagnostic_t> m_vShotDiagnostics;
 	void LogShot(const Target_t& tTarget, const CUserCmd* pCmd);

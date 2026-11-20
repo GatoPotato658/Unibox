@@ -1,9 +1,11 @@
 #pragma once
 #include "../../../SDK/SDK.h"
+#include "../NeuralPrediction/NeuralPrediction.h"
 #include <functional>
+#include <utility>
 
 Enum(Move, Ground, Air, Swim)
-Enum(MoveModel, None, Input, Stop, World, View, Sweep, Charge)
+Enum(MoveModel, None, Input, Stop, World, View, Sweep, Charge, Neural)
 
 using RunTickCallback = const std::function<void(CMoveData&)>;
 
@@ -104,6 +106,13 @@ struct MoveStorage
 
 	std::vector<Vec3> m_vPath = {};
 
+	NeuralHorizon_t m_tNeural = {};
+	bool m_bNeuralGround = false;
+	bool m_bNeuralAir = false;
+	int m_iNeuralStartTick = 0;
+	float m_flNeuralBaseYaw = 0.f;
+	int m_iNeuralStep = 0;
+
 	bool m_bFailed = false;
 	bool m_bInitFailed = false;
 	bool m_bCached = false;
@@ -123,6 +132,7 @@ private:
 		float m_flSimTime = 0.f;
 		float m_flPredictedSimTime = 0.f;
 		bool m_bPredictNetworked = true;
+		int m_iNeuralStep = 0;
 	};
 
 	struct MoveCacheEntry_t
@@ -165,6 +175,7 @@ public:
 
 	float GetPredictedDelta(CBaseEntity* pEntity);
 	float GetMaxSimulationTime(float flDesiredMaxTime) const { return flDesiredMaxTime; }
+	std::pair<float, float> GetUncertaintyAtTick(const MoveStorage& tMoveStorage, int iTick) const;
 };
 
 ADD_FEATURE(CMovementSimulation, MoveSim);

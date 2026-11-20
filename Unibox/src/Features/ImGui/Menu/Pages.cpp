@@ -302,6 +302,16 @@ static void AimbotWeapons()
 			{
 				FSlider(Vars::Aimbot::Projectile::GroundSamples);
 				FSlider(Vars::Aimbot::Projectile::AirSamples);
+				FDropdown(Vars::Aimbot::Projectile::NeuralPrediction);
+				PushTransparent(Vars::Aimbot::Projectile::NeuralPrediction.Value == Vars::Aimbot::Projectile::NeuralPredictionEnum::Off);
+				{
+					FDropdown(Vars::Aimbot::Projectile::NeuralBackend);
+					FToggle(Vars::Aimbot::Projectile::NeuralOnlineLearning);
+					FSlider(Vars::Aimbot::Projectile::NeuralMaxUncertainty);
+					FSlider(Vars::Aimbot::Projectile::NeuralOnlineLR);
+					FToggle(Vars::Aimbot::Projectile::NeuralSaveCheckpoints);
+				}
+				PopTransparent();
 
 				EndPopup();
 			}

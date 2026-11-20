@@ -10,6 +10,7 @@
 #include "../Features/Configs/Configs.h"
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
+#include "../Features/Simulation/NeuralPrediction/NeuralPrediction.h"
 #include "../Features/Visuals/Materials/Materials.h"
 #ifndef TEXTMODE
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
@@ -221,6 +222,7 @@ void CCore::Load()
 			F::Configs.LoadVisual(sVisualConfig, false);
 	}
 	F::TelemetryBlocker.Initialize();
+	F::NeuralPred.Initialize();
 	if (!F::Radio.Startup())
 		SDK::Output("Radio", "Failed to initialize audio output", WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG, ICON_MD_WARNING);
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
@@ -292,6 +294,7 @@ CCore::UnloadResult_t CCore::Unload()
 	U::BytePatches.Unload();
 	H::Events.Unload();
 	F::NavEngine.Shutdown();
+	F::NeuralPred.Shutdown();
 	U::ThreadPool.Shutdown();
 	F::TelemetryBlocker.Unload();
 

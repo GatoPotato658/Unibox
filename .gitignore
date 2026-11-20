@@ -382,3 +382,17 @@ Unibox/src/Features/Misc/ProfileStalker/ProfileStalker.h
 MenuUI.zip
 benchmarks/
 nul
+ml_pipeline/cpp_bench/
+ml_pipeline/.venv/
+ml_pipeline/data/
+ml_pipeline/target/
+ml_pipeline/demo_extractor/target/
+ml_pipeline/checkpoints/
+
+experimental/ml_pipeline/.venv/
+experimental/ml_pipeline/data/
+experimental/ml_pipeline/target/
+experimental/ml_pipeline/demo_extractor/target/
+experimental/ml_pipeline/checkpoints/
+experimental/ml_pipeline/cpp_bench/*.exe
+experimental/ml_pipeline/cpp_bench/*.obj

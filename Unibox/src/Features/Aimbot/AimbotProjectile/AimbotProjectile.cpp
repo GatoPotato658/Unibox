@@ -1987,6 +1987,19 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 		iSimTime = std::ceil(flTime / I::GlobalVars->interval_per_tick);
 	}
 
+	if (Vars::Aimbot::Projectile::HitChance.Value > 0.f && m_tInfo.m_pTarget && m_tInfo.m_pTarget->m_iTargetType == TargetEnum::Player
+		&& (m_tMoveStorage.m_bNeuralGround || m_tMoveStorage.m_bNeuralAir))
+	{
+		const int iHorizon = std::max(iOriginalSimTime + m_tInfo.m_iLaunchDelay + TIME_TO_TICKS(m_tInfo.m_flLatency), 1);
+		const auto [flSigmaXY, flSigmaZ] = F::MoveSim.GetUncertaintyAtTick(m_tMoveStorage, iHorizon);
+		const float flTargetR = (iType == PointTypeEnum::Direct)
+			? std::max(m_tInfo.m_pTarget->m_pEntity->GetSize().Length2D() * 0.5f, 24.f)
+			: std::max(m_tInfo.m_flRadius, 24.f);
+		const float flProb = 100.f * (1.f - expf(-0.5f * (flTargetR * flTargetR) / std::max(flSigmaXY * flSigmaXY, 1.f)));
+		if (flProb < Vars::Aimbot::Projectile::HitChance.Value)
+			return false;
+	}
+
 	if (!m_tInfo.m_pProjectile
 		? TestAngle(vPoint, vAngles, iSimTime, iType, iFlags, false, pCache)
 		: TestAngle(m_tInfo.m_pProjectile, m_tInfo.m_vLocalEye, vPoint, vAngles, iSimTime, iType, iFlags))
@@ -2788,7 +2801,7 @@ static inline void DrawVisuals(int iResult, Target_t& tTarget, std::vector<Vec3>
 
 void CAimbotProjectile::LogShot(const Target_t& tTarget, const CUserCmd* pCmd)
 {
-	if (!Vars::Debug::Logging.Value || G::Attacking != 1 || tTarget.m_iTargetType != TargetEnum::Player
+	if (G::Attacking != 1 || tTarget.m_iTargetType != TargetEnum::Player
 		|| m_tInfo.m_pTarget != &tTarget || m_iHitSimTime < 0 || m_tMoveStorage.m_vPath.empty())
 		return;
 
@@ -2803,42 +2816,72 @@ void CAimbotProjectile::LogShot(const Target_t& tTarget, const CUserCmd* pCmd)
 	const Vec3 vPredicted = bHasPathSample ? m_tMoveStorage.m_vPath[iHorizon] : m_vPredicted;
 	const bool bHasProjectileEnd = !m_vProjectilePath.empty();
 	const Vec3 vProjectileEnd = bHasProjectileEnd ? m_vProjectilePath.back() : Vec3{};
-	const auto& vStart = m_tMoveStorage.m_vPath.front();
-	const auto& vVelocity = pTarget->GetAbsVelocity();
-	const auto& vAngles = pCmd->viewangles;
-	const auto pNetChan = I::EngineClient->GetNetChannelInfo();
-	const auto& tAir = m_tMoveStorage.m_tAir;
-	const auto& tGround = m_tMoveStorage.m_tGround;
 
-	SDK::Output("Projectile prediction", std::format(
-		"shot cmd={} weapon={} item={} target={} server_tick={} target_tick={} expected_tick={} "
-		"hit_ticks={} launch_ticks={} latency_ticks={} account_ping={} out_ms={:.1f} packet_age_ms={:.1f} choke={} cmd_choke={} anticipated_choke={} throwing={} "
-		"ground={} air_model={} air_turn={:.2f} air_conf={:.2f} ground_model={} ground_turn={:.2f} ground_conf={:.2f} "
-		"start=({:.1f},{:.1f},{:.1f}) velocity=({:.1f},{:.1f},{:.1f}) predicted=({:.1f},{:.1f},{:.1f}) "
-		"aim=({:.1f},{:.1f},{:.1f}) angles=({:.2f},{:.2f}) projectile_end=({:.1f},{:.1f},{:.1f}) projectile_samples={} raw_sample={}",
-		pCmd->command_number, m_iWeaponID, m_tInfo.m_pWeapon->m_iItemDefinitionIndex(), pTarget->entindex(), iServerTick, iStartTick, iStartTick + iHorizon,
-		m_iHitSimTime, m_tInfo.m_iLaunchDelay, iLatencyTicks, bAccountPing,
-		pNetChan ? pNetChan->GetLatency(FLOW_OUTGOING) * 1000.f : 0.f, pNetChan ? pNetChan->GetTimeSinceLastReceived() * 1000.f : 0.f,
-		iChoke, I::ClientState->chokedcommands, F::Backtrack.GetAnticipatedChoke(), G::Throwing,
-		pTarget->IsOnGround(), tAir.m_iModel, tAir.m_flTurn, tAir.m_flConfidence, tGround.m_iModel, tGround.m_flTurn, tGround.m_flConfidence,
-		vStart.x, vStart.y, vStart.z, vVelocity.x, vVelocity.y, vVelocity.z, vPredicted.x, vPredicted.y, vPredicted.z,
-		tTarget.m_vPos.x, tTarget.m_vPos.y, tTarget.m_vPos.z, vAngles.x, vAngles.y,
-		vProjectileEnd.x, vProjectileEnd.y, vProjectileEnd.z, m_vProjectilePath.size(), bHasPathSample).c_str());
+	if (Vars::Debug::Logging.Value)
+	{
+		const auto& vStart = m_tMoveStorage.m_vPath.front();
+		const auto& vVelocity = pTarget->GetAbsVelocity();
+		const auto& vAngles = pCmd->viewangles;
+		const auto pNetChan = I::EngineClient->GetNetChannelInfo();
+		const auto& tAir = m_tMoveStorage.m_tAir;
+		const auto& tGround = m_tMoveStorage.m_tGround;
+
+		SDK::Output("Projectile prediction", std::format(
+			"shot cmd={} weapon={} item={} target={} server_tick={} target_tick={} expected_tick={} "
+			"hit_ticks={} launch_ticks={} latency_ticks={} account_ping={} out_ms={:.1f} packet_age_ms={:.1f} choke={} cmd_choke={} anticipated_choke={} throwing={} "
+			"ground={} air_model={} air_turn={:.2f} air_conf={:.2f} ground_model={} ground_turn={:.2f} ground_conf={:.2f} "
+			"start=({:.1f},{:.1f},{:.1f}) velocity=({:.1f},{:.1f},{:.1f}) predicted=({:.1f},{:.1f},{:.1f}) "
+			"aim=({:.1f},{:.1f},{:.1f}) angles=({:.2f},{:.2f}) projectile_end=({:.1f},{:.1f},{:.1f}) projectile_samples={} raw_sample={}",
+			pCmd->command_number, m_iWeaponID, m_tInfo.m_pWeapon->m_iItemDefinitionIndex(), pTarget->entindex(), iServerTick, iStartTick, iStartTick + iHorizon,
+			m_iHitSimTime, m_tInfo.m_iLaunchDelay, iLatencyTicks, bAccountPing,
+			pNetChan ? pNetChan->GetLatency(FLOW_OUTGOING) * 1000.f : 0.f, pNetChan ? pNetChan->GetTimeSinceLastReceived() * 1000.f : 0.f,
+			iChoke, I::ClientState->chokedcommands, F::Backtrack.GetAnticipatedChoke(), G::Throwing,
+			pTarget->IsOnGround(), tAir.m_iModel, tAir.m_flTurn, tAir.m_flConfidence, tGround.m_iModel, tGround.m_flTurn, tGround.m_flConfidence,
+			vStart.x, vStart.y, vStart.z, vVelocity.x, vVelocity.y, vVelocity.z, vPredicted.x, vPredicted.y, vPredicted.z,
+			tTarget.m_vPos.x, tTarget.m_vPos.y, tTarget.m_vPos.z, vAngles.x, vAngles.y,
+			vProjectileEnd.x, vProjectileEnd.y, vProjectileEnd.z, m_vProjectilePath.size(), bHasPathSample).c_str());
+	}
 
 	if (bHasPathSample && iHorizon > 0)
 	{
+		uint32_t uSteamId32 = 0;
+		player_info_t tPlayerInfo = {};
+		if (I::EngineClient && I::EngineClient->GetPlayerInfo(pTarget->entindex(), &tPlayerInfo))
+			uSteamId32 = tPlayerInfo.friendsID;
+
+		bool bHasSpread = false;
+		if (!Vars::Aimbot::General::NoSpread.Value && m_tInfo.m_pWeapon)
+		{
+			switch (m_iWeaponID)
+			{
+			case TF_WEAPON_SYRINGEGUN_MEDIC:
+			case TF_WEAPON_GRENADELAUNCHER:
+			case TF_WEAPON_PIPEBOMBLAUNCHER:
+			case TF_WEAPON_CANNON:
+				bHasSpread = true;
+				break;
+			case TF_WEAPON_ROCKETLAUNCHER:
+				if (m_tInfo.m_pWeapon->m_iItemDefinitionIndex() == Soldier_m_TheBeggarsBazooka)
+					bHasSpread = true;
+				break;
+			default:
+				if (m_tInfo.m_pWeapon->GetWeaponSpread() > 0.f)
+					bHasSpread = true;
+				break;
+			}
+		}
+
+		const bool bNeuralUsed = m_tMoveStorage.m_bNeuralGround || m_tMoveStorage.m_bNeuralAir;
 		if (m_vShotDiagnostics.size() >= 64)
 			m_vShotDiagnostics.pop_front();
 		m_vShotDiagnostics.push_back({ pTarget->GetRefEHandle(), pCmd->command_number, iStartTick + iHorizon,
-			iServerTick, std::max(iServerTick, iStartTick + iHorizon) + TIME_TO_TICKS(1.f), vPredicted, vProjectileEnd, bHasProjectileEnd });
+			iServerTick, std::max(iServerTick, iStartTick + iHorizon) + TIME_TO_TICKS(1.f), vPredicted, vProjectileEnd, bHasProjectileEnd,
+			uSteamId32, iStartTick, bHasSpread, bNeuralUsed });
 	}
 }
 
 void CAimbotProjectile::UpdateShotDiagnostics()
 {
-	if (!Vars::Debug::Logging.Value)
-		return ResetShotDiagnostics();
-
 	const int iServerTick = I::ClientState->m_ClockDriftMgr.m_nServerTick;
 	std::erase_if(m_vShotDiagnostics, [&](const ShotDiagnostic_t& tShot)
 	{
@@ -2848,12 +2891,36 @@ void CAimbotProjectile::UpdateShotDiagnostics()
 		auto pTarget = pEntity ? pEntity->As<CTFPlayer>() : nullptr;
 		if (!pTarget || iServerTick > tShot.m_iExpireTick)
 		{
-			SDK::Output("Projectile prediction", std::format("sample cmd={} expected_tick={} unavailable={} server_tick={}",
-				tShot.m_iCommand, tShot.m_iTargetTick, pTarget ? "timeout" : "target_gone", iServerTick).c_str());
+			if (Vars::Debug::Logging.Value)
+			{
+				SDK::Output("Projectile prediction", std::format("sample cmd={} expected_tick={} unavailable={} server_tick={}",
+					tShot.m_iCommand, tShot.m_iTargetTick, pTarget ? "timeout" : "target_gone", iServerTick).c_str());
+			}
 			return true;
 		}
 
 		const int iActualTick = TIME_TO_TICKS(pTarget->m_flSimulationTime());
+		if (!pTarget->IsAlive())
+		{
+			if (Vars::Debug::Logging.Value && iActualTick < tShot.m_iTargetTick)
+				return false;
+
+			ShotFeedback_t tFeedback = {};
+			tFeedback.m_iEntIndex = pTarget->entindex();
+			tFeedback.m_uSteamId32 = tShot.m_uSteamId32;
+			tFeedback.m_iStartTick = tShot.m_iStartTick;
+			tFeedback.m_iTargetTick = tShot.m_iTargetTick;
+			tFeedback.m_iLateTicks = iActualTick - tShot.m_iTargetTick;
+			tFeedback.m_vPredicted = tShot.m_vPredicted;
+			tFeedback.m_vActual = GetLastNetworkedOrigin(pTarget);
+			tFeedback.m_flHullGap = -1.f;
+			tFeedback.m_bTargetAlive = false;
+			tFeedback.m_bHasSpread = tShot.m_bHasSpread;
+			tFeedback.m_bNeuralUsed = tShot.m_bNeuralUsed;
+			F::NeuralPred.RecordShotFeedback(tFeedback);
+			return true;
+		}
+
 		if (pTarget->IsDormant() || iActualTick < tShot.m_iTargetTick)
 			return false;
 
@@ -2868,14 +2935,34 @@ void CAimbotProjectile::UpdateShotDiagnostics()
 		const Vec3 vEndOffset = tShot.m_vProjectileEnd - vActual;
 		const Vec3 vNearest = { std::clamp(vEndOffset.x, vMins.x, vMaxs.x), std::clamp(vEndOffset.y, vMins.y, vMaxs.y), std::clamp(vEndOffset.z, vMins.z, vMaxs.z) };
 		const float flHullGap = tShot.m_bHasProjectileEnd ? vEndOffset.DistTo(vNearest) : -1.f;
-		SDK::Output("Projectile prediction", std::format(
-			"sample cmd={} expected_tick={} actual_tick={} late_ticks={} server_tick={} ground={} alive={} choke={} "
-			"actual=({:.1f},{:.1f},{:.1f}) velocity=({:.1f},{:.1f},{:.1f}) error=({:+.1f},{:+.1f},{:+.1f}) "
-			"along={:+.1f} side={:+.1f} vertical={:+.1f} total={:.1f} estimated_along_ticks={:+.1f} predicted_end_hull_gap={:.1f}",
-			tShot.m_iCommand, tShot.m_iTargetTick, iActualTick, iActualTick - tShot.m_iTargetTick, iServerTick,
-			pTarget->IsOnGround(), pTarget->IsAlive(), H::Entities.GetChoke(pTarget->entindex()), vActual.x, vActual.y, vActual.z,
-			vVelocity.x, vVelocity.y, vVelocity.z, vError.x, vError.y, vError.z, flAlong, flSide, vError.z, vError.Length(),
-			flSpeed > 0.01f ? flAlong / (flSpeed * TICK_INTERVAL) : 0.f, flHullGap).c_str());
+		if (Vars::Debug::Logging.Value)
+		{
+			SDK::Output("Projectile prediction", std::format(
+				"sample cmd={} expected_tick={} actual_tick={} late_ticks={} server_tick={} ground={} alive={} choke={} "
+				"actual=({:.1f},{:.1f},{:.1f}) velocity=({:.1f},{:.1f},{:.1f}) error=({:+.1f},{:+.1f},{:+.1f}) "
+				"along={:+.1f} side={:+.1f} vertical={:+.1f} total={:.1f} estimated_along_ticks={:+.1f} predicted_end_hull_gap={:.1f}",
+				tShot.m_iCommand, tShot.m_iTargetTick, iActualTick, iActualTick - tShot.m_iTargetTick, iServerTick,
+				pTarget->IsOnGround(), pTarget->IsAlive(), H::Entities.GetChoke(pTarget->entindex()), vActual.x, vActual.y, vActual.z,
+				vVelocity.x, vVelocity.y, vVelocity.z, vError.x, vError.y, vError.z, flAlong, flSide, vError.z, vError.Length(),
+				flSpeed > 0.01f ? flAlong / (flSpeed * TICK_INTERVAL) : 0.f, flHullGap).c_str());
+		}
+
+		ShotFeedback_t tFeedback = {};
+		tFeedback.m_iEntIndex = pTarget->entindex();
+		tFeedback.m_uSteamId32 = tShot.m_uSteamId32;
+		tFeedback.m_iStartTick = tShot.m_iStartTick;
+		tFeedback.m_iTargetTick = tShot.m_iTargetTick;
+		tFeedback.m_iLateTicks = iActualTick - tShot.m_iTargetTick;
+		tFeedback.m_vPredicted = tShot.m_vPredicted;
+		tFeedback.m_vActual = vActual;
+		tFeedback.m_flHullGap = flHullGap;
+		tFeedback.m_bTargetAlive = pTarget->IsAlive();
+		tFeedback.m_bHasSpread = tShot.m_bHasSpread;
+		tFeedback.m_bOccluded = false;
+		tFeedback.m_bNeuralUsed = tShot.m_bNeuralUsed;
+		tFeedback.m_bHitEvent = flHullGap == 0.f;
+		tFeedback.m_flTargetEyeYaw = pTarget->m_angEyeAnglesY();
+		F::NeuralPred.RecordShotFeedback(tFeedback);
 		return true;
 	});
 }

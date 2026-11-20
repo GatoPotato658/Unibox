@@ -385,6 +385,16 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(StrafePrediction, VA_LIST("Predict", "Strafe prediction"), 0b11, DROPDOWN_MULTI, "Off",
 				VA_LIST("Air strafing", "Ground strafing"),
 				Air = 1 << 0, Ground = 1 << 1);
+			CVarEnum(NeuralPrediction, "Neural prediction", 0, NOSAVE | DEBUGVAR, nullptr,
+				VA_LIST("Off", "Auto fuse", "Prefer neural", "Neural only"),
+				Off, AutoFuse, PreferNeural, NeuralOnly);
+			CVarEnum(NeuralBackend, "Neural backend", 0, NOSAVE | DEBUGVAR, nullptr,
+				VA_LIST("Auto", "CUDA", "DirectML", "CPU AVX2", "CPU SSE2"),
+				Auto, Cuda, DirectML, CpuAvx2, CpuSse2);
+			CVar(NeuralOnlineLearning, "Neural online learning", false, NOSAVE | DEBUGVAR);
+			CVar(NeuralMaxUncertainty, "Neural max uncertainty", 42.f, NOSAVE | DEBUGVAR | SLIDER_CLAMP | SLIDER_PRECISION, 8.f, 128.f, 4.f, "%ghu");
+			CVar(NeuralOnlineLR, "Neural online LR", 0.0003f, NOSAVE | DEBUGVAR | SLIDER_CLAMP | SLIDER_PRECISION, 0.00001f, 0.003f, 0.00005f, "%.5f");
+			CVar(NeuralSaveCheckpoints, "Neural save checkpoints", false, NOSAVE | DEBUGVAR);
 			CVarEnum(Hitboxes, VA_LIST("Hitboxes", "Projectile hitboxes"), 0b001111, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Auto", "##Divider", "Head", "Body", "Feet", "##Divider", "Bodyaim if lethal", "Prioritize feet"),
 				Auto = 1 << 0, Head = 1 << 1, Body = 1 << 2, Feet = 1 << 3, BodyaimIfLethal = 1 << 4, PrioritizeFeet = 1 << 5);

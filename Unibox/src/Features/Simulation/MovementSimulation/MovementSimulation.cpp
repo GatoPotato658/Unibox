@@ -471,6 +471,20 @@ static void GetWish(const MoveStorage& tMoveStorage, bool bGround, Vec3& vWish, 
 		vWish = YawDirection(tMoveStorage.m_flViewYaw);
 		flWishSpeed = tPhysics.m_flChargeSpeed * flCrop;
 		return;
+	case MoveModelEnum::Neural:
+	{
+		const auto tKnot = tMoveStorage.m_tNeural.SampleAtTick(tMoveStorage.m_iNeuralStep + 1);
+		Vec3 vForward, vRight;
+		Math::AngleVectors({ 0.f, tMoveStorage.m_flViewYaw, 0.f }, &vForward, &vRight);
+		const Vec3 vWishVel = vForward * tKnot.m_flWishFwd + vRight * tKnot.m_flWishSide;
+		const float flMag = vWishVel.Length2D();
+		if (flMag <= 1e-5f)
+			return;
+		vWish = { vWishVel.x / flMag, vWishVel.y / flMag, 0.f };
+		const float flNeuralCrop = (bGround && (tMoveStorage.m_bDucked || tKnot.m_flDuckProb >= 0.5f)) ? DuckSpeedCrop : 1.f;
+		flWishSpeed = std::min(flMag, 1.f) * flCap * flNeuralCrop;
+		return;
+	}
 	}
 }
 
@@ -1307,6 +1321,7 @@ void CMovementSimulation::Store()
 		{
 			vRecords.clear();
 			m_mFits.erase(iIndex);
+			F::NeuralPred.ResetPlayer(iIndex);
 			continue;
 		}
 
@@ -1324,6 +1339,30 @@ void CMovementSimulation::Store()
 		tRecord.m_flMaxSpeed = SDK::MaxSpeed(pPlayer);
 		tRecord.m_bDucked = pPlayer->IsDucking();
 		StoreRecord(pPlayer, vRecords, tRecord);
+
+		const auto& tNewest = vRecords.front();
+		NeuralBaseline_t tBaseline = {};
+		if (auto itFit = m_mFits.find(iIndex); itFit != m_mFits.end())
+		{
+			const auto& tFit = itFit->second;
+			tBaseline.m_iGroundModel = tFit.m_tGround.m_iModel;
+			tBaseline.m_flGroundYaw = tFit.m_tGround.m_flYaw;
+			tBaseline.m_flGroundScale = tFit.m_tGround.m_flScale;
+			tBaseline.m_flGroundTurn = tFit.m_tGround.m_flTurn;
+			tBaseline.m_iAirModel = tFit.m_tAir.m_iModel;
+			tBaseline.m_flAirYaw = tFit.m_tAir.m_flYaw;
+			tBaseline.m_flAirScale = tFit.m_tAir.m_flScale;
+			tBaseline.m_flAirTurn = tFit.m_tAir.m_flTurn;
+			tBaseline.m_iHopTicks = tFit.m_iHopTicks;
+			tBaseline.m_iGroundTicks = tFit.m_iGroundTicks;
+		}
+		else if (tNewest.m_iMode == MoveEnum::Ground && tNewest.m_vVelocity.Length2D() > 1.f)
+		{
+			tBaseline.m_iGroundModel = MoveModelEnum::World;
+			tBaseline.m_flGroundYaw = Heading(tNewest.m_vVelocity);
+			tBaseline.m_flGroundScale = 1.f;
+		}
+		F::NeuralPred.OnPlayerUpdate(pPlayer, tNewest.m_vOrigin, tNewest.m_vVelocity, flSimTime, tNewest.m_flEyeYaw, tNewest.m_flMaxSpeed, tNewest.m_bDucked, tBaseline);
 	}
 
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerAll))
@@ -1565,7 +1604,56 @@ void CMovementSimulation::SetupController(MoveStorage& tMoveStorage, bool bStraf
 	}
 
 	if (pPlayer->InCond(TF_COND_STUNNED) && (pPlayer->m_iStunFlags() & TF_STUN_CONTROLS || pPlayer->m_iStunFlags() & TF_STUN_MOVEMENT && pPlayer->m_iMovementStunAmount() == 255))
+	{
 		tMoveStorage.m_tGround = { MoveModelEnum::Stop }, tMoveStorage.m_tAir = { MoveModelEnum::None };
+		tMoveStorage.m_bNeuralGround = false;
+		tMoveStorage.m_bNeuralAir = false;
+		return;
+	}
+
+	tMoveStorage.m_bNeuralGround = false;
+	tMoveStorage.m_bNeuralAir = false;
+	tMoveStorage.m_iNeuralStep = 0;
+	tMoveStorage.m_iNeuralStartTick = 0;
+	tMoveStorage.m_flNeuralBaseYaw = tMoveStorage.m_flViewYaw;
+	tMoveStorage.m_tNeural = {};
+
+	const int iNeuralMode = Vars::Aimbot::Projectile::NeuralPrediction.Value;
+	if ((bGround || bAir) && iNeuralMode != Vars::Aimbot::Projectile::NeuralPredictionEnum::Off)
+	{
+		uint32_t uSteamId32 = 0;
+		player_info_t tPlayerInfo = {};
+		if (I::EngineClient && I::EngineClient->GetPlayerInfo(pPlayer->entindex(), &tPlayerInfo))
+			uSteamId32 = tPlayerInfo.friendsID;
+
+		if (F::NeuralPred.GetPrediction(pPlayer->entindex(), uSteamId32, tMoveStorage.m_tNeural))
+		{
+			const float flMidSigma = tMoveStorage.m_tNeural.m_aKnots[6].m_flSigmaXY;
+			const float flMaxUnc = std::max(Vars::Aimbot::Projectile::NeuralMaxUncertainty.Value, 1.f);
+			bool bPassGate = false;
+			if (iNeuralMode == Vars::Aimbot::Projectile::NeuralPredictionEnum::NeuralOnly)
+				bPassGate = true;
+			else if (iNeuralMode == Vars::Aimbot::Projectile::NeuralPredictionEnum::PreferNeural)
+				bPassGate = !F::NeuralPred.ShouldFallback() && flMidSigma <= flMaxUnc * 1.5f;
+			else
+				bPassGate = !F::NeuralPred.ShouldFallback() && flMidSigma <= flMaxUnc;
+
+			if (bPassGate)
+			{
+				const float flConf = std::clamp(1.f - (flMidSigma / flMaxUnc) * 0.5f, 0.1f, 1.f);
+				if (bGround)
+				{
+					tMoveStorage.m_bNeuralGround = true;
+					tMoveStorage.m_tGround = { MoveModelEnum::Neural, 0.f, 1.f, 0.f, flConf };
+				}
+				if (bAir)
+				{
+					tMoveStorage.m_bNeuralAir = true;
+					tMoveStorage.m_tAir = { MoveModelEnum::Neural, 0.f, 1.f, 0.f, flConf };
+				}
+			}
+		}
+	}
 }
 
 bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveStorage, bool bHitchance, bool bStrafe, bool bPredict, const Vec3* pvOrigin)
@@ -1657,10 +1745,13 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 	if (!tMoveStorage.m_bLocal && bStrafe)
 	{
 		const auto& tController = tMoveStorage.m_bOnGround ? tMoveStorage.m_tGround : tMoveStorage.m_tAir;
-		if (auto it = m_mFits.find(iEntIndex); it != m_mFits.end())
+		if (tController.m_iModel != MoveModelEnum::Neural)
 		{
-			const auto& tFit = it->second;
-			bFitted = tMoveStorage.m_bOnGround ? tFit.m_tGround.m_iModel != MoveModelEnum::None && tFit.m_bGroundCurrent : tFit.m_tAir.m_iModel != MoveModelEnum::None && tFit.m_bAirCurrent;
+			if (auto it = m_mFits.find(iEntIndex); it != m_mFits.end())
+			{
+				const auto& tFit = it->second;
+				bFitted = tMoveStorage.m_bOnGround ? tFit.m_tGround.m_iModel != MoveModelEnum::None && tFit.m_bGroundCurrent : tFit.m_tAir.m_iModel != MoveModelEnum::None && tFit.m_bAirCurrent;
+			}
 		}
 		flConfidence = tController.m_flConfidence;
 	}
@@ -1736,9 +1827,24 @@ void CMovementSimulation::StepTick(MoveStorage& tMoveStorage, bool bPath, RunTic
 			tMoveStorage.m_tAir = { MoveModelEnum::None };
 	}
 
-	if (tMoveStorage.m_bOnGround && tMoveStorage.m_iWaterLevel <= 1 && !tMoveStorage.m_bDucked && tMoveStorage.m_iHopTicks >= 0)
+	const bool bNeuralStep = !tMoveStorage.m_bLocal && (tMoveStorage.m_bOnGround ? tMoveStorage.m_bNeuralGround : tMoveStorage.m_bNeuralAir) && tMoveStorage.m_tNeural.m_bValid;
+	const NeuralKnot_t tNeuralKnot = bNeuralStep ? tMoveStorage.m_tNeural.SampleAtTick(tMoveStorage.m_iNeuralStep + 1) : NeuralKnot_t{};
+
+	if (tMoveStorage.m_bOnGround && tMoveStorage.m_iWaterLevel <= 1 && !tMoveStorage.m_bDucked)
 	{
-		if (tMoveStorage.m_iGroundTicks >= tMoveStorage.m_iHopTicks)
+		bool bDoJump = false;
+		if (tMoveStorage.m_iHopTicks >= 0)
+		{
+			if (tMoveStorage.m_iGroundTicks >= tMoveStorage.m_iHopTicks)
+				bDoJump = true;
+			else
+				tMoveStorage.m_iGroundTicks++;
+		}
+		else if (bNeuralStep && tNeuralKnot.m_flJumpProb >= 0.55f)
+		{
+			bDoJump = true;
+		}
+		if (bDoJump)
 		{
 			vVelocity.z -= flHalfGravity;
 			const float flMax = tMoveData.m_flMaxSpeed * 1.2f, flSpeed = vVelocity.Length();
@@ -1749,8 +1855,6 @@ void CMovementSimulation::StepTick(MoveStorage& tMoveStorage, bool bPath, RunTic
 			tMoveStorage.m_iGroundTicks = 0;
 			tMoveStorage.m_flSweepKept = 1.f;
 		}
-		else
-			tMoveStorage.m_iGroundTicks++;
 	}
 
 	const bool bSwimming = tMoveStorage.m_iWaterLevel > 1;
@@ -1806,13 +1910,21 @@ void CMovementSimulation::StepTick(MoveStorage& tMoveStorage, bool bPath, RunTic
 
 	if (!tMoveStorage.m_bLocal)
 	{
-		auto& tController = tMoveStorage.m_bOnGround ? tMoveStorage.m_tGround : tMoveStorage.m_tAir;
-		tMoveStorage.m_flViewYaw += tController.m_flTurn;
-		tMoveStorage.m_tGround.m_flTurn *= EyeTurnFade, tMoveStorage.m_tAir.m_flTurn *= EyeTurnFade;
-		if (!tMoveStorage.m_bOnGround)
-			tMoveStorage.m_flSweepKept *= SweepFade;
+		if (bNeuralStep)
+		{
+			tMoveStorage.m_flViewYaw += tNeuralKnot.m_flTurnRateDeg;
+		}
+		else
+		{
+			auto& tController = tMoveStorage.m_bOnGround ? tMoveStorage.m_tGround : tMoveStorage.m_tAir;
+			tMoveStorage.m_flViewYaw += tController.m_flTurn;
+			tMoveStorage.m_tGround.m_flTurn *= EyeTurnFade, tMoveStorage.m_tAir.m_flTurn *= EyeTurnFade;
+			if (!tMoveStorage.m_bOnGround)
+				tMoveStorage.m_flSweepKept *= SweepFade;
+		}
 		tMoveData.m_vecViewAngles.y = tMoveStorage.m_flViewYaw;
 	}
+	tMoveStorage.m_iNeuralStep++;
 
 	if (pCallback)
 		(*pCallback)(tMoveData);
@@ -1850,6 +1962,7 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 			tMoveStorage.m_flSimTime = tStep.m_flSimTime;
 			tMoveStorage.m_flPredictedSimTime = tStep.m_flPredictedSimTime;
 			tMoveStorage.m_bPredictNetworked = tStep.m_bPredictNetworked;
+			tMoveStorage.m_iNeuralStep = tStep.m_iNeuralStep;
 			if (bPath)
 				tMoveStorage.m_vPath.push_back(tStep.m_vAbsOrigin);
 			return;
@@ -1863,7 +1976,8 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 			tEntry.m_tFrontier.m_bOnGround,
 			tEntry.m_tFrontier.m_flSimTime,
 			tEntry.m_tFrontier.m_flPredictedSimTime,
-			tEntry.m_tFrontier.m_bPredictNetworked
+			tEntry.m_tFrontier.m_bPredictNetworked,
+			tEntry.m_tFrontier.m_iNeuralStep
 		};
 		tEntry.m_vSteps.push_back(tStep);
 		tMoveStorage.m_iCacheStep++;
@@ -1874,6 +1988,7 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 		tMoveStorage.m_flSimTime = tStep.m_flSimTime;
 		tMoveStorage.m_flPredictedSimTime = tStep.m_flPredictedSimTime;
 		tMoveStorage.m_bPredictNetworked = tStep.m_bPredictNetworked;
+		tMoveStorage.m_iNeuralStep = tStep.m_iNeuralStep;
 		if (bPath)
 			tMoveStorage.m_vPath.push_back(tStep.m_vAbsOrigin);
 		return;
@@ -1899,4 +2014,17 @@ float CMovementSimulation::GetPredictedDelta(CBaseEntity* pEntity)
 		}
 	}
 	return TICK_INTERVAL;
+}
+
+std::pair<float, float> CMovementSimulation::GetUncertaintyAtTick(const MoveStorage& tMoveStorage, int iTick) const
+{
+	if ((tMoveStorage.m_bNeuralGround || tMoveStorage.m_bNeuralAir) && tMoveStorage.m_tNeural.m_bValid)
+	{
+		const auto tKnot = tMoveStorage.m_tNeural.SampleAtTick(std::max(iTick, 1));
+		return { tKnot.m_flSigmaXY, tKnot.m_flSigmaZ };
+	}
+	const auto& tController = tMoveStorage.m_bOnGround ? tMoveStorage.m_tGround : tMoveStorage.m_tAir;
+	const float flConf = std::clamp(tController.m_flConfidence, 0.05f, 1.f);
+	const float flScale = (1.f - flConf) * 48.f + float(std::max(iTick, 1)) * 0.6f;
+	return { flScale, flScale * 0.5f };
 }
