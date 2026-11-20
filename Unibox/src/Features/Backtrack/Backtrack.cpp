@@ -396,7 +396,7 @@ void CBacktrack::SyncLatency(CNetChannel* pNetChan)
 
 float CBacktrack::GetFakeTarget(CNetChannel* pNetChan)
 {
-	if (!Vars::Backtrack::Latency.Value || I::EngineClient->IsPlayingDemo())
+	if (!Vars::Backtrack::Latency.Value || I::EngineClient->IsPlayingDemo() || pNetChan->IsLoopback())
 		return 0.f;
 
 	if (I::ClientState->m_nSignonState != SIGNONSTATE_FULL)
@@ -424,17 +424,36 @@ const PacketRecord_t* CBacktrack::ChoosePacket(double dNow, float flTarget)
 
 	const int nNewest = m_tLatency.m_dPackets.front().m_nSequenceNr;
 	const PacketRecord_t* pChosen = nullptr;
+	const PacketRecord_t* pUnder = nullptr;
+	std::array<int, MAX_SUBCHANNELS> aFlips = {};
 	for (auto& tRecord : m_tLatency.m_dPackets)
 	{
 		if (nNewest - tRecord.m_nSequenceNr > LATENCY_RING_ROOM || tRecord.m_nSequenceNr < m_tLatency.m_nPresentedSequenceNr)
 			break;
 
-		pChosen = &tRecord;
-		if (dNow - tRecord.m_dTime >= flTarget)
+		bool bSafe = true;
+		for (int iFlips : aFlips)
+		{
+			if (iFlips > 0 && !(iFlips & 1))
+			{
+				bSafe = false;
+				break;
+			}
+		}
+
+		if (bSafe && dNow - tRecord.m_dTime >= flTarget)
+		{
+			pChosen = &tRecord;
 			break;
+		}
+		if (bSafe)
+			pUnder = &tRecord;
+
+		if (tRecord.m_iFlip >= 0)
+			aFlips[tRecord.m_iFlip]++;
 	}
 
-	return pChosen;
+	return pChosen ? pChosen : pUnder;
 }
 
 void CBacktrack::PushLatencySample(double dDelay)
@@ -453,6 +472,7 @@ void CBacktrack::PushLatencySample(double dDelay)
 void CBacktrack::AdjustPing(CNetChannel* pNetChan)
 {
 	m_tLatency.m_nRealInSequenceNr = pNetChan->m_nInSequenceNr;
+	m_tLatency.m_nRealInReliableState = pNetChan->m_nInReliableState;
 	m_tLatency.m_bFaked = false;
 
 	SyncLatency(pNetChan);
@@ -475,13 +495,17 @@ void CBacktrack::AdjustPing(CNetChannel* pNetChan)
 	PushLatencySample(dNow - pRecord->m_dTime);
 
 	pNetChan->m_nInSequenceNr = pRecord->m_nSequenceNr;
+	pNetChan->m_nInReliableState = pRecord->m_nReliableState;
 	m_tLatency.m_bFaked = true;
 }
 
 void CBacktrack::RestorePing(CNetChannel* pNetChan, bool bSent)
 {
 	if (m_tLatency.m_bFaked)
+	{
 		pNetChan->m_nInSequenceNr = m_tLatency.m_nRealInSequenceNr;
+		pNetChan->m_nInReliableState = m_tLatency.m_nRealInReliableState;
+	}
 
 	if (!bSent)
 		return;
@@ -526,10 +550,23 @@ void CBacktrack::PacketEnd(CNetChannel* pNetChan, double dReceived)
 
 	auto& dPackets = m_tLatency.m_dPackets;
 	const int nSequenceNr = pNetChan->m_nInSequenceNr;
+	if (!dPackets.empty() && dPackets.front().m_nSequenceNr > nSequenceNr)
+	{
+		dPackets.clear();
+		m_tLatency.m_nPresentedSequenceNr = -1;
+	}
 	if (!dPackets.empty() && dPackets.front().m_nSequenceNr >= nSequenceNr)
 		return;
 
-	dPackets.push_front({ nSequenceNr, dReceived });
+	int iFlip = -1;
+	const int iDiff = m_tLatency.m_nReliableBefore ^ pNetChan->m_nInReliableState;
+	for (int i = 0; i < MAX_SUBCHANNELS; i++)
+	{
+		if (iDiff & (1 << i))
+			iFlip = i;
+	}
+
+	dPackets.push_front({ nSequenceNr, pNetChan->m_nInReliableState, iFlip, dReceived });
 	if (dPackets.size() > 128)
 		dPackets.pop_back();
 }

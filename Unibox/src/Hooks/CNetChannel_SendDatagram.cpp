@@ -9,7 +9,7 @@ MAKE_HOOK(CNetChannel_SendDatagram, S::CNetChannel_SendDatagram(), int,
 {
 	DEBUG_RETURN(CNetChannel_SendDatagram, pNetChan, datagram);
 
-	if (datagram || G::Unload)
+	if (datagram || G::Unload || pNetChan != I::ClientState->m_NetChannel)
 		return CALL_ORIGINAL(pNetChan, datagram);
 
 	F::Backtrack.AdjustPing(pNetChan);

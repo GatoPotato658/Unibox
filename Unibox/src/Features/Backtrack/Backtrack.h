@@ -6,6 +6,8 @@
 struct PacketRecord_t
 {
 	int m_nSequenceNr = -1;
+	int m_nReliableState = 0;
+	int m_iFlip = -1;
 	double m_dTime = 0.0;
 };
 
@@ -47,6 +49,7 @@ struct FakeLatency_t
 	std::deque<double> m_dSamples = {};
 	int m_nPresentedSequenceNr = -1;
 	int m_nRealInSequenceNr = 0;
+	int m_nRealInReliableState = 0;
 	bool m_bFaked = false;
 	double m_dLastFaked = -1.0;
 	int m_nSendingSequenceNr = -1;
