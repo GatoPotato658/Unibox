@@ -46,6 +46,7 @@ void CAntiCheatCompatibility::EnforceSettings()
 	Vars::Doubletap::Warp.Value = false;
 	Vars::Doubletap::RechargeTicks.Value = false;
 	Vars::Doubletap::PassiveRecharge.Value = 0;
+	Vars::AutoPeek::Warp.Value = false;
 	Vars::Fakelag::Fakelag.Value = Vars::Fakelag::FakelagEnum::Off;
 	Vars::Misc::Automation::KartControl.Value = false;
 

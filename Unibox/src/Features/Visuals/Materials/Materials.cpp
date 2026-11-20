@@ -11,6 +11,32 @@
 #include <filesystem>
 #include <fstream>
 
+namespace
+{
+	class CMaterialSystemLock
+	{
+	public:
+		CMaterialSystemLock()
+			: m_iThreadMode(I::MaterialSystem->GetThreadMode()),
+			m_bAllowThreading(I::MaterialSystem->AllowThreading(false, -1)),
+			m_hLock(I::MaterialSystem->Lock())
+		{
+		}
+
+		~CMaterialSystemLock()
+		{
+			I::MaterialSystem->Unlock(m_hLock);
+			I::MaterialSystem->AllowThreading(m_bAllowThreading, -1);
+			I::MaterialSystem->SetThreadMode(m_iThreadMode);
+		}
+
+	private:
+		MaterialThreadMode_t m_iThreadMode;
+		bool m_bAllowThreading;
+		MaterialLock_t m_hLock;
+	};
+}
+
 static std::filesystem::path GetMaterialFilePath(const char* sName)
 {
 	if (!sName || !*sName)
@@ -102,7 +128,10 @@ void CMaterials::ServicePendingOperation()
 {
 	const PendingOperation operation = m_ePendingOperation.exchange(PendingOperation::None);
 	if (operation == PendingOperation::None)
+	{
+		ApplyMaterialEdits();
 		return;
+	}
 
 	const char* sName = "Materials.None";
 	switch (operation)
@@ -134,6 +163,8 @@ void CMaterials::ServicePendingOperation()
 		break;
 	}
 	m_bLoading = false;
+	if (operation != PendingOperation::Unload)
+		ApplyMaterialEdits();
 }
 
 IMaterial* CMaterials::create_from_vmt(const char* name, const std::string& vmt)
@@ -432,9 +463,7 @@ void CMaterials::LoadMaterials()
 void CMaterials::UnloadMaterials()
 {
 	m_bLoaded = false;
-	const auto iThreadMode = I::MaterialSystem->GetThreadMode();
-	const bool bAllowThreading = I::MaterialSystem->AllowThreading(false, -1);
-	const auto hLock = I::MaterialSystem->Lock();
+	const CMaterialSystemLock tLock;
 
 	F::D3DMaterials.Unload();
 	F::Glow.Unload();
@@ -444,9 +473,6 @@ void CMaterials::UnloadMaterials()
 		Remove(tMaterial.m_pMaterial);
 	m_mMaterials.clear();
 	m_mMatList.clear();
-	I::MaterialSystem->Unlock(hLock);
-	I::MaterialSystem->AllowThreading(bAllowThreading, -1);
-	I::MaterialSystem->SetThreadMode(iThreadMode);
 }
 
 void CMaterials::RefreshMaterials()
@@ -548,15 +574,40 @@ void CMaterials::AddMaterial(const char* sName)
 
 void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 {
+	if (!sName || !sVMT)
+		return;
+
+	std::scoped_lock tLock(m_tMaterialEditsMutex);
+	m_vMaterialEdits.emplace_back(sName, sVMT);
+}
+
+void CMaterials::ApplyMaterialEdits()
+{
+	if (G::Unload || !m_bLoaded)
+		return;
+
+	decltype(m_vMaterialEdits) vEdits;
+	{
+		std::scoped_lock tLock(m_tMaterialEditsMutex);
+		vEdits.swap(m_vMaterialEdits);
+	}
+	if (vEdits.empty())
+		return;
+
+	const CMaterialSystemLock tLock;
+	for (const auto& [sName, sVMT] : vEdits)
+		ApplyMaterialEdit(sName.c_str(), sVMT.c_str());
+}
+
+void CMaterials::ApplyMaterialEdit(const char* sName, const char* sVMT)
+{
 	const std::filesystem::path tPath = GetMaterialFilePath(sName);
-	if (tPath.empty() || !sVMT)
+	if (tPath.empty())
 		return;
 
 	std::error_code tError;
 	if (!std::filesystem::exists(tPath, tError) || tError)
 		return;
-
-	m_bLoaded = false;
 
 	auto uHash = FNV1A::Hash32(sName);
 	if (m_mMaterials.contains(uHash) && !m_mMaterials[uHash].m_bLocked)
@@ -566,10 +617,7 @@ void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 		const std::string material_vmt = modify_vmt(sVMT);
 		IMaterial* pNewMaterial = create_from_vmt(sName, material_vmt);
 		if (!pNewMaterial)
-		{
-			m_bLoaded = true;
 			return;
-		}
 
 		Remove(tMaterial.m_pMaterial);
 		tMaterial.m_pMaterial = pNewMaterial;
@@ -578,21 +626,14 @@ void CMaterials::EditMaterial(const char* sName, const char* sVMT)
 
 		std::ofstream outStream(tPath);
 		if (!outStream)
-		{
-			m_bLoaded = true;
 			return;
-		}
 		outStream << sVMT;
 		if (!outStream)
 		{
 			std::error_code tRemoveError;
 			std::filesystem::remove(tPath, tRemoveError);
-			m_bLoaded = true;
-			return;
 		}
 	}
-
-	m_bLoaded = true;
 }
 
 void CMaterials::RemoveMaterial(const char* sName)

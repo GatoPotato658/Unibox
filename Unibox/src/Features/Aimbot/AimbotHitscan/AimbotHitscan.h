@@ -17,9 +17,8 @@ private:
 	std::vector<HitscanHitbox_t> GetHitboxes(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget);
 	int GetHitboxPriority(int nHitbox, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget);
 	void GetHitboxInfo(HitscanHitbox_t& tHitbox, CBaseEntity* pTarget, matrix3x4* aBones = nullptr, const matrix3x4** pTransform = nullptr, Vec3* pMins = nullptr, Vec3* pMaxs = nullptr);
-	void GetHullInfo(CBaseEntity* pTarget, TickRecord* pRecord = nullptr, const matrix3x4** pTransform = nullptr, Vec3* pMins = nullptr, Vec3* pMaxs = nullptr, float* pModelScale = nullptr);
-	std::vector<Vec3> GetHitboxPoints(CBaseEntity* pTarget, CTFWeaponBase* pWeapon, const Vec3& vMins, const Vec3& vMaxs, int nHitbox = 0);
-	int CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
+	float GetMultipointScale(CBaseEntity* pTarget, CTFWeaponBase* pWeapon, int nHitbox);
+	int CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd);
 
 	bool Aim(const Vec3& vCurAngle, Vec3 vToAngle, Vec3& vOut, int iMethod = Vars::Aimbot::General::AimType.Value);
 	void Aim(CUserCmd* pCmd, Vec3& vAngles, int iMethod = Vars::Aimbot::General::AimType.Value);
@@ -30,8 +29,8 @@ private:
 	matrix3x4 m_mMatrix = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } };
 	matrix3x4 m_mHullMatrix = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } };
 
-	std::deque<TickRecord> m_vForwardRecords = {};
-	void BuildForwardRecords(CTFPlayer* pTarget, TickRecord* pBaseRecord, std::vector<TickRecord*>& vRecords);
+	std::optional<TickRecord> m_tForwardRecord = {};
+	TickRecord* BuildForwardRecord(CTFPlayer* pTarget, const TickRecord* pBaseRecord, const CUserCmd* pCmd);
 
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);

@@ -132,7 +132,9 @@ public:
 
 	bool GetRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn);
 	std::vector<TickRecord*> GetValidRecords(std::vector<TickRecord*>& vRecords, CTFPlayer* pLocal = nullptr, bool bDistance = false, float flTimeMod = 0.f);
+	TickRecord* GetFirstValidRecord(CBaseEntity* pEntity);
 	matrix3x4* GetBones(CBaseEntity* pEntity);
+	matrix3x4* GetBones(CBaseEntity* pEntity, float flOldCurrentTime, float flLerp);
 
 	float GetReal(int iFlow = MAX_FLOWS, bool bNoFake = true);
 	float GetWishFake();

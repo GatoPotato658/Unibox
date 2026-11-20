@@ -525,6 +525,7 @@
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
     <ClCompile Include="src\Features\Misc\Radio\Radio.cpp" />
     <ClCompile Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.cpp" />
+    <ClCompile Include="src\Features\Misc\AutoTranslate\AutoTranslate.cpp" />
     <ClCompile Include="src\Features\NetworkFix\NetworkFix.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpread.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpreadHitscan\NoSpreadHitscan.cpp" />
@@ -789,6 +790,7 @@
     <ClInclude Include="src\Features\Misc\Misc.h" />
     <ClInclude Include="src\Features\Misc\Radio\Radio.h" />
     <ClInclude Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.h" />
+    <ClInclude Include="src\Features\Misc\AutoTranslate\AutoTranslate.h" />
     <ClInclude Include="src\Features\NetworkFix\NetworkFix.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpread.h" />
     <ClInclude Include="src\Features\NoSpread\SpreadMath.h" />

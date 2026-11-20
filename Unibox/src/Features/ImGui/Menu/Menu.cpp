@@ -320,8 +320,6 @@ void CMenu::MenuESP()
 			EndPopup();
 		}
 
-		FToggle("Radar", &tGroup.m_bRadar);
-
 		FToggle("Pickup timer", &tGroup.m_bPickupTimer);
 
 		FToggle("Backtrack", &tGroup.m_iBacktrack, BacktrackEnum::Enabled);
@@ -410,6 +408,10 @@ void CMenu::MenuESP()
 				auto& tPos = tGroup.m_tESP.Positions;
 				const std::vector<const char*> vTextPositions = { "Top", "Right", "Bottom", "Left", "Bottom right", "Bottom left" };
 				const std::vector<int> vTextValues = { int(EESPPosition::Top), int(EESPPosition::Right), int(EESPPosition::Bottom), int(EESPPosition::Left), int(EESPPosition::BottomRight), int(EESPPosition::BottomLeft) };
+				const std::vector<const char*> vHealthTextPositions = { "On health bar", "Top", "Right", "Bottom", "Left", "Bottom right", "Bottom left" };
+				const std::vector<int> vHealthTextValues = { int(EESPPosition::OnBar), int(EESPPosition::Top), int(EESPPosition::Right), int(EESPPosition::Bottom), int(EESPPosition::Left), int(EESPPosition::BottomRight), int(EESPPosition::BottomLeft) };
+				const std::vector<const char*> vUberTextPositions = { "On uber bar", "Top", "Right", "Bottom", "Left", "Bottom right", "Bottom left" };
+				const std::vector<int> vUberTextValues = { int(EESPPosition::OnBar), int(EESPPosition::Top), int(EESPPosition::Right), int(EESPPosition::Bottom), int(EESPPosition::Left), int(EESPPosition::BottomRight), int(EESPPosition::BottomLeft) };
 				const std::vector<const char*> vBarPositions = { "Left", "Right", "Top", "Bottom" };
 				const std::vector<int> vBarValues = { int(EESPPosition::Left), int(EESPPosition::Right), int(EESPPosition::Top), int(EESPPosition::Bottom) };
 				const std::vector<const char*> vIconPositions = { "Top", "Bottom" };
@@ -432,10 +434,10 @@ void CMenu::MenuESP()
 					fPosition("Name", &tPos.Name, ESPEnum::Name, vTextPositions, vTextValues);
 					fPosition("Distance", &tPos.Distance, ESPEnum::Distance, vTextPositions, vTextValues);
 					if (tGroup.m_iTargets & (TargetsEnum::Players | TargetsEnum::Buildings))
-						fPosition("Health text", &tPos.HealthText, ESPEnum::HealthText, vTextPositions, vTextValues);
+						fPosition("Health text", &tPos.HealthText, ESPEnum::HealthText, vHealthTextPositions, vHealthTextValues);
 					if (tGroup.m_iTargets & TargetsEnum::Players)
 					{
-						fPosition("Uber text", &tPos.UberText, ESPEnum::UberText, vTextPositions, vTextValues);
+						fPosition("Uber text", &tPos.UberText, ESPEnum::UberText, vUberTextPositions, vUberTextValues);
 						fPosition("Class text", &tPos.ClassText, ESPEnum::ClassText, vTextPositions, vTextValues);
 						fPosition("Weapon text", &tPos.WeaponText, ESPEnum::WeaponText, vTextPositions, vTextValues);
 						fPosition("Priority", &tPos.Priority, ESPEnum::Priority, vTextPositions, vTextValues);
@@ -4039,7 +4041,6 @@ void CMenu::Render()
 			{ H::Draw.IndicatorScale(180.f), H::Draw.IndicatorScale(29.f) });
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, m_bIsOpen && FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
 		AddResizableDraggable("Spy camera", Vars::Visuals::Simulation::SpyWindow, m_bIsOpen && FGet(Vars::Visuals::Simulation::SpyCamera), OptionalConstraints);
-		AddResizableDraggable("Radar", Vars::Radar::Window, m_bIsOpen && FGet(Vars::Radar::Enabled), SquareConstraints);
 
 		DrawMenu();
 		if (m_bNoticePending)

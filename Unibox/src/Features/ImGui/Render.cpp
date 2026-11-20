@@ -70,7 +70,12 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 
 	F::Menu.Render();
 
-	if (I::EngineClient->IsInGame() && !bTransient && (bPrivate || bDrawGame && !SDK::TakingScreenshot()))
+	const bool bInGame = I::EngineClient->IsInGame();
+	const bool bDrawVisuals = !bTransient && (bPrivate || bDrawGame && !SDK::TakingScreenshot());
+	if (bDrawVisuals)
+		F::Radar.Draw(bInGame);
+
+	if (bInGame && bDrawVisuals)
 	{
 		ImDrawList* pBackground = ImGui::GetBackgroundDrawList();
 
@@ -90,7 +95,6 @@ void CRender::Render(IDirect3DDevice9* pDevice)
 		F::Radio.Draw();
 
 		F::ESP.Draw(pBackground);
-		F::Radar.Draw(pBackground, H::Entities.GetLocal());
 		F::Aimbot.Draw(pBackground);
 		F::Visuals.DrawBestAimPos(pBackground);
 		F::Hitmarker.Draw(pBackground);

@@ -879,7 +879,6 @@ static void SaveGroups(boost::property_tree::ptree& tWrite)
 		F::Configs.SaveJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
 		F::Configs.SaveJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
 		F::Configs.SaveJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
-		F::Configs.SaveJson(tChild, "Radar", tGroup.m_bRadar);
 		F::Configs.SaveJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
 		F::Configs.SaveJson(tChild, "Backtrack", tGroup.m_iBacktrack);
 		F::Configs.SaveJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);
@@ -921,7 +920,6 @@ static void LoadGroups(const boost::property_tree::ptree& tRead)
 		F::Configs.LoadJson(tChild, "OffscreenArrows", tGroup.m_bOffscreenArrows);
 		F::Configs.LoadJson(tChild, "OffscreenArrowsOffset", tGroup.m_iOffscreenArrowsOffset);
 		F::Configs.LoadJson(tChild, "OffscreenArrowsMaxDistance", tGroup.m_flOffscreenArrowsMaxDistance);
-		F::Configs.LoadJson(tChild, "Radar", tGroup.m_bRadar);
 		F::Configs.LoadJson(tChild, "PickupTimer", tGroup.m_bPickupTimer);
 		F::Configs.LoadJson(tChild, "Backtrack", tGroup.m_iBacktrack);
 		F::Configs.LoadJson(tChild, "BacktrackChams", tGroup.m_tBacktrackChams);

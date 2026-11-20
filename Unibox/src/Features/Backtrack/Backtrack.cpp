@@ -205,12 +205,73 @@ std::vector<TickRecord*> CBacktrack::GetValidRecords(std::vector<TickRecord*>& v
 	return vReturn;
 }
 
+TickRecord* CBacktrack::GetFirstValidRecord(CBaseEntity* pEntity)
+{
+	auto it = m_mRecords.find(pEntity);
+	if (it == m_mRecords.end() || it->second.empty())
+		return nullptr;
+
+	auto pNetChan = I::EngineClient->GetNetChannelInfo();
+	if (!pNetChan)
+		return nullptr;
+
+	const float flCorrect = std::clamp(GetReal(MAX_FLOWS, false) + ROUND_TO_TICKS(GetFakeInterp()), 0.f, m_flMaxUnlag);
+	const int iServerTick = GetServerTick() + Vars::Backtrack::Offset.Value;
+
+	if (!F::AntiCheatCompatibility.Active() && GetWindow())
+	{
+		const float flWindow = GetWindow();
+		for (auto& tRecord : it->second)
+		{
+			if (tRecord.m_bInvalid)
+				continue;
+
+			const float flDelta = flCorrect - TICKS_TO_TIME(iServerTick - TIME_TO_TICKS(tRecord.m_flSimTime));
+			if (fabsf(flDelta) > flWindow)
+				continue;
+
+			return &tRecord;
+		}
+	}
+
+	TickRecord* pBest = nullptr;
+	float flMinDelta = 0.2f;
+	for (auto& tRecord : it->second)
+	{
+		if (tRecord.m_bInvalid)
+			continue;
+
+		const float flDelta = flCorrect - TICKS_TO_TIME(iServerTick - TIME_TO_TICKS(tRecord.m_flSimTime));
+		if (fabsf(flDelta) > flMinDelta)
+			continue;
+
+		flMinDelta = fabsf(flDelta);
+		pBest = &tRecord;
+	}
+
+	return pBest;
+}
+
 matrix3x4* CBacktrack::GetBones(CBaseEntity* pEntity)
 {
-	std::vector<TickRecord*> vRecords = {};
-	if (F::Backtrack.GetRecords(pEntity, vRecords) && !vRecords.empty())
-		return vRecords.front()->m_aBones;
+	auto it = m_mRecords.find(pEntity);
+	if (it != m_mRecords.end() && !it->second.empty())
+		return it->second.front().m_aBones;
 	return nullptr;
+}
+
+matrix3x4* CBacktrack::GetBones(CBaseEntity* pEntity, float flOldCurrentTime, float flLerp)
+{
+	auto it = m_mRecords.find(pEntity);
+	if (it == m_mRecords.end() || it->second.empty())
+		return nullptr;
+
+	for (auto& tRecord : it->second)
+	{
+		if (flOldCurrentTime - tRecord.m_flSimTime > flLerp)
+			return tRecord.m_aBones;
+	}
+	return it->second.front().m_aBones;
 }
 
 static matrix3x4 s_aBones[MAXSTUDIOBONES];

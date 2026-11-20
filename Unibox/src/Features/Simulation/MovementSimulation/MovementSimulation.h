@@ -78,6 +78,7 @@ struct MoveStorage
 	Vec3 m_vMaxs = {};
 	Vec3 m_vViewOffset = {};
 	int m_nMask = MASK_PLAYERSOLID;
+	int m_iTeam = -1;
 	bool m_bLocal = false;
 	bool m_bOnGround = false;
 	bool m_bDucked = false;
@@ -105,21 +106,54 @@ struct MoveStorage
 
 	bool m_bFailed = false;
 	bool m_bInitFailed = false;
+	bool m_bCached = false;
+	int m_iCacheSlot = -1;
+	int m_iCacheStep = 0;
 };
 
 class CMovementSimulation
 {
 private:
+	struct MoveCacheStep_t
+	{
+		Vec3 m_vAbsOrigin = {};
+		Vec3 m_vVelocity = {};
+		Vec3 m_vPredictedOrigin = {};
+		bool m_bOnGround = false;
+		float m_flSimTime = 0.f;
+		float m_flPredictedSimTime = 0.f;
+		bool m_bPredictNetworked = true;
+	};
+
+	struct MoveCacheEntry_t
+	{
+		int m_iEntIndex = 0;
+		float m_flSimTime = 0.f;
+		Vec3 m_vStartOrigin = {};
+		bool m_bStrafe = true;
+		bool m_bPredict = true;
+		int m_iStrafeFlags = 0;
+		bool m_bStuckFailed = false;
+		bool m_bFitted = false;
+		float m_flConfidence = 0.f;
+		MoveStorage m_tInitState = {};
+		MoveStorage m_tFrontier = {};
+		std::vector<MoveCacheStep_t> m_vSteps = {};
+	};
+
 	void StoreRecord(CTFPlayer* pPlayer, std::deque<MoveData>& vRecords, MoveData tRecord);
 	const MoveFit_t& GetFit(CTFPlayer* pPlayer, bool bStrafe);
 
 	void SetupPhysics(MoveStorage& tMoveStorage);
 	void SetupMoveData(MoveStorage& tMoveStorage, const Vec3* pvOrigin);
 	void SetupController(MoveStorage& tMoveStorage, bool bStrafe);
+	void StepTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback* pCallback);
 
 	std::unordered_map<int, std::deque<MoveData>> m_mRecords = {};
 	std::unordered_map<int, std::deque<float>> m_mSimTimes = {};
 	std::unordered_map<int, MoveFit_t> m_mFits = {};
+	int m_iCacheTick = -1;
+	std::vector<MoveCacheEntry_t> m_vCache = {};
 
 public:
 	void Store();

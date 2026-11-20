@@ -5,6 +5,7 @@
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
 #include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
+#include "../Features/Misc/AutoTranslate/AutoTranslate.h"
 #include "../Features/Aimbot/AutoHeal/AutoHeal.h"
 #include "../Features/Commands/Commands.h"
 #include "../Features/Players/PlayerUtils.h"
@@ -84,6 +85,7 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 
 		F::Commands.RunChat(sMsg, F::PlayerUtils.GetAccountID(iEntityID), false);
 		F::Misc.OnChatMessage(iEntityID, sName, sMsg);
+		F::AutoTranslate.OnChatMessage(iEntityID, sName, sMsg);
 		break;
 	}
 	case TextMsg:

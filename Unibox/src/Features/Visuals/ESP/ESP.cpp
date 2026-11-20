@@ -37,10 +37,19 @@ static inline int GetBarEdge(int iPosition)
 	return ALIGN_BOTTOM;
 }
 
-static inline int GetHealthTextEdge(int iPosition, int iHealthBarPosition)
+static inline int GetAttachedTextEdge(int iPosition, int iBarPosition, int iFallbackPosition, EESPBar eBarType, EESPBar& eAttachBar)
 {
-	if (iPosition == iHealthBarPosition && (iPosition == int(EESPPosition::Left) || iPosition == int(EESPPosition::Right)))
-		return iPosition == int(EESPPosition::Left) ? ALIGN_LEFT : ALIGN_RIGHT;
+	if (iPosition == int(EESPPosition::OnBar))
+	{
+		if (iBarPosition < 0)
+		{
+			eAttachBar = EESPBar::None;
+			return GetTextEdge(iFallbackPosition);
+		}
+		eAttachBar = eBarType;
+		return GetBarEdge(iBarPosition);
+	}
+	eAttachBar = EESPBar::None;
 	return GetTextEdge(iPosition);
 }
 
@@ -195,10 +204,14 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 		tBar.m_tOverfill = Vars::Colors::IndicatorMisc.Value;
 		tBar.m_tBackground = Color_t(0, 0, 0, 120);
 		tBar.m_bSmooth = true;
-		tBar.m_bHealth = true;
+		tBar.m_eType = EESPBar::Health;
 	}
 	if (pGroup->m_tESP.Draw & ESPEnum::HealthText)
-		tCache.m_vText.emplace_back(GetHealthTextEdge(tPos.HealthText, (pGroup->m_tESP.Draw & ESPEnum::HealthBar) ? tPos.HealthBar : -1), std::format("{}", flHealth), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
+	{
+		EESPBar eAttachBar = EESPBar::None;
+		const int iMode = GetAttachedTextEdge(tPos.HealthText, (pGroup->m_tESP.Draw & ESPEnum::HealthBar) ? tPos.HealthBar : -1, int(EESPPosition::Left), EESPBar::Health, eAttachBar);
+		tCache.m_vText.emplace_back(iMode, std::format("{}", flHealth), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, byte(0), eAttachBar);
+	}
 
 	if (pGroup->m_tESP.Draw & (ESPEnum::UberBar | ESPEnum::UberText) && iClassNum == TF_CLASS_MEDIC)
 	{
@@ -214,9 +227,14 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 				bar.m_tColor = Vars::Colors::IndicatorMisc.Value;
 				bar.m_tBackground = Color_t(0, 0, 0, 120);
 				bar.m_bSmooth = false;
+				bar.m_eType = EESPBar::Uber;
 			}
 			if (pGroup->m_tESP.Draw & ESPEnum::UberText)
-				tCache.m_vText.emplace_back(GetTextEdge(tPos.UberText), std::format("{:.0f}%", flUber * 100), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
+			{
+				EESPBar eAttachBar = EESPBar::None;
+				const int iMode = GetAttachedTextEdge(tPos.UberText, (pGroup->m_tESP.Draw & ESPEnum::UberBar) ? tPos.UberBar : -1, int(EESPPosition::BottomRight), EESPBar::Uber, eAttachBar);
+				tCache.m_vText.emplace_back(iMode, std::format("{:.0f}%", flUber * 100), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, byte(0), eAttachBar);
+			}
 		}
 	}
 
@@ -538,10 +556,14 @@ static inline void StoreBuilding(CBaseObject* pBuilding, CTFPlayer* pLocal, Grou
 		tBar.m_tOverfill = Vars::Colors::IndicatorMisc.Value;
 		tBar.m_tBackground = Color_t(0, 0, 0, 120);
 		tBar.m_bSmooth = true;
-		tBar.m_bHealth = true;
+		tBar.m_eType = EESPBar::Health;
 	}
 	if (pGroup->m_tESP.Draw & ESPEnum::HealthText)
-		tCache.m_vText.emplace_back(GetHealthTextEdge(tPos.HealthText, (pGroup->m_tESP.Draw & ESPEnum::HealthBar) ? tPos.HealthBar : -1), std::format("{}", flHealth), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
+	{
+		EESPBar eAttachBar = EESPBar::None;
+		const int iMode = GetAttachedTextEdge(tPos.HealthText, (pGroup->m_tESP.Draw & ESPEnum::HealthBar) ? tPos.HealthBar : -1, int(EESPPosition::Left), EESPBar::Health, eAttachBar);
+		tCache.m_vText.emplace_back(iMode, std::format("{}", flHealth), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, byte(0), eAttachBar);
+	}
 
 	if (pGroup->m_tESP.Draw & (ESPEnum::AmmoBars | ESPEnum::AmmoText) && pBuilding->IsSentrygun() && !pBuilding->m_bBuilding())
 	{
@@ -2128,12 +2150,19 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 			}
 		}
 
-		float flHealthForText = std::min(tEntity.m_flHealth, 1.f);
-
 		const float flSpace = roundf(H::Draw.IndicatorScale(4.f));
 		const float flThickness = std::max(roundf(H::Draw.IndicatorScale(3.f)), 2.f);
 		if (tAnim.m_vBars.size() < tEntity.m_vBars.size())
 			tAnim.m_vBars.resize(tEntity.m_vBars.size(), -1.f);
+
+		struct BarAnchor_t
+		{
+			int m_iMode = -1;
+			float m_flY = 0.f;
+			float m_flPercent = 1.f;
+		};
+		BarAnchor_t aBarAnchors[3] = {};
+		aBarAnchors[int(EESPBar::Health)].m_flPercent = std::clamp(tEntity.m_flHealth, 0.f, 1.f);
 
 		for (size_t i = 0; i < tEntity.m_vBars.size(); i++)
 		{
@@ -2149,19 +2178,20 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 					flStored = Approach(flStored, flPercent, 11.f, flDelta);
 				flPercent = flStored;
 
-				if (tBar.m_bHealth)
+				if (tBar.m_eType == EESPBar::Health)
 				{
 					if (tAnim.m_flHealthGhost < 0.f)
 						tAnim.m_flHealthGhost = flPercent;
 					tAnim.m_flHealthGhost = flPercent > tAnim.m_flHealthGhost
 						? flPercent
 						: Approach(tAnim.m_flHealthGhost, flPercent, 2.2f, flDelta);
-					flHealthForText = std::min(flPercent, 1.f);
 				}
 			}
 
-			const float flGhost = tBar.m_bHealth ? tAnim.m_flHealthGhost : flPercent;
-			const bool bPulse = !tBar.m_bHealth;
+			const bool bHealth = tBar.m_eType == EESPBar::Health;
+			const float flGhost = bHealth ? tAnim.m_flHealthGhost : flPercent;
+			const bool bPulse = !bHealth;
+			float flBarY = y;
 			switch (tBar.m_iMode)
 			{
 			case ALIGN_LEFT:
@@ -2175,22 +2205,38 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 				rOffset += flSpace + flThickness;
 				break;
 			case ALIGN_TOP:
-				DrawHorizontalBar(pDrawList, x, y - flSpace - flThickness - tOffset, w, flThickness,
+				flBarY = y - flSpace - flThickness - tOffset;
+				DrawHorizontalBar(pDrawList, x, flBarY, w, flThickness,
 					flPercent, flGhost, tBar.m_tColor, tBar.m_tOverfill, tBar.m_tBackground, flAlpha, m_flAnimTime, bPulse);
 				tOffset += flSpace + flThickness;
 				break;
 			case ALIGN_BOTTOM:
-				DrawHorizontalBar(pDrawList, x, y + h + flSpace + bOffset, w, flThickness,
+				flBarY = y + h + flSpace + bOffset;
+				DrawHorizontalBar(pDrawList, x, flBarY, w, flThickness,
 					flPercent, flGhost, tBar.m_tColor, tBar.m_tOverfill, tBar.m_tBackground, flAlpha, m_flAnimTime, bPulse);
 				bOffset += flSpace + flThickness;
 				break;
 			}
+			if (tBar.m_eType != EESPBar::None)
+				aBarAnchors[int(tBar.m_eType)] = { tBar.m_iMode, flBarY, std::clamp(flPercent, 0.f, 1.f) };
 		}
 
 		int nLeftTop = 0, nLeftMid = 0, nLeftBot = 0;
 		int nRightTop = 0, nRightMid = 0, nRightBot = 0;
+		bool bPadTop = false, bPadBottom = false;
 		for (const auto& tText : tEntity.m_vText)
 		{
+			if (tText.m_eAttachBar != EESPBar::None && (tText.m_iMode == ALIGN_TOP || tText.m_iMode == ALIGN_BOTTOM))
+			{
+				if (tText.m_iMode == aBarAnchors[int(tText.m_eAttachBar)].m_iMode)
+				{
+					if (tText.m_iMode == ALIGN_TOP)
+						bPadTop = true;
+					else
+						bPadBottom = true;
+				}
+				continue;
+			}
 			switch (tText.m_iMode)
 			{
 			case ALIGN_TOPLEFT: nLeftTop++; break;
@@ -2201,6 +2247,10 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 			case ALIGN_BOTTOMRIGHT: nRightBot++; break;
 			}
 		}
+		if (bPadTop)
+			tOffset += H::Draw.IndicatorScale(4.f);
+		if (bPadBottom)
+			bOffset += H::Draw.IndicatorScale(4.f);
 
 		const float flTextPad = H::Draw.IndicatorScale(2.f);
 		const float flSideTopY = y - flTextPad;
@@ -2217,8 +2267,18 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 		float flRightMidMaxY = std::max(flRightMidMinY, flRightBotAnchor - float(nRightBot + nRightMid) * nTall);
 		float flRightBotY = flRightBotAnchor;
 
-		for (const auto& [iMode, sText, tColor, tOutline, ucBackgroundAlpha] : tEntity.m_vText)
+		for (const auto& [iMode, sText, tColor, tOutline, ucBackgroundAlpha, eAttachBar] : tEntity.m_vText)
 		{
+			if (eAttachBar != EESPBar::None && (iMode == ALIGN_TOP || iMode == ALIGN_BOTTOM))
+			{
+				const auto& tAnchor = aBarAnchors[int(eAttachBar)];
+				if (iMode == tAnchor.m_iMode)
+				{
+					const float flBarX = x + w * tAnchor.m_flPercent;
+					DrawESPText(pDrawList, flBarX, tAnchor.m_flY + flThickness * 0.5f, tColor, tOutline, ucBackgroundAlpha, ALIGN_CENTER, sText.c_str(), flAlpha);
+				}
+				continue;
+			}
 			switch (iMode)
 			{
 			case ALIGN_TOP:
@@ -2247,7 +2307,8 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 				break;
 			case ALIGN_LEFT:
 			{
-				const float flPos = std::clamp(flSideTopY + h - h * flHealthForText, flLeftMidMinY, flLeftMidMaxY);
+				const float flTrack = aBarAnchors[int(eAttachBar)].m_flPercent;
+				const float flPos = std::clamp(flSideTopY + h - h * flTrack, flLeftMidMinY, flLeftMidMaxY);
 				DrawESPText(pDrawList, l - lOffset, flPos, tColor, tOutline, ucBackgroundAlpha, ALIGN_TOPRIGHT, sText.c_str(), flAlpha);
 				flLeftMidMinY = flPos + nTall;
 				flLeftMidMaxY = std::max(flLeftMidMinY, flLeftMidMaxY + nTall);
@@ -2255,7 +2316,8 @@ void CESP::DrawEntities(ImDrawList* pDrawList, const std::vector<ESPDrawEntity_t
 			}
 			case ALIGN_RIGHT:
 			{
-				const float flPos = std::clamp(flSideTopY + h - h * flHealthForText, flRightMidMinY, flRightMidMaxY);
+				const float flTrack = aBarAnchors[int(eAttachBar)].m_flPercent;
+				const float flPos = std::clamp(flSideTopY + h - h * flTrack, flRightMidMinY, flRightMidMaxY);
 				DrawESPText(pDrawList, r + rOffset, flPos, tColor, tOutline, ucBackgroundAlpha, ALIGN_TOPLEFT, sText.c_str(), flAlpha);
 				flRightMidMinY = flPos + nTall;
 				flRightMidMaxY = std::max(flRightMidMinY, flRightMidMaxY + nTall);

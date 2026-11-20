@@ -1,426 +1,261 @@
 #include "Radar.h"
 
-#include "../Groups/Groups.h"
-#include "../ESP/ESP.h"
-#include "../../ImGui/IndicatorPanel.h"
-#include "../../ImGui/Menu/Menu.h"
+#ifndef TEXTMODE
 
-static inline Color_t ScaleAlpha(Color_t tColor, float flAlpha)
+#include "../../Binds/Binds.h"
+#include "../ESP/ESP.h"
+#include "../../ImGui/Menu/BindWidgets.h"
+#include "../../NavBot/Map.h"
+
+#include <filesystem>
+
+static void DrawArrow(ImDrawList* pDrawList, const ImVec2& vPos, float flYaw, float flSize, ImU32 uFill)
 {
-	tColor.a = byte(std::clamp(float(tColor.a) * flAlpha, 0.f, 255.f));
-	return tColor;
+	const ImVec2 vForward = { sinf(flYaw), -cosf(flYaw) };
+	const ImVec2 vRight = { -vForward.y, vForward.x };
+	const ImVec2 aPoints[] = {
+		vPos + vForward * flSize,
+		vPos - vForward * flSize * 0.35f + vRight * flSize * 0.55f,
+		vPos - vForward * flSize * 0.15f,
+		vPos - vForward * flSize * 0.35f - vRight * flSize * 0.55f
+	};
+	pDrawList->AddConvexPolyFilled(aPoints, 4, uFill);
+	pDrawList->AddPolyline(aPoints, 4, IM_COL32(14, 15, 17, 230), ImDrawFlags_Closed, 1.2f);
 }
 
-static void DrawHealthBar(ImDrawList* pDrawList, float x, float y, float flSize, int iHealth, int iMaxHealth, float flAlpha)
+void CRadar::LoadFloor()
 {
-	if (iMaxHealth <= 0)
+	const char* sLevel = I::EngineClient->GetLevelName();
+	if (!sLevel || m_sLevel == sLevel)
 		return;
 
-	const float flHealth = float(iHealth);
-	const float flMaxHealth = float(iMaxHealth);
-	const float flRatio = std::clamp(flHealth / flMaxHealth, 0.f, 1.f);
-	const float flOverheal = flHealth > flMaxHealth
-		? std::clamp((flHealth - flMaxHealth) / std::max(floorf(flMaxHealth / 10.f) * 5.f, 1.f), 0.f, 1.f)
-		: 0.f;
+	m_sLevel = sLevel;
+	m_pFloor.reset();
+	const char* sGameDir = I::EngineClient->GetGameDirectory();
+	if (m_sLevel.empty() || !sGameDir || !*sGameDir)
+		return;
 
-	const float flBarW = std::max(roundf(flSize / 8.f), 2.f);
-	const float flBarX1 = x - flSize * 0.5f - flBarW - 2.f;
-	const float flBarX2 = flBarX1 + flBarW;
-	const float flBarY1 = y - flSize * 0.5f;
-	const float flBarY2 = y + flSize * 0.5f;
+	auto tName = std::filesystem::path(m_sLevel).filename().replace_extension(".nav");
+	const std::filesystem::path tGameDir = sGameDir;
+	const std::filesystem::path aPaths[] = {
+		tGameDir / "maps" / tName,
+		tGameDir / "download" / "maps" / tName,
+		std::filesystem::path("unibox") / "Nav" / tName
+	};
 
-	const Color_t tHealth = Vars::Colors::IndicatorBad.Value.Lerp(Vars::Colors::IndicatorGood.Value, flRatio, LerpEnum::HSV);
-	pDrawList->AddRectFilled({ flBarX1 - 1.f, flBarY1 - 1.f }, { flBarX2 + 1.f, flBarY2 + 1.f }, ColorToU32(ScaleAlpha({ 0, 0, 0, 220 }, flAlpha)));
-	pDrawList->AddRectFilled({ flBarX1, flBarY2 - flSize * flRatio }, { flBarX2, flBarY2 }, ColorToU32(ScaleAlpha(tHealth, flAlpha)));
+	CNavFile tNav;
+	bool bLoaded = false;
+	for (const auto& tPath : aPaths)
+	{
+		const auto sPath = tPath.string();
+		if (tNav.Load(sPath.c_str()))
+		{
+			bLoaded = true;
+			break;
+		}
+	}
+	if (!bLoaded)
+		return;
 
-	if (flOverheal > 0.f)
-		pDrawList->AddRectFilled({ flBarX1, flBarY2 - flSize * flOverheal }, { flBarX2, flBarY2 }, ColorToU32(ScaleAlpha(Vars::Colors::IndicatorMisc.Value, flAlpha)));
+	auto pFloor = std::make_shared<std::vector<FloorArea_t>>();
+	pFloor->reserve(tNav.m_vAreas.size());
+	for (const auto& tArea : tNav.m_vAreas)
+	{
+		if (tArea.m_vNwCorner.x < tArea.m_vSeCorner.x && tArea.m_vNwCorner.y < tArea.m_vSeCorner.y)
+			pFloor->push_back({
+				{ tArea.m_vNwCorner.x, tArea.m_vNwCorner.y, tArea.m_flMinZ },
+				{ tArea.m_vSeCorner.x, tArea.m_vSeCorner.y, tArea.m_flMaxZ } });
+	}
+	m_pFloor = std::move(pFloor);
 }
 
-static void DrawHeightTriangle(ImDrawList* pDrawList, float x, float y, float flSize, float flDeltaZ, Color_t tColor)
+void CRadar::Reset()
 {
-	const float flHalf = std::max(flSize * 0.35f, 3.f);
-	const float flHeight = std::max(flSize * 0.25f, 3.f);
-	const bool bAbove = flDeltaZ > 0.f;
-	const float flDir = bAbove ? -1.f : 1.f;
-	const float flBaseY = y + (flSize * 0.5f + 2.f) * flDir;
-	const float flTipY = flBaseY + flHeight * flDir;
-
-	const ImVec2 v1 = { x - flHalf, flBaseY };
-	const ImVec2 v2 = { x + flHalf, flBaseY };
-	const ImVec2 v3 = { x, flTipY };
-
-	const ImU32 uOutline = ColorToU32({ 0, 0, 0, byte(std::min<int>(tColor.a, 220)) });
-	pDrawList->AddTriangleFilled(v1, v2, v3, ColorToU32(tColor));
-	pDrawList->AddTriangle(v1, v2, v3, uOutline, 1.f);
-}
-
-static void DrawPlayerDirection(ImDrawList* pDrawList, float x, float y, float flRadius, float flRelativeYawRad, Color_t tColor, float flAlpha)
-{
-	const float flCos = cosf(flRelativeYawRad);
-	const float flSin = sinf(flRelativeYawRad);
-	const float flTipDist = flRadius + std::max(flRadius * 0.55f, 4.f);
-	const float flBaseDist = flRadius - 0.5f;
-	const float flHalfSpread = 0.45f;
-
-	const ImVec2 vTip = { x + flSin * flTipDist, y - flCos * flTipDist };
-	const ImVec2 vLeft = { x + sinf(flRelativeYawRad - flHalfSpread) * flBaseDist, y - cosf(flRelativeYawRad - flHalfSpread) * flBaseDist };
-	const ImVec2 vRight = { x + sinf(flRelativeYawRad + flHalfSpread) * flBaseDist, y - cosf(flRelativeYawRad + flHalfSpread) * flBaseDist };
-
-	pDrawList->AddTriangleFilled(vLeft, vRight, vTip, ColorToU32(ScaleAlpha(tColor, flAlpha)));
-	pDrawList->AddTriangle(vLeft, vRight, vTip, ColorToU32(ScaleAlpha({ 0, 0, 0, 220 }, flAlpha)), 1.f);
+	m_sLevel.clear();
+	m_pFloor.reset();
+	m_tCache.Set({});
 }
 
 void CRadar::Store(CTFPlayer* pLocal)
 {
 	if (!pLocal || !Vars::Radar::Enabled.Value)
 	{
-		m_tCache.Set({});
+		if (m_tCache.Get()->m_bValid)
+			m_tCache.Set({});
 		return;
 	}
 
-	CBaseEntity* pCenter = pLocal;
-	switch (pLocal->m_iObserverMode())
+	LoadFloor();
+
+	auto pCenter = pLocal;
+	const int iObserverMode = pLocal->m_iObserverMode();
+	if (iObserverMode == OBS_MODE_FIRSTPERSON || iObserverMode == OBS_MODE_THIRDPERSON)
 	{
-	case OBS_MODE_FIRSTPERSON:
-	case OBS_MODE_THIRDPERSON:
-		if (auto pTarget = pLocal->m_hObserverTarget().Get())
-			pCenter = pTarget;
-		break;
+		if (auto pTarget = pLocal->m_hObserverTarget().Get(); pTarget && pTarget->IsPlayer())
+			pCenter = pTarget->As<CTFPlayer>();
 	}
 
-	RadarCache_t tCache = {};
-	tCache.m_bValid = true;
-	tCache.m_vCenterOrigin = pCenter->GetAbsOrigin();
+	Snapshot_t tSnapshot = {};
+	tSnapshot.m_bValid = true;
+	tSnapshot.m_vOrigin = pCenter->GetRenderOrigin();
+	tSnapshot.m_flYaw = iObserverMode == OBS_MODE_FIRSTPERSON && pCenter != pLocal
+		? pCenter->GetEyeAngles().y : I::EngineClient->GetViewAngles().y;
+	tSnapshot.m_pFloor = m_pFloor;
 
-	const int iFOV = pLocal->m_iFOV();
-	tCache.m_flLocalFOV = std::clamp(
-		iFOV > 0 ? float(iFOV) : (Vars::Visuals::UI::FieldOfView.Value > 0.f ? Vars::Visuals::UI::FieldOfView.Value : 90.f),
-		20.f, 160.f
-	);
-
-	for (auto& [pEntity, pGroup] : F::Groups.GetGroup(false))
+	const int iTeam = pCenter->IsInValidTeam();
+	const auto& vPlayers = H::Entities.GetGroup(EntityEnum::PlayerAll);
+	tSnapshot.m_vPlayers.reserve(vPlayers.size());
+	for (auto pEntity : vPlayers)
 	{
-		if (!pGroup->m_bRadar || pEntity == pCenter || pEntity == pLocal)
+		auto pPlayer = pEntity->As<CTFPlayer>();
+		if (pPlayer == pLocal || pPlayer == pCenter || pPlayer->IsDormant()
+			|| !pPlayer->IsAlive() || pPlayer->IsAGhost() || !pPlayer->IsInValidTeam())
 			continue;
 
-		RadarEntity_t tEntity = {};
-		tEntity.m_vOrigin = pEntity->GetAbsOrigin();
-		tEntity.m_tColor = F::Groups.GetColor(pEntity, pGroup);
-		tEntity.m_bDormant = pEntity->IsDormant();
-
-		if (pEntity->IsPlayer())
-		{
-			auto pPlayer = pEntity->As<CTFPlayer>();
-			tEntity.m_eType = ERadarEntityType::Player;
-			tEntity.m_flYaw = pPlayer->GetEyeAngles().y;
-			tEntity.m_iClass = pPlayer->m_iClass();
-			tEntity.m_iHealth = pPlayer->m_iHealth();
-			tEntity.m_iMaxHealth = pPlayer->GetMaxHealth();
-			tEntity.m_bCloaked = pPlayer->IsInvisible();
-		}
-		else if (pEntity->IsBuilding())
-		{
-			auto pBuilding = pEntity->As<CBaseObject>();
-			tEntity.m_eType = ERadarEntityType::Building;
-			tEntity.m_iHealth = pBuilding->m_iHealth();
-			tEntity.m_iMaxHealth = pBuilding->m_iMaxHealth();
-			switch (pEntity->GetClassID())
-			{
-			case ETFClassID::CObjectSentrygun: tEntity.m_iClass = 0; break;
-			case ETFClassID::CObjectDispenser: tEntity.m_iClass = 1; break;
-			case ETFClassID::CObjectTeleporter: tEntity.m_iClass = 2; break;
-			default: tEntity.m_iClass = -1; break;
-			}
-		}
-		else if (pEntity->IsProjectile())
-		{
-			tEntity.m_eType = ERadarEntityType::Projectile;
-		}
-		else if (pEntity->GetClassID() == ETFClassID::CCaptureFlag)
-		{
-			tEntity.m_eType = ERadarEntityType::Objective;
-		}
-		else if (pEntity->IsNPC())
-		{
-			tEntity.m_eType = ERadarEntityType::NPC;
-		}
-		else if (pEntity->GetClassID() == ETFClassID::CBaseAnimating)
-		{
-			auto uHash = H::Entities.GetModel(pEntity->entindex());
-			if (H::Entities.IsHealth(uHash))
-				tEntity.m_eType = ERadarEntityType::Health;
-			else if (H::Entities.IsAmmo(uHash))
-				tEntity.m_eType = ERadarEntityType::Ammo;
-			else
-				tEntity.m_eType = ERadarEntityType::Other;
-		}
-		else
-		{
-			tEntity.m_eType = ERadarEntityType::Other;
-		}
-
-		tCache.m_vEntities.push_back(tEntity);
+		const bool bTeammate = iTeam ? pPlayer->m_iTeamNum() == iTeam : pPlayer->m_iTeamNum() == TF_TEAM_BLUE;
+		if (!iTeam || !bTeammate || Vars::Radar::ShowTeammates.Value)
+			tSnapshot.m_vPlayers.push_back({ pPlayer->GetRenderOrigin(), pPlayer->GetEyeAngles().y, pPlayer->m_iClass(), bTeammate });
 	}
-
-	m_tCache.Set(std::move(tCache));
+	m_tCache.Set(std::move(tSnapshot));
 }
 
-bool CRadar::GetDrawPosition(const Vec3& vCenterOrigin, const Vec3& vEntityOrigin, float flViewYaw, float flPadding, float& x, float& y, float& z)
+void CRadar::Draw(bool bInGame)
 {
-	const float flRange = std::max(float(Vars::Radar::Range.Value), 1.f);
-	const float flYawRad = Math::Deg2Rad(flViewYaw);
-	const float flCos = cosf(flYawRad);
-	const float flSin = sinf(flYawRad);
+	using namespace ImGui;
 
-	const Vec3 vDelta = vEntityOrigin - vCenterOrigin;
-	const float flForward = vDelta.x * flCos + vDelta.y * flSin;
-	const float flRight = vDelta.x * flSin - vDelta.y * flCos;
-	Vec2 vPos = { flRight, -flForward };
+	const bool bEditing = F::Menu.m_bIsOpen && F::Menu.m_bInputReady;
+	if (!(bEditing ? FGet(Vars::Radar::Enabled) : Vars::Radar::Enabled.Value)
+		|| (!bEditing && (!bInGame || I::MatSystemSurface->IsCursorVisible() && !I::EngineClient->IsPlayingDemo())))
+		return;
 
-	auto& tWindowBox = Vars::Radar::Window.Value;
-	const float flHalfW = tWindowBox.w * 0.5f;
-	const float flHalfH = tWindowBox.h * 0.5f;
-	const ImVec2 vCenter = { float(tWindowBox.x), float(tWindowBox.y) + flHalfH };
+	const auto pSnapshot = m_tCache.Get();
+	const bool bHasView = bInGame && pSnapshot->m_bValid;
+	if (!bHasView && !bEditing)
+		return;
 
-	switch (Vars::Radar::Style.Value)
+	auto& tWindow = Vars::Radar::Window[DEFAULT_BIND];
+	const float flHeader = H::Draw.Scale(32), flPad = H::Draw.Scale(6);
+	const ImVec2 vDisplay = GetIO().DisplaySize;
+	const float flMin = H::Draw.Scale(100);
+	const float flMax = H::Draw.Scale(600);
+	const ImVec2 vMaxSize = { std::clamp(vDisplay.x, flMin, flMax), std::clamp(vDisplay.y - float(tWindow.y), flMin, flMax) };
+	const ImVec2 vSavedSize = { std::clamp(float(tWindow.w), flMin, vMaxSize.x), std::clamp(float(tWindow.h), flMin, vMaxSize.y) };
+	const auto iPlacement = tWindow == m_tLastWindow ? ImGuiCond_Appearing : ImGuiCond_Always;
+	SetNextWindowPos({ float(tWindow.x - int(vSavedSize.x) / 2), float(tWindow.y) }, iPlacement);
+	SetNextWindowSize(vSavedSize, iPlacement);
+	SetNextWindowSizeConstraints({ flMin, flMin }, vMaxSize);
+	PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
+	PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+	ImGuiWindowFlags iFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoCollapse
+		| ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
+		| ImGuiWindowFlags_NoNav;
+	if (!bEditing)
+		iFlags |= ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
+
+	if (Begin("Radar", nullptr, iFlags))
 	{
-	case Vars::Radar::StyleEnum::Circle:
-	{
-		const float flDist = vPos.Length();
-		if (flDist > flRange)
+		const ImVec2 vPos = GetWindowPos(), vSize = GetWindowSize();
+		const ImVec2 vMin = vPos + ImVec2(flPad, flHeader + flPad), vMax = vPos + vSize - ImVec2(flPad, flPad);
+		auto pDrawList = GetWindowDrawList();
+
+		if (bEditing)
+			tWindow = { int(vPos.x) + int(vSize.x) / 2, int(vPos.y), int(vSize.x), int(vSize.y) };
+		m_tLastWindow = tWindow;
+
+		RenderOverlayWindow(flHeader, ICON_MD_MAP, "Radar");
+		pDrawList->AddRectFilled(vMin, vMax, F::Render.Background0p5);
+		if (bHasView)
 		{
-			if (!Vars::Radar::DrawOutOfRange.Value)
-				return false;
-			vPos *= (flRange / flDist);
-		}
-		const float flDrawRadius = std::max(std::min(flHalfW, flHalfH) - flPadding, 1.f);
-		x = vCenter.x + (vPos.x / flRange) * flDrawRadius;
-		y = vCenter.y + (vPos.y / flRange) * flDrawRadius;
-		break;
-	}
-	case Vars::Radar::StyleEnum::Rectangle:
-	{
-		const float flMaxAxis = std::max(fabsf(vPos.x), fabsf(vPos.y));
-		if (flMaxAxis > flRange)
-		{
-			if (!Vars::Radar::DrawOutOfRange.Value)
-				return false;
-			vPos *= (flRange / flMaxAxis);
-		}
-		const float flDrawHalfW = std::max(flHalfW - flPadding, 1.f);
-		const float flDrawHalfH = std::max(flHalfH - flPadding, 1.f);
-		x = vCenter.x + (vPos.x / flRange) * flDrawHalfW;
-		y = vCenter.y + (vPos.y / flRange) * flDrawHalfH;
-		break;
-	}
-	}
-
-	z = vDelta.z;
-	return true;
-}
-
-void CRadar::DrawBackground(ImDrawList* pDrawList, float flLocalFOV)
-{
-	auto& tWindowBox = Vars::Radar::Window.Value;
-	const Color_t& tThemeBack = Vars::Menu::Theme::Background.Value;
-	const Color_t& tThemeAccent = Vars::Menu::Theme::Accent.Value;
-	const Color_t tColorBackground = { tThemeBack.r, tThemeBack.g, tThemeBack.b, byte(Vars::Radar::BackgroundAlpha.Value) };
-	const Color_t tColorAccent = { tThemeAccent.r, tThemeAccent.g, tThemeAccent.b, byte(Vars::Radar::LineAlpha.Value) };
-	const Color_t tColorGrid = ScaleAlpha(tColorAccent, 0.35f);
-	const Color_t tColorCone = ScaleAlpha(tColorAccent, 0.14f);
-
-	const float flHalfW = tWindowBox.w * 0.5f;
-	const float flHalfH = tWindowBox.h * 0.5f;
-	const ImVec2 vMin = { float(tWindowBox.x) - flHalfW, float(tWindowBox.y) };
-	const ImVec2 vMax = { float(tWindowBox.x) + flHalfW, float(tWindowBox.y) + float(tWindowBox.h) };
-	const ImVec2 vCenter = { float(tWindowBox.x), float(tWindowBox.y) + flHalfH };
-	const float flRadius = std::min(flHalfW, flHalfH);
-	const float flRounding = H::Draw.Scale(3);
-
-	switch (Vars::Radar::Style.Value)
-	{
-	case Vars::Radar::StyleEnum::Circle:
-		pDrawList->AddCircleFilled(vCenter, flRadius, ColorToU32(tColorBackground), 64);
-		pDrawList->AddCircle(vCenter, flRadius * 0.5f, ColorToU32(tColorGrid), 48, 1.f);
-		break;
-	case Vars::Radar::StyleEnum::Rectangle:
-		pDrawList->AddRectFilled(vMin, vMax, ColorToU32(tColorBackground), flRounding);
-		break;
-	}
-
-	if (Vars::Radar::Style.Value == Vars::Radar::StyleEnum::Circle)
-	{
-		pDrawList->AddLine({ vCenter.x - flRadius, vCenter.y }, { vCenter.x + flRadius, vCenter.y }, ColorToU32(tColorGrid));
-		pDrawList->AddLine({ vCenter.x, vCenter.y - flRadius }, { vCenter.x, vCenter.y + flRadius }, ColorToU32(tColorGrid));
-	}
-	else
-	{
-		pDrawList->AddLine({ vMin.x, vCenter.y }, { vMax.x, vCenter.y }, ColorToU32(tColorGrid));
-		pDrawList->AddLine({ vCenter.x, vMin.y }, { vCenter.x, vMax.y }, ColorToU32(tColorGrid));
-	}
-
-	if (Vars::Radar::ViewCone.Value && Vars::Radar::LineAlpha.Value > 0)
-	{
-		const float flHalfFovRad = Math::Deg2Rad(flLocalFOV * 0.5f);
-		const float flConeLen = Vars::Radar::Style.Value == Vars::Radar::StyleEnum::Circle
-			? flRadius
-			: std::min(flHalfW / std::max(fabsf(sinf(flHalfFovRad)), 0.001f), flHalfH / std::max(fabsf(cosf(flHalfFovRad)), 0.001f));
-
-		const ImVec2 vLeft = { vCenter.x - sinf(flHalfFovRad) * flConeLen, vCenter.y - cosf(flHalfFovRad) * flConeLen };
-		const ImVec2 vRight = { vCenter.x + sinf(flHalfFovRad) * flConeLen, vCenter.y - cosf(flHalfFovRad) * flConeLen };
-
-		pDrawList->PushClipRect(vMin, vMax, true);
-		pDrawList->AddTriangleFilled(vCenter, vLeft, vRight, ColorToU32(tColorCone));
-		pDrawList->AddLine(vCenter, vLeft, ColorToU32(ScaleAlpha(tColorAccent, 0.55f)));
-		pDrawList->AddLine(vCenter, vRight, ColorToU32(ScaleAlpha(tColorAccent, 0.55f)));
-		pDrawList->PopClipRect();
-	}
-
-	switch (Vars::Radar::Style.Value)
-	{
-	case Vars::Radar::StyleEnum::Circle:
-		pDrawList->AddCircle(vCenter, flRadius, ColorToU32(tColorAccent), 64, 1.5f);
-		break;
-	case Vars::Radar::StyleEnum::Rectangle:
-		pDrawList->AddRect(vMin, vMax, ColorToU32(tColorAccent), flRounding, 0, 1.5f);
-		break;
-	}
-
-	const float flCenterSize = std::max(H::Draw.Scale(3.5f), 3.f);
-	const ImVec2 vLocal1 = { vCenter.x, vCenter.y - flCenterSize * 1.2f };
-	const ImVec2 vLocal2 = { vCenter.x + flCenterSize, vCenter.y + flCenterSize * 0.8f };
-	const ImVec2 vLocal3 = { vCenter.x - flCenterSize, vCenter.y + flCenterSize * 0.8f };
-	pDrawList->AddTriangleFilled(vLocal1, vLocal2, vLocal3, ColorToU32(Vars::Menu::Theme::Active.Value));
-	pDrawList->AddTriangle(vLocal1, vLocal2, vLocal3, ColorToU32({ 0, 0, 0, 220 }), 1.f);
-}
-
-void CRadar::DrawPoints(ImDrawList* pDrawList, const RadarCache_t& tCache, float flViewYaw)
-{
-	const float flSize = float(Vars::Radar::Size.Value);
-	const float flRadius = flSize * 0.5f;
-	const float flPadding = flRadius + 2.f;
-	auto& tWindowBox = Vars::Radar::Window.Value;
-
-	const ImVec2 vMin = { float(tWindowBox.x) - tWindowBox.w * 0.5f, float(tWindowBox.y) };
-	const ImVec2 vMax = { float(tWindowBox.x) + tWindowBox.w * 0.5f, float(tWindowBox.y) + float(tWindowBox.h) };
-	pDrawList->PushClipRect(vMin, vMax, true);
-
-	for (const auto& tEntity : tCache.m_vEntities)
-	{
-		float x, y, z;
-		if (!GetDrawPosition(tCache.m_vCenterOrigin, tEntity.m_vOrigin, flViewYaw, flPadding, x, y, z))
-			continue;
-
-		const float flAlpha = tEntity.m_bDormant ? 0.55f : (tEntity.m_bCloaked ? 0.65f : 1.f);
-		const Color_t tColor = ScaleAlpha(tEntity.m_tColor, flAlpha);
-		const ImU32 uColor = ColorToU32(tColor);
-		const ImU32 uOutline = ColorToU32(ScaleAlpha({ 0, 0, 0, 220 }, flAlpha));
-
-		switch (tEntity.m_eType)
-		{
-		case ERadarEntityType::Player:
-		{
-			if (Vars::Radar::PlayerDirection.Value)
+			const float flRange = std::clamp(float(Vars::Radar::Range.Value), 250.f, 4000.f);
+			const float flRadarYaw = Vars::Radar::RotateMap.Value ? pSnapshot->m_flYaw : 0.f;
+			const float flYaw = Math::Deg2Rad(flRadarYaw);
+			const float flCos = cosf(flYaw), flSin = sinf(flYaw);
+			const ImVec2 vHalf = (vMax - vMin) * 0.5f;
+			const float flScale = std::min(vHalf.x, vHalf.y) / flRange;
+			const ImVec2 vCenter = (vMin + vMax) * 0.5f;
+			const Vec3& vOrigin = pSnapshot->m_vOrigin;
+			const auto fProject = [&](float x, float y)
 			{
-				const float flRelYawRad = Math::Deg2Rad(flViewYaw - tEntity.m_flYaw);
-				DrawPlayerDirection(pDrawList, x, y, flRadius, flRelYawRad, tEntity.m_tColor, flAlpha);
+				x -= vOrigin.x;
+				y -= vOrigin.y;
+				return vCenter + ImVec2(x * flSin - y * flCos, -x * flCos - y * flSin) * flScale;
+			};
+
+			pDrawList->PushClipRect(vMin, vMax, true);
+			if (Vars::Radar::DrawMap.Value && pSnapshot->m_pFloor)
+			{
+				const float flExtentX = (vHalf.x * fabsf(flSin) + vHalf.y * fabsf(flCos)) / flScale;
+				const float flExtentY = (vHalf.x * fabsf(flCos) + vHalf.y * fabsf(flSin)) / flScale;
+				const auto iDrawFlags = pDrawList->Flags;
+				pDrawList->Flags &= ~ImDrawListFlags_AntiAliasedFill;
+				for (bool bNear : { false, true })
+				{
+					ImVec4 tFill = MixColor(F::Render.Background1, F::Render.Active, bNear ? 0.38f : 0.16f);
+					tFill.w = F::Render.Background1.Value.w;
+					const ImU32 uFill = FadeColor(tFill);
+					const ImU32 uLine = FadeColor(F::Render.Background0, 0.55f);
+					for (const auto& [vLow, vHigh] : *pSnapshot->m_pFloor)
+					{
+						if (vLow.x > vOrigin.x + flExtentX || vHigh.x < vOrigin.x - flExtentX
+							|| vLow.y > vOrigin.y + flExtentY || vHigh.y < vOrigin.y - flExtentY
+							|| bNear != (vOrigin.z >= vLow.z - 80.f && vOrigin.z <= vHigh.z + 80.f))
+							continue;
+
+						pDrawList->AddQuadFilled(fProject(vLow.x, vLow.y), fProject(vLow.x, vHigh.y),
+							fProject(vHigh.x, vHigh.y), fProject(vHigh.x, vLow.y), uFill);
+						pDrawList->AddQuad(fProject(vLow.x, vLow.y), fProject(vLow.x, vHigh.y),
+							fProject(vHigh.x, vHigh.y), fProject(vHigh.x, vLow.y), uLine);
+					}
+				}
+				pDrawList->Flags = iDrawFlags;
 			}
 
-			pDrawList->AddCircleFilled({ x, y }, flRadius, uColor, 24);
-			pDrawList->AddCircle({ x, y }, flRadius, uOutline, 24, 1.f);
-#ifndef TEXTMODE
-			if (IDirect3DTexture9* pTexture = GetIconTexture(GetClassIconTexture(tEntity.m_iClass)))
+			const float flMarker = H::Draw.Scale(Vars::Radar::IconSize.Value);
+			const float flDot = std::max(flMarker * 0.32f, H::Draw.Scale(2.5f));
+			for (const auto& tPlayer : pSnapshot->m_vPlayers)
 			{
-				const float flIconPad = std::max(flSize * 0.1f, 1.f);
-				const ImU32 uIconTint = ColorToU32(ScaleAlpha({ 255, 255, 255, 255 }, flAlpha));
-				pDrawList->AddImage(reinterpret_cast<ImTextureID>(pTexture),
-					{ x - flRadius + flIconPad, y - flRadius + flIconPad },
-					{ x + flRadius - flIconPad, y + flRadius - flIconPad },
-					{ 0, 0 }, { 1, 1 }, uIconTint);
+				const ImVec2 vDot = fProject(tPlayer.m_vOrigin.x, tPlayer.m_vOrigin.y);
+				if (vDot.x < vMin.x + flMarker * 0.5f || vDot.x > vMax.x - flMarker * 0.5f
+					|| vDot.y < vMin.y + flMarker * 0.5f || vDot.y > vMax.y - flMarker * 0.5f)
+					continue;
+
+				const ImU32 uTeam = tPlayer.m_bTeammate ? IM_COL32(133, 198, 236, 255) : IM_COL32(247, 102, 96, 255);
+				const float flPlayerYaw = Math::Deg2Rad(flRadarYaw - tPlayer.m_flYaw);
+				if (Vars::Radar::PlayerStyle.Value == Vars::Radar::PlayerStyleEnum::ClassIcon)
+				{
+					const float flHalf = flMarker * 0.5f;
+					pDrawList->AddRectFilled(vDot - ImVec2(flHalf + 1.f, flHalf + 1.f), vDot + ImVec2(flHalf + 1.f, flHalf + 1.f), IM_COL32(14, 15, 17, 230), H::Draw.Scale(3));
+					pDrawList->AddRectFilled(vDot - ImVec2(flHalf, flHalf), vDot + ImVec2(flHalf, flHalf), uTeam, H::Draw.Scale(3));
+					if (IDirect3DTexture9* pTexture = GetIconTexture(GetClassIconTexture(tPlayer.m_iClass)))
+					{
+						const float flIcon = flHalf - H::Draw.Scale(1.5f);
+						pDrawList->AddImage(reinterpret_cast<ImTextureID>(pTexture), vDot - ImVec2(flIcon, flIcon), vDot + ImVec2(flIcon, flIcon));
+					}
+					else
+						DrawArrow(pDrawList, vDot, flPlayerYaw, flMarker * 0.5f, uTeam);
+				}
+				else if (Vars::Radar::PlayerStyle.Value == Vars::Radar::PlayerStyleEnum::Arrow)
+					DrawArrow(pDrawList, vDot, flPlayerYaw, std::max(flMarker * 0.62f, H::Draw.Scale(5)), uTeam);
+				else
+				{
+					pDrawList->AddCircleFilled(vDot, flDot + 1.f, IM_COL32(14, 15, 17, 220));
+					pDrawList->AddCircleFilled(vDot, flDot, uTeam);
+				}
 			}
+			DrawArrow(pDrawList, vCenter, Math::Deg2Rad(flRadarYaw - pSnapshot->m_flYaw), std::max(flMarker * 0.58f, H::Draw.Scale(5)), FadeColor(F::Render.Active));
+			pDrawList->PopClipRect();
+		}
+		if (bEditing)
+		{
+			const ImVec2 vCorner = vPos + vSize - ImVec2(H::Draw.Scale(3), H::Draw.Scale(3));
+			const float flGrip = H::Draw.Scale(7);
+			pDrawList->AddLine(vCorner - ImVec2(flGrip, 0.f), vCorner - ImVec2(0.f, flGrip), FadeColor(F::Render.Inactive, 0.55f));
+		}
+	}
+	End();
+	PopStyleVar(2);
+	if (bEditing)
+		F::Render.Cursor = GetMouseCursor();
+}
+
 #endif
-			if (Vars::Radar::HealthBar.Value && tEntity.m_iMaxHealth > 0)
-				DrawHealthBar(pDrawList, x, y, flSize, tEntity.m_iHealth, tEntity.m_iMaxHealth, flAlpha);
-			if (Vars::Radar::HeightIndicator.Value && std::abs(z) > 80.f)
-				DrawHeightTriangle(pDrawList, x, y, flSize, z, tColor);
-			break;
-		}
-		case ERadarEntityType::Building:
-		{
-			const float flHalf = std::max(flRadius * 0.85f, 3.5f);
-			pDrawList->AddRectFilled({ x - flHalf, y - flHalf }, { x + flHalf, y + flHalf }, uColor, 2.f);
-			pDrawList->AddRect({ x - flHalf, y - flHalf }, { x + flHalf, y + flHalf }, uOutline, 2.f, 0, 1.f);
-
-			const char* sTag = tEntity.m_iClass == 0 ? "S" : (tEntity.m_iClass == 1 ? "D" : (tEntity.m_iClass == 2 ? "T" : "B"));
-			const ImVec2 vTextSize = ImGui::CalcTextSize(sTag);
-			const ImVec2 vTextPos = { x - vTextSize.x * 0.5f, y - vTextSize.y * 0.5f };
-			pDrawList->AddText({ vTextPos.x + 1.f, vTextPos.y + 1.f }, uOutline, sTag);
-			pDrawList->AddText(vTextPos, ColorToU32(ScaleAlpha({ 255, 255, 255, 255 }, flAlpha)), sTag);
-
-			if (Vars::Radar::HealthBar.Value && tEntity.m_iMaxHealth > 0)
-				DrawHealthBar(pDrawList, x, y, flHalf * 2.f, tEntity.m_iHealth, tEntity.m_iMaxHealth, flAlpha);
-			if (Vars::Radar::HeightIndicator.Value && std::abs(z) > 80.f)
-				DrawHeightTriangle(pDrawList, x, y, flHalf * 2.f, z, tColor);
-			break;
-		}
-		case ERadarEntityType::Health:
-		{
-			const float flArm = std::max(flRadius * 0.55f, 3.f);
-			const float flThick = std::max(flRadius * 0.25f, 1.5f);
-			pDrawList->AddRectFilled({ x - flThick - 1.f, y - flArm - 1.f }, { x + flThick + 1.f, y + flArm + 1.f }, uOutline);
-			pDrawList->AddRectFilled({ x - flArm - 1.f, y - flThick - 1.f }, { x + flArm + 1.f, y + flThick + 1.f }, uOutline);
-			pDrawList->AddRectFilled({ x - flThick, y - flArm }, { x + flThick, y + flArm }, uColor);
-			pDrawList->AddRectFilled({ x - flArm, y - flThick }, { x + flArm, y + flThick }, uColor);
-			break;
-		}
-		case ERadarEntityType::Ammo:
-		{
-			const float flBox = std::max(flRadius * 0.45f, 2.5f);
-			pDrawList->AddRectFilled({ x - flBox, y - flBox }, { x + flBox, y + flBox }, uColor);
-			pDrawList->AddRect({ x - flBox, y - flBox }, { x + flBox, y + flBox }, uOutline, 0.f, 0, 1.f);
-			break;
-		}
-		case ERadarEntityType::Objective:
-		{
-			const float flDia = std::max(flRadius * 0.7f, 4.f);
-			const ImVec2 aPoints[4] = { { x, y - flDia }, { x + flDia, y }, { x, y + flDia }, { x - flDia, y } };
-			pDrawList->AddConvexPolyFilled(aPoints, 4, uColor);
-			pDrawList->AddPolyline(aPoints, 4, uOutline, ImDrawFlags_Closed, 1.2f);
-			break;
-		}
-		case ERadarEntityType::Projectile:
-		{
-			const float flDia = std::max(flRadius * 0.4f, 2.f);
-			const ImVec2 aPoints[4] = { { x, y - flDia }, { x + flDia, y }, { x, y + flDia }, { x - flDia, y } };
-			pDrawList->AddConvexPolyFilled(aPoints, 4, uColor);
-			pDrawList->AddPolyline(aPoints, 4, uOutline, ImDrawFlags_Closed, 1.f);
-			break;
-		}
-		default:
-		{
-			const float flDot = std::max(flRadius * 0.45f, 2.5f);
-			pDrawList->AddCircleFilled({ x, y }, flDot, uColor, 16);
-			pDrawList->AddCircle({ x, y }, flDot, uOutline, 16, 1.f);
-			break;
-		}
-		}
-	}
-
-	pDrawList->PopClipRect();
-}
-
-void CRadar::Draw(ImDrawList* pDrawList, CTFPlayer* pLocal)
-{
-	if (!pDrawList || !Vars::Radar::Enabled.Value
-		|| I::MatSystemSurface->IsCursorVisible() && !I::EngineClient->IsPlayingDemo() && !F::Menu.m_bIsOpen)
-		return;
-
-	const auto pCache = m_tCache.Get();
-	if (!pCache || !pCache->m_bValid)
-		return;
-
-	const float flViewYaw = I::EngineClient->GetViewAngles().y;
-	DrawBackground(pDrawList, pCache->m_flLocalFOV);
-	DrawPoints(pDrawList, *pCache, flViewYaw);
-}

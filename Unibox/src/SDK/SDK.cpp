@@ -1218,6 +1218,24 @@ EWeaponType SDK::GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryTy
 	return EWeaponType::HITSCAN;
 }
 
+static int UpdateThrowTick(CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool bStart, float flDelay)
+{
+	static CBaseHandle hWeapon;
+	static int iLastCommand = -1;
+	static int iThrowTick = -5;
+	const int iCommand = pCmd->command_number;
+	if (hWeapon != pWeapon->GetRefEHandle() || iCommand < iLastCommand || iCommand > iLastCommand + 1)
+		iThrowTick = -5;
+	else if (iCommand != iLastCommand)
+		iThrowTick = std::max(iThrowTick - 1, -5);
+	hWeapon = pWeapon->GetRefEHandle();
+	iLastCommand = iCommand;
+
+	if (bStart && iThrowTick == -5)
+		iThrowTick = std::max(TIME_TO_TICKS(flDelay), 1) + 1;
+	return iThrowTick;
+}
+
 int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool bTickBase)
 {
 	if (!pLocal || !pWeapon || pCmd->weaponselect)
@@ -1235,16 +1253,10 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 		case TF_WEAPON_BAT_WOOD:
 		case TF_WEAPON_BAT_GIFTWRAP:
 		{
-			static int iThrowTick = -5;
-			{
-				static int iLastTickBase = iTickBase;
-				if (iTickBase != iLastTickBase)
-					iThrowTick = std::max(iThrowTick - 1, -5);
-				iLastTickBase = iTickBase;
-			}
-
-			if (G::CanPrimaryAttack && pWeapon->HasPrimaryAmmoForShot() && pCmd->buttons & IN_ATTACK2 && iThrowTick == -5)
-				iThrowTick = 12;
+			static auto tf_scout_bat_launch_delay = H::ConVars.FindVar("tf_scout_bat_launch_delay");
+			const int iThrowTick = UpdateThrowTick(pWeapon, pCmd,
+				G::CanPrimaryAttack && pCmd->buttons & IN_ATTACK2 && pWeapon->HasPrimaryAmmoForShot(),
+				tf_scout_bat_launch_delay ? tf_scout_bat_launch_delay->GetFloat() : 0.1f);
 			if (iThrowTick > -5)
 				G::Throwing = G::CanSecondaryAttack = true;
 			if (iThrowTick > 1)
@@ -1294,17 +1306,9 @@ int SDK::IsAttacking(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* 
 	case TF_WEAPON_JAR_MILK:
 	case TF_WEAPON_JAR_GAS:
 	{
-		static int iThrowTick = -5;
-		{
-			static int iLastTickBase = iTickBase;
-			if (iTickBase != iLastTickBase)
-				iThrowTick = std::max(iThrowTick - 1, -5);
-			iLastTickBase = iTickBase;
-		}
-
 		const int iAttack = pWeapon->GetWeaponID() == TF_WEAPON_CLEAVER ? IN_ATTACK | IN_ATTACK2 : IN_ATTACK;
-		if (G::CanPrimaryAttack && pWeapon->HasPrimaryAmmoForShot() && pCmd->buttons & iAttack && iThrowTick == -5)
-			iThrowTick = 12;
+		const int iThrowTick = UpdateThrowTick(pWeapon, pCmd,
+			G::CanPrimaryAttack && pCmd->buttons & iAttack && pWeapon->HasPrimaryAmmoForShot(), 0.1f);
 		if (iThrowTick > -5)
 			G::Throwing = G::CanPrimaryAttack = true;
 		if (iThrowTick > 1)

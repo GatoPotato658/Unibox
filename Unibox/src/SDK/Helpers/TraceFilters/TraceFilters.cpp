@@ -87,9 +87,6 @@ bool CTraceFilterCollideable::ShouldHitEntity(IHandleEntity* pHandleEntity, int 
 	auto pEntity = reinterpret_cast<CBaseEntity*>(pHandleEntity);
 	const auto nClassID = pEntity->GetClassID();
 
-	if (m_iTeam == -1) 
-		m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
-
 	switch (nClassID)
 	{
 	case ETFClassID::CBaseEntity:
@@ -120,12 +117,19 @@ bool CTraceFilterCollideable::ShouldHitEntity(IHandleEntity* pHandleEntity, int 
 		if (m_iType != SKIP_CHECK && (m_iWeapon == WEAPON_INCLUDE ? m_bWeapon : !m_bWeapon))
 			return m_iType == FORCE_HIT;
 
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
 		return pEntity->m_iTeamNum() != m_iTeam;
 	}
 	case ETFClassID::CBaseObject:
 	case ETFClassID::CObjectSentrygun:
 	case ETFClassID::CObjectDispenser:
-		return nContentsMask & CONTENTS_MOVEABLE && (m_iObject == OBJECT_ALL ? true : m_iObject == OBJECT_NONE ? false : pEntity->m_iTeamNum() != m_iTeam);
+		if (!(nContentsMask & CONTENTS_MOVEABLE)) return false;
+		if (m_iObject == OBJECT_ALL) return true;
+		if (m_iObject == OBJECT_NONE) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
+		return pEntity->m_iTeamNum() != m_iTeam;
 	case ETFClassID::CObjectTeleporter:
 		return nContentsMask & CONTENTS_MOVEABLE;
 	case ETFClassID::CTFBaseBoss:
@@ -138,9 +142,15 @@ bool CTraceFilterCollideable::ShouldHitEntity(IHandleEntity* pHandleEntity, int 
 	case ETFClassID::CTFGrenadePipebombProjectile:
 		return nContentsMask & CONTENTS_MOVEABLE && m_bMisc && pEntity->As<CTFGrenadePipebombProjectile>()->m_iType() == TF_GL_MODE_REMOTE_DETONATE;
 	case ETFClassID::CFuncRespawnRoomVisualizer:
-		return nContentsMask & CONTENTS_PLAYERCLIP && pEntity->m_iTeamNum() != m_iTeam;
+		if (!(nContentsMask & CONTENTS_PLAYERCLIP)) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
+		return pEntity->m_iTeamNum() != m_iTeam;
 	case ETFClassID::CTFMedigunShield:
-		return !(nContentsMask & CONTENTS_PLAYERCLIP) && pEntity->m_iTeamNum() != m_iTeam;
+		if (nContentsMask & CONTENTS_PLAYERCLIP) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
+		return pEntity->m_iTeamNum() != m_iTeam;
 	}
 
 	return false;
@@ -155,10 +165,9 @@ bool CTraceFilterWorldAndPropsOnly::ShouldHitEntity(IHandleEntity* pHandleEntity
 	if (!pHandleEntity || pHandleEntity == m_pSkip)
 		return false;
 	if (pHandleEntity->GetRefEHandle().GetSerialNumber() == (1 << 15))
-		return nContentsMask & CONTENTS_SOLID && pHandleEntity->GetRefEHandle().GetEntryIndex() != m_iTeam; // team variable since cliententitylist can give nullptrs
+		return nContentsMask & CONTENTS_SOLID;
 
 	auto pEntity = reinterpret_cast<CBaseEntity*>(pHandleEntity);
-	if (m_iTeam == -1) m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
 	
 	switch (pEntity->GetClassID())
 	{
@@ -174,14 +183,17 @@ bool CTraceFilterWorldAndPropsOnly::ShouldHitEntity(IHandleEntity* pHandleEntity
 	case ETFClassID::CFuncConveyor:
 		return nContentsMask & CONTENTS_MOVEABLE;
 	case ETFClassID::CFuncRespawnRoomVisualizer:
-		return nContentsMask & CONTENTS_PLAYERCLIP && pEntity->m_iTeamNum() != m_iTeam;
+		if (!(nContentsMask & CONTENTS_PLAYERCLIP)) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
+		return pEntity->m_iTeamNum() != m_iTeam;
 	}
 
 	return false;
 }
 TraceType_t CTraceFilterWorldAndPropsOnly::GetTraceType() const
 {
-	return TRACE_EVERYTHING_FILTER_PROPS;
+	return TRACE_EVERYTHING;
 }
 
 #define MOVEMENT_COLLISION_GROUP 8
@@ -200,9 +212,6 @@ bool CTraceFilterNavigation::ShouldHitEntity(IHandleEntity* pHandleEntity, int n
 	const auto nClassID = pEntity->GetClassID();
 	if (nClassID == ETFClassID::CBaseEntity)
 		return true;
-
-	if (m_iTeam == -1)
-		m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
 
 	/*
 	if (nClassID == ETFClassID::CBaseDoor ||
@@ -239,6 +248,8 @@ bool CTraceFilterNavigation::ShouldHitEntity(IHandleEntity* pHandleEntity, int n
 	{
 		if (m_iPlayer == PLAYER_ALL) return true;
 		if (m_iPlayer == PLAYER_NONE) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
 		return pEntity->m_iTeamNum() != m_iTeam;
 	}
 
@@ -248,11 +259,18 @@ bool CTraceFilterNavigation::ShouldHitEntity(IHandleEntity* pHandleEntity, int n
 	{
 		if (m_iObject == OBJECT_ALL) return true;
 		if (m_iObject == OBJECT_NONE) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
 		return pEntity->m_iTeamNum() != m_iTeam || ((nContentsMask & CONTENTS_PLAYERCLIP) && m_pSkip && pEntity->As<CBaseObject>()->m_hBuilder().GetEntryIndex() == m_pSkip->entindex());
 	}
 
 	if (nClassID == ETFClassID::CFuncRespawnRoomVisualizer)
-		return (nContentsMask & CONTENTS_PLAYERCLIP) && m_iTeam != TEAM_UNASSIGNED && pEntity->ShouldCollide(MOVEMENT_COLLISION_GROUP, m_iTeam == TF_TEAM_RED ? BLU_CONTENTS_MASK : RED_CONTENTS_MASK);
+	{
+		if (!(nContentsMask & CONTENTS_PLAYERCLIP)) return false;
+		if (m_iTeam == -1)
+			m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
+		return m_iTeam != TEAM_UNASSIGNED && pEntity->ShouldCollide(MOVEMENT_COLLISION_GROUP, m_iTeam == TF_TEAM_RED ? BLU_CONTENTS_MASK : RED_CONTENTS_MASK);
+	}
 
 	return false;
 }

@@ -1311,19 +1311,17 @@ void CMisc::AutoHeatmakerFocus(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CMisc::AutoPeek(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost)
 {
-	static bool bReturning = false;
-
 	if (!bPost)
 	{
 		if (Vars::AutoPeek::Enabled.Value)
 		{
 			Vec3 vLocalPos = pLocal->m_vecOrigin();
 
-			if (bReturning)
+			if (m_bPeekReturning)
 			{
 				if (vLocalPos.DistTo2D(m_vPeekReturnPos) < 8.f)
 				{
-					bReturning = false;
+					m_bPeekReturning = false;
 					return;
 				}
 
@@ -1346,10 +1344,10 @@ void CMisc::AutoPeek(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost)
 			}
 		}
 		else
-			m_bPeekPlaced = bReturning = false;
+			m_bPeekPlaced = m_bPeekReturning = false;
 	}
-	else if (G::Attacking && m_bPeekPlaced)
-		bReturning = true;
+	else if (G::Attacking && m_bPeekPlaced && pLocal->m_vecOrigin().DistTo2D(m_vPeekReturnPos) >= 8.f)
+		m_bPeekReturning = true;
 }
 
 void CMisc::EdgeJump(CTFPlayer* pLocal, CUserCmd* pCmd, bool bPost)
@@ -1389,6 +1387,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 		F::NavBotMVMSniper.Reset();
 		F::AntiAim.OnLevelInit();
 
+		m_bPeekPlaced = m_bPeekReturning = false;
 		m_bEdgeBug = m_bEdgeBugCrouch = false;
 		ResetEdgebug();
 		break;
@@ -1397,7 +1396,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 		if (I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid")) != I::EngineClient->GetLocalPlayer())
 			return;
 
-		m_bPeekPlaced = false;
+		m_bPeekPlaced = m_bPeekReturning = false;
 
 		m_bEdgeBug = m_bEdgeBugCrouch = false;
 		ResetEdgebug();

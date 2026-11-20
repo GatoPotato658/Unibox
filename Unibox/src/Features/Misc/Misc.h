@@ -66,6 +66,7 @@ private:
 	bool m_bJumpValid = false;
 
 	bool m_bPeekPlaced = false;
+	bool m_bPeekReturning = false;
 	Vec3 m_vPeekReturnPos = {};
 
 	std::vector<std::string> m_vChatSpamLines;
@@ -154,6 +155,7 @@ public:
 	void RunPre(CTFPlayer* pLocal, CUserCmd* pCmd);
 	void RunPost(CTFPlayer* pLocal, CUserCmd* pCmd);
 	bool IsDuckSpeedActive() const { return m_bDuckSpeedActive; }
+	bool IsPeekReturning() const { return m_bPeekReturning; }
 
 	void Event(IGameEvent* pEvent, uint32_t uNameHash);
 	int AntiBackstab(CTFPlayer* pLocal, CUserCmd* pCmd);

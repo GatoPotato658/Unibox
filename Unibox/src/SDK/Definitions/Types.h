@@ -1185,7 +1185,8 @@ enum class EESPPosition
 	Bottom,
 	Left,
 	BottomRight,
-	BottomLeft
+	BottomLeft,
+	OnBar
 };
 
 struct ESPPositions_t
@@ -1193,7 +1194,7 @@ struct ESPPositions_t
 	int Name = int(EESPPosition::Top);
 	int Distance = int(EESPPosition::Bottom);
 	int HealthBar = int(EESPPosition::Left);
-	int HealthText = int(EESPPosition::Left);
+	int HealthText = int(EESPPosition::OnBar);
 	int UberBar = int(EESPPosition::Bottom);
 	int UberText = int(EESPPosition::BottomRight);
 	int ClassIcon = int(EESPPosition::Top);
@@ -1223,6 +1224,11 @@ struct ESPPositions_t
 			if (i < int(EESPPosition::Top) || i > int(EESPPosition::BottomLeft))
 				i = iDefault;
 		};
+		auto fAttachText = [](int& i, int iDefault)
+		{
+			if (i < int(EESPPosition::Top) || i > int(EESPPosition::OnBar))
+				i = iDefault;
+		};
 		auto fBar = [](int& i, int iDefault)
 		{
 			if (i < int(EESPPosition::Top) || i > int(EESPPosition::Left))
@@ -1234,8 +1240,8 @@ struct ESPPositions_t
 				i = iDefault;
 		};
 
-		fText(Name, tDefault.Name); fText(Distance, tDefault.Distance); fText(HealthText, tDefault.HealthText);
-		fText(UberText, tDefault.UberText); fText(ClassText, tDefault.ClassText); fText(WeaponText, tDefault.WeaponText);
+		fText(Name, tDefault.Name); fText(Distance, tDefault.Distance); fAttachText(HealthText, tDefault.HealthText);
+		fAttachText(UberText, tDefault.UberText); fText(ClassText, tDefault.ClassText); fText(WeaponText, tDefault.WeaponText);
 		fText(Priority, tDefault.Priority); fText(Labels, tDefault.Labels); fText(Buffs, tDefault.Buffs);
 		fText(Debuffs, tDefault.Debuffs); fText(Flags, tDefault.Flags); fText(LagComp, tDefault.LagComp);
 		fText(Ping, tDefault.Ping); fText(KDR, tDefault.KDR); fText(Mafia, tDefault.Mafia);

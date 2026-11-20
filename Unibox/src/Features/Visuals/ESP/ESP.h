@@ -10,6 +10,13 @@ const char* GetClassIconTexture(int iClassNum);
 IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
 #endif
 
+enum class EESPBar
+{
+	None,
+	Health,
+	Uber
+};
+
 struct Text_t
 {
 	int m_iMode = ALIGN_TOP;
@@ -17,6 +24,7 @@ struct Text_t
 	Color_t m_tColor = {};
 	Color_t m_tOutline = {};
 	byte m_ucBackgroundAlpha = 0;
+	EESPBar m_eAttachBar = EESPBar::None;
 };
 
 struct Bar_t
@@ -27,7 +35,7 @@ struct Bar_t
 	Color_t m_tOverfill = {};
 	Color_t m_tBackground = Color_t(0, 0, 0, 0);
 	bool m_bSmooth = false;
-	bool m_bHealth = false;
+	EESPBar m_eType = EESPBar::None;
 };
 
 enum class EESPBadge

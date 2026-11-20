@@ -284,6 +284,7 @@
     <ClCompile Include="src\Hooks\CAvatarImage_ApplyImage.cpp" />
     <ClCompile Include="src\Features\ImGui\Overlay\CaptureOverlay.cpp" />
     <ClCompile Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.cpp" />
+    <ClCompile Include="src\Features\Misc\AutoTranslate\AutoTranslate.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Core\Core.h" />
@@ -658,6 +659,7 @@
     <ClInclude Include="src\Features\Debug\Debug.h" />
     <ClInclude Include="src\Features\ImGui\Easings\Easings.h" />
     <ClInclude Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.h" />
+    <ClInclude Include="src\Features\Misc\AutoTranslate\AutoTranslate.h" />
     <ClInclude Include="src\Features\ImGui\Overlay\CaptureOverlay.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CClient_Precipitation.h" />
   </ItemGroup>

@@ -156,14 +156,12 @@ Vec3 CSpreadOptimizer::Point(float flI, float flJ) const
 	return m_vCentre + m_vRight * (flI * m_flCell) + m_vUp * (flJ * m_flCell);
 }
 
-bool CSpreadOptimizer::SetupMask(CTFPlayer* pLocal, CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye)
+bool CSpreadOptimizer::SetupMask(CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye)
 {
 	auto pSet = pTarget->As<CBaseAnimating>()->GetAimHitboxSet();
 	if (!pSet || pSet->numhitboxes <= 0 || !aBones)
 		return false;
 
-	m_pLocal = pLocal;
-	m_pTarget = pTarget;
 	m_aBones = aBones;
 	m_pSet = pSet;
 	m_iHitboxes = std::min(pSet->numhitboxes, MaxHitboxes);
@@ -243,7 +241,9 @@ CSpreadOptimizer::Cell_t CSpreadOptimizer::Ray(const Vec3& vEnd, float flU, floa
 		return Cell_t::Blocked;
 
 	m_iTraces++;
-	return SDK::VisPos(m_pLocal, m_pTarget, m_vEye, m_vEye + vDirection * flNearest) ? Cell_t::Hit : Cell_t::Blocked;
+	CGameTrace tTrace = {};
+	SDK::Trace(m_vEye, m_vEye + vDirection * flNearest, MASK_SHOT | CONTENTS_GRATE, m_pTraceFilter, &tTrace);
+	return tTrace.DidHit() ? Cell_t::Blocked : Cell_t::Hit;
 }
 
 CSpreadOptimizer::Cell_t CSpreadOptimizer::Cell(int iI, int iJ)
@@ -375,9 +375,9 @@ CSpreadOptimizer::Score_t CSpreadOptimizer::Refine(float& flA, float& flB, Score
 	return tBest;
 }
 
-bool CSpreadOptimizer::Optimize(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye, Vec3& vAimPos)
+bool CSpreadOptimizer::Optimize(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye, Vec3& vAimPos, ITraceFilter& tTraceFilter)
 {
-	if (!BuildKernel(pLocal, pWeapon) || !SetupMask(pLocal, pTarget, aBones, flModelScale, vHullMins, vHullMaxs, vEye))
+	if (!BuildKernel(pLocal, pWeapon) || !SetupMask(pTarget, aBones, flModelScale, vHullMins, vHullMaxs, vEye))
 		return true;
 
 	float flU, flV;
@@ -386,7 +386,9 @@ bool CSpreadOptimizer::Optimize(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBase
 
 	float flA = flU / m_flCell, flB = flV / m_flCell;
 	const float flSeedA = flA, flSeedB = flB;
+	m_pTraceFilter = &tTraceFilter;
 	const Score_t tBest = Refine(flA, flB, Score(flA, flB));
+	m_pTraceFilter = nullptr;
 	if (flA != flSeedA || flB != flSeedB)
 		vAimPos = Point(flA, flB);
 

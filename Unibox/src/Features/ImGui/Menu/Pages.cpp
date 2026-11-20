@@ -211,7 +211,7 @@ static void AimbotWeapons()
 		}
 		PopTransparent();
 		FToggle(Vars::Aimbot::Hitscan::ForwardTrack);
-		FTooltip("Simulates the target forward to where they will be by the time your shot lands. The mode adapts automatically. Likes to miss when your ping is >80.");
+		FTooltip("Tries one predicted pose when no recorded pose offers a shot.");
 		FToggle(Vars::Aimbot::Hitscan::SpreadOptimization);
 		FTooltip("Shifts the aim point so the most pellets of the spread pattern land on the target. Only used when nospread is not correcting the shot.");
 		PushTransparent(!Vars::Aimbot::Hitscan::SpreadOptimization.Value);
@@ -235,7 +235,7 @@ static void AimbotWeapons()
 			{
 				FDropdown(Vars::Aimbot::Hitscan::ForwardTrackMode);
 				FToggle(Vars::Aimbot::Hitscan::ForwardTrackAirOnly);
-				FDropdown(Vars::Aimbot::Hitscan::PeekCheck, FDropdownEnum::None, 0, &Hovered); FTooltip("This should stay as doubletap only or off if you want to be able to target hitboxes other than the highest priority one", Hovered);
+				FDropdown(Vars::Aimbot::Hitscan::PeekCheck, FDropdownEnum::None, 0, &Hovered); FTooltip("Requires the selected aim point to also be visible from the earlier peek position.", Hovered);
 				FSlider(Vars::Aimbot::Hitscan::PeekAmount);
 				FSlider(Vars::Aimbot::Hitscan::BoneSizeSubtract);
 				FSlider(Vars::Aimbot::Hitscan::BoneSizeMinimumScale);
@@ -682,16 +682,12 @@ static void VisualsView()
 		FToggle(Vars::Radar::Enabled);
 		PushTransparent(!Vars::Radar::Enabled.Value);
 		{
-			FDropdown(Vars::Radar::Style);
 			FSlider(Vars::Radar::Range);
-			FToggle(Vars::Radar::DrawOutOfRange);
-			FSlider(Vars::Radar::Size);
-			FSlider(Vars::Radar::BackgroundAlpha);
-			FSlider(Vars::Radar::LineAlpha);
-			FToggle(Vars::Radar::HealthBar);
-			FToggle(Vars::Radar::HeightIndicator);
-			FToggle(Vars::Radar::ViewCone);
-			FToggle(Vars::Radar::PlayerDirection);
+			FToggle(Vars::Radar::DrawMap);
+			FToggle(Vars::Radar::RotateMap);
+			FToggle(Vars::Radar::ShowTeammates);
+			FDropdown(Vars::Radar::PlayerStyle);
+			FSlider(Vars::Radar::IconSize);
 		}
 		PopTransparent();
 	} EndSection();
@@ -906,6 +902,11 @@ static void HvHTicks()
 	if (Section("Auto peek"))
 	{
 		FToggle(Vars::AutoPeek::Enabled);
+		PushDisabled(F::AntiCheatCompatibility.Active());
+		{
+			FToggle(Vars::AutoPeek::Warp);
+		}
+		PopDisabled();
 	} EndSection();
 
 	TableNextColumn();
@@ -1231,6 +1232,14 @@ static void MiscAutomation()
 		PushTransparent(!KillSay::Enable.Value);
 		{
 			FToggle(KillSay::TeamChat);
+		}
+		PopTransparent();
+		FToggle(AutoTranslate::Enable);
+		PushTransparent(!AutoTranslate::Enable.Value);
+		{
+			FSDropdown(AutoTranslate::TargetLanguage);
+			FToggle(AutoTranslate::IgnoreLocal);
+			FSDropdown(AutoTranslate::ApiKey);
 		}
 		PopTransparent();
 

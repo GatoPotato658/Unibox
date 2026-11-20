@@ -37,8 +37,6 @@ struct Group_t
 	int m_iOffscreenArrowsOffset = 100;
 	float m_flOffscreenArrowsMaxDistance = 1000.f;
 
-	bool m_bRadar = false;
-
 	bool m_bPickupTimer = false;
 
 	int m_iBacktrack = 0b0;

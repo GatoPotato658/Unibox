@@ -3,6 +3,7 @@
 #include "../Features/Players/SteamProfileCache.h"
 #include "../Features/Misc/TelemetryBlocker/TelemetryBlocker.h"
 #include "../Features/Misc/Radio/Radio.h"
+#include "../Features/Misc/AutoTranslate/AutoTranslate.h"
 
 #include "../SDK/SDK.h"
 #include "../BytePatches/BytePatches.h"
@@ -260,6 +261,7 @@ CCore::UnloadResult_t CCore::Unload()
 	SDK::ShutdownSteamScreenshotHook();
 	F::SteamProfileCache.Shutdown();
 	F::Radio.Shutdown();
+	F::AutoTranslate.Shutdown();
 
 #ifndef TEXTMODE
 	bool bMaterialsUnloaded = !U::Hooks.IsInitialized() || !F::Materials.m_bLoaded;

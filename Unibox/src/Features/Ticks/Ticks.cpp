@@ -7,6 +7,7 @@
 #include "../Backtrack/Backtrack.h"
 #include "../Createmove/Createmove.h"
 #include "../ImGui/IndicatorPanel.h"
+#include "../Misc/Misc.h"
 
 MAKE_SIGNATURE(Host_ShouldRun, "engine.dll", "48 83 EC ? 48 8B 05 ? ? ? ? 83 78 ? ? 74 ? 48 8B 05", 0x0);
 MAKE_SIGNATURE(net_time, "engine.dll", "F2 0F 10 05 ? ? ? ? 66 0F 2F 05 ? ? ? ? 72", 0x0);
@@ -301,13 +302,18 @@ void CTicks::Recharge(CTFPlayer* pLocal)
 	m_iShiftedGoal = m_iShiftedTicks + 1;
 }
 
+static bool ShouldPeekWarp()
+{
+	return Vars::AutoPeek::Enabled.Value && Vars::AutoPeek::Warp.Value && F::Misc.IsPeekReturning() && !F::AntiCheatCompatibility.Active();
+}
+
 void CTicks::Warp()
 {
 	if (!m_bGoalReached)
 		return;
 
 	m_bWarp = false;
-	if (!Vars::Doubletap::Warp.Value
+	if (!Vars::Doubletap::Warp.Value && !ShouldPeekWarp()
 		|| !m_iShiftedTicks || m_bDoubletap || m_bRecharge)
 		return;
 
@@ -569,6 +575,7 @@ void CTicks::Move(float accumulated_extra_samples, bool bFinalTick)
 			MoveFunc(accumulated_extra_samples, m_iShiftedTicks - 1 == m_iShiftedGoal);
 		}
 
+		m_bGoalReached = true;
 		m_bAntiWarp = m_bTimingUnsure = false;
 		if (m_bWarp)
 			m_iDeficit = 0;
@@ -623,6 +630,14 @@ void CTicks::MoveManage()
 void CTicks::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
 	Doubletap(pLocal, pCmd);
+	const bool bPeekWarp = ShouldPeekWarp();
+	if (bPeekWarp && !m_bDoubletap && !m_bRecharge && !m_bWarp && m_iShiftedTicks > 0)
+	{
+		m_bWarp = true;
+		m_iShiftedGoal = std::max(m_iShiftedTicks - Vars::Doubletap::WarpRate.Value + 1, 0);
+	}
+	else if (m_bWarp && !Vars::Doubletap::Warp.Value && !bPeekWarp)
+		m_iShiftedGoal = m_iShiftedTicks;
 	AntiWarp(pLocal, pCmd);
 	ManagePacket(pCmd);
 

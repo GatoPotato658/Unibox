@@ -12,6 +12,7 @@ Enum(PointFlags, None = 0, Regular = 1 << 0, Lob = 1 << 1)
 Enum(PointType, Direct, Geometry, Air)
 Enum(CalculateFlags, None = 0, TwoPass = 1 << 0, SetupClip = 1 << 1, AccountDrag = 1 << 2, LobAngle = 1 << 3, Accuracy = TwoPass | SetupClip | AccountDrag)
 Enum(CalculateResult, Pending, Good, Time, Bad)
+Enum(FlightCacheState, Untested, Failed, ImpactHit, Verified)
 Enum(ZombiePhase, Idle, Charge, Windup, Burst, Tail)
 Enum(PasstimePhase, Idle, Aim, Hold)
 Enum(PasstimeKind, None, Goal, Pass)
@@ -32,6 +33,7 @@ struct Info_t
 	Vec3 m_vAngFix = {};
 	float m_flVelocity = 0.f;
 	float m_flGravity = 0.f;
+	float m_flLifetime = 60.f;
 	float m_flRadius = 0.f;
 	float m_flRadiusTime = 0.f;
 	float m_flBoundsTime = 0.f;
@@ -70,10 +72,25 @@ struct Point_t
 	Solution_t m_tSolution = {};
 	uint8_t m_iType = PointTypeEnum::Direct;
 	float m_flFirstTime = 0.f;
+	int m_iFirstTimeTicks = 0;
 	std::vector<Vec3> m_vPath = {};
 	Vec3 m_vVelocity = {};
 	int m_iIndex = -1;
 	bool m_bPathSet = false;
+	uint8_t m_iFlightState = FlightCacheStateEnum::Untested;
+	int m_iCachedSimTime = -1;
+	int m_iHitTick = -1;
+	int m_iPopCount = 0;
+	Vec3 m_vImpactPos = {};
+	Vec3 m_vImpactNormal = {};
+	Vec3 m_vLaunchAng = {};
+	Vec3 m_vCachedHull = {};
+	int m_nCachedMask = MASK_SOLID;
+};
+struct SplashCandidate_t
+{
+	int m_iIndex = -1;
+	float m_flDistSqr = 0.f;
 };
 
 struct Offset_t
@@ -125,9 +142,9 @@ private:
 	Splashes_t GetSplashes();
 	void SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& vSplashPoints, uint8_t iFlags = CalculateFlagsEnum::None);
 	std::vector<Point_t> SolveSplashPoints(Vec3 vOrigin, std::vector<Setup_t>& vSplashPoints, uint8_t iFlags = CalculateFlagsEnum::Accuracy);
-	std::vector<Point_t> GetSplashPoints(Vec3 vOrigin, std::vector<Point_t>& vSplashPoints, int iSimTime, uint8_t iFlags = CalculateFlagsEnum::Accuracy, bool bFirst = false);
+	void GetSplashPoints(Vec3 vOrigin, const std::vector<Point_t>& vSplashPoints, int iSimTime, uint8_t iFlags, bool bFirst, float flLowestDistance, std::vector<SplashCandidate_t>& vOut);
 
-	void CalculateAngle(const Vec3& vLocalPos, const Vec3& vTargetPos, int iSimTime, Solution_t& tOut, uint8_t iFlags = CalculateFlagsEnum::Accuracy, int iTolerance = -1);
+	void CalculateAngle(const Vec3& vLocalPos, const Vec3& vTargetPos, int iSimTime, Solution_t& tOut, uint8_t iFlags = CalculateFlagsEnum::Accuracy, int iTolerance = -1, float* pFirstTime = nullptr);
 	const FireSetup_t& GetFireSetup(uint8_t iFlags);
 	bool PrepareParallel(uint8_t iFlags);
 	bool TestAngle(const Vec3& vPoint, const Vec3& vAngles, int iSimTime, uint8_t iType, uint8_t iFlags, bool bSecondTest = false);
@@ -157,9 +174,31 @@ private:
 	std::vector<Setup_t> m_vSplashPoints = {};
 	FireSetup_t m_aFireSetup[2] = {};
 	bool m_aFireSetupPrimed[2] = {};
+	int m_iFireSetupTick = -1;
+	CTFPlayer* m_pFireSetupLocal = nullptr;
+	CTFWeaponBase* m_pFireSetupWeapon = nullptr;
+	int m_iFireSetupWeaponID = -1;
+	const SpecialProjectile_t* m_pFireSetupSpecial = nullptr;
+	CBaseEntity* m_pFireSetupProjectile = nullptr;
 
 	bool m_bLastTickHeld = false;
 	bool m_bLowerBow = false;
+	CBaseHandle m_hThrowAimWeapon;
+	int m_iThrowAimCommand = -1;
+	Vec3 m_vThrowAim = {};
+	struct ShotDiagnostic_t
+	{
+		CBaseHandle m_hTarget;
+		int m_iCommand;
+		int m_iTargetTick;
+		int m_iServerTick;
+		int m_iExpireTick;
+		Vec3 m_vPredicted;
+		Vec3 m_vProjectileEnd;
+		bool m_bHasProjectileEnd;
+	};
+	std::deque<ShotDiagnostic_t> m_vShotDiagnostics;
+	void LogShot(const Target_t& tTarget, const CUserCmd* pCmd);
 	TickRecord m_tCurrentRecord = {};
 	std::vector<Vec3> m_vTargetPath = {};
 
@@ -234,6 +273,7 @@ private:
 	int m_iWeaponID = -1;
 	int m_iMethod = -1;
 	int m_iResult = false;
+	int m_iHitSimTime = -1;
 	bool m_bUpdate = true;
 	bool m_bBestPlayerPathSet = false;
 	bool m_bBlockAimAnglesDraw = false;
@@ -268,6 +308,8 @@ private:
 	CObjectSentrygun* m_pSentryGun = nullptr;
 
 public:
+	void UpdateShotDiagnostics();
+	void ResetShotDiagnostics() { m_vShotDiagnostics.clear(); }
 	void ResetMainSearch() { m_bMainSearchComplete = false; }
 	void ResetPreview() { m_iLastPreviewTick = -1, m_vPreviewAimAngles = {}, m_vPreviewPath.clear(); }
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);

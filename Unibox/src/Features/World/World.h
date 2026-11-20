@@ -72,6 +72,7 @@ class CWorld
 {
 private:
 	bool FaceValid(const std::vector<Vec3>& vVertices, const Vec3* pNormal, const Vec3* pMins = nullptr, const Vec3* pMaxs = nullptr);
+	void CollectFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCheckNormal, std::vector<Face_t>& vOut);
 
 	VerticesValidCallback* m_pVerticesValidCallback = &s_fVerticesValid;
 	BoundsValidCallback* m_pBoundsValidCallback = &s_fBoundsValid;
@@ -81,6 +82,21 @@ private:
 	std::unordered_map<void*, std::vector<Face_t>> m_mFaceCache = {};
 	std::vector<int> m_vBrushStorage = {};
 	std::vector<Vec3> m_vDispVertices = std::vector<Vec3>(3);
+	std::vector<Vec3> m_vTempVertices = {};
+
+	struct AABBCacheEntry_t
+	{
+		Vec3 m_vMins = {};
+		Vec3 m_vMaxs = {};
+		int m_iMask = 0;
+		int m_iFlags = 0;
+		bool m_bHasFilter = false;
+		std::vector<Face_t> m_vRawFaces = {};
+	};
+	int m_iQueryCacheTick = -1;
+	size_t m_uQueryCacheCount = 0;
+	size_t m_uQueryCacheNext = 0;
+	std::array<AABBCacheEntry_t, 4> m_aQueryCache = {};
 
 public:
 	void Cache();
@@ -90,7 +106,7 @@ public:
 	void CacheEntities();
 	void Uncache();
 
-	std::vector<Face_t> GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask = MASK_SOLID, ITraceFilter* pFilter = nullptr, int iFlags = FaceTypeEnum::All);
+	std::vector<Face_t> GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask = MASK_SOLID, ITraceFilter* pFilter = nullptr, int iFlags = FaceTypeEnum::All, bool bCacheQuery = false);
 
 	void SetNormalValidCallback(NormalValidCallback* pCallback = nullptr);
 

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -187,9 +188,8 @@ namespace
 
 	bool CopyGroup(const studiomeshgroup_t& source, int boneCount, bool (&usedBones)[MAXSTUDIOBONES], Group& group)
 	{
-		if (!source.m_pMesh || source.m_MeshNeedsRestore || source.m_pMorph ||
-			(source.m_Flags & (MESHGROUP_IS_FLEXED | MESHGROUP_IS_DELTA_FLEXED)) ||
-			(source.m_Flags & ~MESHGROUP_IS_HWSKINNED) ||
+		if (!source.m_pMesh || source.m_MeshNeedsRestore ||
+			(source.m_Flags & ~(MESHGROUP_IS_HWSKINNED | MESHGROUP_IS_FLEXED | MESHGROUP_IS_DELTA_FLEXED)) ||
 			source.m_NumStrips <= 0 || source.m_NumStrips > 65536 || !source.m_pStripData ||
 			source.m_NumVertices <= 0 || source.m_NumVertices > 65536)
 			return false;
@@ -485,7 +485,8 @@ namespace
 		state(D3DRS_LIGHTING, FALSE);
 		state(D3DRS_SRGBWRITEENABLE, FALSE);
 		state(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
-		state(D3DRS_DEPTHBIAS, 0);
+		const float depthBias = packet.occluded ? 0.f : -1e-5f;
+		state(D3DRS_DEPTHBIAS, std::bit_cast<DWORD>(depthBias));
 		state(D3DRS_SLOPESCALEDEPTHBIAS, 0);
 		if (!success)
 			return false;

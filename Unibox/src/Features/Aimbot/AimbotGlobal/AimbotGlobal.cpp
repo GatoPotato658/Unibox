@@ -8,6 +8,7 @@
 #include "../../NavBot/Jobs/NavBotJobs.h"
 #include "../../Followbot/Followbot.h"
 #include "../AutoHeal/AutoHeal.h"
+#include "../AimbotProjectile/ProjProfiler.h"
 
 inline int GetPriorityIdx(CTFWeaponBase* pWeapon)
 {
@@ -65,6 +66,8 @@ CrosshairRecord_t CAimbotGlobal::GetCrosshairRecord(CTFPlayer* pLocal, CBaseEnti
 std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTargets)(CTFPlayer* pLocal, CTFWeaponBase* pWeapon), CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
 	int iMethod, int iMaxTargets)
 {
+	PROJ_ZONE(TargetSelect);
+
 	auto vTargets = GetTargets(pLocal, pWeapon);
 	SortTargetsPre(vTargets, iMethod);
 
@@ -172,23 +175,9 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 	if (pTarget->IsDormant())
 		return EntityCenterInFOV(pTarget, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo);
 
-	matrix3x4* aBones = F::Backtrack.GetBones(pTarget);
-	if (!Vars::Visuals::Removals::Interpolation.Value)
-	{
-		std::vector<TickRecord*> vRecords = {};
-		if (F::Backtrack.GetRecords(pTarget, vRecords) && !vRecords.empty())
-		{
-			float flLerp = Vars::Visuals::Removals::Lerp.Value ? 0.f : G::Lerp;
-			for (auto pRecord : vRecords)
-			{
-				if (F::EnginePrediction.m_flOldCurrentTime - pRecord->m_flSimTime > flLerp)
-				{
-					aBones = pRecord->m_aBones;
-					break;
-				}
-			}
-		}
-	}
+	matrix3x4* aBones = !Vars::Visuals::Removals::Interpolation.Value
+		? F::Backtrack.GetBones(pTarget, F::EnginePrediction.m_flOldCurrentTime, Vars::Visuals::Removals::Lerp.Value ? 0.f : G::Lerp)
+		: F::Backtrack.GetBones(pTarget);
 	if (!aBones)
 		return false;
 
@@ -196,7 +185,12 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 	if (!pSet)
 		return false;
 
-	float flMinFOV = std::numeric_limits<float>::max();
+	Vec3 vLocalForward;
+	Math::AngleVectors(vLocalAngles, &vLocalForward);
+
+	float flBestDot = -2.f;
+	Vec3 vBestPos = {};
+	bool bFound = false;
 	for (int nHitbox = 0; nHitbox < pSet->numhitboxes; nHitbox++)
 	{
 		if (!IsHitboxValid(pTarget, nHitbox, iHitboxes))
@@ -207,22 +201,26 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 			continue;
 
 		Vec3 vCurPos;
-		Math::VectorTransform((pBox->bbmin + pBox->bbmax) / 2, aBones[pBox->bone], vCurPos);
-		Vec3 vCurAngleTo = Math::CalcAngle(vLocalPos, vCurPos);
-		float flCurFOVTo = Math::CalcFov(vLocalAngles, vCurAngleTo);
+		Math::VectorTransform((pBox->bbmin + pBox->bbmax) * 0.5f, aBones[pBox->bone], vCurPos);
+		const Vec3 vDelta = vCurPos - vLocalPos;
+		const float flDistSqr = vDelta.LengthSqr();
+		const float flDot = flDistSqr > 0.f ? vLocalForward.Dot(vDelta) / sqrtf(flDistSqr) : 1.f;
 
-		if (flCurFOVTo < flMinFOV)
+		if (flDot > flBestDot)
 		{
-			vPos = vCurPos;
-			vAngleTo = vCurAngleTo;
-			flFOVTo = flMinFOV = flCurFOVTo;
+			flBestDot = flDot;
+			vBestPos = vCurPos;
+			bFound = true;
 		}
 	}
 
-	if (flMinFOV == std::numeric_limits<float>::max())
+	if (!bFound)
 		return false;
 
-	return flMinFOV <= GetAimFOV();
+	vPos = vBestPos;
+	vAngleTo = Math::CalcAngle(vLocalPos, vBestPos);
+	flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
+	return flFOVTo <= GetAimFOV();
 }
 
 bool CAimbotGlobal::IsHitboxValid(CBaseEntity* pEntity, int nHitbox, int iHitboxes)

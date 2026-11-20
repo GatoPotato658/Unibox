@@ -358,6 +358,12 @@ void CWorld::CacheEntities()
 
 void CWorld::Uncache()
 {
+	m_iQueryCacheTick = -1;
+	m_uQueryCacheCount = 0;
+	m_uQueryCacheNext = 0;
+	for (auto& tEntry : m_aQueryCache)
+		tEntry.m_vRawFaces.clear();
+
 	if (m_iNeedsCache == FaceTypeEnum::Cache)
 		return;
 
@@ -366,12 +372,8 @@ void CWorld::Uncache()
 	m_iNeedsCache = FaceTypeEnum::Cache;
 }
 
-std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags)
+void CWorld::CollectFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCheckNormal, std::vector<Face_t>& vOut)
 {
-	Cache();
-
-	std::vector<Face_t> vFaces;
-
 	if ((iFlags & (FaceTypeEnum::BoxBrush | FaceTypeEnum::PlaneBrush)) && I::BSPData && I::BSPData->numbrushes > 0)
 	{
 		m_vBrushStorage.resize(I::BSPData->numbrushes);
@@ -380,22 +382,23 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 		for (int iBrush = 0; iBrush < vBrushes.Count(); iBrush++)
 		{
 			cbrush_t* pBrush = &I::BSPData->map_brushes[vBrushes[iBrush]];
-			if (!m_mFaceCache.contains(pBrush))
+			auto it = m_mFaceCache.find(pBrush);
+			if (it == m_mFaceCache.end())
 				continue;
 
 			bool bBox = pBrush->IsBox();
 			if (!(iFlags & (bBox ? FaceTypeEnum::BoxBrush : FaceTypeEnum::PlaneBrush)))
 				continue;
 
-			auto& vCache = m_mFaceCache[pBrush];
-			if (bBox)
+			auto& vCache = it->second;
+			if (bBox && bCheckNormal)
 			{
 				for (auto& tFace : vCache)
 				{
 					if (FaceValid(tFace.m_vVertices, &tFace.m_vNormal, &vMins, &vMaxs))
 					{
-						vFaces.push_back(tFace);
-						for (auto& vVertex : vFaces.back().m_vVertices)
+						vOut.push_back(tFace);
+						for (auto& vVertex : vOut.back().m_vVertices)
 							vVertex = vVertex.Clamp(vMins, vMaxs);
 					}
 				}
@@ -404,8 +407,8 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 			{
 				for (auto& tFace : vCache)
 				{
-					if (FaceValid(tFace.m_vVertices, &tFace.m_vNormal, &vMins, &vMaxs))
-						vFaces.push_back(tFace);
+					if (FaceValid(tFace.m_vVertices, bCheckNormal ? &tFace.m_vNormal : nullptr, &vMins, &vMaxs))
+						vOut.push_back(tFace);
 				}
 			}
 		}
@@ -429,8 +432,8 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 				vVertices[1] = pDispTree->m_aVerts[pTri->GetVert(1)];
 				vVertices[2] = pDispTree->m_aVerts[pTri->GetVert(2)];
 
-				if (FaceValid(vVertices, &pTri->m_vecNormal, &vMins, &vMaxs))
-					vFaces.emplace_back(vVertices, pTri->m_vecNormal, FaceTypeEnum::Displacement);
+				if (FaceValid(vVertices, bCheckNormal ? &pTri->m_vecNormal : nullptr, &vMins, &vMaxs))
+					vOut.emplace_back(vVertices, pTri->m_vecNormal, FaceTypeEnum::Displacement);
 			}
 		}
 	}
@@ -464,28 +467,102 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 				continue;
 
 			vcollide_t* pCollide = I::ModelInfoClient->GetVCollide(pCollideable->GetCollisionModel());
-			if (!m_mFaceCache.contains(pCollide))
-				continue; // cache as well?
+			auto it = m_mFaceCache.find(pCollide);
+			if (it == m_mFaceCache.end())
+				continue;
 
-			auto& vCache = m_mFaceCache[pCollide];
-			for (auto& tFace : vCache)
+			const bool bHasAngles = bool(pCollideable->GetCollisionAngles());
+			Vec3 vCollisionOrigin;
+			matrix3x4 mTransform;
+			if (!bHasAngles)
+				vCollisionOrigin = pCollideable->GetCollisionOrigin();
+			else
+				Math::MatrixCopy(pCollideable->CollisionToWorldTransform(), mTransform);
+
+			for (auto& tFace : it->second)
 			{
-				std::vector<Vec3> vVertices = tFace.m_vVertices;
+				m_vTempVertices = tFace.m_vVertices;
 				Vec3 vNormal = tFace.m_vNormal;
-				if (!pCollideable->GetCollisionAngles())
+				if (!bHasAngles)
 				{
-					for (auto& vVertex : vVertices)
-						vVertex += pCollideable->GetCollisionOrigin();
+					for (auto& vVertex : m_vTempVertices)
+						vVertex += vCollisionOrigin;
 				}
 				else
 				{
-					for (auto& vVertex : vVertices)
-						vVertex = Math::VectorTransform(vVertex, pCollideable->CollisionToWorldTransform());
-					vNormal = (vVertices[0] - vVertices[2]).Cross(vVertices[0] - vVertices[1]).Normalized();
+					for (auto& vVertex : m_vTempVertices)
+						vVertex = Math::VectorTransform(vVertex, mTransform);
+					vNormal = (m_vTempVertices[0] - m_vTempVertices[2]).Cross(m_vTempVertices[0] - m_vTempVertices[1]).Normalized();
 				}
 
-				if (FaceValid(vVertices, &vNormal, &vMins, &vMaxs))
-					vFaces.emplace_back(vVertices, vNormal, tFace.m_iType);
+				if (FaceValid(m_vTempVertices, bCheckNormal ? &vNormal : nullptr, &vMins, &vMaxs))
+					vOut.emplace_back(m_vTempVertices, vNormal, tFace.m_iType);
+			}
+		}
+	}
+}
+
+std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCacheQuery)
+{
+	Cache();
+
+	std::vector<Face_t> vFaces;
+	if (!bCacheQuery)
+	{
+		CollectFacesInAABB(vMins, vMaxs, iMask, pFilter, iFlags, true, vFaces);
+		return vFaces;
+	}
+
+	const int iTick = I::GlobalVars ? I::GlobalVars->tickcount : -1;
+	if (m_iQueryCacheTick != iTick)
+	{
+		m_iQueryCacheTick = iTick;
+		m_uQueryCacheCount = 0;
+		m_uQueryCacheNext = 0;
+	}
+
+	const bool bHasFilter = pFilter != nullptr;
+	AABBCacheEntry_t* pEntry = nullptr;
+	for (size_t i = 0; i < m_uQueryCacheCount; i++)
+	{
+		auto& tEntry = m_aQueryCache[i];
+		if (tEntry.m_iMask == iMask
+			&& tEntry.m_iFlags == iFlags
+			&& tEntry.m_bHasFilter == bHasFilter
+			&& tEntry.m_vMins == vMins
+			&& tEntry.m_vMaxs == vMaxs)
+		{
+			pEntry = &tEntry;
+			break;
+		}
+	}
+
+	if (!pEntry)
+	{
+		pEntry = &m_aQueryCache[m_uQueryCacheNext];
+		m_uQueryCacheNext = (m_uQueryCacheNext + 1) % m_aQueryCache.size();
+		if (m_uQueryCacheCount < m_aQueryCache.size())
+			m_uQueryCacheCount++;
+
+		pEntry->m_vMins = vMins;
+		pEntry->m_vMaxs = vMaxs;
+		pEntry->m_iMask = iMask;
+		pEntry->m_iFlags = iFlags;
+		pEntry->m_bHasFilter = bHasFilter;
+		pEntry->m_vRawFaces.clear();
+		CollectFacesInAABB(vMins, vMaxs, iMask, pFilter, iFlags, false, pEntry->m_vRawFaces);
+	}
+
+	vFaces.reserve(pEntry->m_vRawFaces.size());
+	for (const auto& tFace : pEntry->m_vRawFaces)
+	{
+		if ((*m_pNormalValidCallback)(tFace.m_vVertices, tFace.m_vNormal))
+		{
+			vFaces.push_back(tFace);
+			if (tFace.m_iType == FaceTypeEnum::BoxBrush)
+			{
+				for (auto& vVertex : vFaces.back().m_vVertices)
+					vVertex = vVertex.Clamp(vMins, vMaxs);
 			}
 		}
 	}

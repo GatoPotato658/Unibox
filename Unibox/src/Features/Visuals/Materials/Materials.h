@@ -2,6 +2,7 @@
 #include "../../../SDK/SDK.h"
 
 #include <atomic>
+#include <mutex>
 
 struct Material_t
 {
@@ -58,6 +59,11 @@ public:
 	std::atomic_bool m_bLoading = false;
 
 private:
+	void ApplyMaterialEdits();
+	void ApplyMaterialEdit(const char* sName, const char* sVMT);
+
+	std::mutex m_tMaterialEditsMutex;
+	std::vector<std::pair<std::string, std::string>> m_vMaterialEdits;
 	std::atomic<PendingOperation> m_ePendingOperation = PendingOperation::None;
 	std::atomic_bool m_bUnloadComplete = false;
 };

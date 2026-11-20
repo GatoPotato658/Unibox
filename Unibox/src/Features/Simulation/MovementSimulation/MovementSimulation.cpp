@@ -24,6 +24,9 @@ struct FitSample_t
 	float m_flEyeYaw = 0.f;
 	float m_flMaxSpeed = 0.f;
 	bool m_bDucked = false;
+	float m_flWeight = 1.f;
+	float m_flEyeDelta = 0.f;
+	Vec3 m_vEyeDir = {};
 };
 
 static inline float Heading(const Vec3& vVelocity)
@@ -76,12 +79,12 @@ static inline void ClampSpeed2D(Vec3& vVelocity, float flMax)
 	vVelocity.x *= flScale, vVelocity.y *= flScale;
 }
 
-static inline void ClampBackSpeed(Vec3& vVelocity, float flViewYaw, float flMax, const MovePhysics_t& tPhysics)
+static inline void ClampBackSpeed(Vec3& vVelocity, float flViewYaw, float flMax, const MovePhysics_t& tPhysics, const Vec3* pForward = nullptr)
 {
 	if (tPhysics.m_flClampBack >= 1.f || vVelocity.Length2D() <= tPhysics.m_flClampBackMin)
 		return;
 
-	const Vec3 vForward = YawDirection(flViewYaw);
+	const Vec3 vForward = pForward ? *pForward : YawDirection(flViewYaw);
 	const float flForward = vVelocity.x * vForward.x + vVelocity.y * vForward.y;
 	if (flForward >= 0.f)
 		return;
@@ -154,6 +157,9 @@ static inline void TraceMove(const MoveStorage& tMoveStorage, const Vec3& vStart
 {
 	CTraceFilterCollideable filter(tMoveStorage.m_pPlayer);
 	filter.m_iType = SKIP_CHECK;
+	filter.m_iPlayer = PLAYER_NONE;
+	filter.m_iObject = OBJECT_DEFAULT;
+	filter.m_iTeam = tMoveStorage.m_iTeam;
 	SDK::TraceHull(vStart, vEnd, pMins ? *pMins : tMoveStorage.m_vMins, pMaxs ? *pMaxs : tMoveStorage.m_vMaxs, tMoveStorage.m_nMask, &filter, &trace);
 }
 
@@ -200,6 +206,7 @@ static bool CheckStuck(MoveStorage& tMoveStorage)
 			continue;
 
 		vOrigin += vOffset;
+		tMoveStorage.m_iWaterLevel = CheckWater(tMoveStorage);
 		return false;
 	}
 	return true;
@@ -275,7 +282,7 @@ static void CategorizePosition(MoveStorage& tMoveStorage)
 			tMoveStorage.m_bLostFooting = false;
 	}
 
-	if (!bInAir && !bWalkable && !TouchGroundInQuadrants(tMoveStorage, vOrigin, vProbe, tGround))
+	if (!bInAir && !bWalkable && ((trace.fraction == 1.f && !trace.startsolid) || !TouchGroundInQuadrants(tMoveStorage, vOrigin, vProbe, tGround)))
 		bInAir = bSteep = true;
 
 	if (bInAir || !tGround.m_pEnt)
@@ -295,7 +302,10 @@ static void CategorizePosition(MoveStorage& tMoveStorage)
 
 	if (bRetain && bWalkable && trace.fraction > 0.f && trace.fraction < 1.f && !trace.startsolid
 		&& fabsf(vOrigin.z - trace.endpos.z) > 0.5f / 16.f)
+	{
 		vOrigin.z = trace.endpos.z;
+		tMoveStorage.m_iWaterLevel = CheckWater(tMoveStorage);
+	}
 }
 
 static void TryPlayerMove(MoveStorage& tMoveStorage, float flRedirect = 0.f)
@@ -327,7 +337,7 @@ static void TryPlayerMove(MoveStorage& tMoveStorage, float flRedirect = 0.f)
 		flAllFraction += trace.fraction;
 		if (trace.fraction > 0.f)
 		{
-			if (trace.fraction == 1.f)
+			if (iBump > 0 && trace.fraction == 1.f)
 			{
 				CGameTrace tStuck = {};
 				TraceMove(tMoveStorage, trace.endpos, trace.endpos, tStuck);
@@ -535,24 +545,40 @@ static void WaterMove(MoveStorage& tMoveStorage)
 		TryPlayerMove(tMoveStorage);
 }
 
-static void StepFit(Vec3& vPosition, Vec3& vVelocity, const MoveController_t& tController, bool bGround, float flEyeYaw, float flMaxSpeed, bool bDucked, const MovePhysics_t& tPhysics)
+static void StepFit(Vec3& vPosition, Vec3& vVelocity, const MoveController_t& tController, const Vec3& vCtrlDir, bool bGround, float flEyeYaw, const Vec3* pEyeDir, float flMaxSpeed, bool bDucked, const MovePhysics_t& tPhysics)
 {
 	const float flCap = bGround ? GroundCap(flMaxSpeed, false, false, 0.f) * (bDucked ? DuckSpeedCrop : 1.f) : flMaxSpeed;
 
 	Vec3 vWish = {}; float flWishSpeed = 0.f;
 	switch (tController.m_iModel)
 	{
-	case MoveModelEnum::World: vWish = YawDirection(tController.m_flYaw), flWishSpeed = tController.m_flScale * flCap; break;
-	case MoveModelEnum::View: vWish = YawDirection(flEyeYaw + tController.m_flYaw), flWishSpeed = tController.m_flScale * flCap; break;
-	case MoveModelEnum::Sweep: vWish = YawDirection(Heading(vVelocity) + tController.m_flYaw), flWishSpeed = tController.m_flScale * flCap; break;
+	case MoveModelEnum::World:
+		vWish = vCtrlDir;
+		flWishSpeed = tController.m_flScale * flCap;
+		break;
+	case MoveModelEnum::View:
+		vWish = pEyeDir
+			? Vec3{ pEyeDir->x * vCtrlDir.x - pEyeDir->y * vCtrlDir.y, pEyeDir->x * vCtrlDir.y + pEyeDir->y * vCtrlDir.x, 0.f }
+			: YawDirection(flEyeYaw + tController.m_flYaw);
+		flWishSpeed = tController.m_flScale * flCap;
+		break;
+	case MoveModelEnum::Sweep:
+	{
+		const float flVel = vVelocity.Length2D();
+		const Vec3 vVelDir = flVel > 0.f ? Vec3(vVelocity.x / flVel, vVelocity.y / flVel, 0.f) : Vec3(1.f, 0.f, 0.f);
+		vWish = { vVelDir.x * vCtrlDir.x - vVelDir.y * vCtrlDir.y, vVelDir.x * vCtrlDir.y + vVelDir.y * vCtrlDir.x, 0.f };
+		flWishSpeed = tController.m_flScale * flCap;
+		break;
+	}
 	}
 
 	if (bGround)
 	{
+		const float flGroundCap = GroundCap(flMaxSpeed, false, false, 0.f);
 		GroundFriction(vVelocity, 1.f, tPhysics);
 		GroundAccelerate(vVelocity, vWish, flWishSpeed, 1.f, false, tPhysics);
-		ClampSpeed2D(vVelocity, GroundCap(flMaxSpeed, false, false, 0.f));
-		ClampBackSpeed(vVelocity, flEyeYaw, GroundCap(flMaxSpeed, false, false, 0.f), tPhysics);
+		ClampSpeed2D(vVelocity, flGroundCap);
+		ClampBackSpeed(vVelocity, flEyeYaw, flGroundCap, tPhysics, pEyeDir);
 		vPosition += vVelocity * TICK_INTERVAL;
 		return;
 	}
@@ -565,6 +591,7 @@ static void StepFit(Vec3& vPosition, Vec3& vVelocity, const MoveController_t& tC
 
 static float EvaluateFit(const std::vector<FitSample_t>& vSamples, bool bGround, const MoveController_t& tController, const MovePhysics_t& tPhysics)
 {
+	const Vec3 vCtrlDir = YawDirection(tController.m_flYaw);
 	Vec3 vVelocity = vSamples.front().m_vVelocity;
 	if (bGround)
 		vVelocity.z = 0.f;
@@ -575,13 +602,13 @@ static float EvaluateFit(const std::vector<FitSample_t>& vSamples, bool bGround,
 	for (size_t i = 1; i < vSamples.size(); i++)
 	{
 		auto& tFrom = vSamples[i - 1], &tTo = vSamples[i];
-		const float flEyeDelta = Math::NormalizeAngle(tTo.m_flEyeYaw - tFrom.m_flEyeYaw);
+		const float flEyeDelta = tTo.m_flEyeDelta;
 
 		Vec3 vPosition = tFrom.m_vOrigin;
 		for (int n = 1; n <= tTo.m_iTicks; n++)
-			StepFit(vPosition, vVelocity, tController, bGround, tFrom.m_flEyeYaw + flEyeDelta * n / tTo.m_iTicks, tTo.m_flMaxSpeed, tTo.m_bDucked, tPhysics);
+			StepFit(vPosition, vVelocity, tController, vCtrlDir, bGround, tFrom.m_flEyeYaw + flEyeDelta * n / tTo.m_iTicks, n == tTo.m_iTicks ? &tTo.m_vEyeDir : nullptr, tTo.m_flMaxSpeed, tTo.m_bDucked, tPhysics);
 
-		const float flSampleWeight = expf(-tTo.m_iAge / 16.f);
+		const float flSampleWeight = tTo.m_flWeight;
 		flError += (vPosition - tTo.m_vOrigin).Length2DSqr() * flSampleWeight;
 		flWeight += flSampleWeight;
 	}
@@ -598,7 +625,7 @@ static const MoveController_t aKeys[KeyCount] = {
 	{ MoveModelEnum::None }
 };
 
-static float EvaluateGap(const FitSample_t& tFrom, const FitSample_t& tTo, bool bGround, const MoveController_t& tController, const MovePhysics_t& tPhysics)
+static float EvaluateGap(const FitSample_t& tFrom, const FitSample_t& tTo, bool bGround, const MoveController_t& tController, const Vec3& vCtrlDir, const MovePhysics_t& tPhysics)
 {
 	static constexpr float flQuantize = PLAYER_ORIGIN_COMPRESSION * PLAYER_ORIGIN_COMPRESSION / 12.f;
 
@@ -608,23 +635,30 @@ static float EvaluateGap(const FitSample_t& tFrom, const FitSample_t& tTo, bool 
 	else
 		vVelocity.z -= tPhysics.m_flGravity * TICK_INTERVAL * tFrom.m_iTicks * 0.5f;
 
-	const float flEyeDelta = Math::NormalizeAngle(tTo.m_flEyeYaw - tFrom.m_flEyeYaw);
+	const float flEyeDelta = tTo.m_flEyeDelta;
 	for (int n = 1; n <= tTo.m_iTicks; n++)
-		StepFit(vPosition, vVelocity, tController, bGround, tFrom.m_flEyeYaw + flEyeDelta * n / tTo.m_iTicks, tTo.m_flMaxSpeed, tTo.m_bDucked, tPhysics);
+		StepFit(vPosition, vVelocity, tController, vCtrlDir, bGround, tFrom.m_flEyeYaw + flEyeDelta * n / tTo.m_iTicks, n == tTo.m_iTicks ? &tTo.m_vEyeDir : nullptr, tTo.m_flMaxSpeed, tTo.m_bDucked, tPhysics);
 
 	const float flRatio = float(tTo.m_iTicks) / tFrom.m_iTicks;
 	return (vPosition - tTo.m_vOrigin).Length2DSqr() / (flQuantize * (1.f + (1.f + flRatio) * (1.f + flRatio) + flRatio * flRatio));
 }
 
-static void FitChange(const std::vector<FitSample_t>& vSamples, bool bGround, const MovePhysics_t& tPhysics, MoveController_t& tBest)
+static void FitChange(const std::vector<FitSample_t>& vSamples, bool bGround, const MovePhysics_t& tPhysics, MoveController_t& tBest, float& flBest)
 {
+	static const Vec3 aKeyDirs[KeyCount] = {
+		YawDirection(aKeys[0].m_flYaw), YawDirection(aKeys[1].m_flYaw), YawDirection(aKeys[2].m_flYaw),
+		YawDirection(aKeys[3].m_flYaw), YawDirection(aKeys[4].m_flYaw), YawDirection(aKeys[5].m_flYaw),
+		YawDirection(aKeys[6].m_flYaw), YawDirection(aKeys[7].m_flYaw), YawDirection(aKeys[8].m_flYaw)
+	};
+	const Vec3 vBestDir = YawDirection(tBest.m_flYaw);
+
 	const size_t iLast = vSamples.size() - 1;
 	std::vector<std::array<float, KeyCount + 1>> vSums(vSamples.size());
 	for (size_t i = 1; i <= iLast; i++)
 	{
 		for (int k = 0; k < KeyCount; k++)
-			vSums[i][k] = vSums[i - 1][k] + EvaluateGap(vSamples[i - 1], vSamples[i], bGround, aKeys[k], tPhysics);
-		vSums[i][KeyCount] = vSums[i - 1][KeyCount] + EvaluateGap(vSamples[i - 1], vSamples[i], bGround, tBest, tPhysics);
+			vSums[i][k] = vSums[i - 1][k] + EvaluateGap(vSamples[i - 1], vSamples[i], bGround, aKeys[k], aKeyDirs[k], tPhysics);
+		vSums[i][KeyCount] = vSums[i - 1][KeyCount] + EvaluateGap(vSamples[i - 1], vSamples[i], bGround, tBest, vBestDir, tPhysics);
 	}
 	auto fSum = [&](size_t iFrom, size_t iTo, int k) { return vSums[iTo][k] - vSums[iFrom - 1][k]; };
 
@@ -667,12 +701,14 @@ static void FitChange(const std::vector<FitSample_t>& vSamples, bool bGround, co
 			iSeen |= 1 << iKey, iKey = iTop, iSince = iTopFrom;
 	}
 
-	if (iSeen & 1 << iKey || fSum(iSince, iLast, KeyCount) - fSum(iSince, iLast, iKey) < flThreshold)
+	const float flSuffixMean = fSum(iSince, iLast, iKey) / float(iLast - iSince + 1);
+	if (iSeen & 1 << iKey || flSuffixMean > 128.f || fSum(iSince, iLast, KeyCount) - fSum(iSince, iLast, iKey) < flThreshold)
 		return;
 
 	tBest = aKeys[iKey];
 	if (bGround && tBest.m_iModel == MoveModelEnum::None)
 		tBest.m_iModel = MoveModelEnum::Stop;
+	flBest = std::min(flBest, flSuffixMean * (PLAYER_ORIGIN_COMPRESSION * PLAYER_ORIGIN_COMPRESSION * 0.5f));
 }
 
 static MoveController_t OptimizeFit(const std::vector<FitSample_t>& vSamples, bool bGround, std::initializer_list<MoveController_t> lSeeds, bool bScale, const MovePhysics_t& tPhysics, float& flError)
@@ -691,21 +727,24 @@ static MoveController_t OptimizeFit(const std::vector<FitSample_t>& vSamples, bo
 		const float flScaleStep = flStep / 48.f;
 		for (int iIteration = 0; iIteration < 4; iIteration++)
 		{
-			bool bImproved = false;
+			bool bImproved = false, bYawImproved = false, bScaleImproved = false;
 			for (int iSign = -1; iSign <= 1; iSign += 2)
 			{
-				MoveController_t tTry = tBest;
-				tTry.m_flYaw = Math::NormalizeAngle(tTry.m_flYaw + flStep * iSign);
-				if (const float flTry = EvaluateFit(vSamples, bGround, tTry, tPhysics); flTry < flError)
-					tBest = tTry, flError = flTry, bImproved = true;
+				if (!bYawImproved)
+				{
+					MoveController_t tTry = tBest;
+					tTry.m_flYaw = Math::NormalizeAngle(tTry.m_flYaw + flStep * iSign);
+					if (const float flTry = EvaluateFit(vSamples, bGround, tTry, tPhysics); flTry < flError)
+						tBest = tTry, flError = flTry, bImproved = true, bYawImproved = true;
+				}
 
-				if (!bScale)
+				if (!bScale || bScaleImproved)
 					continue;
 
-				tTry = tBest;
+				MoveController_t tTry = tBest;
 				tTry.m_flScale = std::clamp(tTry.m_flScale + flScaleStep * iSign, 0.f, 1.f);
 				if (const float flTry = EvaluateFit(vSamples, bGround, tTry, tPhysics); flTry < flError)
-					tBest = tTry, flError = flTry, bImproved = true;
+					tBest = tTry, flError = flTry, bImproved = true, bScaleImproved = true;
 			}
 			if (!bImproved)
 				break;
@@ -730,7 +769,223 @@ static inline float FitConfidence(float flError)
 	return std::clamp(1.f - (sqrtf(flError) - 0.5f) / 6.f, 0.f, 1.f);
 }
 
-static bool GatherSegment(const std::deque<MoveData>& vRecords, int iMode, int iWindow, std::vector<FitSample_t>& vOut, bool& bCurrent)
+static bool AirVelocityBreak(const MoveData& tOlder, const MoveData& tNewer, const MovePhysics_t& tPhysics)
+{
+	const int iOldTicks = std::max(tOlder.m_iTicks, 1);
+	const int iNewTicks = std::max(tNewer.m_iTicks, 1);
+	const float flMidTicks = 0.5f * float(iOldTicks + iNewTicks);
+	const float flQuantRate = (PLAYER_ORIGIN_COMPRESSION / TICK_INTERVAL) * (1.f / float(iOldTicks) + 1.f / float(iNewTicks));
+
+	const float flMaxSpeed = std::max(tOlder.m_flMaxSpeed, tNewer.m_flMaxSpeed);
+	const float flMaxAccelPerTick = std::max(tPhysics.m_flAirAccelerate * flMaxSpeed * TICK_INTERVAL, tPhysics.m_flAirCap);
+	const float flMaxDv2D = flMaxAccelPerTick * (flMidTicks + 0.5f) + 1.415f * flQuantRate + 15.f;
+	if ((tNewer.m_vVelocity - tOlder.m_vVelocity).Length2D() > flMaxDv2D)
+		return true;
+
+	const float flExpectedDz = -tPhysics.m_flGravity * flMidTicks * TICK_INTERVAL;
+	if (fabsf((tNewer.m_vVelocity.z - tOlder.m_vVelocity.z) - flExpectedDz) > flQuantRate + 30.f)
+		return true;
+
+	return false;
+}
+
+static bool FitLine2D(const std::vector<FitSample_t>& vSamples, Vec3& vChordVel, float& flMaxDev, float& flRmsDev)
+{
+	const size_t n = vSamples.size();
+	if (n < 2)
+		return false;
+
+	float flSumT = 0.f, flSumX = 0.f, flSumY = 0.f;
+	float flT = 0.f;
+	for (size_t i = 0; i < n; i++)
+	{
+		if (i > 0)
+			flT += TICKS_TO_TIME(std::max(vSamples[i].m_iTicks, 1));
+		flSumT += flT;
+		flSumX += vSamples[i].m_vOrigin.x;
+		flSumY += vSamples[i].m_vOrigin.y;
+	}
+	if (flT <= 0.f)
+		return false;
+
+	const float flInvN = 1.f / float(n);
+	const float flMeanT = flSumT * flInvN;
+	const float flMeanX = flSumX * flInvN;
+	const float flMeanY = flSumY * flInvN;
+
+	float flStt = 0.f, flStx = 0.f, flSty = 0.f;
+	flT = 0.f;
+	for (size_t i = 0; i < n; i++)
+	{
+		if (i > 0)
+			flT += TICKS_TO_TIME(std::max(vSamples[i].m_iTicks, 1));
+		const float flDt = flT - flMeanT;
+		flStt += flDt * flDt;
+		flStx += flDt * (vSamples[i].m_vOrigin.x - flMeanX);
+		flSty += flDt * (vSamples[i].m_vOrigin.y - flMeanY);
+	}
+	if (flStt <= 1e-8f)
+		return false;
+
+	const float flVx = flStx / flStt;
+	const float flVy = flSty / flStt;
+	const float flX0 = flMeanX - flVx * flMeanT;
+	const float flY0 = flMeanY - flVy * flMeanT;
+
+	float flMaxSqr = 0.f, flSumSqr = 0.f;
+	flT = 0.f;
+	for (size_t i = 0; i < n; i++)
+	{
+		if (i > 0)
+			flT += TICKS_TO_TIME(std::max(vSamples[i].m_iTicks, 1));
+		const float flDx = vSamples[i].m_vOrigin.x - (flX0 + flVx * flT);
+		const float flDy = vSamples[i].m_vOrigin.y - (flY0 + flVy * flT);
+		const float flSqr = flDx * flDx + flDy * flDy;
+		if (flSqr > flMaxSqr)
+			flMaxSqr = flSqr;
+		flSumSqr += flSqr;
+	}
+
+	vChordVel = { flVx, flVy, 0.f };
+	flMaxDev = sqrtf(flMaxSqr);
+	flRmsDev = sqrtf(flSumSqr * flInvN);
+	return true;
+}
+
+static Vec3 EstimateVelocity(const std::deque<MoveData>& vRecords, bool bOnGround, bool bParachute, const MovePhysics_t& tPhysics)
+{
+	const auto& tNewest = vRecords.front();
+	Vec3 vVelocity = tNewest.m_vVelocity;
+	if (!bOnGround)
+		vVelocity.z -= tPhysics.m_flGravity * TICK_INTERVAL * tNewest.m_iTicks * 0.5f;
+
+	if (bOnGround && tNewest.m_iMode == MoveEnum::Ground)
+	{
+		int aBackTicks[8] = {};
+		int iTotalTicks = 0;
+		for (size_t k = 1; k < vRecords.size() && k < 8; k++)
+		{
+			if (vRecords[k].m_iMode != MoveEnum::Ground || vRecords[k - 1].m_bWall || vRecords[k - 1].m_iTicks > MaxRecordGap
+				|| vRecords[k].m_bDucked != tNewest.m_bDucked || fabsf(vRecords[k].m_flMaxSpeed - tNewest.m_flMaxSpeed) > 1.f)
+				break;
+
+			iTotalTicks += std::max(vRecords[k - 1].m_iTicks, 1);
+			if (iTotalTicks > 4)
+				break;
+			aBackTicks[k] = iTotalTicks;
+
+			bool bCollinear = true;
+			const Vec3 vSpan = vRecords[k].m_vOrigin - tNewest.m_vOrigin;
+			for (size_t j = 1; j < k; j++)
+			{
+				const float flFrac = float(aBackTicks[j]) / float(iTotalTicks);
+				const Vec3 vExpected = tNewest.m_vOrigin + vSpan * flFrac;
+				if ((vRecords[j].m_vOrigin - vExpected).Length2DSqr() > 0.177f * 0.177f || fabsf(vRecords[j].m_vOrigin.z - vExpected.z) > 2.f)
+				{
+					bCollinear = false;
+					break;
+				}
+			}
+			if (!bCollinear)
+				break;
+
+			vVelocity = (tNewest.m_vOrigin - vRecords[k].m_vOrigin) / TICKS_TO_TIME(iTotalTicks);
+			vVelocity.z = 0.f;
+		}
+		return vVelocity;
+	}
+
+	if (!bOnGround && tNewest.m_iMode == MoveEnum::Air)
+	{
+		int aBackTicks[8] = {};
+		size_t iMaxK = 0;
+		int iTotalTicks = 0;
+		for (size_t k = 1; k < vRecords.size() && k < 8; k++)
+		{
+			if (vRecords[k].m_iMode != MoveEnum::Air || vRecords[k - 1].m_bWall || vRecords[k - 1].m_iTicks > MaxRecordGap
+				|| vRecords[k].m_bDucked != tNewest.m_bDucked || fabsf(vRecords[k].m_flMaxSpeed - tNewest.m_flMaxSpeed) > 1.f)
+				break;
+			if (k >= 2 && AirVelocityBreak(vRecords[k - 1], vRecords[k - 2], tPhysics))
+				break;
+
+			iTotalTicks += std::max(vRecords[k - 1].m_iTicks, 1);
+			if (iTotalTicks > 6)
+				break;
+			aBackTicks[k] = iTotalTicks;
+			iMaxK = k;
+		}
+
+		for (size_t k = 2; k <= iMaxK; k++)
+		{
+			bool bCollinear = true;
+			const Vec3 vSpan = vRecords[k].m_vOrigin - tNewest.m_vOrigin;
+			for (size_t j = 1; j < k; j++)
+			{
+				const float flFrac = float(aBackTicks[j]) / float(aBackTicks[k]);
+				const Vec3 vExpected = tNewest.m_vOrigin + vSpan * flFrac;
+				if ((vRecords[j].m_vOrigin - vExpected).Length2DSqr() > 0.177f * 0.177f)
+				{
+					bCollinear = false;
+					break;
+				}
+			}
+			if (!bCollinear)
+				break;
+
+			const float flInvDt = 1.f / TICKS_TO_TIME(aBackTicks[k]);
+			vVelocity.x = (tNewest.m_vOrigin.x - vRecords[k].m_vOrigin.x) * flInvDt;
+			vVelocity.y = (tNewest.m_vOrigin.y - vRecords[k].m_vOrigin.y) * flInvDt;
+		}
+
+		if (!bParachute)
+		{
+			for (size_t k = 2; k <= iMaxK; k++)
+			{
+				const float flInvCount = 1.f / float(k + 1);
+				float flSumT = 0.f, flSumH = 0.f;
+				float aT[8], aH[8];
+				for (size_t j = 0; j <= k; j++)
+				{
+					aT[j] = -TICKS_TO_TIME(aBackTicks[j]);
+					aH[j] = vRecords[j].m_vOrigin.z + 0.5f * tPhysics.m_flGravity * aT[j] * aT[j];
+					flSumT += aT[j];
+					flSumH += aH[j];
+				}
+				const float flMeanT = flSumT * flInvCount;
+				const float flMeanH = flSumH * flInvCount;
+				float flStt = 0.f, flSth = 0.f;
+				for (size_t j = 0; j <= k; j++)
+				{
+					const float flDt = aT[j] - flMeanT;
+					flStt += flDt * flDt;
+					flSth += flDt * (aH[j] - flMeanH);
+				}
+				if (flStt <= 1e-8f)
+					break;
+
+				const float flVz = flSth / flStt;
+				const float flIntercept = flMeanH - flVz * flMeanT;
+				bool bValid = true;
+				for (size_t j = 0; j <= k; j++)
+				{
+					if (fabsf(aH[j] - (flIntercept + flVz * aT[j])) > 0.25f)
+					{
+						bValid = false;
+						break;
+					}
+				}
+				if (!bValid)
+					break;
+
+				vVelocity.z = flVz;
+			}
+		}
+	}
+
+	return vVelocity;
+}
+
+static bool GatherSegment(const std::deque<MoveData>& vRecords, int iMode, int iWindow, const MovePhysics_t& tPhysics, std::vector<FitSample_t>& vOut, bool& bCurrent)
 {
 	vOut.clear();
 
@@ -743,18 +998,48 @@ static bool GatherSegment(const std::deque<MoveData>& vRecords, int iMode, int i
 	for (int iTicks = 0; i + 1 < vRecords.size() && iTicks < iWindow; i++)
 	{
 		auto& tRecord = vRecords[i];
-		if (tRecord.m_iMode != iMode || vRecords[i + 1].m_iMode != iMode || tRecord.m_bWall || tRecord.m_iTicks > MaxRecordGap)
+		auto& tPrev = vRecords[i + 1];
+		if (tRecord.m_iMode != iMode || tPrev.m_iMode != iMode || tRecord.m_bWall || tRecord.m_iTicks > MaxRecordGap
+			|| tRecord.m_bDucked != tPrev.m_bDucked || fabsf(tRecord.m_flMaxSpeed - tPrev.m_flMaxSpeed) > 1.f)
 			break;
 
 		vOut.push_back({ tRecord.m_vOrigin, tRecord.m_vVelocity, tRecord.m_iTicks, TIME_TO_TICKS(flNewest - tRecord.m_flSimTime), tRecord.m_flEyeYaw, tRecord.m_flMaxSpeed, tRecord.m_bDucked });
 		iTicks += tRecord.m_iTicks;
+
+		if (iMode == MoveEnum::Air && AirVelocityBreak(tPrev, tRecord, tPhysics))
+			break;
 	}
 	std::reverse(vOut.begin(), vOut.end());
+	for (size_t i = 0; i < vOut.size(); i++)
+	{
+		vOut[i].m_flWeight = expf(-vOut[i].m_iAge / 16.f);
+		vOut[i].m_vEyeDir = YawDirection(vOut[i].m_flEyeYaw);
+		if (i >= 1)
+			vOut[i].m_flEyeDelta = Math::NormalizeAngle(vOut[i].m_flEyeYaw - vOut[i - 1].m_flEyeYaw);
+	}
 	return vOut.size() >= 3;
 }
 
 static MoveController_t FitGround(const std::vector<FitSample_t>& vSamples, bool bCurrent, const MovePhysics_t& tPhysics)
 {
+	int iTotalTicks = 0;
+	for (size_t i = 1; i < vSamples.size(); i++)
+		iTotalTicks += vSamples[i].m_iTicks;
+
+	const auto& tNewest = vSamples.back();
+	Vec3 vChordVel = {};
+	float flMaxDev = 0.f, flRmsDev = 0.f;
+	if (iTotalTicks >= 5 && FitLine2D(vSamples, vChordVel, flMaxDev, flRmsDev) && flMaxDev <= 0.25f && flRmsDev <= 0.14f)
+	{
+		const float flChordSpeed = vChordVel.Length2D();
+		if (flChordSpeed < 5.f && tNewest.m_vVelocity.Length2D() < 10.f)
+			return { MoveModelEnum::Stop, 0.f, 1.f, 0.f, 1.f };
+
+		const float flCap = GroundCap(tNewest.m_flMaxSpeed, false, false, 0.f) * (tNewest.m_bDucked ? DuckSpeedCrop : 1.f);
+		const float flScale = flCap > 0.f ? std::clamp(flChordSpeed / flCap, 0.f, 1.f) : 1.f;
+		return { MoveModelEnum::World, Heading(vChordVel), flScale, 0.f, 1.f };
+	}
+
 	std::vector<std::pair<float, float>> vWorld, vView;
 	for (size_t i = 1; i < vSamples.size(); i++)
 	{
@@ -768,12 +1053,11 @@ static MoveController_t FitGround(const std::vector<FitSample_t>& vSamples, bool
 		if (vDelta.Length2D() < 4.f)
 			continue;
 
-		const float flWeight = expf(-tTo.m_iAge / 16.f), flYaw = Heading(vDelta);
+		const float flWeight = tTo.m_flWeight, flYaw = Heading(vDelta);
 		vWorld.emplace_back(flYaw, flWeight);
 		vView.emplace_back(Math::NormalizeAngle(flYaw - tTo.m_flEyeYaw), flWeight);
 	}
 
-	const auto& tNewest = vSamples.back();
 	const float flHeading = Heading(tNewest.m_vVelocity);
 
 	float flStop = EvaluateFit(vSamples, true, { MoveModelEnum::Stop }, tPhysics);
@@ -800,22 +1084,33 @@ static MoveController_t FitGround(const std::vector<FitSample_t>& vSamples, bool
 			tBest = tWorld, flBest = flWorld;
 	}
 
-	FitChange(vSamples, true, tPhysics, tBest);
+	FitChange(vSamples, true, tPhysics, tBest, flBest);
 	tBest.m_flConfidence = FitConfidence(flBest);
 	return tBest;
 }
 
 static MoveController_t FitAir(const std::vector<FitSample_t>& vSamples, bool bCurrent, const MovePhysics_t& tPhysics)
 {
+	int iTotalTicks = 0;
+	for (size_t i = 1; i < vSamples.size(); i++)
+		iTotalTicks += vSamples[i].m_iTicks;
+	if (vSamples.size() < 4 || iTotalTicks < 5)
+		return { MoveModelEnum::None, 0.f, 1.f, 0.f, 1.f };
+
+	Vec3 vChordVel = {};
+	float flMaxDev = 0.f, flRmsDev = 0.f;
+	if (FitLine2D(vSamples, vChordVel, flMaxDev, flRmsDev) && flMaxDev <= 0.25f && flRmsDev <= 0.14f)
+		return { MoveModelEnum::None, 0.f, 1.f, 0.f, 1.f };
+
 	std::vector<std::pair<float, float>> vWorld, vView, vSweep;
 	for (size_t i = 1; i < vSamples.size(); i++)
 	{
 		auto& tFrom = vSamples[i - 1], &tTo = vSamples[i];
 		const Vec3 vDelta = (tTo.m_vVelocity - tFrom.m_vVelocity).To2D();
-		if (vDelta.Length2D() < 1.5f * tTo.m_iTicks)
+		if (vDelta.Length2D() < 6.f)
 			continue;
 
-		const float flWeight = expf(-tTo.m_iAge / 16.f), flYaw = Heading(vDelta);
+		const float flWeight = tTo.m_flWeight, flYaw = Heading(vDelta);
 		vWorld.emplace_back(flYaw, flWeight);
 		vView.emplace_back(Math::NormalizeAngle(flYaw - tTo.m_flEyeYaw), flWeight);
 		vSweep.emplace_back(Math::NormalizeAngle(flYaw - Heading(tFrom.m_vVelocity)), flWeight);
@@ -823,15 +1118,10 @@ static MoveController_t FitAir(const std::vector<FitSample_t>& vSamples, bool bC
 
 	MoveController_t tBest = { MoveModelEnum::None };
 	float flBest = EvaluateFit(vSamples, false, tBest, tPhysics);
-	if (vSweep.empty())
-	{
-		tBest.m_flConfidence = FitConfidence(flBest);
-		return tBest;
-	}
 
 	auto fConsider = [&](const MoveController_t& tController, float flError, float flBias)
 		{
-			if (flError * flBias + 0.05f < flBest * 0.95f)
+			if (flError < 4.f && flError * flBias + 0.08f < flBest * 0.75f)
 				tBest = tController, flBest = flError;
 		};
 
@@ -858,12 +1148,11 @@ static MoveController_t FitAir(const std::vector<FitSample_t>& vSamples, bool bC
 		fConsider(tWorld, flError, 1.1f);
 	}
 
-	FitChange(vSamples, false, tPhysics, tBest);
 	tBest.m_flConfidence = FitConfidence(flBest);
 	return tBest;
 }
 
-static void FitHop(const std::deque<MoveData>& vRecords, MoveFit_t& tFit)
+static void FitHop(const std::deque<MoveData>& vRecords, float flGravity, MoveFit_t& tFit)
 {
 	int aStays[16] = {}, iStays = 0, iRun = 0, iRunStart = -1, iCurrent = -1;
 	for (int i = 0; i < int(vRecords.size()) && iStays < 16; i++)
@@ -881,8 +1170,18 @@ static void FitHop(const std::deque<MoveData>& vRecords, MoveFit_t& tFit)
 		{
 			if (!iRunStart)
 				iCurrent = iRun;
-			else if (auto& tDeparture = vRecords[iRunStart - 1]; tDeparture.m_iMode == MoveEnum::Air && tDeparture.m_vVelocity.z > 150.f)
-				aStays[iStays++] = iRun;
+			else
+			{
+				auto& tGround = vRecords[iRunStart];
+				auto& tDeparture = vRecords[iRunStart - 1];
+				const int iGap = tDeparture.m_iTicks;
+				if (tDeparture.m_iMode == MoveEnum::Air && iGap >= 1 && iGap <= 3 && !tDeparture.m_bDucked && !tGround.m_bDucked && !tDeparture.m_bWall)
+				{
+					const float flExpectedRise = TICKS_TO_TIME(iGap) * (JumpVelocity - flGravity * TICK_INTERVAL * float(iGap + 1) * 0.5f);
+					if (fabsf((tDeparture.m_vOrigin.z - tGround.m_vOrigin.z) - flExpectedRise) <= 0.5f)
+						aStays[iStays++] = iRun;
+				}
+			}
 		}
 		iRun = 0;
 	}
@@ -991,6 +1290,7 @@ void CMovementSimulation::StoreRecord(CTFPlayer* pPlayer, std::deque<MoveData>& 
 
 void CMovementSimulation::Store()
 {
+	m_vCache.clear();
 	if (I::EngineClient->IsPlayingDemo())
 		return;
 
@@ -1079,6 +1379,12 @@ void CMovementSimulation::StorePlayer(CTFPlayer* pPlayer, CMoveData& tMoveData, 
 
 const MoveFit_t& CMovementSimulation::GetFit(CTFPlayer* pPlayer, bool bStrafe)
 {
+	if (!bStrafe)
+	{
+		static const MoveFit_t tEmpty = {};
+		return tEmpty;
+	}
+
 	auto& tFit = m_mFits[pPlayer->entindex()];
 	auto& vRecords = m_mRecords[pPlayer->entindex()];
 	if (vRecords.empty())
@@ -1093,8 +1399,6 @@ const MoveFit_t& CMovementSimulation::GetFit(CTFPlayer* pPlayer, bool bStrafe)
 
 	tFit = {};
 	tFit.m_flSimTime = vRecords.front().m_flSimTime;
-	if (!bStrafe)
-		return tFit;
 
 	MoveStorage tPhysics = {};
 	tPhysics.m_pPlayer = pPlayer;
@@ -1102,17 +1406,16 @@ const MoveFit_t& CMovementSimulation::GetFit(CTFPlayer* pPlayer, bool bStrafe)
 
 	std::vector<FitSample_t> vSamples;
 	vSamples.reserve(MaxRecords);
-	if (GatherSegment(vRecords, MoveEnum::Ground, Vars::Aimbot::Projectile::GroundSamples.Value, vSamples, tFit.m_bGroundCurrent))
+	if (GatherSegment(vRecords, MoveEnum::Ground, Vars::Aimbot::Projectile::GroundSamples.Value, tPhysics.m_tPhysics, vSamples, tFit.m_bGroundCurrent))
 		tFit.m_tGround = FitGround(vSamples, tFit.m_bGroundCurrent, tPhysics.m_tPhysics);
-	if (GatherSegment(vRecords, MoveEnum::Air, Vars::Aimbot::Projectile::AirSamples.Value, vSamples, tFit.m_bAirCurrent))
+	if (GatherSegment(vRecords, MoveEnum::Air, Vars::Aimbot::Projectile::AirSamples.Value, tPhysics.m_tPhysics, vSamples, tFit.m_bAirCurrent))
 		tFit.m_tAir = FitAir(vSamples, tFit.m_bAirCurrent, tPhysics.m_tPhysics);
-	else if (tFit.m_tGround.m_iModel == MoveModelEnum::View)
-		tFit.m_tAir = tFit.m_tGround;
-	FitHop(vRecords, tFit);
+	FitHop(vRecords, tPhysics.m_tPhysics.m_flGravity, tFit);
 
-	SDK::Output("MovementSimulation", std::format("{}: ground {} ({:.2f}, {:.0f}%), air {} ({:.2f}, {:.0f}%), hop {}",
-		pPlayer->entindex(), tFit.m_tGround.m_iModel, tFit.m_tGround.m_flYaw, tFit.m_tGround.m_flConfidence * 100,
-		tFit.m_tAir.m_iModel, tFit.m_tAir.m_flYaw, tFit.m_tAir.m_flConfidence * 100, tFit.m_iHopTicks).c_str(), { 100, 255, 150 }, Vars::Debug::Logging.Value);
+	if (Vars::Debug::Logging.Value)
+		SDK::Output("MovementSimulation", std::format("{}: ground {} ({:.2f}, {:.0f}%), air {} ({:.2f}, {:.0f}%), hop {}",
+			pPlayer->entindex(), tFit.m_tGround.m_iModel, tFit.m_tGround.m_flYaw, tFit.m_tGround.m_flConfidence * 100,
+			tFit.m_tAir.m_iModel, tFit.m_tAir.m_flYaw, tFit.m_tAir.m_flConfidence * 100, tFit.m_iHopTicks).c_str(), { 100, 255, 150 }, Vars::Debug::Logging.Value);
 
 	return tFit;
 }
@@ -1133,10 +1436,16 @@ void CMovementSimulation::SetupMoveData(MoveStorage& tMoveStorage, const Vec3* p
 	tMoveStorage.m_bOnGround = pPlayer->IsOnGround() && !pPlayer->IsDormant();
 	tMoveStorage.m_bDucked = pPlayer->IsDucking();
 	tMoveStorage.m_nMask = pPlayer->SolidMask();
+	tMoveStorage.m_iTeam = pPlayer->m_iTeamNum();
 	tMoveStorage.m_vMins = pPlayer->m_vecMins(), tMoveStorage.m_vMaxs = pPlayer->m_vecMaxs();
 	tMoveStorage.m_vViewOffset = bLocal ? pPlayer->m_vecViewOffset() : pPlayer->GetViewOffset();
 	if (!bLocal)
 		tMoveStorage.m_vMins += PLAYER_ORIGIN_COMPRESSION, tMoveStorage.m_vMaxs -= PLAYER_ORIGIN_COMPRESSION;
+
+	tMoveStorage.m_iWaterLevel = CheckWater(tMoveStorage);
+	tMoveStorage.m_bLostFooting = pPlayer->InCond(TF_COND_LOST_FOOTING);
+	tMoveStorage.m_bAirCurrent = pPlayer->InCond(TF_COND_AIR_CURRENT);
+	tMoveStorage.m_bParachute = pPlayer->InCond(TF_COND_PARACHUTE_ACTIVE);
 
 	if (bLocal)
 	{
@@ -1147,11 +1456,7 @@ void CMovementSimulation::SetupMoveData(MoveStorage& tMoveStorage, const Vec3* p
 	{
 		const bool bRecord = !vRecords.empty() && vRecords.front().m_flSimTime == pPlayer->m_flSimulationTime() && vRecords.size() > 1 && vRecords.front().m_iTicks <= MaxRecordGap;
 		if (bRecord)
-		{
-			tMoveData.m_vecVelocity = vRecords.front().m_vVelocity;
-			if (!tMoveStorage.m_bOnGround)
-				tMoveData.m_vecVelocity.z -= tPhysics.m_flGravity * TICK_INTERVAL * vRecords.front().m_iTicks * 0.5f;
-		}
+			tMoveData.m_vecVelocity = EstimateVelocity(vRecords, tMoveStorage.m_bOnGround, tMoveStorage.m_bParachute, tPhysics);
 		else if (auto pAvgVelocity = H::Entities.GetAvgVelocity(iIndex))
 			tMoveData.m_vecVelocity = *pAvgVelocity;
 		else
@@ -1161,11 +1466,6 @@ void CMovementSimulation::SetupMoveData(MoveStorage& tMoveStorage, const Vec3* p
 	if (tMoveStorage.m_bOnGround)
 		tMoveData.m_vecVelocity.z = 0.f;
 	tMoveStorage.m_flViewYaw = tMoveData.m_vecViewAngles.y;
-
-	tMoveStorage.m_iWaterLevel = CheckWater(tMoveStorage);
-	tMoveStorage.m_bLostFooting = pPlayer->InCond(TF_COND_LOST_FOOTING);
-	tMoveStorage.m_bAirCurrent = pPlayer->InCond(TF_COND_AIR_CURRENT);
-	tMoveStorage.m_bParachute = pPlayer->InCond(TF_COND_PARACHUTE_ACTIVE);
 
 	tMoveStorage.m_bCharging = pPlayer->InCond(TF_COND_SHIELD_CHARGE) && tMoveStorage.m_iWaterLevel < 2;
 	if (tMoveStorage.m_bCharging)
@@ -1220,33 +1520,48 @@ void CMovementSimulation::SetupController(MoveStorage& tMoveStorage, bool bStraf
 		return;
 	}
 
-	const auto& tFit = GetFit(pPlayer, bStrafe);
 	const bool bGround = bStrafe && Vars::Aimbot::Projectile::StrafePrediction.Value & Vars::Aimbot::Projectile::StrafePredictionEnum::Ground;
 	const bool bAir = bStrafe && Vars::Aimbot::Projectile::StrafePrediction.Value & Vars::Aimbot::Projectile::StrafePredictionEnum::Air;
+	static const MoveFit_t tEmpty = {};
+	const auto& tFit = (bGround || bAir) ? GetFit(pPlayer, bStrafe) : tEmpty;
 
 	const Vec3& vVelocity = tMoveData.m_vecVelocity;
 	const float flCap = GroundCap(tMoveData.m_flMaxSpeed, tMoveStorage.m_bLostFooting, false, 0.f) * (tMoveStorage.m_bDucked ? DuckSpeedCrop : 1.f);
-	if (bGround && tFit.m_tGround.m_iModel != MoveModelEnum::None)
+	if (bGround && tFit.m_bGroundCurrent && tFit.m_tGround.m_iModel != MoveModelEnum::None)
 		tMoveStorage.m_tGround = tFit.m_tGround;
+	else if (!tMoveStorage.m_bOnGround)
+		tMoveStorage.m_tGround = { MoveModelEnum::None };
 	else if (vVelocity.Length2D() > 1.f)
 		tMoveStorage.m_tGround = { MoveModelEnum::World, Heading(vVelocity), flCap > 0.f ? std::min(vVelocity.Length2D() / flCap, 1.f) : 1.f };
 	else
 		tMoveStorage.m_tGround = { MoveModelEnum::Stop };
 
-	tMoveStorage.m_tAir = bAir ? tFit.m_tAir : MoveController_t{ MoveModelEnum::None };
+	tMoveStorage.m_tAir = (bAir && (tFit.m_bAirCurrent || tFit.m_iHopTicks >= 0)) ? tFit.m_tAir : MoveController_t{ MoveModelEnum::None };
 
 	if (bGround || bAir)
 		tMoveStorage.m_iHopTicks = tFit.m_iHopTicks, tMoveStorage.m_iGroundTicks = tFit.m_iGroundTicks;
 
-	for (size_t i = 1; i < vRecords.size(); i++)
+	if (tMoveStorage.m_tGround.m_iModel == MoveModelEnum::View && vRecords.size() > 1)
 	{
-		const int iSpan = TIME_TO_TICKS(vRecords.front().m_flSimTime - vRecords[i].m_flSimTime);
-		if (iSpan < 2)
-			continue;
+		float flFallbackTurn = 0.f;
+		bool bFound = false;
+		for (size_t i = 1; i < vRecords.size(); i++)
+		{
+			const int iSpan = TIME_TO_TICKS(vRecords.front().m_flSimTime - vRecords[i].m_flSimTime);
+			if (iSpan < 2)
+				continue;
 
-		const float flTurn = Math::NormalizeAngle(vRecords.front().m_flEyeYaw - vRecords[i].m_flEyeYaw) / iSpan;
-		tMoveStorage.m_tGround.m_flTurn = std::clamp(flTurn, -EyeTurnMax, EyeTurnMax) * EyeTurnKept;
-		break;
+			const float flTurn = Math::NormalizeAngle(vRecords.front().m_flEyeYaw - vRecords[i].m_flEyeYaw) / float(iSpan);
+			if (!bFound)
+				flFallbackTurn = flTurn, bFound = true;
+			if (iSpan >= 4)
+			{
+				flFallbackTurn = flTurn;
+				break;
+			}
+		}
+		if (bFound && fabsf(flFallbackTurn) >= 0.35f)
+			tMoveStorage.m_tGround.m_flTurn = std::clamp(flFallbackTurn, -EyeTurnMax, EyeTurnMax) * EyeTurnKept;
 	}
 
 	if (pPlayer->InCond(TF_COND_STUNNED) && (pPlayer->m_iStunFlags() & TF_STUN_CONTROLS || pPlayer->m_iStunFlags() & TF_STUN_MOVEMENT && pPlayer->m_iMovementStunAmount() == 255))
@@ -1256,6 +1571,12 @@ void CMovementSimulation::SetupController(MoveStorage& tMoveStorage, bool bStraf
 bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveStorage, bool bHitchance, bool bStrafe, bool bPredict, const Vec3* pvOrigin)
 {
 	PROJ_ZONE(MoveInit);
+
+	if (I::GlobalVars->tickcount != m_iCacheTick)
+	{
+		m_vCache.clear();
+		m_iCacheTick = I::GlobalVars->tickcount;
+	}
 
 	if (!pEntity || !pEntity->IsPlayer() || !pEntity->As<CTFPlayer>()->IsAlive())
 	{
@@ -1267,41 +1588,131 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 	tMoveStorage.m_pPlayer = pPlayer;
 	tMoveStorage.m_bLocal = pPlayer->entindex() == I::EngineClient->GetLocalPlayer();
 
+	const int iEntIndex = pPlayer->entindex();
+	const float flSimTime = pPlayer->m_flSimulationTime();
+	const Vec3 vStartOrigin = pvOrigin ? *pvOrigin : pPlayer->m_vecOrigin();
+	const int iStrafeFlags = Vars::Aimbot::Projectile::StrafePrediction.Value;
+
+	if (!tMoveStorage.m_bLocal)
+	{
+		for (int iSlot = 0; iSlot < int(m_vCache.size()); iSlot++)
+		{
+			const auto& tEntry = m_vCache[iSlot];
+			if (tEntry.m_iEntIndex != iEntIndex || tEntry.m_flSimTime != flSimTime || tEntry.m_vStartOrigin != vStartOrigin
+				|| tEntry.m_bStrafe != bStrafe || tEntry.m_bPredict != bPredict || tEntry.m_iStrafeFlags != iStrafeFlags)
+				continue;
+
+			if (tEntry.m_bStuckFailed)
+			{
+				tMoveStorage = tEntry.m_tInitState;
+				tMoveStorage.m_bCached = true;
+				tMoveStorage.m_iCacheSlot = -1;
+				tMoveStorage.m_iCacheStep = 0;
+				return true;
+			}
+
+			if (bHitchance && bStrafe && Vars::Aimbot::Projectile::HitChance.Value
+				&& tEntry.m_bFitted && tEntry.m_flConfidence * 100.f < Vars::Aimbot::Projectile::HitChance.Value)
+			{
+				if (Vars::Debug::Logging.Value)
+					SDK::Output("MovementSimulation", std::format("Hitchance ({}% < {}%)", tEntry.m_flConfidence * 100, Vars::Aimbot::Projectile::HitChance.Value).c_str(), { 80, 200, 120 }, Vars::Debug::Logging.Value);
+				tMoveStorage.m_bFailed = true;
+				return false;
+			}
+
+			tMoveStorage = tEntry.m_tInitState;
+			tMoveStorage.m_bCached = true;
+			tMoveStorage.m_iCacheSlot = iSlot;
+			tMoveStorage.m_iCacheStep = 0;
+			tMoveStorage.m_vPath.reserve(256);
+			return true;
+		}
+	}
+
 	SetupPhysics(tMoveStorage);
 	SetupMoveData(tMoveStorage, pvOrigin);
 	if (CheckStuck(tMoveStorage))
 	{
 		tMoveStorage.m_bFailed = true;
+		if (!tMoveStorage.m_bLocal)
+		{
+			MoveCacheEntry_t tEntry = {};
+			tEntry.m_iEntIndex = iEntIndex;
+			tEntry.m_flSimTime = flSimTime;
+			tEntry.m_vStartOrigin = vStartOrigin;
+			tEntry.m_bStrafe = bStrafe;
+			tEntry.m_bPredict = bPredict;
+			tEntry.m_iStrafeFlags = iStrafeFlags;
+			tEntry.m_bStuckFailed = true;
+			tEntry.m_tInitState = tMoveStorage;
+			m_vCache.push_back(std::move(tEntry));
+		}
 		return true;
 	}
 
 	SetupController(tMoveStorage, bStrafe);
 
-	if (bHitchance && bStrafe && Vars::Aimbot::Projectile::HitChance.Value && !tMoveStorage.m_bLocal)
+	bool bFitted = false;
+	float flConfidence = 0.f;
+	if (!tMoveStorage.m_bLocal && bStrafe)
 	{
 		const auto& tController = tMoveStorage.m_bOnGround ? tMoveStorage.m_tGround : tMoveStorage.m_tAir;
-		const auto& tFit = m_mFits[pPlayer->entindex()];
-		const bool bFitted = tMoveStorage.m_bOnGround ? tFit.m_tGround.m_iModel != MoveModelEnum::None && tFit.m_bGroundCurrent : tFit.m_tAir.m_iModel != MoveModelEnum::None && tFit.m_bAirCurrent;
-		if (bFitted && tController.m_flConfidence * 100.f < Vars::Aimbot::Projectile::HitChance.Value)
+		if (auto it = m_mFits.find(iEntIndex); it != m_mFits.end())
 		{
-			SDK::Output("MovementSimulation", std::format("Hitchance ({}% < {}%)", tController.m_flConfidence * 100, Vars::Aimbot::Projectile::HitChance.Value).c_str(), { 80, 200, 120 }, Vars::Debug::Logging.Value);
-			tMoveStorage.m_bFailed = true;
-			return false;
+			const auto& tFit = it->second;
+			bFitted = tMoveStorage.m_bOnGround ? tFit.m_tGround.m_iModel != MoveModelEnum::None && tFit.m_bGroundCurrent : tFit.m_tAir.m_iModel != MoveModelEnum::None && tFit.m_bAirCurrent;
 		}
+		flConfidence = tController.m_flConfidence;
 	}
 
 	tMoveStorage.m_vPath = { tMoveStorage.m_MoveData.m_vecAbsOrigin };
 	tMoveStorage.m_vPath.reserve(256);
+	tMoveStorage.m_iCacheSlot = -1;
+	tMoveStorage.m_iCacheStep = 0;
+	tMoveStorage.m_bCached = false;
 	if (bPredict)
 	{
-		for (int i = 0; i < H::Entities.GetChoke(pPlayer->entindex()); i++)
+		for (int i = 0; i < H::Entities.GetChoke(iEntIndex); i++)
 			RunTick(tMoveStorage);
+	}
+
+	if (!tMoveStorage.m_bLocal)
+	{
+		const int iSlot = int(m_vCache.size());
+		MoveCacheEntry_t tEntry = {};
+		tEntry.m_iEntIndex = iEntIndex;
+		tEntry.m_flSimTime = flSimTime;
+		tEntry.m_vStartOrigin = vStartOrigin;
+		tEntry.m_bStrafe = bStrafe;
+		tEntry.m_bPredict = bPredict;
+		tEntry.m_iStrafeFlags = iStrafeFlags;
+		tEntry.m_bStuckFailed = false;
+		tEntry.m_bFitted = bFitted;
+		tEntry.m_flConfidence = flConfidence;
+		tEntry.m_tInitState = tMoveStorage;
+		tEntry.m_tFrontier = tMoveStorage;
+		tEntry.m_tFrontier.m_iCacheSlot = -1;
+		tEntry.m_tFrontier.m_vPath.clear();
+		tEntry.m_vSteps.reserve(256);
+		m_vCache.push_back(std::move(tEntry));
+		tMoveStorage.m_iCacheSlot = iSlot;
+		tMoveStorage.m_iCacheStep = 0;
+		tMoveStorage.m_bCached = false;
+	}
+
+	if (bHitchance && bStrafe && Vars::Aimbot::Projectile::HitChance.Value && !tMoveStorage.m_bLocal
+		&& bFitted && flConfidence * 100.f < Vars::Aimbot::Projectile::HitChance.Value)
+	{
+		if (Vars::Debug::Logging.Value)
+			SDK::Output("MovementSimulation", std::format("Hitchance ({}% < {}%)", flConfidence * 100, Vars::Aimbot::Projectile::HitChance.Value).c_str(), { 80, 200, 120 }, Vars::Debug::Logging.Value);
+		tMoveStorage.m_bFailed = true;
+		return false;
 	}
 
 	return true;
 }
 
-void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback* pCallback)
+void CMovementSimulation::StepTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback* pCallback)
 {
 	PROJ_ZONE(MoveTick);
 	PROJ_COUNT(MoveTicks);
@@ -1342,7 +1753,6 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 			tMoveStorage.m_iGroundTicks++;
 	}
 
-	tMoveStorage.m_iWaterLevel = CheckWater(tMoveStorage);
 	const bool bSwimming = tMoveStorage.m_iWaterLevel > 1;
 
 	if (tMoveStorage.m_bParachute && !tMoveStorage.m_bOnGround && !bSwimming && vVelocity.z < 0.f)
@@ -1375,7 +1785,18 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 
 	CategorizePosition(tMoveStorage);
 	if (bWasAirborne && tMoveStorage.m_bOnGround)
+	{
 		tMoveStorage.m_iGroundTicks = 1;
+		if (!tMoveStorage.m_bLocal && !tMoveStorage.m_bCharging && tMoveStorage.m_tGround.m_iModel == MoveModelEnum::None)
+		{
+			const float flSpeed = vVelocity.Length2D();
+			const float flCap = GroundCap(tMoveData.m_flMaxSpeed, tMoveStorage.m_bLostFooting, false, 0.f) * (tMoveStorage.m_bDucked ? DuckSpeedCrop : 1.f);
+			if (flSpeed > 1.f)
+				tMoveStorage.m_tGround = { MoveModelEnum::World, Heading(vVelocity), flCap > 0.f ? std::min(flSpeed / flCap, 1.f) : 1.f };
+			else
+				tMoveStorage.m_tGround = { MoveModelEnum::Stop };
+		}
+	}
 
 	if (!bSwimming)
 		vVelocity.z -= flHalfGravity;
@@ -1406,6 +1827,59 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 
 	if (bPath)
 		tMoveStorage.m_vPath.push_back(tMoveData.m_vecAbsOrigin);
+}
+
+void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback* pCallback)
+{
+	if (tMoveStorage.m_bFailed || !tMoveStorage.m_pPlayer)
+		return;
+
+	if (!pCallback && tMoveStorage.m_iCacheSlot >= 0 && tMoveStorage.m_iCacheSlot < int(m_vCache.size()))
+	{
+		auto& tEntry = m_vCache[tMoveStorage.m_iCacheSlot];
+		if (tMoveStorage.m_iCacheStep < int(tEntry.m_vSteps.size()))
+		{
+			PROJ_COUNT(MoveTicks);
+			PROJ_COUNT(MoveTicksCached);
+
+			const auto& tStep = tEntry.m_vSteps[tMoveStorage.m_iCacheStep++];
+			tMoveStorage.m_MoveData.m_vecAbsOrigin = tStep.m_vAbsOrigin;
+			tMoveStorage.m_MoveData.m_vecVelocity = tStep.m_vVelocity;
+			tMoveStorage.m_vPredictedOrigin = tStep.m_vPredictedOrigin;
+			tMoveStorage.m_bOnGround = tStep.m_bOnGround;
+			tMoveStorage.m_flSimTime = tStep.m_flSimTime;
+			tMoveStorage.m_flPredictedSimTime = tStep.m_flPredictedSimTime;
+			tMoveStorage.m_bPredictNetworked = tStep.m_bPredictNetworked;
+			if (bPath)
+				tMoveStorage.m_vPath.push_back(tStep.m_vAbsOrigin);
+			return;
+		}
+
+		StepTick(tEntry.m_tFrontier, false, nullptr);
+		const MoveCacheStep_t tStep = {
+			tEntry.m_tFrontier.m_MoveData.m_vecAbsOrigin,
+			tEntry.m_tFrontier.m_MoveData.m_vecVelocity,
+			tEntry.m_tFrontier.m_vPredictedOrigin,
+			tEntry.m_tFrontier.m_bOnGround,
+			tEntry.m_tFrontier.m_flSimTime,
+			tEntry.m_tFrontier.m_flPredictedSimTime,
+			tEntry.m_tFrontier.m_bPredictNetworked
+		};
+		tEntry.m_vSteps.push_back(tStep);
+		tMoveStorage.m_iCacheStep++;
+		tMoveStorage.m_MoveData.m_vecAbsOrigin = tStep.m_vAbsOrigin;
+		tMoveStorage.m_MoveData.m_vecVelocity = tStep.m_vVelocity;
+		tMoveStorage.m_vPredictedOrigin = tStep.m_vPredictedOrigin;
+		tMoveStorage.m_bOnGround = tStep.m_bOnGround;
+		tMoveStorage.m_flSimTime = tStep.m_flSimTime;
+		tMoveStorage.m_flPredictedSimTime = tStep.m_flPredictedSimTime;
+		tMoveStorage.m_bPredictNetworked = tStep.m_bPredictNetworked;
+		if (bPath)
+			tMoveStorage.m_vPath.push_back(tStep.m_vAbsOrigin);
+		return;
+	}
+
+	StepTick(tMoveStorage, bPath, pCallback);
 }
 
 void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback fCallback)

@@ -1,6 +1,7 @@
 #include "../SDK/SDK.h"
 
 #include "../Features/Aimbot/Aimbot.h"
+#include "../Features/Aimbot/AimbotProjectile/AimbotProjectile.h"
 #include "../Features/Aimbot/AutoDetonate/AutoDetonate.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Binds/Binds.h"
@@ -78,6 +79,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		F::MoveSim.Store();
 		F::CritHack.Store();
 		F::AutoDetonate.Store();
+		F::AimbotProjectile.UpdateShotDiagnostics();
 #ifndef TEXTMODE
 		F::Aimbot.Store();
 		auto pLocal = H::Entities.GetLocal();
@@ -86,7 +88,6 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		F::Chams.Store(pLocal);
 		F::Glow.Store(pLocal);
 		F::OffscreenArrows.Store();
-		F::Radar.Store(pLocal);
 		F::Visuals.Store();
 #endif
 
@@ -106,6 +107,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		SDK::UpdateSteamScreenshotHook();
 		{
 			auto pLocal = H::Entities.GetLocal();
+			F::Radar.Store(pLocal);
 			F::Ticks.CacheDrawInfo(pLocal);
 			F::Backtrack.CacheDrawInfo(pLocal);
 			F::NoSpreadHitscan.CacheDrawInfo(pLocal);

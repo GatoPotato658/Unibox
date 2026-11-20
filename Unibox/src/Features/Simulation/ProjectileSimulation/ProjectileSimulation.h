@@ -34,6 +34,38 @@ struct ProjectileInfo
 	uint8_t m_iFlags = 0;
 
 	Vec3 m_vVelocityAdd = {};
+
+	inline void Reset()
+	{
+		m_pOwner = nullptr;
+		m_pWeapon = nullptr;
+		m_uType = 0;
+		m_vPos = {};
+		m_vAng = {};
+		m_vHull = {};
+		m_flVelocity = 0.f;
+		m_flGravity = 0.f;
+		m_flLifetime = 60.f;
+		m_vPath.clear();
+		m_iFlags = 0;
+		m_vVelocityAdd = {};
+	}
+
+	inline void Set(CTFPlayer* pOwner, CTFWeaponBase* pWeapon, uint32_t uType, const Vec3& vPos, const Vec3& vAng, const Vec3& vHull, float flVelocity, float flGravity, float flLifetime = 60.f, uint8_t iFlags = 0, const Vec3& vVelocityAdd = {})
+	{
+		m_pOwner = pOwner;
+		m_pWeapon = pWeapon;
+		m_uType = uType;
+		m_vPos = vPos;
+		m_vAng = vAng;
+		m_vHull = vHull;
+		m_flVelocity = flVelocity;
+		m_flGravity = flGravity;
+		m_flLifetime = flLifetime;
+		m_vPath.clear();
+		m_iFlags = iFlags;
+		m_vVelocityAdd = vVelocityAdd;
+	}
 };
 
 Enum(ProjSpecial, None, SniperSpit, SpyEmp, PyroSpew, HeavyRock)
@@ -66,6 +98,26 @@ private:
 	bool GetInfoMain(CTFPlayer* pPlayer, CTFWeaponBase* pWeapon, Vec3 vAngles, ProjectileInfo& tProjInfo, int iFlags, float flAutoCharge);
 
 	FireSetup_t m_tFireSetup = {};
+
+	struct SpreadCache_t
+	{
+		int m_iTick = -1;
+		int m_iCmdNum = 0;
+		int m_iWeaponID = 0;
+		CTFPlayer* m_pPlayer = nullptr;
+		CTFWeaponBase* m_pWeapon = nullptr;
+		Vec3 m_vAngAdd = {};
+		float m_flUpRand = 0.f;
+		float m_flRightRand = 0.f;
+		int m_iAngYawRand = 0;
+		bool m_bHasGrenadeRand = false;
+	};
+	SpreadCache_t m_tSpreadCache = {};
+
+	IPhysicsObject* m_pLastObj = nullptr;
+	float m_flLastGravity = -1e9f;
+	float m_flLastMaxVel = -1.f;
+	float m_flLastMaxAngVel = -1.f;
 
 	const objectparams_t m_tPhysDefaultObjectParams = {
 		NULL,
@@ -252,6 +304,7 @@ public:
 	const CPhysCollide* m_aSpecialDragFor[ProjSpecialEnum::HeavyRock + 1] = {};
 	PhysicsObject_t m_tObj = {};
 	bool m_bPhysics = false;
+	bool m_bAngDrag = false;
 
 	ProjectileInfo* m_pCurrent = nullptr;
 };

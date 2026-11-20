@@ -578,6 +578,7 @@ NAMESPACE_BEGIN(Vars)
 
 	NAMESPACE_BEGIN(AutoPeek, Auto Peek)
 		CVar(Enabled, VA_LIST("Enabled", "Auto peek"), false);
+		CVar(Warp, VA_LIST("Warp", "Auto peek warp"), false);
 	NAMESPACE_END(AutoPeek)
 
 	NAMESPACE_BEGIN(AntiAim, Antiaim)
@@ -855,19 +856,15 @@ NAMESPACE_BEGIN(Vars)
 
 	NAMESPACE_BEGIN(Radar)
 		CVar(Enabled, "Enabled", false, VISUAL);
-		CVar(DrawOutOfRange, "Draw out of range", true, VISUAL);
-		CVarEnum(Style, "Style", 0, VISUAL, nullptr,
-			VA_LIST("Circle", "Rectangle"),
-			Circle, Rectangle);
 		CVar(Window, "Window", WindowBox_t(), VISUAL | NOBIND);
-		CVar(Range, "Range", 1500, VISUAL | SLIDER_MIN | SLIDER_PRECISION, 50, 3000, 50);
-		CVar(BackgroundAlpha, "Background alpha", 128, VISUAL | SLIDER_CLAMP, 0, 255, 5);
-		CVar(LineAlpha, "Line alpha", 255, VISUAL | SLIDER_CLAMP, 0, 255, 5);
-		CVar(Size, "Icon size", 16, VISUAL | SLIDER_CLAMP, 8, 32, 1);
-		CVar(HealthBar, "Health bar", false, VISUAL);
-		CVar(HeightIndicator, "Height indicator", false, VISUAL);
-		CVar(ViewCone, "View cone", true, VISUAL);
-		CVar(PlayerDirection, "Player direction", true, VISUAL);
+		CVar(Range, "Range", 1500, VISUAL | SLIDER_CLAMP | SLIDER_PRECISION, 250, 4000, 50, "%dHU");
+		CVar(DrawMap, "Draw map", true, VISUAL);
+		CVar(RotateMap, "Rotate map", true, VISUAL);
+		CVar(ShowTeammates, "Show teammates", false, VISUAL);
+		CVarEnum(PlayerStyle, "Player style", 1, VISUAL, nullptr,
+			VA_LIST("Dot", "Arrow", "Class icon"),
+			Dot, Arrow, ClassIcon);
+		CVar(IconSize, "Icon size", 12.f, VISUAL | SLIDER_CLAMP | SLIDER_PRECISION, 6.f, 24.f, 1.f, "%gpx");
 	NAMESPACE_END(Radar);
 
 	NAMESPACE_BEGIN(Misc)
@@ -1261,6 +1258,14 @@ NAMESPACE_BEGIN(Vars)
 				CVar(Chance, "Kill say chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
 				CVar(TeamChat, "Team chat", false);
 			NAMESPACE_END(KillSay)
+
+			NAMESPACE_BEGIN(AutoTranslate, Auto translate)
+				CVar(Enable, "Auto translate", false);
+				CVarValues(TargetLanguage, "Target language", std::string("en"), DROPDOWN_CUSTOM, nullptr,
+					"en", "ru", "es", "fr", "de", "pt", "pl", "uk", "zh-CN", "ja", "ko");
+				CVar(IgnoreLocal, "Ignore local player", true);
+				CVar(ApiKey, "Google API key", std::string(""));
+			NAMESPACE_END(AutoTranslate)
 
 			NAMESPACE_BEGIN(AutoItem)
 				CVarEnum(Enable, "Enable", 0b0, DROPDOWN_MULTI, nullptr,

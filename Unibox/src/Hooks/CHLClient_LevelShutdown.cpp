@@ -1,5 +1,6 @@
 #include "../SDK/SDK.h"
 
+#include "../Features/Aimbot/AimbotProjectile/AimbotProjectile.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/EnginePrediction/Doors.h"
@@ -11,8 +12,10 @@
 #include "../Features/NavBot/Hazards.h"
 #include "../Features/NavBot/Jobs/NavBotJobs.h"
 #include "../Features/Misc/AutoVote/AutoVote.h"
+#include "../Features/Misc/AutoTranslate/AutoTranslate.h"
 #include "../Features/Misc/Radio/Radio.h"
 #ifndef TEXTMODE
+#include "../Features/Visuals/Radar/Radar.h"
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
 #endif
 
@@ -21,8 +24,10 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 {
 	DEBUG_RETURN(CHLClient_LevelShutdown, rcx);
 
+	F::AimbotProjectile.ResetShotDiagnostics();
 	F::Backtrack.Reset();
 	F::Radio.OnLevelShutdown();
+	F::AutoTranslate.OnLevelShutdown();
 	F::NetworkFix.Reset();
 	F::Chams.Reset();
 	F::Hitmarker.Clear();
@@ -43,6 +48,7 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	F::NavBotSupplies.ResetCachedOrigins();
 	F::AutoVote.Reset();
 #ifndef TEXTMODE
+	F::Radar.Reset();
 	F::SkinChanger.OnLevelShutdown();
 #endif
 

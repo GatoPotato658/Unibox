@@ -39,7 +39,7 @@ private:
 	};
 
 	bool BuildKernel(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
-	bool SetupMask(CTFPlayer* pLocal, CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye);
+	bool SetupMask(CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye);
 	bool Project(const Vec3& vPoint, float& flU, float& flV) const;
 	Vec3 Point(float flI, float flJ) const;
 	Cell_t Ray(const Vec3& vEnd, float flU, float flV);
@@ -53,8 +53,7 @@ private:
 	float m_flRange = 0.f;
 	bool m_bPrior = false;
 
-	CTFPlayer* m_pLocal = nullptr;
-	CBaseEntity* m_pTarget = nullptr;
+	ITraceFilter* m_pTraceFilter = nullptr;
 	const matrix3x4* m_aBones = nullptr;
 	const mstudiohitboxset_t* m_pSet = nullptr;
 	int m_iHitboxes = 0;
@@ -74,7 +73,7 @@ private:
 
 public:
 	bool Applies(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
-	bool Optimize(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye, Vec3& vAimPos);
+	bool Optimize(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEntity* pTarget, const matrix3x4* aBones, float flModelScale, const Vec3& vHullMins, const Vec3& vHullMaxs, const Vec3& vEye, Vec3& vAimPos, ITraceFilter& tTraceFilter);
 };
 
 ADD_FEATURE(CSpreadOptimizer, SpreadOptimizer);

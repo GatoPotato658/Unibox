@@ -471,6 +471,42 @@ namespace Math
 		std::vector<Vec3> vTemporary;
 		ExpandPolygon(vTemporary, vVertices, vNormal, flOffset, pTarget);
 	}
+	inline void ExpandPolygonFrom(const std::vector<Vec3>& vSource, std::vector<Vec3>& vOut, const Vec3& vNormal, float flOffset, const Vec3* pTarget = nullptr)
+	{
+		Vec3 vForward = (vSource.front() - vSource.back()).Normalized();
+		Vec3 vRight = vForward.Cross(vNormal).Normalized();
+
+		vOut = vSource;
+		for (int i = 0, n = int(vSource.size()); i < n; i++)
+		{
+			const Vec3& vVertex1 = vSource[i], &vVertex2 = vSource[(i + 1) % n], &vVertex3 = vSource[(i + 2) % n];
+
+			Vec2 vPoint1 = { vVertex1.Dot(vForward), vVertex1.Dot(vRight) };
+			Vec2 vPoint2 = { vVertex2.Dot(vForward), vVertex2.Dot(vRight) };
+			Vec2 vPoint3 = { vVertex3.Dot(vForward), vVertex3.Dot(vRight) };
+
+			Vec2 vDelta21 = vPoint2 - vPoint1;
+			Vec2 vDelta32 = vPoint3 - vPoint2;
+
+			Vec2 vNormal1 = Vec2(vDelta21.y, -vDelta21.x).Normalized();
+			Vec2 vNormal2 = Vec2(vDelta32.y, -vDelta32.x).Normalized();
+
+			Vec2 vBisect = Vec2(vNormal1.x + vNormal2.x, vNormal1.y + vNormal2.y).Normalized();
+			float flDistance = flOffset / vNormal1.Dot(vBisect);
+			vBisect *= flDistance;
+
+			if (!pTarget)
+				vOut[(i + 1) % n] += vForward * vBisect.x + vRight * vBisect.y;
+			else
+			{
+				Vec3 vToTarget = *pTarget - vVertex2;
+				if (Vec3 vDisplacementX = vForward * vBisect.x; vDisplacementX.Dot(vToTarget) > 0.f)
+					vOut[(i + 1) % n] += vDisplacementX;
+				if (Vec3 vDisplacementY = vRight * vBisect.y; vDisplacementY.Dot(vToTarget) > 0.f)
+					vOut[(i + 1) % n] += vDisplacementY;
+			}
+		}
+	}
 
 	inline Vec3 ClosestPointOnLine(const Vec3& vPoint, const Vec3& vPoint1, const Vec3& vPoint2)
 	{
