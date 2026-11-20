@@ -16,7 +16,7 @@ struct Text_t
 	std::string m_sText = "";
 	Color_t m_tColor = {};
 	Color_t m_tOutline = {};
-	byte m_ucBackgroundAlpha = -1;
+	byte m_ucBackgroundAlpha = 0;
 };
 
 struct Bar_t
@@ -27,6 +27,7 @@ struct Bar_t
 	Color_t m_tOverfill = {};
 	Color_t m_tBackground = Color_t(0, 0, 0, 0);
 	bool m_bSmooth = false;
+	bool m_bHealth = false;
 };
 
 enum class EESPBadge
@@ -39,6 +40,7 @@ enum class EESPBadge
 struct Badge_t
 {
 	EESPBadge m_eType = EESPBadge::None;
+	int m_iMode = ALIGN_TOP;
 	std::string m_sTexture = "";
 	Color_t m_tColor = {};
 	float m_flW = 0.f, m_flH = 0.f;
@@ -64,7 +66,9 @@ struct PlayerCache_t : BuildingCache_t
 {
 	bool m_bBones = false;
 	int m_iClassIcon = 0;
+	int m_iClassIconMode = ALIGN_TOP;
 	CHudTexture* m_pWeaponIcon = nullptr;
+	int m_iWeaponIconMode = ALIGN_BOTTOM;
 };
 
 struct ESPDrawEntity_t

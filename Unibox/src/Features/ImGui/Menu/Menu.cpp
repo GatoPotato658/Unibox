@@ -404,6 +404,86 @@ void CMenu::MenuESP()
 		PushTransparent(tGroup.m_iTargets && !(tGroup.m_iTargets & TargetsEnum::ESP));
 		{
 			FDropdown("Draw", &tGroup.m_tESP.Draw, vEntries, vValues, FDropdownEnum::Multi);
+			if (FPopupButton("ESP positions"))
+			{
+				auto& tPos = tGroup.m_tESP.Positions;
+				const std::vector<const char*> vTextPositions = { "Top", "Right", "Bottom", "Left", "Bottom right", "Bottom left" };
+				const std::vector<int> vTextValues = { int(EESPPosition::Top), int(EESPPosition::Right), int(EESPPosition::Bottom), int(EESPPosition::Left), int(EESPPosition::BottomRight), int(EESPPosition::BottomLeft) };
+				const std::vector<const char*> vBarPositions = { "Left", "Right", "Top", "Bottom" };
+				const std::vector<int> vBarValues = { int(EESPPosition::Left), int(EESPPosition::Right), int(EESPPosition::Top), int(EESPPosition::Bottom) };
+				const std::vector<const char*> vIconPositions = { "Top", "Bottom" };
+				const std::vector<int> vIconValues = { int(EESPPosition::Top), int(EESPPosition::Bottom) };
+				auto fPosition = [&](const char* sLabel, int* pVar, int iFlag, const std::vector<const char*>& vElements, const std::vector<int>& vVals)
+				{
+					PushTransparent(Transparent || !(tGroup.m_tESP.Draw & iFlag));
+					FDropdown(sLabel, pVar, vElements, vVals);
+					PopTransparent();
+				};
+
+				const float flMaxHeight = std::min(H::Draw.Scale(380), GetIO().DisplaySize.y * 0.6f);
+				SetNextWindowSizeConstraints({ 0.f, 0.f }, { FLT_MAX, flMaxHeight });
+				PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
+				if (BeginChild("##ESPPositions", { GetContentRegionAvail().x, 0.f }, ImGuiChildFlags_AutoResizeY))
+				{
+					Subheader("Text");
+					fPosition("Name", &tPos.Name, ESPEnum::Name, vTextPositions, vTextValues);
+					fPosition("Distance", &tPos.Distance, ESPEnum::Distance, vTextPositions, vTextValues);
+					if (tGroup.m_iTargets & (TargetsEnum::Players | TargetsEnum::Buildings))
+						fPosition("Health text", &tPos.HealthText, ESPEnum::HealthText, vTextPositions, vTextValues);
+					if (tGroup.m_iTargets & TargetsEnum::Players)
+					{
+						fPosition("Uber text", &tPos.UberText, ESPEnum::UberText, vTextPositions, vTextValues);
+						fPosition("Class text", &tPos.ClassText, ESPEnum::ClassText, vTextPositions, vTextValues);
+						fPosition("Weapon text", &tPos.WeaponText, ESPEnum::WeaponText, vTextPositions, vTextValues);
+						fPosition("Priority", &tPos.Priority, ESPEnum::Priority, vTextPositions, vTextValues);
+						fPosition("Labels", &tPos.Labels, ESPEnum::Labels, vTextPositions, vTextValues);
+						fPosition("Buffs", &tPos.Buffs, ESPEnum::Buffs, vTextPositions, vTextValues);
+						fPosition("Debuffs", &tPos.Debuffs, ESPEnum::Debuffs, vTextPositions, vTextValues);
+					}
+					if (tGroup.m_iTargets & (TargetsEnum::Players | TargetsEnum::Buildings | TargetsEnum::Projectiles | TargetsEnum::Objective))
+						fPosition("Flags", &tPos.Flags, ESPEnum::Flags, vTextPositions, vTextValues);
+					if (tGroup.m_iTargets & TargetsEnum::Players)
+					{
+						fPosition("Lag compensation", &tPos.LagComp, ESPEnum::LagCompensation, vTextPositions, vTextValues);
+						fPosition("Ping", &tPos.Ping, ESPEnum::Ping, vTextPositions, vTextValues);
+						fPosition("KDR", &tPos.KDR, ESPEnum::KDR, vTextPositions, vTextValues);
+						fPosition("That's how mafia works", &tPos.Mafia, ESPEnum::ThatsHowMafiaWorks, vTextPositions, vTextValues);
+					}
+					if (tGroup.m_iTargets & (TargetsEnum::Buildings | TargetsEnum::Projectiles))
+						fPosition("Owner", &tPos.Owner, ESPEnum::Owner, vTextPositions, vTextValues);
+					if (tGroup.m_iTargets & TargetsEnum::Buildings)
+					{
+						fPosition("Level", &tPos.Level, ESPEnum::Level, vTextPositions, vTextValues);
+						fPosition("Ammo text", &tPos.AmmoText, ESPEnum::AmmoText, vTextPositions, vTextValues);
+					}
+					if (tGroup.m_iTargets & TargetsEnum::Objective)
+						fPosition("Intel return time", &tPos.IntelReturn, ESPEnum::IntelReturnTime, vTextPositions, vTextValues);
+
+					if (tGroup.m_iTargets & (TargetsEnum::Players | TargetsEnum::Buildings))
+					{
+						Subheader("Bars");
+						fPosition("Health bar", &tPos.HealthBar, ESPEnum::HealthBar, vBarPositions, vBarValues);
+						if (tGroup.m_iTargets & TargetsEnum::Players)
+							fPosition("Uber bar", &tPos.UberBar, ESPEnum::UberBar, vBarPositions, vBarValues);
+						if (tGroup.m_iTargets & TargetsEnum::Buildings)
+							fPosition("Ammo bars", &tPos.AmmoBar, ESPEnum::AmmoBars, vBarPositions, vBarValues);
+					}
+					if (tGroup.m_iTargets & TargetsEnum::Players)
+					{
+						Subheader("Icons");
+						fPosition("Class icon", &tPos.ClassIcon, ESPEnum::ClassIcon, vIconPositions, vIconValues);
+						fPosition("Weapon icon", &tPos.WeaponIcon, ESPEnum::WeaponIcon, vIconPositions, vIconValues);
+					}
+				}
+				EndChild();
+				PopStyleVar();
+
+				DebugDummy({ 0.f, H::Draw.Scale(4) });
+				if (FButton("Reset"))
+					tPos = {};
+
+				EndPopup();
+			}
 			PushTransparent(Transparent || !(tGroup.m_tESP.Draw & ESPEnum::Box));
 			{
 				FDropdown("Box style", &tGroup.m_tESP.BoxStyle, { "Solid", "Corner accent", "Corners only", "Outline", "Rounded" });

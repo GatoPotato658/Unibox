@@ -1178,6 +1178,81 @@ public:
 	}
 };
 
+enum class EESPPosition
+{
+	Top,
+	Right,
+	Bottom,
+	Left,
+	BottomRight,
+	BottomLeft
+};
+
+struct ESPPositions_t
+{
+	int Name = int(EESPPosition::Top);
+	int Distance = int(EESPPosition::Bottom);
+	int HealthBar = int(EESPPosition::Left);
+	int HealthText = int(EESPPosition::Left);
+	int UberBar = int(EESPPosition::Bottom);
+	int UberText = int(EESPPosition::BottomRight);
+	int ClassIcon = int(EESPPosition::Top);
+	int ClassText = int(EESPPosition::Right);
+	int WeaponIcon = int(EESPPosition::Bottom);
+	int WeaponText = int(EESPPosition::Bottom);
+	int Priority = int(EESPPosition::Top);
+	int Labels = int(EESPPosition::Right);
+	int Buffs = int(EESPPosition::Right);
+	int Debuffs = int(EESPPosition::Right);
+	int Flags = int(EESPPosition::Right);
+	int LagComp = int(EESPPosition::Right);
+	int Ping = int(EESPPosition::Right);
+	int KDR = int(EESPPosition::Right);
+	int Mafia = int(EESPPosition::Right);
+	int Owner = int(EESPPosition::Top);
+	int Level = int(EESPPosition::Right);
+	int AmmoBar = int(EESPPosition::Bottom);
+	int AmmoText = int(EESPPosition::BottomRight);
+	int IntelReturn = int(EESPPosition::Right);
+
+	inline void Sanitize()
+	{
+		constexpr ESPPositions_t tDefault = {};
+		auto fText = [](int& i, int iDefault)
+		{
+			if (i < int(EESPPosition::Top) || i > int(EESPPosition::BottomLeft))
+				i = iDefault;
+		};
+		auto fBar = [](int& i, int iDefault)
+		{
+			if (i < int(EESPPosition::Top) || i > int(EESPPosition::Left))
+				i = iDefault;
+		};
+		auto fIcon = [](int& i, int iDefault)
+		{
+			if (i != int(EESPPosition::Top) && i != int(EESPPosition::Bottom))
+				i = iDefault;
+		};
+
+		fText(Name, tDefault.Name); fText(Distance, tDefault.Distance); fText(HealthText, tDefault.HealthText);
+		fText(UberText, tDefault.UberText); fText(ClassText, tDefault.ClassText); fText(WeaponText, tDefault.WeaponText);
+		fText(Priority, tDefault.Priority); fText(Labels, tDefault.Labels); fText(Buffs, tDefault.Buffs);
+		fText(Debuffs, tDefault.Debuffs); fText(Flags, tDefault.Flags); fText(LagComp, tDefault.LagComp);
+		fText(Ping, tDefault.Ping); fText(KDR, tDefault.KDR); fText(Mafia, tDefault.Mafia);
+		fText(Owner, tDefault.Owner); fText(Level, tDefault.Level); fText(AmmoText, tDefault.AmmoText);
+		fText(IntelReturn, tDefault.IntelReturn);
+		fBar(HealthBar, tDefault.HealthBar); fBar(UberBar, tDefault.UberBar); fBar(AmmoBar, tDefault.AmmoBar);
+		fIcon(ClassIcon, tDefault.ClassIcon); fIcon(WeaponIcon, tDefault.WeaponIcon);
+	}
+
+	inline bool operator==(const ESPPositions_t& t) const = default;
+
+	inline bool operator!=(const ESPPositions_t& t) const
+	{
+		return !(*this == t);
+	}
+};
+
 struct ESP_t
 {
 	int		Draw = 0b0;
@@ -1188,14 +1263,16 @@ struct ESP_t
 	float	End = 8192.f;
 	bool	SmoothAlpha = true;
 
+	ESPPositions_t Positions = {};
+
 	inline bool operator==(const ESP_t& t) const
 	{
-		return Draw == t.Draw && BoxStyle == t.BoxStyle && BackgroundOpacity == t.BackgroundOpacity && Start == t.Start && End == t.End && SmoothAlpha == t.SmoothAlpha;
+		return Draw == t.Draw && BoxStyle == t.BoxStyle && BackgroundOpacity == t.BackgroundOpacity && Start == t.Start && End == t.End && SmoothAlpha == t.SmoothAlpha && Positions == t.Positions;
 	}
 
 	inline bool operator!=(const ESP_t& t) const
 	{
-		return Draw != t.Draw || BoxStyle != t.BoxStyle || BackgroundOpacity != t.BackgroundOpacity || Start != t.Start || End != t.End || SmoothAlpha != t.SmoothAlpha;
+		return Draw != t.Draw || BoxStyle != t.BoxStyle || BackgroundOpacity != t.BackgroundOpacity || Start != t.Start || End != t.End || SmoothAlpha != t.SmoothAlpha || Positions != t.Positions;
 	}
 
 	inline bool operator()() const

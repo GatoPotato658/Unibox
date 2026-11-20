@@ -386,6 +386,37 @@ template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::s
 	t.put_child(s, tChild);
 }
 
+template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const ESPPositions_t& v)
+{
+	boost::property_tree::ptree tChild;
+	SaveJson(tChild, "Name", v.Name);
+	SaveJson(tChild, "Distance", v.Distance);
+	SaveJson(tChild, "HealthBar", v.HealthBar);
+	SaveJson(tChild, "HealthText", v.HealthText);
+	SaveJson(tChild, "UberBar", v.UberBar);
+	SaveJson(tChild, "UberText", v.UberText);
+	SaveJson(tChild, "ClassIcon", v.ClassIcon);
+	SaveJson(tChild, "ClassText", v.ClassText);
+	SaveJson(tChild, "WeaponIcon", v.WeaponIcon);
+	SaveJson(tChild, "WeaponText", v.WeaponText);
+	SaveJson(tChild, "Priority", v.Priority);
+	SaveJson(tChild, "Labels", v.Labels);
+	SaveJson(tChild, "Buffs", v.Buffs);
+	SaveJson(tChild, "Debuffs", v.Debuffs);
+	SaveJson(tChild, "Flags", v.Flags);
+	SaveJson(tChild, "LagComp", v.LagComp);
+	SaveJson(tChild, "Ping", v.Ping);
+	SaveJson(tChild, "KDR", v.KDR);
+	SaveJson(tChild, "Mafia", v.Mafia);
+	SaveJson(tChild, "Owner", v.Owner);
+	SaveJson(tChild, "Level", v.Level);
+	SaveJson(tChild, "AmmoBar", v.AmmoBar);
+	SaveJson(tChild, "AmmoText", v.AmmoText);
+	SaveJson(tChild, "IntelReturn", v.IntelReturn);
+
+	t.put_child(s, tChild);
+}
+
 template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::string& s, const ESP_t& v)
 {
 	boost::property_tree::ptree tChild;
@@ -395,6 +426,7 @@ template <> void CConfigs::SaveJson(boost::property_tree::ptree& t, const std::s
 	SaveJson(tChild, "Start", v.Start);
 	SaveJson(tChild, "End", v.End);
 	SaveJson(tChild, "SmoothAlpha", v.SmoothAlpha);
+	SaveJson(tChild, "Positions", v.Positions);
 
 	t.put_child(s, tChild);
 }
@@ -568,6 +600,38 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 	v.Sanitize();
 }
 
+template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s, ESPPositions_t& v)
+{
+	if (auto tChild = t.get_child_optional(s))
+	{
+		LoadJson(*tChild, "Name", v.Name);
+		LoadJson(*tChild, "Distance", v.Distance);
+		LoadJson(*tChild, "HealthBar", v.HealthBar);
+		LoadJson(*tChild, "HealthText", v.HealthText);
+		LoadJson(*tChild, "UberBar", v.UberBar);
+		LoadJson(*tChild, "UberText", v.UberText);
+		LoadJson(*tChild, "ClassIcon", v.ClassIcon);
+		LoadJson(*tChild, "ClassText", v.ClassText);
+		LoadJson(*tChild, "WeaponIcon", v.WeaponIcon);
+		LoadJson(*tChild, "WeaponText", v.WeaponText);
+		LoadJson(*tChild, "Priority", v.Priority);
+		LoadJson(*tChild, "Labels", v.Labels);
+		LoadJson(*tChild, "Buffs", v.Buffs);
+		LoadJson(*tChild, "Debuffs", v.Debuffs);
+		LoadJson(*tChild, "Flags", v.Flags);
+		LoadJson(*tChild, "LagComp", v.LagComp);
+		LoadJson(*tChild, "Ping", v.Ping);
+		LoadJson(*tChild, "KDR", v.KDR);
+		LoadJson(*tChild, "Mafia", v.Mafia);
+		LoadJson(*tChild, "Owner", v.Owner);
+		LoadJson(*tChild, "Level", v.Level);
+		LoadJson(*tChild, "AmmoBar", v.AmmoBar);
+		LoadJson(*tChild, "AmmoText", v.AmmoText);
+		LoadJson(*tChild, "IntelReturn", v.IntelReturn);
+	}
+	v.Sanitize();
+}
+
 template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const std::string& s,ESP_t& v)
 {
 	if (auto tChild = t.get_child_optional(s))
@@ -579,6 +643,7 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 		LoadJson(*tChild, "Start", v.Start);
 		LoadJson(*tChild, "End", v.End);
 		LoadJson(*tChild, "SmoothAlpha", v.SmoothAlpha);
+		LoadJson(*tChild, "Positions", v.Positions);
 	}
 }
 
