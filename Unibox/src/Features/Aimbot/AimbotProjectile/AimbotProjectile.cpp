@@ -2760,7 +2760,7 @@ bool CAimbotProjectile::RunMain(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUser
 		return true;
 	}
 
-	if (bAllMissed && m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER)
+	if (bAllMissed)
 		m_bMainSearchComplete = true;
 
 	return false;
@@ -3024,7 +3024,7 @@ void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	const bool bPath = Vars::Visuals::Prediction::BestPathPreview.Value && Vars::Visuals::Prediction::BestPath.Value;
 	if (!bAimPos && !bPath)
 		return;
-	if (m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER && m_bMainSearchComplete)
+	if (m_bMainSearchComplete)
 		return;
 	if (m_flAimAnglesSetTime == I::GlobalVars->curtime)
 		return;
@@ -3039,32 +3039,30 @@ void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	case TF_WEAPON_PASSTIME_GUN:
 		return;
 	}
-	if (m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER)
+	if (m_iWeaponID != m_iPreviewWeaponID)
 	{
-		if (m_iLastPreviewTick > 0 && I::GlobalVars->tickcount - m_iLastPreviewTick < 4)
-		{
-			if (bAimPos && !m_vPreviewAimAngles.IsZero())
-			{
-				m_vAimAngles = m_vPreviewAimAngles;
-				m_flAimAnglesSetTime = I::GlobalVars->curtime;
-			}
-			if (bPath && !m_vPreviewPath.empty())
-			{
-				if (Vars::Colors::BestPathIgnoreZ.Value.a)
-					G::PathStorage.emplace_back(m_vPreviewPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPathIgnoreZ.Value, Vars::Visuals::Prediction::BestPath.Value);
-				if (Vars::Colors::BestPath.Value.a)
-					G::PathStorage.emplace_back(m_vPreviewPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
-			}
-			return;
-		}
-		m_iLastPreviewTick = I::GlobalVars->tickcount;
-	}
-	else
-	{
+		m_iPreviewWeaponID = m_iWeaponID;
 		m_iLastPreviewTick = -1;
 		m_vPreviewAimAngles = {};
 		m_vPreviewPath.clear();
 	}
+	if (m_iLastPreviewTick > 0 && I::GlobalVars->tickcount - m_iLastPreviewTick < 4)
+	{
+		if (bAimPos && !m_vPreviewAimAngles.IsZero())
+		{
+			m_vAimAngles = m_vPreviewAimAngles;
+			m_flAimAnglesSetTime = I::GlobalVars->curtime;
+		}
+		if (bPath && !m_vPreviewPath.empty())
+		{
+			if (Vars::Colors::BestPathIgnoreZ.Value.a)
+				G::PathStorage.emplace_back(m_vPreviewPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPathIgnoreZ.Value, Vars::Visuals::Prediction::BestPath.Value);
+			if (Vars::Colors::BestPath.Value.a)
+				G::PathStorage.emplace_back(m_vPreviewPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
+		}
+		return;
+	}
+	m_iLastPreviewTick = I::GlobalVars->tickcount;
 	PROJ_FRAME("Preview", m_iWeaponID);
 	if (auto pSentryGun = pLocal->GetObjectOfType(OBJ_SENTRYGUN))
 		m_pSentryGun = pSentryGun->As<CObjectSentrygun>();
@@ -3102,11 +3100,8 @@ void CAimbotProjectile::RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 			G::PathStorage.emplace_back(m_vBestPlayerPath, I::GlobalVars->curtime + TICK_INTERVAL, Vars::Colors::BestPath.Value, Vars::Visuals::Prediction::BestPath.Value, true);
 	}
 
-	if (m_iWeaponID == TF_WEAPON_PIPEBOMBLAUNCHER)
-	{
-		m_vPreviewAimAngles = m_flAimAnglesSetTime == I::GlobalVars->curtime ? m_vAimAngles : Vec3();
-		m_vPreviewPath = m_vBestPlayerPath;
-	}
+	m_vPreviewAimAngles = m_flAimAnglesSetTime == I::GlobalVars->curtime ? m_vAimAngles : Vec3();
+	m_vPreviewPath = m_vBestPlayerPath;
 
 	m_vPlayerPath.clear(); m_vProjectilePath.clear(); m_vBoxes.clear();
 	m_vBestPlayerPath.clear();

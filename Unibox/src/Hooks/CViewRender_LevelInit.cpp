@@ -48,4 +48,5 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::FollowBot.Reset();
 
 	G::WranglerSecondFireTime = F::AimbotProjectile.m_flAimAnglesSetTime = 0.f;
+	F::AimbotProjectile.ResetPreview();
 }

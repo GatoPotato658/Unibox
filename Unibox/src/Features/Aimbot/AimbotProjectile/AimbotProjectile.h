@@ -239,6 +239,7 @@ private:
 	bool m_bBlockAimAnglesDraw = false;
 	bool m_bMainSearchComplete = false;
 	int m_iLastPreviewTick = -1;
+	int m_iPreviewWeaponID = -1;
 	Vec3 m_vPreviewAimAngles = {};
 	std::vector<Vec3> m_vPreviewPath = {};
 
@@ -268,6 +269,7 @@ private:
 
 public:
 	void ResetMainSearch() { m_bMainSearchComplete = false; }
+	void ResetPreview() { m_iLastPreviewTick = -1, m_vPreviewAimAngles = {}, m_vPreviewPath.clear(); }
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void RunPreview(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	void RunGrapplingHook(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
