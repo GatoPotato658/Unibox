@@ -33,6 +33,9 @@ void CCameraWindow::Draw()
 // Renders another view onto a texture
 void CCameraWindow::RenderView(void* rcx, const CViewSetup& pViewSetup)
 {
+	if (m_bDrawing)
+		return;
+
 	m_bDrawing = true;
 
 	if (m_bShouldDraw && m_pCameraTexture)

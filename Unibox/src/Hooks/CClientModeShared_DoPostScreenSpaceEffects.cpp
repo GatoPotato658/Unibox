@@ -18,15 +18,13 @@ MAKE_HOOK(CClientModeShared_DoPostScreenSpaceEffects, U::Memory.GetVirtual(I::Cl
 #ifdef TEXTMODE
 	return false;
 #else
-	if (SDK::CleanScreenshot() || G::Unload)
+	if (SDK::CleanScreenshot() || G::Unload || F::CameraWindow.m_bDrawing)
 		return CALL_ORIGINAL(rcx, pSetup);
-	
+
 	auto pLocal = H::Entities.GetLocal();
 	F::Visuals.ProjectileTrace(pLocal, H::Entities.GetWeapon());
 	F::Visuals.SpyCamera(pLocal);
-	if (F::CameraWindow.m_bDrawing)
-		return CALL_ORIGINAL(rcx, pSetup);
-	
+
 	F::NavRender.RenderWorld();
 	F::Visuals.Triggers(pLocal);
 	F::Visuals.DrawEffects();

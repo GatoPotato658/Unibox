@@ -11,6 +11,31 @@ T_HIST = 32
 HORIZON_KNOTS = np.array([1, 2, 4, 6, 9, 12, 16, 21, 27, 34, 42, 52, 64, 78, 96, 120], dtype=np.int32)
 MAX_HORIZON = 120
 UNSEEN_TEST_FAMILIES = {"koth_bagel", "cp_metalworks"}
+AIR_HEAVY_FAMILIES = {"koth_ultiduo", "ultiduo_baloo", "ctf_ballin", "ctf_bball", "mge_training"}
+PINNED_TEST_IDS = {
+    "demostf_1403967",
+    "demostf_1484116",
+    "demostf_1535981",
+    "demostf_1536408",
+    "demostf_1536372",
+    "demostf_1536376",
+    "demostf_1523840",
+    "demostf_1536267",
+    "demostf_1291155",
+    "demostf_1311530",
+    "demostf_1440360",
+    "demostf_1445341",
+}
+PINNED_VAL_IDS = {
+    "demostf_1536373",
+    "demostf_1536378",
+    "etf2l_92868_pov",
+    "demostf_1484115",
+    "etf2l_92888_pov",
+    "demostf_1324269",
+    "demostf_1446689",
+    "etf2l_93069_pov",
+}
 
 FRAME_DTYPE = np.dtype([
     ("steam_id", "<u8"),
@@ -59,36 +84,56 @@ def build_strict_split(manifest_path: Path, summary_path: Path) -> dict[str, lis
     for d in mf["demos"]:
         name = Path(d["local_path"]).name
         m = meta_by_demo.get(name, {})
-        if m.get("total_frames", 0) < 50000:
+        min_frames = 10000 if d.get("map_family") in AIR_HEAVY_FAMILIES else 50000
+        if (
+            not m
+            or m.get("map", "").lower() != d.get("map", "").lower()
+            or Path(d.get("bsp_path", "")).stem.lower() != m.get("map", "").lower()
+            or (d["id"] not in PINNED_TEST_IDS and d["id"] not in PINNED_VAL_IDS and m.get("total_frames", 0) < min_frames)
+        ):
             continue
         rec = dict(d)
-        rec["bin_path"] = str(Path("ml_pipeline/data/extracted") / f"{d['id']}.bin")
+        rec["bin_path"] = str(summary_path.parent / f"{d['id']}.bin")
         rec["meta"] = m
         demos.append(rec)
 
+    missing_test = PINNED_TEST_IDS - {d["id"] for d in demos}
+    if missing_test:
+        raise ValueError(f"Missing pinned test demos: {sorted(missing_test)}")
+
+    def overlaps(a: dict[str, Any], b: dict[str, Any]) -> bool:
+        if a.get("sha256") and a["sha256"] == b.get("sha256"):
+            return True
+        ta, tb = int(a.get("time") or 0), int(b.get("time") or 0)
+        return bool(ta and tb and a["map_family"] == b["map_family"] and abs(ta - tb) < 3 * 3600)
+
     train_demos: list[dict[str, Any]] = []
     val_demos: list[dict[str, Any]] = []
-    test_demos: list[dict[str, Any]] = []
+    test_demos = [d for d in demos if d["id"] in PINNED_TEST_IDS]
+    remaining_by_fam: dict[str, list[dict[str, Any]]] = {}
 
-    by_fam: dict[str, list[dict[str, Any]]] = {}
     for d in demos:
-        by_fam.setdefault(d["map_family"], []).append(d)
-
-    for fam, items in sorted(by_fam.items()):
-        items_sorted = sorted(items, key=lambda x: (not x["is_pov"], x["id"]))
-        if fam in UNSEEN_TEST_FAMILIES:
-            test_demos.extend(items_sorted)
+        did = d["id"]
+        if did in PINNED_TEST_IDS or any(overlaps(d, t) for t in test_demos):
             continue
-        if len(items_sorted) >= 6:
-            test_demos.extend(items_sorted[:2])
-            val_demos.append(items_sorted[2])
-            train_demos.extend(items_sorted[3:])
-        elif len(items_sorted) >= 2:
+        if d["map_family"] in UNSEEN_TEST_FAMILIES:
+            continue
+        elif did in PINNED_VAL_IDS:
+            val_demos.append(d)
+        else:
+            remaining_by_fam.setdefault(d["map_family"], []).append(d)
+
+    val_fams = {d["map_family"] for d in val_demos}
+    for fam, items in sorted(remaining_by_fam.items()):
+        items_sorted = sorted(items, key=lambda x: (not x["is_pov"], x["id"]))
+        if fam not in val_fams and len(items_sorted) >= 2:
             val_demos.append(items_sorted[0])
+            val_fams.add(fam)
             train_demos.extend(items_sorted[1:])
         else:
             train_demos.extend(items_sorted)
 
+    train_demos = [d for d in train_demos if not any(overlaps(d, v) for v in val_demos)]
     return {"train": train_demos, "val": val_demos, "test": test_demos}
 
 
@@ -285,6 +330,16 @@ def compute_features_and_targets(
         float(anchor["ground_dist"]),
     ], dtype=np.float32)
 
+    fut_h_mask = (fut_ticks > t0) & (fut_ticks <= t0 + MAX_HORIZON)
+    if np.any(fut_h_mask):
+        t_sub = fut_ticks[fut_h_mask]
+        dts = np.clip(np.diff(t_sub, prepend=t0), 1, 8)
+        f_air = (fut_frames["flags"][fut_h_mask] & 1) == 0
+        fut_air_ticks = int(np.sum(dts[f_air]))
+    else:
+        fut_air_ticks = 0
+    is_air_traj = 1 if (on_g_h[-1] < 0.5 or blast_h[-1] > 0.5 or fut_air_ticks >= 12) else 0
+
     return {
         "x_seq": x_seq,
         "x_ctx": x_ctx,
@@ -293,6 +348,8 @@ def compute_features_and_targets(
         "y_ctrl": y_ctrl,
         "init_state": init_state,
         "input_source": int(anchor["input_source"]),
+        "fut_air_ticks": min(fut_air_ticks, 255),
+        "is_air_traj": is_air_traj,
     }
 
 
@@ -302,6 +359,7 @@ def extract_windows_from_demo(
     choke_aug_prob: float = 0.0,
     rng: np.random.Generator | None = None,
     keep_raw_hist: bool = False,
+    air_oversample: bool = False,
 ) -> dict[str, np.ndarray]:
     if rng is None:
         rng = np.random.default_rng(42)
@@ -313,6 +371,9 @@ def extract_windows_from_demo(
     eids = arr["entity_id"]
     ticks = arr["server_tick"]
     pos = arr["origin"]
+    not_on_g = (arr["flags"] & 1) == 0
+    blast_arr = has_cond(arr["player_cond"], 81)
+    in_src_arr = arr["input_source"]
 
     eid_change = np.empty(n, dtype=bool)
     eid_change[0] = True
@@ -328,7 +389,7 @@ def extract_windows_from_demo(
 
     _, seg_starts, seg_counts = np.unique(seg_ids, return_index=True, return_counts=True)
 
-    candidates: list[tuple[int, int, int, int]] = []
+    candidates: list[tuple[int, int, int, int, int]] = []
     for s_start, s_len in zip(seg_starts, seg_counts):
         if s_len < T_HIST + MAX_HORIZON + 2:
             continue
@@ -338,36 +399,71 @@ def extract_windows_from_demo(
         if max_anchor_tick <= int(seg_ticks[T_HIST - 1]):
             continue
         valid_end = int(np.searchsorted(seg_ticks, max_anchor_tick, side="right"))
+        seg_air_cs = np.cumsum(not_on_g[s_start:s_end], dtype=np.int32)
         stride = 8
-        for local_idx in range(T_HIST * 3 if choke_aug_prob > 0 else T_HIST - 1, valid_end, stride):
+        start_off = T_HIST * 3 if choke_aug_prob > 0 else T_HIST - 1
+        for local_idx in range(start_off, valid_end, stride):
             if local_idx < T_HIST - 1:
                 continue
-            candidates.append((int(s_start), int(s_end), int(s_start + local_idx), int(arr["input_source"][s_start + local_idx])))
+            abs_idx = int(s_start + local_idx)
+            look_hi = min(int(s_len) - 1, local_idx + MAX_HORIZON)
+            approx_air = int(seg_air_cs[look_hi] - seg_air_cs[local_idx])
+            is_air_c = 1 if (not_on_g[abs_idx] or blast_arr[abs_idx] or approx_air >= 10) else 0
+            candidates.append((int(s_start), int(s_end), abs_idx, int(in_src_arr[abs_idx]), is_air_c))
 
     if not candidates:
         return {}
 
-    pov_cands = [c for c in candidates if c[3] == 1]
-    stv_cands = [c for c in candidates if c[3] == 0]
     if len(candidates) > max_windows:
-        if pov_cands:
-            n_pov = min(len(pov_cands), max_windows // 2)
-            n_stv = max_windows - n_pov
-            sel_pov = rng.choice(len(pov_cands), size=n_pov, replace=False)
-            chosen = [pov_cands[i] for i in sel_pov]
-            if stv_cands and n_stv > 0:
-                sel_stv = rng.choice(len(stv_cands), size=min(len(stv_cands), n_stv), replace=False)
-                chosen.extend(stv_cands[i] for i in sel_stv)
+        if air_oversample:
+            pov_air = [c for c in candidates if c[3] == 1 and c[4] == 1]
+            stv_air = [c for c in candidates if c[3] == 0 and c[4] == 1]
+            pov_gnd = [c for c in candidates if c[3] == 1 and c[4] == 0]
+            stv_gnd = [c for c in candidates if c[3] == 0 and c[4] == 0]
+            chosen = []
+            air_budget = (max_windows * 55) // 100
+            take_pa = min(len(pov_air), air_budget)
+            if take_pa > 0:
+                chosen.extend(pov_air[i] for i in rng.choice(len(pov_air), size=take_pa, replace=False))
+            rem_air = air_budget - len(chosen)
+            take_sa = min(len(stv_air), rem_air)
+            if take_sa > 0:
+                chosen.extend(stv_air[i] for i in rng.choice(len(stv_air), size=take_sa, replace=False))
+            rem_total = max_windows - len(chosen)
+            take_pg = min(len(pov_gnd), max(rem_total // 2, 0))
+            if take_pg > 0:
+                chosen.extend(pov_gnd[i] for i in rng.choice(len(pov_gnd), size=take_pg, replace=False))
+            rem_total = max_windows - len(chosen)
+            take_sg = min(len(stv_gnd), rem_total)
+            if take_sg > 0:
+                chosen.extend(stv_gnd[i] for i in rng.choice(len(stv_gnd), size=take_sg, replace=False))
+            if len(chosen) < max_windows:
+                chosen_set = {c[2] for c in chosen}
+                leftover = [c for c in candidates if c[2] not in chosen_set]
+                if leftover:
+                    extra = min(len(leftover), max_windows - len(chosen))
+                    chosen.extend(leftover[i] for i in rng.choice(len(leftover), size=extra, replace=False))
         else:
-            sel = rng.choice(len(candidates), size=max_windows, replace=False)
-            chosen = [candidates[i] for i in sel]
+            pov_cands = [c for c in candidates if c[3] == 1]
+            stv_cands = [c for c in candidates if c[3] == 0]
+            if pov_cands:
+                n_pov = min(len(pov_cands), max_windows // 2)
+                n_stv = max_windows - n_pov
+                sel_pov = rng.choice(len(pov_cands), size=n_pov, replace=False)
+                chosen = [pov_cands[i] for i in sel_pov]
+                if stv_cands and n_stv > 0:
+                    sel_stv = rng.choice(len(stv_cands), size=min(len(stv_cands), n_stv), replace=False)
+                    chosen.extend(stv_cands[i] for i in sel_stv)
+            else:
+                sel = rng.choice(len(candidates), size=max_windows, replace=False)
+                chosen = [candidates[i] for i in sel]
     else:
         chosen = candidates
 
-    xs, xc, yp, yv, yc, ist, isrc = [], [], [], [], [], [], []
+    xs, xc, yp, yv, yc, ist, isrc, fair, iair = [], [], [], [], [], [], [], [], []
     raw_h_list = []
 
-    for s_start, s_end, abs_idx, _ in chosen:
+    for s_start, s_end, abs_idx, _, _ in chosen:
         hist_step = 1
         if choke_aug_prob > 0.0 and rng.random() < choke_aug_prob:
             hist_step = int(rng.choice([2, 3]))
@@ -392,6 +488,8 @@ def extract_windows_from_demo(
         yc.append(res["y_ctrl"])
         ist.append(res["init_state"])
         isrc.append(res["input_source"])
+        fair.append(res["fut_air_ticks"])
+        iair.append(res["is_air_traj"])
         if keep_raw_hist:
             rh = np.zeros((T_HIST, 11), dtype=np.float32)
             rh[:, 0:3] = hist["origin"]
@@ -413,6 +511,8 @@ def extract_windows_from_demo(
         "y_ctrl": np.stack(yc, axis=0),
         "init_state": np.stack(ist, axis=0),
         "input_source": np.array(isrc, dtype=np.uint8),
+        "fut_air_ticks": np.array(fair, dtype=np.uint8),
+        "is_air_traj": np.array(iair, dtype=np.uint8),
     }
     if keep_raw_hist:
         out["raw_hist"] = np.stack(raw_h_list, axis=0)
@@ -423,61 +523,119 @@ def build_or_load_cache(
     cache_dir: Path = Path("ml_pipeline/data/cache"),
     manifest_path: Path = Path("ml_pipeline/data/manifest.json"),
     summary_path: Path = Path("ml_pipeline/data/extracted/batch_summary.json"),
-    train_target: int = 360000,
-    val_target: int = 50000,
+    train_target: int = 850000,
+    val_target: int = 80000,
     test_target: int = 60000,
     force_rebuild: bool = False,
+    memory_mapped: bool = False,
 ) -> dict[str, Any]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     split_file = cache_dir / "split_info.json"
-    if not force_rebuild and split_file.exists() and all((cache_dir / f"{s}.npz").exists() for s in ("train", "val", "test")):
+    split_paths = [cache_dir / s if memory_mapped else cache_dir / f"{s}.npz" for s in ("train", "val")]
+    if not force_rebuild and split_file.exists() and all(p.exists() for p in split_paths + [cache_dir / "test.npz"]):
         return json.loads(split_file.read_text(encoding="utf-8"))
 
     splits = build_strict_split(manifest_path, summary_path)
     rng = np.random.default_rng(2026)
     split_stats: dict[str, Any] = {}
+    old_split: dict[str, Any] = {}
+    if split_file.exists():
+        try:
+            old_split = json.loads(split_file.read_text(encoding="utf-8"))
+        except Exception:
+            old_split = {}
 
     targets = {"train": train_target, "val": val_target, "test": test_target}
     for sname in ("train", "val", "test"):
+        if (
+            sname == "test"
+            and (cache_dir / "test.npz").exists()
+            and set(old_split.get("test", {}).get("demo_ids", [])) == PINNED_TEST_IDS
+        ):
+            split_stats["test"] = old_split["test"]
+            print(
+                f"Preserved test: {split_stats['test']['demos']} demos, "
+                f"{split_stats['test']['windows']:,} windows (pinned apples-to-apples)",
+                flush=True,
+            )
+            continue
+
         demos = splits[sname]
-        per_demo = max(1000, targets[sname] // max(len(demos), 1))
+        per_demo = max(1200, targets[sname] // max(len(demos), 1))
         choke_p = 0.15 if sname == "train" else 0.0
         keep_raw = sname == "test"
+        air_os = sname in ("train", "val")
         chunks: list[dict[str, np.ndarray]] = []
+        mapped: dict[str, np.ndarray] = {}
+        count = 0
+        used_demos = []
         raw_frames_sum = 0
-        for d in demos:
+        for i, d in enumerate(demos, 1):
             bp = Path(d["bin_path"])
             if not bp.exists():
                 continue
             raw_frames_sum += int(d["meta"].get("total_frames", 0))
-            chunk = extract_windows_from_demo(bp, per_demo, choke_aug_prob=choke_p, rng=rng, keep_raw_hist=keep_raw)
+            chunk = extract_windows_from_demo(
+                bp,
+                per_demo,
+                choke_aug_prob=choke_p,
+                rng=rng,
+                keep_raw_hist=keep_raw,
+                air_oversample=air_os,
+            )
             if chunk:
+                used_demos.append(d)
                 n_w = len(chunk["x_seq"])
                 chunk["is_unseen_map"] = np.full(
                     n_w, 1 if d["map_family"] in UNSEEN_TEST_FAMILIES else 0, dtype=np.uint8
                 )
-                chunks.append(chunk)
+                if memory_mapped and sname != "test":
+                    if not mapped:
+                        mapped_dir = cache_dir / sname
+                        mapped_dir.mkdir()
+                        capacity = per_demo * len(demos)
+                        mapped = {
+                            k: np.lib.format.open_memmap(
+                                mapped_dir / f"{k}.npy", mode="w+", dtype=v.dtype, shape=(capacity, *v.shape[1:])
+                            )
+                            for k, v in chunk.items()
+                        }
+                    for k, v in chunk.items():
+                        mapped[k][count:count + n_w] = v
+                    count += n_w
+                else:
+                    chunks.append(chunk)
+            if i % 25 == 0 or i == len(demos):
+                print(f"Preparing {sname}: {i}/{len(demos)} demos", flush=True)
 
-        merged: dict[str, np.ndarray] = {}
-        for k in chunks[0].keys():
-            merged[k] = np.concatenate([c[k] for c in chunks], axis=0)
-
-        if sname == "train":
-            perm = rng.permutation(len(merged["x_seq"]))
-            for k in merged:
-                merged[k] = merged[k][perm]
-
-        np.savez(cache_dir / f"{sname}.npz", **merged)
+        if mapped:
+            for v in mapped.values():
+                v.flush()
+            merged = {k: v[:count] for k, v in mapped.items()}
+        elif chunks:
+            merged = {k: np.concatenate([c[k] for c in chunks], axis=0) for k in chunks[0]}
+            if sname == "train":
+                perm = rng.permutation(len(merged["x_seq"]))
+                for k in merged:
+                    merged[k] = merged[k][perm]
+            np.savez(cache_dir / f"{sname}.npz", **merged)
+        else:
+            raise ValueError(f"No usable {sname} windows")
         split_stats[sname] = {
-            "demos": len(demos),
-            "demo_ids": [d["id"] for d in demos],
-            "map_families": sorted({d["map_family"] for d in demos}),
+            "demos": len(used_demos),
+            "demo_ids": [d["id"] for d in used_demos],
+            "map_families": sorted({d["map_family"] for d in used_demos}),
             "raw_frames": raw_frames_sum,
             "windows": int(len(merged["x_seq"])),
             "pov_windows": int((merged["input_source"] == 1).sum()),
             "stv_windows": int((merged["input_source"] == 0).sum()),
+            "air_traj_windows": int((merged["is_air_traj"] == 1).sum()),
         }
-        print(f"Cached {sname}: {split_stats[sname]['demos']} demos, {split_stats[sname]['raw_frames']:,} raw frames, {split_stats[sname]['windows']:,} windows (POV={split_stats[sname]['pov_windows']:,})", flush=True)
+        print(
+            f"Cached {sname}: {split_stats[sname]['demos']} demos, {split_stats[sname]['raw_frames']:,} raw frames, "
+            f"{split_stats[sname]['windows']:,} windows (POV={split_stats[sname]['pov_windows']:,}, air={split_stats[sname]['air_traj_windows']:,})",
+            flush=True,
+        )
 
     split_file.write_text(json.dumps(split_stats, indent=2), encoding="utf-8")
     return split_stats

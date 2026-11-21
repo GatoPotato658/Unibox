@@ -396,3 +396,4 @@ experimental/ml_pipeline/demo_extractor/target/
 experimental/ml_pipeline/checkpoints/
 experimental/ml_pipeline/cpp_bench/*.exe
 experimental/ml_pipeline/cpp_bench/*.obj
+.playwright-cli/

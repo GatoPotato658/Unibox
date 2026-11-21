@@ -1993,7 +1993,7 @@ bool CAimbotProjectile::HandlePoint(const Vec3& vOrigin, int iSimTime, float flP
 		const int iHorizon = std::max(iOriginalSimTime + m_tInfo.m_iLaunchDelay + TIME_TO_TICKS(m_tInfo.m_flLatency), 1);
 		const auto [flSigmaXY, flSigmaZ] = F::MoveSim.GetUncertaintyAtTick(m_tMoveStorage, iHorizon);
 		const float flTargetR = (iType == PointTypeEnum::Direct)
-			? std::max(m_tInfo.m_pTarget->m_pEntity->GetSize().Length2D() * 0.5f, 24.f)
+			? (m_tInfo.m_pTarget->m_nAimedHitbox == HITBOX_HEAD ? 8.f : 24.f)
 			: std::max(m_tInfo.m_flRadius, 24.f);
 		const float flProb = 100.f * (1.f - expf(-0.5f * (flTargetR * flTargetR) / std::max(flSigmaXY * flSigmaXY, 1.f)));
 		if (flProb < Vars::Aimbot::Projectile::HitChance.Value)

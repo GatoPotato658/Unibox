@@ -98,13 +98,14 @@ def ground_accelerate(vx: float, vy: float, wx: float, wy: float, wish_spd: floa
     return vx + wx * gain, vy + wy * gain
 
 
-def air_accelerate(vx: float, vy: float, wx: float, wy: float, wish_spd: float) -> tuple[float, float]:
+def air_accelerate(vx: float, vy: float, vz: float, wx: float, wy: float, wish_spd: float) -> tuple[float, float]:
     if wish_spd <= 0.0:
         return vx, vy
     missing = min(wish_spd, AIR_CAP) - (vx * wx + vy * wy)
     if missing <= 0.0:
         return vx, vy
-    gain = min(SV_AIRACCEL * wish_spd * TICK_INTERVAL, missing)
+    surface = 0.25 if 0.0 < vz <= 250.0 else 1.0
+    gain = min(SV_AIRACCEL * wish_spd * TICK_INTERVAL * surface, missing)
     return vx + wx * gain, vy + wy * gain
 
 
@@ -172,7 +173,7 @@ def step_fit(
         return px + vx * TICK_INTERVAL, py + vy * TICK_INTERVAL, vx, vy, vz
 
     vz -= GRAVITY * TICK_INTERVAL * 0.5
-    vx, vy = air_accelerate(vx, vy, wx, wy, wsp)
+    vx, vy = air_accelerate(vx, vy, vz, wx, wy, wsp)
     px += vx * TICK_INTERVAL
     py += vy * TICK_INTERVAL
     vz -= GRAVITY * TICK_INTERVAL * 0.5
@@ -652,7 +653,7 @@ def rollout_unibox_one(args: tuple[np.ndarray, np.ndarray, bool, bool]) -> np.nd
             vx, vy = clamp_speed_2d(vx, vy, gcap)
             vx, vy = clamp_back_speed(vx, vy, view_yaw, gcap)
         else:
-            vx, vy = air_accelerate(vx, vy, wx, wy, wsp)
+            vx, vy = air_accelerate(vx, vy, vz, wx, wy, wsp)
 
         px += vx * TICK_INTERVAL
         py += vy * TICK_INTERVAL
@@ -877,21 +878,24 @@ def main() -> None:
     sub_idx = rng.choice(n_tot, size=min(args.analytic_n, n_tot), replace=False)
 
     rollout = torch.jit.script(DifferentiableSourceRollout().to(device))
-    tcn = TCNResMLP().to(device)
-    tcn.load_state_dict(torch.load(args.ckpt_dir / "tcn_best.pt", map_location=device)["model"])
-    gru = GRUResMLP().to(device)
-    gru.load_state_dict(torch.load(args.ckpt_dir / "gru_best.pt", map_location=device)["model"])
-
+    train_summary = json.loads((args.ckpt_dir / "train_summary.json").read_text(encoding="utf-8"))
+    architectures = {"tcn": ("TCN_ResMLP", TCNResMLP), "gru": ("GRU_ResMLP", GRUResMLP)}
+    models, predictions, sigmas = {}, {}, {}
+    for arch, (name, model_type) in architectures.items():
+        if arch not in train_summary:
+            continue
+        model = model_type().to(device)
+        model.load_state_dict(torch.load(args.ckpt_dir / f"{arch}_best.pt", map_location=device, weights_only=False)["model"])
+        models[name] = model
+        predictions[name], sigmas[name], _ = predict_neural(model, rollout, x_seq, x_ctx, init_state, device)
+    if not models:
+        raise ValueError("No supported models in training summary")
     pred_const_all = rollout_const_vel(init_state)
-    pred_tcn_all, sxy_tcn, sz_tcn = predict_neural(tcn, rollout, x_seq, x_ctx, init_state, device)
-    pred_gru_all, sxy_gru, sz_gru = predict_neural(gru, rollout, x_seq, x_ctx, init_state, device)
-
-    tcn_val_score = compute_horizon_metrics(pred_tcn_all, y_pos)["fde_3d"]["500ms"]
-    gru_val_score = compute_horizon_metrics(pred_gru_all, y_pos)["fde_3d"]["500ms"]
-    winner_name = "TCN_ResMLP" if tcn_val_score <= gru_val_score else "GRU_ResMLP"
-    winner_model = tcn if winner_name == "TCN_ResMLP" else gru
-    pred_win_all = pred_tcn_all if winner_name == "TCN_ResMLP" else pred_gru_all
-    sxy_win = sxy_tcn if winner_name == "TCN_ResMLP" else sxy_gru
+    winner_arch = min((a for a in architectures if a in train_summary), key=lambda a: train_summary[a]["best_score"])
+    winner_name = architectures[winner_arch][0]
+    winner_model = models[winner_name]
+    pred_win_all = predictions[winner_name]
+    sxy_win = sigmas[winner_name]
 
     x_ctx_nobsp = x_ctx.copy()
     x_ctx_nobsp[:, 20:44] = 0.0
@@ -935,8 +939,7 @@ def main() -> None:
 
     for name, preds in [
         ("const_vel", pred_const_all),
-        ("TCN_ResMLP", pred_tcn_all),
-        ("GRU_ResMLP", pred_gru_all),
+        *predictions.items(),
         (f"{winner_name}_noBSP", pred_nobsp_all),
     ]:
         report["full_test"][name] = {k: compute_horizon_metrics(preds, y_pos, m) for k, m in subsets_all.items()}
@@ -946,8 +949,7 @@ def main() -> None:
         ("unibox_air_only", unibox_air_sub),
         ("unibox_ground_only", unibox_gnd_sub),
         ("unibox_air_and_ground", unibox_both_sub),
-        ("TCN_ResMLP", pred_tcn_all[sub_idx]),
-        ("GRU_ResMLP", pred_gru_all[sub_idx]),
+        *((name, preds[sub_idx]) for name, preds in predictions.items()),
         (f"{winner_name}_noBSP", pred_nobsp_all[sub_idx]),
     ]:
         report["head_to_head_subset"][name] = {k: compute_horizon_metrics(preds, y_sub, m) for k, m in subsets_sub.items()}
@@ -991,8 +993,7 @@ def main() -> None:
     report["projectile_hit_rates"] = {
         "const_vel": simulate_projectile_hit_rate(pred_const_all[sub_idx], y_sub, np.random.default_rng(77)),
         "unibox_air_and_ground": simulate_projectile_hit_rate(unibox_both_sub, y_sub, np.random.default_rng(77)),
-        "TCN_ResMLP": simulate_projectile_hit_rate(pred_tcn_all[sub_idx], y_sub, np.random.default_rng(77)),
-        "GRU_ResMLP": simulate_projectile_hit_rate(pred_gru_all[sub_idx], y_sub, np.random.default_rng(77)),
+        **{name: simulate_projectile_hit_rate(preds[sub_idx], y_sub, np.random.default_rng(77)) for name, preds in predictions.items()},
     }
 
     out_json = args.ckpt_dir / "eval_report.json"

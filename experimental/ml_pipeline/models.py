@@ -258,7 +258,8 @@ class DifferentiableSourceRollout(nn.Module):
             capped_a = torch.clamp(wish_spd_a, max=air_cap)
             cur_a = vx * wdx + vy * wdy
             add_a = torch.clamp(capped_a - cur_a, min=0.0)
-            acc_a = torch.minimum(airaccel_dt * wish_spd_a, add_a)
+            air_surface = torch.where((vz > 0.0) & (vz <= 250.0), 0.25, 1.0)
+            acc_a = torch.minimum(airaccel_dt * wish_spd_a * air_surface, add_a)
             vax = vx + wdx * acc_a
             vay = vy + wdy * acc_a
 

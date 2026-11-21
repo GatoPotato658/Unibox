@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <random>
+#include <utility>
 
 namespace
 {
@@ -767,12 +768,16 @@ void CNeuralPrediction::Initialize()
 		return;
 
 	NeuralCompute::StrafeNetWeights tInitWeights;
-	bool bLoaded = false;
+	bool bLoaded = tInitWeights.load_snv1_memory(NeuralCompute::g_aEmbeddedWeights, NeuralCompute::g_uEmbeddedWeightsSize);
 	const std::string sPath = F::Configs.m_sConfigPath + "neural_strafe.bin";
-	if (!F::Configs.m_sConfigPath.empty() && std::filesystem::exists(sPath))
-		bLoaded = tInitWeights.load_snv1(sPath);
-	if (!bLoaded)
-		bLoaded = tInitWeights.load_snv1_memory(NeuralCompute::g_aEmbeddedWeights, NeuralCompute::g_uEmbeddedWeightsSize);
+	NeuralCompute::StrafeNetWeights tSavedWeights;
+	if (!F::Configs.m_sConfigPath.empty() && std::filesystem::exists(sPath) && tSavedWeights.load_snv1(sPath)
+		&& (!bLoaded || (tSavedWeights.arch == tInitWeights.arch && tSavedWeights.backbone == tInitWeights.backbone
+			&& tSavedWeights.anchor_theta0 == tInitWeights.anchor_theta0)))
+	{
+		tInitWeights = std::move(tSavedWeights);
+		bLoaded = true;
+	}
 	if (!bLoaded)
 		tInitWeights.init_random(NeuralCompute::ArchType::TCN_ResMLP);
 

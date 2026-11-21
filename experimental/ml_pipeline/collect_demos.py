@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import time
 import zipfile
 from collections import Counter
@@ -15,6 +17,9 @@ from typing import Any
 import requests
 from tqdm import tqdm
 
+from dataset import PINNED_TEST_IDS
+
+LEAK_WINDOW_SECONDS = 3 * 3600
 USER_AGENT = "UniboxikML/1.0"
 TF2_MAP_DIRS = [
     Path(r"C:\SteamLibrary\steamapps\common\Team Fortress 2\tf\maps"),
@@ -25,6 +30,11 @@ FASTDL_BASES = [
     "https://maps.demos.tf/",
 ]
 TARGET_MAP_PREFIXES = [
+    "koth_ultiduo",
+    "ultiduo_baloo",
+    "ctf_ballin",
+    "ctf_bball",
+    "mge_training",
     "cp_process",
     "cp_snakewater",
     "cp_gullywash",
@@ -50,8 +60,10 @@ TARGET_MAP_PREFIXES = [
     "pl_borneo",
     "koth_lakeside",
 ]
+AIR_HEAVY_PREFIXES = {"koth_ultiduo", "ultiduo_baloo", "ctf_ballin", "ctf_bball", "mge_training"}
+UNSEEN_TEST_FAMILIES = {"koth_bagel", "cp_metalworks"}
 RGL_HIGH_DIVISIONS = ("invite", "advanced", "main", "challenger", "div-1", "div 1")
-ETF2L_HIGH_KEYWORDS = ("premiership", "top division", "top tiers", "division 1", "division 2", "high")
+ETF2L_LOW_KEYWORDS = ("fun", "fresh", "open", "low", "division 3", "division 4", "3rd place", "mid", "preseason", "nations")
 
 
 def make_session() -> requests.Session:
@@ -167,11 +179,11 @@ def resolve_bsp(
     return None
 
 
-def collect_etf2l(session: requests.Session, max_comps: int = 12, max_matches_per_comp: int = 12) -> tuple[list[dict], dict[str, dict]]:
+def collect_etf2l(session: requests.Session, max_comps: int = 40, max_matches_per_comp: int = 14) -> tuple[list[dict], dict[str, dict]]:
     players: dict[str, dict] = {}
     direct_demos: list[dict] = []
     comp_ids: list[tuple[int, str, str]] = []
-    for page in range(1, 5):
+    for page in range(1, 22):
         data = fetch_json(session, f"https://api-v2.etf2l.org/competition/list?limit=50&page={page}")
         if not data:
             break
@@ -181,38 +193,41 @@ def collect_etf2l(session: requests.Session, max_comps: int = 12, max_matches_pe
         for c in comps:
             ctype = c.get("type", "")
             cname = c.get("name", "")
-            cat = c.get("category", "")
             if ctype not in ("6v6", "Highlander"):
                 continue
-            if "Season" not in cat and "Playoffs" not in cname:
-                continue
             nl = cname.lower()
-            if any(k in nl for k in ETF2L_HIGH_KEYWORDS):
-                comp_ids.append((int(c["id"]), cname, ctype))
+            if "season" not in nl and "premiership" not in nl:
+                continue
+            if any(k in nl for k in ETF2L_LOW_KEYWORDS):
+                continue
+            comp_ids.append((int(c["id"]), cname, ctype))
         if len(comp_ids) >= max_comps:
             break
 
     for cid, cname, ctype in comp_ids[:max_comps]:
-        res = fetch_json(session, f"https://api-v2.etf2l.org/competition/{cid}/results?limit=25")
+        res = fetch_json(session, f"https://api-v2.etf2l.org/competition/{cid}/results?limit=100")
         if not res:
             continue
-        matches = [m for m in res.get("results", {}).get("data", []) if not m.get("defaultwin") and m.get("id")]
-        mids = [m["id"] for m in matches[:max_matches_per_comp]]
+        rows = res.get("results", {}).get("data", [])
+        matches = [
+            m for m in rows
+            if not m.get("defaultwin") and m.get("id") and (m.get("division") or {}).get("tier") in (0, 1, 2)
+        ]
+        step = max(1, len(matches) // max_matches_per_comp)
+        mids = [m["id"] for m in matches[::step][:max_matches_per_comp]]
 
         def fetch_match(mid: int):
+            time.sleep(0.15)
             return mid, fetch_json(make_session(), f"https://api-v2.etf2l.org/matches/{mid}")
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
             for mid, md_wrap in ex.map(fetch_match, mids):
                 if not md_wrap or "match" not in md_wrap:
                     continue
                 md = md_wrap["match"]
                 div_name = (md.get("division") or {}).get("name", "Unknown")
                 div_tier = (md.get("division") or {}).get("tier")
-                m_players = md.get("players") or []
-                if not m_players:
-                    continue
-                for p in m_players:
+                for p in md.get("players") or []:
                     id64 = ((p.get("steam") or {}).get("id64") or "").strip()
                     if id64 and id64 not in players:
                         players[id64] = {
@@ -251,15 +266,19 @@ def collect_rgl_players(session: requests.Session, season_ids: list[int], max_te
             continue
         fmt = s.get("formatName", "Sixes")
         sname = s.get("name", f"RGL Season {sid}")
-        teams = (s.get("participatingTeams") or [])[:max_teams_per_season * 2]
+        teams = s.get("participatingTeams") or []
 
         def fetch_team(tid: int):
-            return fetch_json(make_session(), f"https://api.rgl.gg/v0/teams/{tid}", timeout=8)
+            return fetch_json(make_session(), f"https://api.rgl.gg/v0/teams/{tid}", timeout=10)
 
         checked = 0
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
-            for t in ex.map(fetch_team, teams):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            futs = [ex.submit(fetch_team, tid) for tid in teams]
+            for fut in concurrent.futures.as_completed(futs):
+                t = fut.result()
                 if checked >= max_teams_per_season:
+                    for f in futs:
+                        f.cancel()
                     break
                 if not t:
                     continue
@@ -279,7 +298,7 @@ def collect_rgl_players(session: requests.Session, season_ids: list[int], max_te
     return players
 
 
-def collect_ozfortress_players(session: requests.Session, league_ids: list[int], max_users: int = 24) -> dict[str, dict]:
+def collect_ozfortress_players(session: requests.Session, league_ids: list[int], max_users: int = 75) -> dict[str, dict]:
     players: dict[str, dict] = {}
     user_ids: list[str] = []
     for lid in league_ids:
@@ -287,7 +306,7 @@ def collect_ozfortress_players(session: requests.Session, league_ids: list[int],
         if not html:
             continue
         team_paths = sorted(set(re.findall(r"/teams/\d+", html)))
-        for tp in team_paths[:10]:
+        for tp in team_paths[:16]:
             th = fetch_text(session, f"https://ozfortress.com{tp}")
             if not th:
                 continue
@@ -301,25 +320,37 @@ def collect_ozfortress_players(session: requests.Session, league_ids: list[int],
         if len(user_ids) >= max_users:
             break
 
-    for up in user_ids[:max_users]:
-        uh = fetch_text(session, f"https://ozfortress.com{up}")
-        if not uh:
-            continue
-        ids = re.findall(r"7656119\d{10}", uh)
-        if ids:
-            id64 = ids[0]
-            if id64 not in players:
-                players[id64] = {
-                    "league": "ozfortress",
-                    "tier": "Premier/Main",
-                    "format": "6v6",
-                    "competition": "ozfortress",
-                }
+    def fetch_user(up: str):
+        return fetch_text(make_session(), f"https://ozfortress.com{up}", timeout=10)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        for uh in ex.map(fetch_user, user_ids[:max_users]):
+            if not uh:
+                continue
+            ids = re.findall(r"7656119\d{10}", uh)
+            if ids:
+                id64 = ids[0]
+                if id64 not in players:
+                    players[id64] = {
+                        "league": "ozfortress",
+                        "tier": "Premier/Main",
+                        "format": "6v6",
+                        "competition": "ozfortress",
+                    }
     return players
 
 
-def collect_logstf_index(session: requests.Session, pages: int = 3) -> dict[tuple[str, int], dict]:
+def _steamid3_to_64(s: str) -> str | None:
+    m = re.match(r"^\[U:1:(\d+)\]$", s.strip())
+    if not m:
+        return None
+    return str(76561197960265728 + int(m.group(1)))
+
+
+def collect_logstf_data(session: requests.Session, pages: int = 6) -> tuple[dict[tuple[str, int], dict], dict[str, dict]]:
     index: dict[tuple[str, int], dict] = {}
+    players: dict[str, dict] = {}
+    log_ids: list[tuple[int, str]] = []
     for p in range(pages):
         data = fetch_json(session, f"https://logs.tf/api/v1/log?limit=100&offset={p * 100}")
         if not data or not data.get("logs"):
@@ -329,24 +360,73 @@ def collect_logstf_index(session: requests.Session, pages: int = 3) -> dict[tupl
             dt = int(row.get("date") or 0)
             if m and dt:
                 index[(m, dt // 600)] = row
-    return index
+    for mp in ("koth_ultiduo", "ultiduo_baloo", "cp_process_f12", "cp_snakewater_final1", "cp_sunshine", "koth_product_final"):
+        data = fetch_json(session, f"https://logs.tf/api/v1/log?map={mp}&limit=10")
+        if data and data.get("logs"):
+            for row in data["logs"][:8]:
+                lid = row.get("id")
+                if lid:
+                    log_ids.append((int(lid), mp))
+                    m = (row.get("map") or "").lower()
+                    dt = int(row.get("date") or 0)
+                    if m and dt:
+                        index[(m, dt // 600)] = row
+
+    def fetch_log(item: tuple[int, str]):
+        lid, mp = item
+        return mp, fetch_json(make_session(), f"https://logs.tf/api/v1/log/{lid}", timeout=10)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        for mp, lj in ex.map(fetch_log, log_ids):
+            if not lj or not isinstance(lj.get("players"), dict):
+                continue
+            for sid3, pdata in lj["players"].items():
+                id64 = _steamid3_to_64(sid3)
+                if not id64 or id64 in players:
+                    continue
+                if int(pdata.get("dapm") or 0) < 180:
+                    continue
+                players[id64] = {
+                    "league": "logs.tf",
+                    "tier": "competitive",
+                    "format": "Ultiduo" if "ultiduo" in mp else "6v6",
+                    "competition": mp,
+                }
+    return index, players
 
 
 def make_demostf_record(d: dict, source: str, league: str, tier: str, fmt: str) -> dict | None:
     url = d.get("url")
     if not url:
         return None
-    dur = int(d.get("duration") or 0)
-    pc = int(d.get("playerCount") or 0)
-    if dur < 600 or dur > 7200 or pc < 12:
-        return None
     m = (d.get("map") or "").strip().lower()
     if not m:
         return None
+    fam = normalize_map_family(m)
+    dur = int(d.get("duration") or 0)
+    pc = int(d.get("playerCount") or 0)
+    if fam == "mge_training":
+        if dur < 240 or dur > 7200 or pc < 2:
+            return None
+        if fmt == "unknown":
+            fmt = "MGE"
+    elif fam in ("koth_ultiduo", "ultiduo_baloo"):
+        if dur < 300 or dur > 7200 or pc < 4:
+            return None
+        if fmt == "unknown":
+            fmt = "Ultiduo"
+    elif fam in ("ctf_ballin", "ctf_bball"):
+        if dur < 300 or dur > 7200 or pc < 4:
+            return None
+        if fmt == "unknown":
+            fmt = "BBall"
+    else:
+        if dur < 600 or dur > 7200 or pc < 12:
+            return None
+        if fmt == "unknown":
+            fmt = "Highlander" if pc >= 18 else "6v6"
     nick = (d.get("nick") or "").strip()
     is_pov = nick != "SourceTV Demo"
-    if fmt == "unknown":
-        fmt = "Highlander" if pc >= 18 else "6v6"
     return {
         "id": f"demostf_{d['id']}",
         "demostf_id": int(d["id"]),
@@ -355,7 +435,7 @@ def make_demostf_record(d: dict, source: str, league: str, tier: str, fmt: str) 
         "tier": tier,
         "format": fmt,
         "map": m,
-        "map_family": normalize_map_family(m),
+        "map_family": fam,
         "duration": dur,
         "player_count": pc,
         "is_pov": is_pov,
@@ -401,8 +481,9 @@ def query_demostf_by_players(
 def query_demostf_by_maps(
     session: requests.Session,
     map_prefixes: list[str],
-    pages_per_map: int = 4,
-    pov_scan_pages: int = 12,
+    pages_per_map: int = 8,
+    pov_scan_pages: int = 40,
+    type_pov_pages: int = 24,
 ) -> dict[str, dict]:
     candidates: dict[str, dict] = {}
     urls = [
@@ -412,13 +493,16 @@ def query_demostf_by_maps(
     ] + [
         ("pov", f"https://api.demos.tf/demos?page={page}")
         for page in range(1, pov_scan_pages + 1)
+    ] + [
+        ("pov", f"https://api.demos.tf/demos?type=pov&page={page}")
+        for page in range(1, type_pov_pages + 1)
     ]
 
     def fetch_page(item: tuple[str, str]):
         kind, url = item
         return kind, fetch_json(make_session(), url)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for kind, rows in ex.map(fetch_page, urls):
             if not isinstance(rows, list):
                 continue
@@ -437,14 +521,14 @@ def select_balanced_demos(
     candidates: list[dict],
     target_stv: int,
     target_pov: int,
-    max_per_map_stv: int = 10,
-    max_per_map_pov: int = 6,
+    max_per_map_stv: int = 16,
+    max_per_map_pov: int = 12,
 ) -> list[dict]:
     def score(r: dict) -> tuple:
-        league_prio = 0 if r["league"] in ("ETF2L", "RGL", "ozfortress") else 1
+        league_prio = 0 if r["league"] in ("ETF2L", "RGL", "ozfortress", "logs.tf") else 1
         tier_l = r["tier"].lower()
-        tier_prio = 0 if ("prem" in tier_l or "invite" in tier_l) else (1 if "div" in tier_l or "adv" in tier_l or "high" in tier_l else 2)
-        fam_prio = 0 if r["map_family"] in TARGET_MAP_PREFIXES[:13] else 1
+        tier_prio = 0 if ("prem" in tier_l or "invite" in tier_l) else (1 if "div" in tier_l or "adv" in tier_l or "high" in tier_l or "comp" in tier_l else 2)
+        fam_prio = 0 if r["map_family"] in TARGET_MAP_PREFIXES[:18] else 1
         return (league_prio, tier_prio, fam_prio, -r["time"])
 
     povs = sorted([c for c in candidates if c["is_pov"]], key=score)
@@ -456,6 +540,8 @@ def select_balanced_demos(
     stv_counts: Counter = Counter()
 
     def pick_round_robin(pool: list[dict], target: int, counts: Counter, max_cap: int) -> None:
+        if target <= 0:
+            return
         picked_start = len(selected)
         by_fam: dict[str, list[dict]] = {}
         for c in pool:
@@ -558,6 +644,50 @@ def download_demo_file(session: requests.Session, rec: dict, demos_dir: Path) ->
         return None
 
 
+def read_demo_map(path: Path) -> str:
+    with open(path, "rb") as f:
+        hdr = f.read(8 + 4 + 4 + 260 * 3)
+    if hdr[:8] != b"HL2DEMO\x00" or len(hdr) < 8 + 8 + 780:
+        return ""
+    return hdr[16 + 520 : 16 + 780].split(b"\x00", 1)[0].decode("utf-8", "ignore").strip().lower()
+
+
+def download_etf2l_demo(session: requests.Session, d: dict, demos_dir: Path) -> tuple[Path, str] | None:
+    demos_dir.mkdir(parents=True, exist_ok=True)
+    num = d["url"].rstrip("/").split("/")[-1]
+    kind = "pov" if d["is_pov"] else "stv"
+    tmp_dir = demos_dir / f"etf2l_{num}.tmp"
+    tmp_dir.mkdir(exist_ok=True)
+    try:
+        with session.get(d["url"], stream=True, timeout=120, allow_redirects=True) as r:
+            if r.status_code != 200:
+                return None
+            fname = r.url.split("?")[0].split("/")[-1]
+            arc = tmp_dir / fname
+            with open(arc, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 256):
+                    if chunk:
+                        f.write(chunk)
+        if arc.suffix.lower() != ".dem":
+            if shutil.which("tar") is None:
+                return None
+            subprocess.run(["tar", "-xf", str(arc), "-C", str(tmp_dir)], check=True, capture_output=True, timeout=600)
+            arc.unlink(missing_ok=True)
+        dems = sorted(tmp_dir.rglob("*.dem"), key=lambda p: p.stat().st_size, reverse=True)
+        if not dems or dems[0].stat().st_size < 1_000_000:
+            return None
+        map_name = read_demo_map(dems[0])
+        if not map_name:
+            return None
+        out = demos_dir / f"etf2l_{num}_{kind}_{map_name}.dem"
+        shutil.move(str(dems[0]), out)
+        return out, map_name
+    except Exception:
+        return None
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def file_sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -569,9 +699,11 @@ def file_sha256(path: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=Path("ml_pipeline/data"))
-    parser.add_argument("--target-stv", type=int, default=110)
-    parser.add_argument("--target-pov", type=int, default=40)
-    parser.add_argument("--max-gb", type=float, default=8.5)
+    parser.add_argument("--target-stv", type=int, default=240)
+    parser.add_argument("--target-pov", type=int, default=95)
+    parser.add_argument("--max-gb", type=float, default=24.0)
+    parser.add_argument("--etf2l-max", type=int, default=40)
+    parser.add_argument("--map-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -593,65 +725,67 @@ def main() -> None:
             existing_entries = []
 
     existing_by_id = {e["id"]: e for e in existing_entries if Path(e.get("local_path", "")).exists()}
+    existing_urls = {e.get("url", "") for e in existing_by_id.values() if e.get("url")}
     session = make_session()
 
-    print("Querying ETF2L competitions and verified high-div rosters...", flush=True)
-    etf2l_direct, etf2l_players = collect_etf2l(session)
-    print(f"  ETF2L players: {len(etf2l_players)}, direct demo entries: {len(etf2l_direct)}", flush=True)
+    etf2l_direct, etf2l_players, rgl_players, oz_players, logs_index, logs_players = [], {}, {}, {}, {}, {}
+    if not args.map_only:
+        print("Querying ETF2L competitions and verified high-div rosters...", flush=True)
+        etf2l_direct, etf2l_players = collect_etf2l(session)
+        print(f"  ETF2L players: {len(etf2l_players)}, direct demo entries: {len(etf2l_direct)}", flush=True)
 
-    print("Querying RGL high-div rosters...", flush=True)
-    rgl_players = collect_rgl_players(session, [199, 198, 192, 193], max_teams_per_season=8)
-    print(f"  RGL players: {len(rgl_players)}", flush=True)
+        print("Querying RGL high-div rosters...", flush=True)
+        rgl_players = collect_rgl_players(session, [199, 198, 195, 194, 193, 192, 188, 187, 183], max_teams_per_season=14)
+        print(f"  RGL players: {len(rgl_players)}", flush=True)
 
-    print("Querying ozfortress rosters...", flush=True)
-    oz_players = collect_ozfortress_players(session, [99, 95])
-    print(f"  ozfortress players: {len(oz_players)}", flush=True)
+        print("Querying ozfortress rosters...", flush=True)
+        oz_players = collect_ozfortress_players(session, [95, 93, 91, 89, 94, 92, 88], max_users=75)
+        print(f"  ozfortress players: {len(oz_players)}", flush=True)
 
-    print("Indexing recent logs.tf matches for cross-verification...", flush=True)
-    logs_index = collect_logstf_index(session, pages=3)
-    print(f"  logs.tf index buckets: {len(logs_index)}", flush=True)
+        print("Indexing logs.tf matches and players for cross-verification...", flush=True)
+        logs_index, logs_players = collect_logstf_data(session, pages=6)
+        print(f"  logs.tf index buckets: {len(logs_index)}, players: {len(logs_players)}", flush=True)
 
     all_players = {}
-    etf_items = list(etf2l_players.items())[:25]
-    rgl_items = list(rgl_players.items())[:25]
-    oz_items = list(oz_players.items())[:15]
-    for k, v in etf_items + rgl_items + oz_items:
+    etf_items = list(etf2l_players.items())[:130]
+    rgl_items = list(rgl_players.items())[:130]
+    oz_items = list(oz_players.items())[:60]
+    ltf_items = list(logs_players.items())[:60]
+    for k, v in etf_items + rgl_items + oz_items + ltf_items:
         all_players[k] = v
 
-    print("Querying demos.tf for league-verified players...", flush=True)
-    candidates_map = query_demostf_by_players(session, all_players, max_queries=65)
+    print(f"Querying demos.tf for {len(all_players)} league-verified players...", flush=True)
+    candidates_map = query_demostf_by_players(session, all_players, max_queries=380)
     print(f"  League-matched demos.tf candidates: {len(candidates_map)}", flush=True)
 
-    print("Querying demos.tf across competitive maps and recent POV uploads...")
-    map_candidates = query_demostf_by_maps(session, TARGET_MAP_PREFIXES[:14], pages_per_map=4, pov_scan_pages=18)
+    print("Querying demos.tf across competitive & air-heavy maps and POV uploads...", flush=True)
+    search_prefixes = [f for f in TARGET_MAP_PREFIXES if f not in UNSEEN_TEST_FAMILIES]
+    map_candidates = query_demostf_by_maps(session, search_prefixes, pages_per_map=8, pov_scan_pages=40, type_pov_pages=24)
     for k, v in map_candidates.items():
         if k not in candidates_map:
             candidates_map[k] = v
 
-    for d in etf2l_direct:
-        if d["maps"]:
-            m0 = d["maps"][0].lower()
-            rec = {
-                "id": f"etf2l_{d['match_id']}_{'pov' if d['is_pov'] else 'stv'}",
-                "source": "etf2l_direct",
-                "league": "ETF2L",
-                "tier": d["tier"],
-                "format": d["format"],
-                "map": m0,
-                "map_family": normalize_map_family(m0),
-                "duration": 1800,
-                "player_count": 18 if d["format"] == "Highlander" else 12,
-                "is_pov": d["is_pov"],
-                "nick": "ETF2L POV" if d["is_pov"] else "SourceTV Demo",
-                "server": "ETF2L",
-                "time": int(d["time"]),
-                "hash": d["url"],
-                "url": d["url"],
-            }
-            if rec["hash"] not in candidates_map:
-                candidates_map[rec["hash"]] = rec
+    test_keys = [
+        (e["map"], int(e["time"]))
+        for e in existing_entries
+        if e["id"] in PINNED_TEST_IDS
+    ]
 
-    all_candidates = [c for c in candidates_map.values() if c["map_family"] in TARGET_MAP_PREFIXES]
+    def leaks_test(c: dict) -> bool:
+        for tm, tt in test_keys:
+            if normalize_map_family(tm) == c["map_family"] and abs(int(c["time"]) - tt) < LEAK_WINDOW_SECONDS:
+                return True
+        return False
+
+    all_candidates = [
+        c
+        for c in candidates_map.values()
+        if c["map_family"] in TARGET_MAP_PREFIXES
+        and c["map_family"] not in UNSEEN_TEST_FAMILIES
+        and c["id"] not in existing_by_id
+        and c.get("url", "") not in existing_urls
+        and not leaks_test(c)
+    ]
     for c in all_candidates:
         bucket = (c["map"], c["time"] // 600)
         if bucket in logs_index:
@@ -659,13 +793,13 @@ def main() -> None:
 
     neg_cache: set[str] = set()
     unique_maps = sorted({c["map"] for c in all_candidates})
-    print(f"Total deduplicated candidates: {len(all_candidates)} across {len(unique_maps)} maps. Checking BSP availability...", flush=True)
+    print(f"Total new deduplicated candidates: {len(all_candidates)} across {len(unique_maps)} maps. Checking BSP availability...", flush=True)
 
     def check_map(m: str):
         return m, resolve_bsp(make_session(), m, maps_dir, set(), allow_download=False)
 
     map_bsp_cache: dict[str, Path | None] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for m, bp in ex.map(check_map, unique_maps):
             map_bsp_cache[m] = bp
 
@@ -679,40 +813,53 @@ def main() -> None:
     pov_avail = sum(1 for c in bsp_ok_candidates if c["is_pov"])
     stv_avail = sum(1 for c in bsp_ok_candidates if not c["is_pov"])
     fam_counts = Counter(c["map_family"] for c in bsp_ok_candidates)
-    print(f"BSP-verified candidates: {len(bsp_ok_candidates)} (STV={stv_avail}, POV={pov_avail})")
+    print(f"BSP-verified new candidates: {len(bsp_ok_candidates)} (STV={stv_avail}, POV={pov_avail})")
     print("Map family availability:", dict(fam_counts.most_common()))
 
-    selected = select_balanced_demos(bsp_ok_candidates, args.target_stv, args.target_pov)
+    cur_pov = sum(1 for e in existing_by_id.values() if e["is_pov"])
+    cur_stv = sum(1 for e in existing_by_id.values() if not e["is_pov"])
+    need_stv = max(0, args.target_stv - cur_stv)
+    need_pov = max(0, args.target_pov - cur_pov)
+    selected = select_balanced_demos(bsp_ok_candidates, need_stv, need_pov)
     sel_pov = sum(1 for c in selected if c["is_pov"])
     sel_stv = sum(1 for c in selected if not c["is_pov"])
     sel_fams = Counter(c["map_family"] for c in selected)
     sel_leagues = Counter(c["league"] for c in selected)
-    print(f"Selected batch: {len(selected)} demos (STV={sel_stv}, POV={sel_pov})")
+    print(f"Existing={len(existing_by_id)} (STV={cur_stv}, POV={cur_pov}) + Selected new={len(selected)} (STV={sel_stv}, POV={sel_pov})")
     print("Selected map families:", dict(sel_fams.most_common()))
     print("Selected leagues:", dict(sel_leagues.most_common()))
 
     if args.dry_run:
         return
 
+    sel_maps = sorted({c["map"] for c in selected})
+    resolved_maps: dict[str, Path] = {}
+    for m in sel_maps:
+        bp = resolve_bsp(session, m, maps_dir, neg_cache, allow_download=True)
+        if bp is not None:
+            resolved_maps[m] = bp
+
+    download_queue = [c for c in selected if c["map"] in resolved_maps]
     max_bytes = int(args.max_gb * 1024 * 1024 * 1024)
     total_bytes = sum(Path(e["local_path"]).stat().st_size for e in existing_by_id.values())
     manifest_demos: dict[str, dict] = dict(existing_by_id)
 
-    pbar = tqdm(selected, desc="Downloading demos")
-    for rec in pbar:
-        if rec["id"] in manifest_demos:
-            continue
-        if total_bytes >= max_bytes:
-            print(f"Reached disk budget {args.max_gb:.2f} GB, stopping downloads.")
-            break
-        bsp_path = resolve_bsp(session, rec["map"], maps_dir, neg_cache, allow_download=True)
-        if bsp_path is None:
-            continue
-        dem_path = download_demo_file(session, rec, demos_dir)
+    import threading
+    lock = threading.Lock()
+    stop_flag = threading.Event()
+
+    def worker(rec: dict) -> dict | None:
+        if stop_flag.is_set():
+            return None
+        with lock:
+            if total_bytes >= max_bytes:
+                stop_flag.set()
+                return None
+        dem_path = download_demo_file(make_session(), rec, demos_dir)
         if dem_path is None:
-            continue
+            return None
         sz = dem_path.stat().st_size
-        total_bytes += sz
+        sha = file_sha256(dem_path)
         entry = {
             "id": rec["id"],
             "source": rec["source"],
@@ -729,17 +876,87 @@ def main() -> None:
             "time": rec["time"],
             "url": rec["url"],
             "local_path": str(dem_path),
-            "bsp_path": str(bsp_path),
+            "bsp_path": str(resolved_maps[rec["map"]]),
             "size_bytes": sz,
-            "sha256": file_sha256(dem_path),
+            "sha256": sha,
         }
         if "logstf_id" in rec:
             entry["logstf_id"] = rec["logstf_id"]
-        manifest_demos[rec["id"]] = entry
-        pbar.set_postfix(saved=len(manifest_demos), gb=f"{total_bytes / (1024**3):.2f}")
+        return entry
 
-        if len(manifest_demos) % 10 == 0:
-            save_manifest(manifest_path, list(manifest_demos.values()))
+    pbar = tqdm(total=len(download_queue), desc="Downloading demos")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+        for entry in ex.map(worker, download_queue):
+            pbar.update(1)
+            if entry is None:
+                continue
+            with lock:
+                manifest_demos[entry["id"]] = entry
+                total_bytes += entry["size_bytes"]
+                if total_bytes >= max_bytes:
+                    stop_flag.set()
+                cur_n = len(manifest_demos)
+                cur_gb = total_bytes / (1024 ** 3)
+            pbar.set_postfix(saved=cur_n, gb=f"{cur_gb:.2f}")
+            if cur_n % 15 == 0:
+                save_manifest(manifest_path, list(manifest_demos.values()))
+    pbar.close()
+
+    etf_done = 0
+    etf_seen_urls = {e.get("url") for e in manifest_demos.values()}
+    etf_queue = [
+        d for d in etf2l_direct
+        if d["url"] not in etf_seen_urls and int(d["time"]) > 0
+        and not any(
+            abs(int(d["time"]) - tt) < LEAK_WINDOW_SECONDS and any(normalize_map_family(m) == normalize_map_family(tm) for m in d["maps"])
+            for tm, tt in test_keys
+        )
+    ]
+    etf_queue.sort(key=lambda d: (not d["is_pov"], -int(d["time"])))
+    etf_pbar = tqdm(total=min(len(etf_queue), args.etf2l_max), desc="ETF2L direct")
+    known_sha = {e["sha256"] for e in manifest_demos.values()}
+    for d in etf_queue:
+        if etf_done >= args.etf2l_max or total_bytes >= max_bytes:
+            break
+        time.sleep(1.5)
+        res = download_etf2l_demo(session, d, demos_dir)
+        if res is None:
+            continue
+        dem_path, map_name = res
+        fam = normalize_map_family(map_name)
+        sha = file_sha256(dem_path)
+        bp = resolve_bsp(session, map_name, maps_dir, neg_cache, allow_download=True)
+        if fam in UNSEEN_TEST_FAMILIES or sha in known_sha or bp is None or fam not in TARGET_MAP_PREFIXES:
+            dem_path.unlink(missing_ok=True)
+            continue
+        known_sha.add(sha)
+        kind = "pov" if d["is_pov"] else "stv"
+        eid = dem_path.stem.split(f"_{kind}_")[0]
+        manifest_demos[eid] = {
+            "id": eid,
+            "source": "etf2l_direct",
+            "league": "ETF2L",
+            "tier": d["tier"],
+            "format": d["format"],
+            "map": map_name,
+            "map_family": fam,
+            "duration": 0,
+            "player_count": 0,
+            "is_pov": d["is_pov"],
+            "nick": "ETF2L POV" if d["is_pov"] else "SourceTV Demo",
+            "server": "ETF2L",
+            "time": int(d["time"]),
+            "url": d["url"],
+            "local_path": str(dem_path),
+            "bsp_path": str(bp),
+            "size_bytes": dem_path.stat().st_size,
+            "sha256": sha,
+        }
+        total_bytes += dem_path.stat().st_size
+        etf_done += 1
+        etf_pbar.update(1)
+        save_manifest(manifest_path, list(manifest_demos.values()))
+    etf_pbar.close()
 
     final_list = list(manifest_demos.values())
     save_manifest(manifest_path, final_list)

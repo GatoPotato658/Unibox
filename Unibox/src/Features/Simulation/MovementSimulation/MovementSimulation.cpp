@@ -1628,18 +1628,23 @@ void CMovementSimulation::SetupController(MoveStorage& tMoveStorage, bool bStraf
 
 		if (F::NeuralPred.GetPrediction(pPlayer->entindex(), uSteamId32, tMoveStorage.m_tNeural))
 		{
+			const int iAgeTicks = TIME_TO_TICKS(pPlayer->m_flSimulationTime() - tMoveStorage.m_tNeural.m_flSimTime);
 			const float flMidSigma = tMoveStorage.m_tNeural.m_aKnots[6].m_flSigmaXY;
 			const float flMaxUnc = std::max(Vars::Aimbot::Projectile::NeuralMaxUncertainty.Value, 1.f);
 			bool bPassGate = false;
-			if (iNeuralMode == Vars::Aimbot::Projectile::NeuralPredictionEnum::NeuralOnly)
-				bPassGate = true;
-			else if (iNeuralMode == Vars::Aimbot::Projectile::NeuralPredictionEnum::PreferNeural)
-				bPassGate = !F::NeuralPred.ShouldFallback() && flMidSigma <= flMaxUnc * 1.5f;
-			else
-				bPassGate = !F::NeuralPred.ShouldFallback() && flMidSigma <= flMaxUnc;
+			if (iAgeTicks >= -1 && iAgeTicks <= 4)
+			{
+				if (iNeuralMode == Vars::Aimbot::Projectile::NeuralPredictionEnum::NeuralOnly)
+					bPassGate = true;
+				else if (iNeuralMode == Vars::Aimbot::Projectile::NeuralPredictionEnum::PreferNeural)
+					bPassGate = !F::NeuralPred.ShouldFallback() && flMidSigma <= flMaxUnc * 1.5f;
+				else
+					bPassGate = !F::NeuralPred.ShouldFallback() && flMidSigma <= flMaxUnc;
+			}
 
 			if (bPassGate)
 			{
+				tMoveStorage.m_iNeuralStep = std::max(0, iAgeTicks);
 				const float flConf = std::clamp(1.f - (flMidSigma / flMaxUnc) * 0.5f, 0.1f, 1.f);
 				if (bGround)
 				{
