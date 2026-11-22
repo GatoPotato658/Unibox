@@ -6,6 +6,317 @@
 #include "../../Backtrack/Backtrack.h"
 #include "../../Aimbot/AimbotProjectile/ProjProfiler.h"
 
+constexpr double k_dDeltaPsi = 1.0 / 66.0;
+
+static void QuatToMatrix3(const double q[4], double m[3][3])
+{
+	const double x2 = q[0] + q[0];
+	const double y2 = q[1] + q[1];
+	const double z2 = q[2] + q[2];
+
+	const double xx = q[0] * x2;
+	const double xy = q[0] * y2;
+	const double xz = q[0] * z2;
+
+	const double yy = q[1] * y2;
+	const double yz = q[1] * z2;
+	const double zz = q[2] * z2;
+
+	const double wx = q[3] * x2;
+	const double wy = q[3] * y2;
+	const double wz = q[3] * z2;
+
+	m[0][0] = 1.0 - (yy + zz);
+	m[0][1] = xy - wz;
+	m[0][2] = xz + wy;
+
+	m[1][0] = xy + wz;
+	m[1][1] = 1.0 - (xx + zz);
+	m[1][2] = yz - wx;
+
+	m[2][0] = xz - wy;
+	m[2][1] = yz + wx;
+	m[2][2] = 1.0 - (xx + yy);
+}
+
+static void Matrix3ToQuat(const double m[3][3], double q[4])
+{
+	const double dTrace = m[0][0] + m[1][1] + m[2][2];
+	if (dTrace > 0.0)
+	{
+		double s = std::sqrt(dTrace + 1.0);
+		q[3] = s * 0.5;
+		s = 0.5 / s;
+		q[0] = (m[2][1] - m[1][2]) * s;
+		q[1] = (m[0][2] - m[2][0]) * s;
+		q[2] = (m[1][0] - m[0][1]) * s;
+	}
+	else
+	{
+		static constexpr int aNext[3] = { 1, 2, 0 };
+		int i = 0;
+		if (m[1][1] > m[0][0])
+			i = 1;
+		if (m[2][2] > m[i][i])
+			i = 2;
+		const int j = aNext[i];
+		const int k = aNext[j];
+
+		double s = std::sqrt((m[i][i] - (m[j][j] + m[k][k])) + 1.0);
+		q[i] = s * 0.5;
+		if (s != 0.0)
+			s = 0.5 / s;
+		q[3] = (m[k][j] - m[j][k]) * s;
+		q[j] = (m[j][i] + m[i][j]) * s;
+		q[k] = (m[k][i] + m[i][k]) * s;
+	}
+
+	const double dNorm2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+	if (dNorm2 > 1e-19)
+	{
+		const double dInvNorm = 1.0 / std::sqrt(dNorm2);
+		q[0] *= dInvNorm;
+		q[1] *= dInvNorm;
+		q[2] *= dInvNorm;
+		q[3] *= dInvNorm;
+	}
+}
+
+static void QuatMult(const double a[4], const double b[4], double out[4])
+{
+	const double x = a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1];
+	const double y = a[3] * b[1] + a[1] * b[3] + a[2] * b[0] - a[0] * b[2];
+	const double z = a[3] * b[2] + a[2] * b[3] + a[0] * b[1] - a[1] * b[0];
+	const double w = a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2];
+	out[0] = x;
+	out[1] = y;
+	out[2] = z;
+	out[3] = w;
+}
+
+static void FastNormizeQuat(double q[4])
+{
+	const double dLen2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+	if (std::fabs(1.0 - dLen2) > 1e-12)
+	{
+		const double dInv = 1.0 / std::sqrt(dLen2);
+		q[0] *= dInv;
+		q[1] *= dInv;
+		q[2] *= dInv;
+		q[3] *= dInv;
+	}
+}
+
+static void SetFastMultipleWithClip(const float aAngles[3], double dFactor, double q[4])
+{
+	const double dHalf = dFactor * 0.5;
+	q[0] = std::sin(double(aAngles[0]) * dHalf);
+	q[1] = std::sin(double(aAngles[1]) * dHalf);
+	q[2] = std::sin(double(aAngles[2]) * dHalf);
+
+	double dS2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2];
+	if (dS2 > 1.0)
+	{
+		const double dScale = 0.999999999 / std::sqrt(dS2);
+		q[0] *= dScale;
+		q[1] *= dScale;
+		q[2] *= dScale;
+		dS2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2];
+	}
+	q[3] = std::sqrt(std::max(0.0, 1.0 - dS2));
+}
+
+static void InitPhysicsState(PhysicsObject_t& tObj, const Vec3& vPos, const QAngle& vAng, const Vec3& vVel, const Vec3& vAngVel, float flGravity, float flDrag, const Vec3& vDragBasis, const Vec3& vAngDragBasis, float flMaxVel, float flMaxAngVel)
+{
+	constexpr double dMetersPerInch = double(METERS_PER_INCH);
+	constexpr float flInvMetersPerInch = 1.f / METERS_PER_INCH;
+
+	tObj.m_vOrigin = vPos;
+
+	tObj.m_adPosLastPsi[0] = double(vPos.x) * dMetersPerInch;
+	tObj.m_adPosLastPsi[1] = -double(vPos.z) * dMetersPerInch;
+	tObj.m_adPosLastPsi[2] = double(vPos.y) * dMetersPerInch;
+
+	tObj.m_afVelLastPsi[0] = 0.f;
+	tObj.m_afVelLastPsi[1] = 0.f;
+	tObj.m_afVelLastPsi[2] = 0.f;
+
+	tObj.m_afSpeed[0] = float(double(vVel.x) * dMetersPerInch);
+	tObj.m_afSpeed[1] = float(-double(vVel.z) * dMetersPerInch);
+	tObj.m_afSpeed[2] = float(double(vVel.y) * dMetersPerInch);
+
+	tObj.m_afRotSpeed[0] = Math::Deg2Rad(vAngVel.x);
+	tObj.m_afRotSpeed[1] = -Math::Deg2Rad(vAngVel.z);
+	tObj.m_afRotSpeed[2] = Math::Deg2Rad(vAngVel.y);
+
+	tObj.m_flMaxVelIVP = flMaxVel * METERS_PER_INCH;
+	tObj.m_flMaxAngVelIVP = Math::Deg2Rad(flMaxAngVel);
+
+	if (tObj.m_flMaxVelIVP > 0.f)
+	{
+		const double dVelLen = std::sqrt(double(tObj.m_afSpeed[0]) * tObj.m_afSpeed[0] + double(tObj.m_afSpeed[1]) * tObj.m_afSpeed[1] + double(tObj.m_afSpeed[2]) * tObj.m_afSpeed[2]);
+		if (float(dVelLen) > tObj.m_flMaxVelIVP)
+		{
+			const double dScale = double(tObj.m_flMaxVelIVP) / dVelLen;
+			tObj.m_afSpeed[0] = float(double(tObj.m_afSpeed[0]) * dScale);
+			tObj.m_afSpeed[1] = float(double(tObj.m_afSpeed[1]) * dScale);
+			tObj.m_afSpeed[2] = float(double(tObj.m_afSpeed[2]) * dScale);
+		}
+	}
+
+	if (tObj.m_flMaxAngVelIVP > 0.f)
+	{
+		const float flMaxAngCheck = float(66.0 * double(tObj.m_flMaxAngVelIVP * float(k_dDeltaPsi)));
+		const double dVelLen = std::sqrt(double(tObj.m_afSpeed[0]) * tObj.m_afSpeed[0] + double(tObj.m_afSpeed[1]) * tObj.m_afSpeed[1] + double(tObj.m_afSpeed[2]) * tObj.m_afSpeed[2]);
+		if (float(dVelLen) > flMaxAngCheck)
+		{
+			const double dScale = double(flMaxAngCheck) / dVelLen;
+			tObj.m_afRotSpeed[0] = float(double(tObj.m_afRotSpeed[0]) * dScale);
+			tObj.m_afRotSpeed[1] = float(double(tObj.m_afRotSpeed[1]) * dScale);
+			tObj.m_afRotSpeed[2] = float(double(tObj.m_afRotSpeed[2]) * dScale);
+		}
+	}
+
+	tObj.m_vVelocity = {
+		tObj.m_afSpeed[0] * flInvMetersPerInch,
+		tObj.m_afSpeed[2] * flInvMetersPerInch,
+		-tObj.m_afSpeed[1] * flInvMetersPerInch
+	};
+
+	Vec3 vForward, vRight, vUp;
+	Math::AngleVectors(vAng, &vForward, &vRight, &vUp);
+	const double m[3][3] = {
+		{ double(vForward.x), double(-vUp.x), double(-vRight.x) },
+		{ double(-vForward.z), double(vUp.z), double(vRight.z) },
+		{ double(vForward.y), double(-vUp.y), double(-vRight.y) }
+	};
+	Matrix3ToQuat(m, tObj.m_adQuatNextPsi);
+
+	tObj.m_dCurrentTime = 0.0;
+	tObj.m_dLastPsiTime = 0.0;
+	tObj.m_dNextPsiTime = 0.0;
+
+	tObj.m_flGravityIVP = flGravity * METERS_PER_INCH;
+	tObj.m_flDragCoeff = flDrag;
+	tObj.m_vDragBasis = vDragBasis;
+	tObj.m_vAngDragBasis = vAngDragBasis;
+}
+
+static void StepPhysicsPsi(PhysicsObject_t& tObj)
+{
+	double m[3][3];
+	QuatToMatrix3(tObj.m_adQuatNextPsi, m);
+
+	tObj.m_afSpeed[1] += tObj.m_flGravityIVP * float(k_dDeltaPsi);
+
+	const float afLocal[3] = {
+		float(m[0][0] * double(tObj.m_afSpeed[0]) + m[1][0] * double(tObj.m_afSpeed[1]) + m[2][0] * double(tObj.m_afSpeed[2])),
+		float(m[0][1] * double(tObj.m_afSpeed[0]) + m[1][1] * double(tObj.m_afSpeed[1]) + m[2][1] * double(tObj.m_afSpeed[2])),
+		float(m[0][2] * double(tObj.m_afSpeed[0]) + m[1][2] * double(tObj.m_afSpeed[1]) + m[2][2] * double(tObj.m_afSpeed[2]))
+	};
+
+	const float flLinDrag = tObj.m_flDragCoeff * std::fabs(afLocal[0] * tObj.m_vDragBasis.x)
+		+ std::fabs(afLocal[1] * tObj.m_vDragBasis.y)
+		+ std::fabs(afLocal[2] * tObj.m_vDragBasis.z);
+	float flDragForce = float(-0.5 * double(flLinDrag) * double(AIR_DENSITY) * k_dDeltaPsi);
+	if (flDragForce < -1.0f)
+		flDragForce = -1.0f;
+	if (flDragForce < 0.0f)
+	{
+		tObj.m_afSpeed[0] += tObj.m_afSpeed[0] * flDragForce;
+		tObj.m_afSpeed[1] += tObj.m_afSpeed[1] * flDragForce;
+		tObj.m_afSpeed[2] += tObj.m_afSpeed[2] * flDragForce;
+	}
+
+	const float flAngDrag = tObj.m_flDragCoeff * std::fabs(tObj.m_afRotSpeed[0] * tObj.m_vAngDragBasis.x)
+		+ std::fabs(tObj.m_afRotSpeed[1] * tObj.m_vAngDragBasis.y)
+		+ std::fabs(tObj.m_afRotSpeed[2] * tObj.m_vAngDragBasis.z);
+	float flAngDragForce = float(-double(flAngDrag) * double(AIR_DENSITY) * k_dDeltaPsi);
+	if (flAngDragForce < -1.0f)
+		flAngDragForce = -1.0f;
+	if (flAngDragForce < 0.0f)
+	{
+		tObj.m_afRotSpeed[0] += tObj.m_afRotSpeed[0] * flAngDragForce;
+		tObj.m_afRotSpeed[1] += tObj.m_afRotSpeed[1] * flAngDragForce;
+		tObj.m_afRotSpeed[2] += tObj.m_afRotSpeed[2] * flAngDragForce;
+	}
+
+	if (tObj.m_flMaxAngVelIVP > 0.f)
+	{
+		const double dRotLen2 = double(tObj.m_afRotSpeed[0]) * tObj.m_afRotSpeed[0]
+			+ double(tObj.m_afRotSpeed[1]) * tObj.m_afRotSpeed[1]
+			+ double(tObj.m_afRotSpeed[2]) * tObj.m_afRotSpeed[2];
+		const double dMaxAng = double(tObj.m_flMaxAngVelIVP);
+		if (dRotLen2 > dMaxAng * dMaxAng)
+		{
+			const float flScale = float((dMaxAng * 0.9) / std::sqrt(dRotLen2));
+			tObj.m_afRotSpeed[0] *= flScale;
+			tObj.m_afRotSpeed[1] *= flScale;
+			tObj.m_afRotSpeed[2] *= flScale;
+		}
+	}
+
+	if (tObj.m_flMaxVelIVP > 0.f)
+	{
+		const double dVelLen2 = double(tObj.m_afSpeed[0]) * tObj.m_afSpeed[0]
+			+ double(tObj.m_afSpeed[1]) * tObj.m_afSpeed[1]
+			+ double(tObj.m_afSpeed[2]) * tObj.m_afSpeed[2];
+		const double dMaxVel = double(tObj.m_flMaxVelIVP);
+		if (dVelLen2 > dMaxVel * dMaxVel)
+		{
+			const float flScale = float((dMaxVel * 0.99) / std::sqrt(dVelLen2));
+			tObj.m_afSpeed[0] *= flScale;
+			tObj.m_afSpeed[1] *= flScale;
+			tObj.m_afSpeed[2] *= flScale;
+		}
+	}
+
+	double qRot[4];
+	SetFastMultipleWithClip(tObj.m_afRotSpeed, k_dDeltaPsi, qRot);
+
+	const double dDeltaPos = tObj.m_dNextPsiTime - tObj.m_dLastPsiTime;
+	tObj.m_dLastPsiTime = tObj.m_dNextPsiTime;
+	tObj.m_adPosLastPsi[0] += double(tObj.m_afVelLastPsi[0]) * dDeltaPos;
+	tObj.m_adPosLastPsi[1] += double(tObj.m_afVelLastPsi[1]) * dDeltaPos;
+	tObj.m_adPosLastPsi[2] += double(tObj.m_afVelLastPsi[2]) * dDeltaPos;
+
+	tObj.m_afVelLastPsi[0] = tObj.m_afSpeed[0];
+	tObj.m_afVelLastPsi[1] = tObj.m_afSpeed[1];
+	tObj.m_afVelLastPsi[2] = tObj.m_afSpeed[2];
+
+	double qNext[4];
+	QuatMult(tObj.m_adQuatNextPsi, qRot, qNext);
+	FastNormizeQuat(qNext);
+	tObj.m_adQuatNextPsi[0] = qNext[0];
+	tObj.m_adQuatNextPsi[1] = qNext[1];
+	tObj.m_adQuatNextPsi[2] = qNext[2];
+	tObj.m_adQuatNextPsi[3] = qNext[3];
+
+	tObj.m_dNextPsiTime += k_dDeltaPsi;
+}
+
+static void SimulatePhysicsTick(PhysicsObject_t& tObj, float flDeltaTime)
+{
+	constexpr float flInvMetersPerInch = 1.f / METERS_PER_INCH;
+
+	const double dTarget = tObj.m_dCurrentTime + double(flDeltaTime);
+	while (float(tObj.m_dNextPsiTime) < float(dTarget))
+		StepPhysicsPsi(tObj);
+	tObj.m_dCurrentTime = dTarget;
+
+	const double dSubTime = std::max(0.0, tObj.m_dCurrentTime - tObj.m_dLastPsiTime);
+	tObj.m_vOrigin = {
+		float(tObj.m_adPosLastPsi[0] + double(tObj.m_afVelLastPsi[0]) * dSubTime) * flInvMetersPerInch,
+		float(tObj.m_adPosLastPsi[2] + double(tObj.m_afVelLastPsi[2]) * dSubTime) * flInvMetersPerInch,
+		-float(tObj.m_adPosLastPsi[1] + double(tObj.m_afVelLastPsi[1]) * dSubTime) * flInvMetersPerInch
+	};
+	tObj.m_vVelocity = {
+		tObj.m_afSpeed[0] * flInvMetersPerInch,
+		tObj.m_afSpeed[2] * flInvMetersPerInch,
+		-tObj.m_afSpeed[1] * flInvMetersPerInch
+	};
+}
+
 static const char* GetPasstimeThrowSpeedCvar(CTFPlayer* pPlayer)
 	{
 		switch (pPlayer ? pPlayer->m_iClass() : TF_CLASS_UNDEFINED)
@@ -88,6 +399,7 @@ float CProjectileSimulation::GetSpecialDrag(const SpecialProjectile_t* pSpecial)
 	ProjectileInfo* pOldCurrent = m_pCurrent;
 	const bool bOldPhysics = m_bPhysics;
 	const bool bOldAngDrag = m_bAngDrag;
+	const bool bOldVPhysics = m_bVPhysics;
 	const PhysicsObject_t tOldObj = m_tObj;
 	const SpecialProjectile_t* pOldSpecial = m_pSpecial;
 	m_pSpecial = pSpecial;
@@ -123,6 +435,7 @@ float CProjectileSimulation::GetSpecialDrag(const SpecialProjectile_t* pSpecial)
 	m_pCurrent = pOldCurrent;
 	m_bPhysics = bOldPhysics;
 	m_bAngDrag = bOldAngDrag;
+	m_bVPhysics = bOldVPhysics;
 	m_tObj = tOldObj;
 	return flDrag;
 }
@@ -850,10 +1163,51 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 	{
 		m_bPhysics = false;
 		m_bAngDrag = false;
+		m_bVPhysics = false;
 		m_pCurrent = &tProjInfo;
 		vVelocity.z += tProjInfo.m_flGravity * TICK_INTERVAL / 2;
 		m_tObj.m_vOrigin = tProjInfo.m_vPos;
 		m_tObj.m_vVelocity = vVelocity;
+		if (tProjInfo.m_uType == FNV1A::Hash32Const("custom"))
+			tProjInfo.m_uType = FNV1A::Hash32(Vars::Visuals::Trajectory::Type.Value.c_str());
+		return true;
+	}
+
+	float flMaxVelocity = 1000000.f;
+	float vMaxAngularVelocity = 1000000.f;
+
+	switch (tProjInfo.m_uType)
+	{
+	case FNV1A::Hash32Const("custom"):
+		if (Vars::Visuals::Trajectory::MaxVelocity.Value)
+			flMaxVelocity = Vars::Visuals::Trajectory::MaxVelocity.Value;
+		if (Vars::Visuals::Trajectory::MaxAngularVelocity.Value)
+			vMaxAngularVelocity = Vars::Visuals::Trajectory::MaxAngularVelocity.Value;
+		break;
+	case FNV1A::Hash32Const("models/weapons/w_models/w_grenade_grenadelauncher.mdl"):
+	case FNV1A::Hash32Const("models/workshop/weapons/c_models/c_quadball/w_quadball_grenade.mdl"):
+	case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb.mdl"):
+	case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb2.mdl"):
+	case FNV1A::Hash32Const("models/weapons/w_models/w_cannonball.mdl"):
+	case FNV1A::Hash32Const("models/workshop_partner/weapons/c_models/c_sd_cleaver/c_sd_cleaver.mdl"):
+	case FNV1A::Hash32Const("models/weapons/w_models/w_baseball.mdl"):
+	case FNV1A::Hash32Const("models/weapons/c_models/c_xms_festive_ornament.mdl"):
+		flMaxVelocity = k_flMaxVelocity;
+		vMaxAngularVelocity = k_flMaxAngularVelocity;
+	}
+	if (bIsSpecial)
+	{
+		flMaxVelocity = k_flMaxVelocity;
+		vMaxAngularVelocity = k_flMaxAngularVelocity;
+	}
+
+	if (bSimulate && !bIsSpecial)
+	{
+		m_pCurrent = &tProjInfo;
+		m_bPhysics = flDrag && vDragBasis;
+		m_bAngDrag = flDrag && vAngDragBasis;
+		m_bVPhysics = false;
+		InitPhysicsState(m_tObj, tProjInfo.m_vPos, tProjInfo.m_vAng, vVelocity, vAngularVelocity, tProjInfo.m_flGravity, flDrag, vDragBasis, vAngDragBasis, flMaxVelocity, vMaxAngularVelocity);
 		if (tProjInfo.m_uType == FNV1A::Hash32Const("custom"))
 			tProjInfo.m_uType = FNV1A::Hash32(Vars::Visuals::Trajectory::Type.Value.c_str());
 		return true;
@@ -917,6 +1271,7 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 	}
 	m_bPhysics = m_pObj->m_dragCoefficient && m_pObj->m_dragBasis;
 	m_bAngDrag = m_pObj->m_dragCoefficient && m_pObj->m_angDragBasis;
+	m_bVPhysics = m_bPhysics && bSpecialObject;
 
 	if (bSimulate && !m_bPhysics)
 		vVelocity.z += tProjInfo.m_flGravity * TICK_INTERVAL / 2;
@@ -927,6 +1282,8 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 		m_pObj->SetVelocity(&vVelocity, &vAngularVelocity);
 	}
 	m_tObj.m_vOrigin = tProjInfo.m_vPos;
+	if (m_bPhysics && !bSpecialObject)
+		InitPhysicsState(m_tObj, tProjInfo.m_vPos, tProjInfo.m_vAng, vVelocity, vAngularVelocity, tProjInfo.m_flGravity, flDrag, vDragBasis, vAngDragBasis, flMaxVelocity, vMaxAngularVelocity);
 	if (!m_bPhysics)
 	{
 		m_tObj.m_vVelocity = vVelocity;
@@ -935,34 +1292,6 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 	}
 
 	{
-		float flMaxVelocity = 1000000.f;
-		float vMaxAngularVelocity = 1000000.f;
-
-		switch (tProjInfo.m_uType)
-		{
-		case FNV1A::Hash32Const("custom"):
-			if (Vars::Visuals::Trajectory::MaxVelocity.Value)
-				flMaxVelocity = Vars::Visuals::Trajectory::MaxVelocity.Value;
-			if (Vars::Visuals::Trajectory::MaxAngularVelocity.Value)
-				vMaxAngularVelocity = Vars::Visuals::Trajectory::MaxAngularVelocity.Value;
-			break;
-		case FNV1A::Hash32Const("models/weapons/w_models/w_grenade_grenadelauncher.mdl"):
-		case FNV1A::Hash32Const("models/workshop/weapons/c_models/c_quadball/w_quadball_grenade.mdl"):
-		case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb.mdl"):
-		case FNV1A::Hash32Const("models/weapons/w_models/w_stickybomb2.mdl"):
-		case FNV1A::Hash32Const("models/weapons/w_models/w_cannonball.mdl"):
-		case FNV1A::Hash32Const("models/workshop_partner/weapons/c_models/c_sd_cleaver/c_sd_cleaver.mdl"):
-		case FNV1A::Hash32Const("models/weapons/w_models/w_baseball.mdl"):
-		case FNV1A::Hash32Const("models/weapons/c_models/c_xms_festive_ornament.mdl"):
-			flMaxVelocity = k_flMaxVelocity;
-			vMaxAngularVelocity = k_flMaxAngularVelocity;
-		}
-		if (bIsSpecial)
-		{
-			flMaxVelocity = k_flMaxVelocity;
-			vMaxAngularVelocity = k_flMaxAngularVelocity;
-		}
-
 		if (flMaxVelocity != m_flLastMaxVel || vMaxAngularVelocity != m_flLastMaxAngVel || !bSimulate)
 		{
 			physics_performanceparams_t params = {}; params.Defaults();
@@ -1000,8 +1329,13 @@ void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath)
 
 	if (m_bPhysics)
 	{
-		m_pEnv->Simulate(TICK_INTERVAL);
-		m_pObj->GetPosition(&m_tObj.m_vOrigin, nullptr);
+		if (m_bVPhysics)
+		{
+			m_pEnv->Simulate(TICK_INTERVAL);
+			m_pObj->GetPosition(&m_tObj.m_vOrigin, nullptr);
+		}
+		else
+			SimulatePhysicsTick(m_tObj, TICK_INTERVAL);
 	}
 	else
 	{
@@ -1022,7 +1356,7 @@ Vec3 CProjectileSimulation::GetOrigin()
 
 Vec3 CProjectileSimulation::GetVelocity()
 {
-	if (!m_bPhysics)
+	if (!m_bPhysics || !m_bVPhysics)
 		return m_tObj.m_vVelocity;
 
 	if (!m_pObj)

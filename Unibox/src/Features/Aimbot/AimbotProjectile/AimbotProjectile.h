@@ -49,6 +49,7 @@ struct Info_t
 	float m_flSpawnHeight = 0.f;
 	float m_flDrag = 0.f;
 	int m_iLaunchDelay = 0;
+	int m_iPreRoll = 0;
 };
 
 #pragma pack(1)
@@ -97,6 +98,7 @@ struct Offset_t
 {
 	Vec3 m_vOffset;
 	uint8_t m_iFlags;
+	bool m_bHead = false;
 };
 using Directs_t = std::unordered_map<uint8_t, Offset_t>;
 using Splashes_t = std::vector<uint8_t>;
@@ -113,6 +115,7 @@ struct Direct_t : History_t
 	float m_flTime;
 	Vec3 m_vPoint;
 	int m_iPriority;
+	bool m_bHead = false;
 };
 struct Splash_t : History_t
 {
@@ -205,6 +208,8 @@ private:
 	void LogShot(const Target_t& tTarget, const CUserCmd* pCmd);
 	TickRecord m_tCurrentRecord = {};
 	std::vector<Vec3> m_vTargetPath = {};
+	Vec3 m_vHeadOffset = {};
+	int m_iHeadContactTick = -1;
 
 	int m_iLaunchDelay = 0;
 	float m_flSpecialDrag = 0.f;

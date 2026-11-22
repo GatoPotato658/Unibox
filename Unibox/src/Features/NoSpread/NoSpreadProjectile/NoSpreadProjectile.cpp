@@ -52,9 +52,14 @@ void CNoSpreadProjectile::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 				flSpeed = SDK::AttribHookValue(pLocal->InCond(TF_COND_RUNE_PRECISION) ? 3000.f : SDK::AttribHookValue(1200.f, "mult_projectile_speed", pWeapon), "mult_projectile_range", pWeapon);
 			else
 			{
-				float flElapsed = flCurTime - pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime();
-				float flChargeTime = SDK::AttribHookValue(4.f, "stickybomb_charge_rate", pWeapon);
-				float flCharge = flChargeTime != 0.f ? std::clamp(flElapsed / flChargeTime, 0.f, 1.f) : flElapsed >= 0.f ? 1.f : 0.f;
+				const float flChargeBegin = pWeapon->As<CTFPipebombLauncher>()->m_flChargeBeginTime();
+				float flCharge = 0.f;
+				if (flChargeBegin > 0.f)
+				{
+					const float flElapsed = flCurTime - flChargeBegin;
+					const float flChargeTime = SDK::AttribHookValue(4.f, "stickybomb_charge_rate", pWeapon);
+					flCharge = flChargeTime != 0.f ? std::clamp(flElapsed / flChargeTime, 0.f, 1.f) : (flElapsed >= 0.f ? 1.f : 0.f);
+				}
 				flSpeed = SDK::AttribHookValue(900.f + flCharge * 1500.f, "mult_projectile_range", pWeapon);
 			}
 

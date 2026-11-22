@@ -42,6 +42,7 @@ struct MoveFit_t
 	bool m_bAirCurrent = false;
 	int m_iHopTicks = -1;
 	int m_iGroundTicks = 0;
+	int m_iMaxHops = 0;
 };
 
 struct MovePhysics_t
@@ -97,6 +98,9 @@ struct MoveStorage
 	bool m_bBunnyHop = false;
 	int m_iHopTicks = -1;
 	int m_iGroundTicks = 0;
+	int m_iMaxHops = 0;
+	int m_iPredictedHops = 0;
+	int m_iSimTicks = 0;
 
 	float m_flSimTime = 0.f;
 	float m_flPredictedDelta = 0.f;
@@ -128,7 +132,23 @@ private:
 		Vec3 m_vAbsOrigin = {};
 		Vec3 m_vVelocity = {};
 		Vec3 m_vPredictedOrigin = {};
+		MoveController_t m_tGround = {};
+		MoveController_t m_tAir = {};
+		float m_flViewYaw = 0.f;
+		float m_flSweepKept = 1.f;
+		float m_flMaxSpeed = 0.f;
+		float m_flAirCap = 30.f;
+		float m_flChargeMeter = 0.f;
+		float m_flSurfaceFriction = 1.f;
+		int m_iWaterLevel = 0;
+		int m_iHopTicks = -1;
+		int m_iGroundTicks = 0;
+		int m_iPredictedHops = 0;
+		int m_iSimTicks = 0;
 		bool m_bOnGround = false;
+		bool m_bLostFooting = false;
+		bool m_bAirCurrent = false;
+		bool m_bCharging = false;
 		float m_flSimTime = 0.f;
 		float m_flPredictedSimTime = 0.f;
 		bool m_bPredictNetworked = true;
@@ -158,6 +178,8 @@ private:
 	void SetupMoveData(MoveStorage& tMoveStorage, const Vec3* pvOrigin);
 	void SetupController(MoveStorage& tMoveStorage, bool bStrafe);
 	void StepTick(MoveStorage& tMoveStorage, bool bPath, RunTickCallback* pCallback);
+	static MoveCacheStep_t MakeCacheStep(const MoveStorage& tMoveStorage);
+	static void ApplyCacheStep(MoveStorage& tMoveStorage, const MoveCacheStep_t& tStep, bool bPath);
 
 	std::unordered_map<int, std::deque<MoveData>> m_mRecords = {};
 	std::unordered_map<int, std::deque<float>> m_mSimTimes = {};

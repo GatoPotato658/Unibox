@@ -90,6 +90,21 @@ struct PhysicsObject_t
 {
 	Vec3 m_vOrigin = {};
 	Vec3 m_vVelocity = {};
+
+	double m_adPosLastPsi[3] = {};
+	float m_afVelLastPsi[3] = {};
+	float m_afSpeed[3] = {};
+	float m_afRotSpeed[3] = {};
+	double m_adQuatNextPsi[4] = { 0.0, 0.0, 0.0, 1.0 };
+	double m_dCurrentTime = 0.0;
+	double m_dLastPsiTime = 0.0;
+	double m_dNextPsiTime = 0.0;
+	float m_flGravityIVP = 0.f;
+	float m_flDragCoeff = 0.f;
+	Vec3 m_vDragBasis = {};
+	Vec3 m_vAngDragBasis = {};
+	float m_flMaxVelIVP = 0.f;
+	float m_flMaxAngVelIVP = 0.f;
 };
 
 class CProjectileSimulation
@@ -305,6 +320,7 @@ public:
 	PhysicsObject_t m_tObj = {};
 	bool m_bPhysics = false;
 	bool m_bAngDrag = false;
+	bool m_bVPhysics = false;
 
 	ProjectileInfo* m_pCurrent = nullptr;
 };
