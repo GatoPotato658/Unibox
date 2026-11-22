@@ -1,5 +1,7 @@
 > [!IMPORTANT]
 > We are moving to GitLab, please consider migrating [there](https://gitlab.com/jamesfunction/unibox).
+>
+> If you have any suggestions or bugs to report, please report them on [the new issues page](https://gitlab.com/jamesfunction/unibox/-/boards).
 
 ##
 
