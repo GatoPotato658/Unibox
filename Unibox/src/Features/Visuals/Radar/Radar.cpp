@@ -114,7 +114,7 @@ void CRadar::Store(CTFPlayer* pLocal)
 
 		const bool bTeammate = iTeam ? pPlayer->m_iTeamNum() == iTeam : pPlayer->m_iTeamNum() == TF_TEAM_BLUE;
 		if (!iTeam || !bTeammate || Vars::Radar::ShowTeammates.Value)
-			tSnapshot.m_vPlayers.push_back({ pPlayer->GetRenderOrigin(), pPlayer->GetEyeAngles().y, pPlayer->m_iClass(), bTeammate });
+			tSnapshot.m_vPlayers.push_back({ pPlayer->GetRenderOrigin(), pPlayer->GetEyeAngles().y, pPlayer->m_iClass(), pPlayer->m_iTeamNum() });
 	}
 	m_tCache.Set(std::move(tSnapshot));
 }
@@ -219,7 +219,8 @@ void CRadar::Draw(bool bInGame)
 					|| vDot.y < vMin.y + flMarker * 0.5f || vDot.y > vMax.y - flMarker * 0.5f)
 					continue;
 
-				const ImU32 uTeam = tPlayer.m_bTeammate ? IM_COL32(133, 198, 236, 255) : IM_COL32(247, 102, 96, 255);
+				const Color_t tTeam = tPlayer.m_iTeam == TF_TEAM_RED ? Vars::Radar::TeamRed.Value : Vars::Radar::TeamBlu.Value;
+			const ImU32 uTeam = IM_COL32(tTeam.r, tTeam.g, tTeam.b, tTeam.a);
 				const float flPlayerYaw = Math::Deg2Rad(flRadarYaw - tPlayer.m_flYaw);
 				if (Vars::Radar::PlayerStyle.Value == Vars::Radar::PlayerStyleEnum::ClassIcon)
 				{

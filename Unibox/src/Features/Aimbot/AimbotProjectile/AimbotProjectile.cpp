@@ -29,6 +29,8 @@ static std::map<std::string, int> s_mTraceCount = {};
 
 static inline Vec3 GetLastNetworkedOrigin(CBaseEntity* pEntity)
 {
+	if (pEntity->IsDormant())
+		return pEntity->m_vecOrigin();
 	if (pEntity->m_iv_vecOrigin().m_LastNetworkedValue)
 		return *pEntity->m_iv_vecOrigin().m_LastNetworkedValue;
 	return pEntity->m_vecOrigin();
@@ -45,7 +47,7 @@ static inline float GetLatency()
 
 static inline int GetTargetServerChoke(CBaseEntity* pEntity)
 {
-	if (!pEntity || !pEntity->IsPlayer() || !I::ClientState)
+	if (!pEntity || !pEntity->IsPlayer() || pEntity->IsDormant() || !I::ClientState)
 		return 0;
 
 	const int iServerTick = I::ClientState->m_ClockDriftMgr.m_nServerTick;
@@ -53,7 +55,11 @@ static inline int GetTargetServerChoke(CBaseEntity* pEntity)
 	if (iServerTick <= 0 || flSimTime <= 0.f)
 		return 0;
 
-	return std::clamp(iServerTick - TIME_TO_TICKS(flSimTime), 0, 24);
+	const int iDiff = iServerTick - TIME_TO_TICKS(flSimTime);
+	if (iDiff <= 0 || iDiff > 24)
+		return 0;
+
+	return iDiff;
 }
 
 static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)

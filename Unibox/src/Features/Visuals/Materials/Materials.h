@@ -44,6 +44,8 @@ public:
 	void Remove(IMaterial* pMaterial);
 	void StoreStruct(const std::string& sName, const std::string& sVMT, bool bLocked = false);
 
+	bool IsCustomMaterial(IMaterial* pMaterial);
+
 	void SetColor(Material_t* pMaterial, Color_t tColor);
 
 	Material_t* GetMaterial(uint32_t uHash);
@@ -54,6 +56,7 @@ public:
 
 	std::unordered_map<uint32_t, Material_t> m_mMaterials = {};
 	std::unordered_mapset<IMaterial*> m_mMatList = {};
+	std::unordered_mapset<uint32_t> m_mMatNames = {};
 
 	bool m_bLoaded = false;
 	std::atomic_bool m_bLoading = false;

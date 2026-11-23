@@ -9,8 +9,8 @@ MAKE_HOOK(CMaterial_Uncache, S::CMaterial_Uncache(), void,
 {
 	DEBUG_RETURN(CMaterial_Uncache, rcx, bPreserveVars);
 
-	if (F::Materials.m_mMatList.contains(rcx))
-		bPreserveVars = true;
+	if (F::Materials.IsCustomMaterial(rcx))
+		return;
 
 	__try { CALL_ORIGINAL(rcx, bPreserveVars); }
 	__except (EXCEPTION_EXECUTE_HANDLER) {}

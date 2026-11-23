@@ -17,7 +17,7 @@ private:
 		Vec3 m_vOrigin;
 		float m_flYaw;
 		int m_iClass;
-		bool m_bTeammate;
+		int m_iTeam;
 	};
 
 	struct Snapshot_t

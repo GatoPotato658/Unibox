@@ -875,6 +875,8 @@ NAMESPACE_BEGIN(Vars)
 			VA_LIST("Dot", "Arrow", "Class icon"),
 			Dot, Arrow, ClassIcon);
 		CVar(IconSize, "Icon size", 12.f, VISUAL | SLIDER_CLAMP | SLIDER_PRECISION, 6.f, 24.f, 1.f, "%gpx");
+		CVar(TeamRed, "RED team color", Color_t(184, 56, 59, 255), VISUAL | DEBUGVAR);
+		CVar(TeamBlu, "BLU team color", Color_t(88, 133, 162, 255), VISUAL | DEBUGVAR);
 	NAMESPACE_END(Radar);
 
 	NAMESPACE_BEGIN(Misc)

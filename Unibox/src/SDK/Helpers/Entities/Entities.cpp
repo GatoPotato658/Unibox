@@ -114,13 +114,16 @@ bool CEntities::UpdatePlayerDetails(int n, CTFPlayer* pPlayer, int iLag)
 			m_aOldAngles[n] = m_aEyeAngles[n], m_aEyeAngles[n] = pPlayer->GetEyeAngles();
 		}
 	}
-	if (!bDormant)
+	if (!bDormant && pPlayer->IsAlive() && !pPlayer->IsAGhost())
 		m_aChokes[n] = std::max(0, I::GlobalVars->tickcount - m_aSetTicks[n]);
 	else
 	{
 		m_aOrigins[n].clear();
-		if (s_mDormancy.contains(n))
+		m_aAvgVelocities[n] = {};
+		if (bDormant && s_mDormancy.contains(n))
 			m_aChokes[n] = std::max(0, TIME_TO_TICKS(I::GlobalVars->curtime - s_mDormancy[n].m_flLastUpdate));
+		else
+			m_aChokes[n] = 0;
 	}
 	return !bDormant;
 }

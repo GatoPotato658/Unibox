@@ -70,7 +70,14 @@ IMaterial* CMaterials::Create(char const* szName, KeyValues* pKV)
 	if (!pMaterial)
 		return nullptr;
 
-	m_mMatList[pMaterial];
+	m_mMatList[pMaterial] = true;
+	auto pRealTime = *reinterpret_cast<IMaterial**>(reinterpret_cast<uintptr_t>(pMaterial) + 8);
+	if (pRealTime)
+		m_mMatList[pRealTime] = true;
+
+	if (szName && *szName)
+		m_mMatNames[FNV1A::Hash32(szName)] = true;
+
 	return pMaterial;
 }
 
@@ -189,6 +196,18 @@ void CMaterials::Remove(IMaterial* pMaterial)
 
 	if (m_mMatList.contains(pMaterial))
 		m_mMatList.erase(pMaterial);
+
+	auto pRealTime = *reinterpret_cast<IMaterial**>(reinterpret_cast<uintptr_t>(pMaterial) + 8);
+	if (pRealTime && m_mMatList.contains(pRealTime))
+		m_mMatList.erase(pRealTime);
+
+	const char* szName = pMaterial->GetName();
+	if (szName && *szName)
+	{
+		auto uHash = FNV1A::Hash32(szName);
+		if (m_mMatNames.contains(uHash))
+			m_mMatNames.erase(uHash);
+	}
 
 	pMaterial->DecrementReferenceCount();
 	pMaterial->DeleteIfUnreferenced();
@@ -473,6 +492,30 @@ void CMaterials::UnloadMaterials()
 		Remove(tMaterial.m_pMaterial);
 	m_mMaterials.clear();
 	m_mMatList.clear();
+	m_mMatNames.clear();
+}
+
+bool CMaterials::IsCustomMaterial(IMaterial* pMaterial)
+{
+	if (!pMaterial)
+		return false;
+
+	if (m_mMatList.contains(pMaterial))
+		return true;
+
+	auto pQueue = reinterpret_cast<IMaterial*>(reinterpret_cast<uintptr_t>(pMaterial) + 0xD0);
+	if (m_mMatList.contains(pQueue))
+		return true;
+
+	const char* szName = pMaterial->GetName();
+	if (szName && *szName)
+	{
+		uint32_t uHash = FNV1A::Hash32(szName);
+		if (m_mMaterials.contains(uHash) || m_mMatNames.contains(uHash) || uHash == FNV1A::Hash32Const("dev/glow_color"))
+			return true;
+	}
+
+	return false;
 }
 
 void CMaterials::RefreshMaterials()

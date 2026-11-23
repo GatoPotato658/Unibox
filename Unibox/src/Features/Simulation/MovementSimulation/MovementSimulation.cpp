@@ -1571,7 +1571,7 @@ void CMovementSimulation::SetupMoveData(MoveStorage& tMoveStorage, const Vec3* p
 	tMoveData.m_vecAbsOrigin = pvOrigin ? *pvOrigin : pPlayer->m_vecOrigin();
 	tMoveData.m_flMaxSpeed = tMoveData.m_flClientMaxSpeed = SDK::MaxSpeed(pPlayer);
 
-	tMoveStorage.m_bOnGround = pPlayer->IsOnGround() && !pPlayer->IsDormant();
+	tMoveStorage.m_bOnGround = pPlayer->IsOnGround();
 	tMoveStorage.m_bDucked = pPlayer->IsDucking();
 	tMoveStorage.m_nMask = pPlayer->SolidMask();
 	tMoveStorage.m_iTeam = pPlayer->m_iTeamNum();
@@ -1590,13 +1590,19 @@ void CMovementSimulation::SetupMoveData(MoveStorage& tMoveStorage, const Vec3* p
 		tMoveData.m_vecVelocity = pPlayer->m_vecVelocity();
 		tMoveData.m_vecViewAngles = G::CurrentUserCmd ? G::CurrentUserCmd->viewangles : pPlayer->GetEyeAngles();
 	}
+	else if (pPlayer->IsDormant())
+	{
+		tMoveData.m_vecVelocity = {};
+		tMoveData.m_vecViewAngles = { 0.f, pPlayer->m_angEyeAngles().y, 0.f };
+	}
 	else
 	{
 		const bool bRecord = !vRecords.empty() && vRecords.front().m_flSimTime == pPlayer->m_flSimulationTime() && vRecords.size() > 1 && vRecords.front().m_iTicks <= MaxRecordGap;
+		const auto pOrigins = H::Entities.GetOrigins(iIndex);
 		if (bRecord)
 			tMoveData.m_vecVelocity = EstimateVelocity(vRecords, tMoveStorage.m_bOnGround, tMoveStorage.m_bParachute, tPhysics);
-		else if (auto pAvgVelocity = H::Entities.GetAvgVelocity(iIndex))
-			tMoveData.m_vecVelocity = *pAvgVelocity;
+		else if (pOrigins && pOrigins->size() >= 2 && H::Entities.GetAvgVelocity(iIndex))
+			tMoveData.m_vecVelocity = *H::Entities.GetAvgVelocity(iIndex);
 		else
 			tMoveData.m_vecVelocity = pPlayer->m_vecVelocity();
 		tMoveData.m_vecViewAngles = { 0.f, pPlayer->m_angEyeAngles().y, 0.f };
