@@ -1058,45 +1058,34 @@ void CESP::CacheBones(CTFPlayer* pPlayer, const Vec3& vOffset, ESPDrawEntity_t& 
 	if (!pPlayer->SetupBones(s_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, I::GlobalVars->curtime))
 		return;
 
-	const int iHead = pPlayer->GetBaseToHitbox(HITBOX_HEAD);
-	const int iSpine2 = pPlayer->GetBaseToHitbox(HITBOX_SPINE2);
-	const int iPelvis = pPlayer->GetBaseToHitbox(HITBOX_PELVIS);
-	const int iLeftUpperarm = pPlayer->GetBaseToHitbox(HITBOX_LEFT_UPPERARM);
-	const int iLeftForearm = pPlayer->GetBaseToHitbox(HITBOX_LEFT_FOREARM);
-	const int iLeftHand = pPlayer->GetBaseToHitbox(HITBOX_LEFT_HAND);
-	const int iRightUpperarm = pPlayer->GetBaseToHitbox(HITBOX_RIGHT_UPPERARM);
-	const int iRightForearm = pPlayer->GetBaseToHitbox(HITBOX_RIGHT_FOREARM);
-	const int iRightHand = pPlayer->GetBaseToHitbox(HITBOX_RIGHT_HAND);
-	const int iLeftThigh = pPlayer->GetBaseToHitbox(HITBOX_LEFT_THIGH);
-	const int iLeftCalf = pPlayer->GetBaseToHitbox(HITBOX_LEFT_CALF);
-	const int iLeftFoot = pPlayer->GetBaseToHitbox(HITBOX_LEFT_FOOT);
-	const int iRightThigh = pPlayer->GetBaseToHitbox(HITBOX_RIGHT_THIGH);
-	const int iRightCalf = pPlayer->GetBaseToHitbox(HITBOX_RIGHT_CALF);
-	const int iRightFoot = pPlayer->GetBaseToHitbox(HITBOX_RIGHT_FOOT);
-
-	CacheBoneChain(pPlayer, s_aBones, { iHead, iSpine2, iPelvis }, vOffset, tOut);
-	CacheBoneChain(pPlayer, s_aBones, { iSpine2, iLeftUpperarm, iLeftForearm, iLeftHand }, vOffset, tOut);
-	CacheBoneChain(pPlayer, s_aBones, { iSpine2, iRightUpperarm, iRightForearm, iRightHand }, vOffset, tOut);
-	CacheBoneChain(pPlayer, s_aBones, { iPelvis, iLeftThigh, iLeftCalf, iLeftFoot }, vOffset, tOut);
-	CacheBoneChain(pPlayer, s_aBones, { iPelvis, iRightThigh, iRightCalf, iRightFoot }, vOffset, tOut);
-}
-
-void CESP::CacheBoneChain(CTFPlayer* pPlayer, matrix3x4* aBones, std::initializer_list<int> vBones, const Vec3& vOffset, ESPDrawEntity_t& tOut)
-{
-	auto it = vBones.begin();
-	if (it == vBones.end())
-		return;
-
-	int iPrevious = *it++;
-	for (; it != vBones.end(); ++it)
+	static constexpr int aHitboxes[] = {
+		HITBOX_HEAD, HITBOX_SPINE2, HITBOX_PELVIS,
+		HITBOX_LEFT_UPPERARM, HITBOX_LEFT_FOREARM, HITBOX_LEFT_HAND,
+		HITBOX_RIGHT_UPPERARM, HITBOX_RIGHT_FOREARM, HITBOX_RIGHT_HAND,
+		HITBOX_LEFT_THIGH, HITBOX_LEFT_CALF, HITBOX_LEFT_FOOT,
+		HITBOX_RIGHT_THIGH, HITBOX_RIGHT_CALF, HITBOX_RIGHT_FOOT
+	};
+	static constexpr int aLinks[][2] = {
+		{ 1, 0 }, { 2, 1 },
+		{ 3, 1 }, { 4, 3 }, { 5, 4 },
+		{ 6, 1 }, { 7, 6 }, { 8, 7 },
+		{ 9, 2 }, { 10, 9 }, { 11, 10 },
+		{ 12, 2 }, { 13, 12 }, { 14, 13 }
+	};
+	Vec3 aScreen[std::size(aHitboxes)] = {};
+	bool aVisible[std::size(aHitboxes)] = {};
+	for (size_t i = 0; i < std::size(aHitboxes); i++)
 	{
-		const Vec3 vBone1 = pPlayer->GetHitboxCenter(aBones, *it) + vOffset;
-		const Vec3 vBone2 = pPlayer->GetHitboxCenter(aBones, iPrevious) + vOffset;
+		const int iHitbox = pPlayer->GetBaseToHitbox(aHitboxes[i]);
+		aVisible[i] = SDK::W2S(pPlayer->GetHitboxCenter(s_aBones, iHitbox) + vOffset, aScreen[i]);
+	}
 
-		Vec3 vScreen1, vScreen2;
-		if (SDK::W2S(vBone1, vScreen1) && SDK::W2S(vBone2, vScreen2))
-			tOut.m_vBones.emplace_back(Vec2(vScreen1.x, vScreen1.y), Vec2(vScreen2.x, vScreen2.y));
-		iPrevious = *it;
+	tOut.m_vBones.reserve(std::size(aLinks));
+	for (const auto& aLink : aLinks)
+	{
+		const int iFirst = aLink[0], iSecond = aLink[1];
+		if (aVisible[iFirst] && aVisible[iSecond])
+			tOut.m_vBones.emplace_back(Vec2(aScreen[iFirst].x, aScreen[iFirst].y), Vec2(aScreen[iSecond].x, aScreen[iSecond].y));
 	}
 }
 
@@ -1407,7 +1396,7 @@ static void DrawTextPill(ImDrawList* pDrawList, float x, float y, Color_t tColor
 
 	const ImVec2 vSize = ImGui::CalcTextSize(sText);
 	const float flPadX = H::Draw.IndicatorScale(4.f), flPadY = H::Draw.IndicatorScale(1.f);
-	ImVec2 vPos = GetIndicatorTextPos(x, y, sText, eAlign);
+	ImVec2 vPos = GetIndicatorTextPos(x, y, sText, eAlign, &vSize);
 	switch (eAlign)
 	{
 	case ALIGN_TOPLEFT:

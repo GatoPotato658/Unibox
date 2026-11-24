@@ -1,7 +1,6 @@
 #pragma once
 #include "../../../SDK/SDK.h"
 #include "../../ImGui/IndicatorCache.h"
-#include <initializer_list>
 
 struct ImDrawList;
 void InvalidateESPIconTextures();
@@ -127,7 +126,6 @@ private:
 
 	bool GetDrawBounds(CBaseEntity* pEntity, bool bSmooth, double dNow, Vec3& vOffset, float& x, float& y, float& w, float& h);
 	void CacheBones(CTFPlayer* pPlayer, const Vec3& vOffset, ESPDrawEntity_t& tOut);
-	void CacheBoneChain(CTFPlayer* pPlayer, matrix3x4* aBones, std::initializer_list<int> vBones, const Vec3& vOffset, ESPDrawEntity_t& tOut);
 
 	ESPAnim_t& GetAnim(const void* pKey);
 	void CleanupAnims();

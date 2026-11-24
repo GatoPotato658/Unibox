@@ -139,9 +139,9 @@ static inline ImU32 ColorToU32(const Color_t& tColor)
 	return IM_COL32(tColor.r, tColor.g, tColor.b, tColor.a);
 }
 
-static inline ImVec2 GetIndicatorTextPos(float x, float y, const char* sText, EAlign eAlign)
+static inline ImVec2 GetIndicatorTextPos(float x, float y, const char* sText, EAlign eAlign, const ImVec2* pTextSize = nullptr)
 {
-	ImVec2 vTextSize = ImGui::CalcTextSize(sText);
+	ImVec2 vTextSize = pTextSize ? *pTextSize : ImGui::CalcTextSize(sText);
 	switch (eAlign)
 	{
 	case ALIGN_TOP:

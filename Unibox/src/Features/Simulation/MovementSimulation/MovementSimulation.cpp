@@ -1611,7 +1611,7 @@ void CMovementSimulation::SetupMoveData(MoveStorage& tMoveStorage, const Vec3* p
 		tMoveData.m_vecVelocity.z = 0.f;
 	tMoveStorage.m_flViewYaw = tMoveData.m_vecViewAngles.y;
 
-	tMoveStorage.m_bCharging = pPlayer->InCond(TF_COND_SHIELD_CHARGE) && tMoveStorage.m_iWaterLevel < 2;
+	tMoveStorage.m_bCharging = (bLocal || !pPlayer->IsDormant()) && pPlayer->InCond(TF_COND_SHIELD_CHARGE) && tMoveStorage.m_iWaterLevel < 2;
 	if (tMoveStorage.m_bCharging)
 	{
 		static auto tf_demoman_charge_drain_time = H::ConVars.FindVar("tf_demoman_charge_drain_time");
@@ -1811,6 +1811,8 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 	auto pPlayer = pEntity->As<CTFPlayer>();
 	tMoveStorage.m_pPlayer = pPlayer;
 	tMoveStorage.m_bLocal = pPlayer->entindex() == I::EngineClient->GetLocalPlayer();
+	if (!tMoveStorage.m_bLocal && pPlayer->IsDormant())
+		bStrafe = false;
 
 	const int iEntIndex = pPlayer->entindex();
 	const float flSimTime = pPlayer->m_flSimulationTime();
