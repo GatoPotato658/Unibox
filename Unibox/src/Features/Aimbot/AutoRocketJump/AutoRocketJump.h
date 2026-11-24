@@ -9,6 +9,8 @@ private:
 
 	Vec3 m_vAngles = {};
 	bool m_bFull = false;
+	bool m_bReloadingShot = false;
+	CBaseHandle m_hReloadWeapon = {};
 	int m_iFrame = -1;
 	int m_iDelay = 0;
 	int m_iChoke = 0;

@@ -118,6 +118,7 @@ void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 	if (!ShouldRun(pLocal, pWeapon, pCmd))
 	{
 		m_iFrame = -1;
+		m_bRunning = false;
 		return;
 	}
 
@@ -141,7 +142,10 @@ void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 		}
 	}
 
-	if (bValidWeapon && m_iFrame == -1 && (bCurrGrounded && bBeggars ? G::Attacking == 1 : G::CanPrimaryAttack || G::Reloading)
+	const float flCurTime = TICKS_TO_TIME(pLocal->m_nTickBase());
+	const bool bReloadingShot = !bBeggars && G::Reloading && pLocal->m_flNextAttack() > flCurTime
+		&& pWeapon->m_flReloadPriorNextFire() <= flCurTime + TICK_INTERVAL;
+	if (bValidWeapon && m_iFrame == -1 && (bCurrGrounded && bBeggars ? G::Attacking == 1 : G::CanPrimaryAttack || (bBeggars ? G::Reloading : bReloadingShot))
 		&& SetAngles(pLocal, pWeapon, pCmd))
 	{
 		bool bWillHit = false;
@@ -229,6 +233,8 @@ void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 			if (m_iFrame != -1)
 			{
 				m_bFull = Vars::Misc::Movement::AutoRocketJump.Value;
+				m_bReloadingShot = bReloadingShot;
+				m_hReloadWeapon = pWeapon->GetRefEHandle();
 				m_iChoke = bCurrGrounded ? Vars::Misc::Movement::AutoRocketJumpChokeGrounded.Value : Vars::Misc::Movement::AutoRocketJumpChokeAir.Value;
 
 			}
@@ -238,9 +244,16 @@ void CAutoRocketJump::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* p
 	if (m_iFrame != -1)
 	{
 		m_iFrame++;
+		if (m_iFrame == 2 && m_bReloadingShot
+			&& (pCmd->weaponselect || pWeapon->GetRefEHandle() != m_hReloadWeapon || !G::CanPrimaryAttack || !pWeapon->HasPrimaryAmmoForShot()))
+		{
+			m_iFrame = -1;
+			m_bRunning = false;
+			return;
+		}
 		pCmd->buttons &= ~IN_JUMP;
 
-		if (m_iFrame == 1)
+		if (m_iFrame == 1 || m_iFrame == 2 && m_bReloadingShot)
 		{
 			if (!bBeggars)
 				pCmd->buttons |= IN_ATTACK, pCmd->buttons &= ~IN_ATTACK2;
