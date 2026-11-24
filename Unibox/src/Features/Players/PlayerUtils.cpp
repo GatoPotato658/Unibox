@@ -20,7 +20,7 @@ static bool IsPlaceholderName(const std::string& sName)
 uint32_t CPlayerlistUtils::GetAccountID(int iIndex)
 {
 	auto pResource = H::Entities.GetResource();
-	if (pResource && pResource->m_bValid(iIndex) && !pResource->IsFakePlayer(iIndex))
+	if (pResource && pResource->IsValid(iIndex) && !pResource->IsFakePlayer(iIndex))
 		return pResource->m_iAccountID(iIndex);
 	return 0;
 }

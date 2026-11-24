@@ -16,6 +16,9 @@ static void* s_pTeamStatus;
 
 static inline void SetScoreboardColor(int iIndex, Color_t& tColor)
 {
+	if (iIndex <= 0 || iIndex > MAX_PLAYERS || iIndex > I::EngineClient->GetMaxClients())
+		return;
+
 	if (iIndex == I::EngineClient->GetLocalPlayer())
 		tColor = Vars::Colors::Local.Value;
 	else if (H::Entities.IsFriend(iIndex))
@@ -44,16 +47,16 @@ MAKE_HOOK(CTFPlayerPanel_GetTeam, S::CTFPlayerPanel_GetTeam(), int,
 
 	if (auto pResource = H::Entities.GetResource(); dwRetAddr == dwDesired && pResource)
 	{
-		s_iPlayerIndex = *reinterpret_cast<int*>(uintptr_t(rcx) + 580);
+		s_iPlayerIndex = *reinterpret_cast<int*>(uintptr_t(rcx) + 612);
 
 		int iLocalTeam = pResource->m_iTeam(I::EngineClient->GetLocalPlayer());
 
 		if (Vars::Visuals::UI::RevealScoreboard.Value && !SDK::CleanScreenshot())
 			iReturn = iLocalTeam;
 		
-		if (auto pHealthBar = *reinterpret_cast<void**>(uintptr_t(rcx) + 688);
+		if (auto pHealthBar = *reinterpret_cast<void**>(uintptr_t(rcx) + 720);
 			pHealthBar && U::Memory.CallVirtual<34, bool>(pHealthBar) != (iReturn == iLocalTeam))
-			*reinterpret_cast<int*>(uintptr_t(rcx) + 624) = -1;
+			*reinterpret_cast<int*>(uintptr_t(rcx) + 656) = -1;
 	}
 
 	return iReturn;

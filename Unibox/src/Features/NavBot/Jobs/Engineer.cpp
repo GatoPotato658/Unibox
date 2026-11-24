@@ -337,7 +337,12 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 		if (pBuilding->GetAbsOrigin().DistTo(pLocal->GetAbsOrigin()) <= kSmackApproachDist)
 			SDK::WalkTo(pCmd, pLocal, pBuilding->GetCenter());
 		else
-			return F::NavEngine.NavTo(pBuilding->GetAbsOrigin(), PriorityListEnum::Engineer);
+		{
+			Vector vApproach = pLocal->GetAbsOrigin() - pBuilding->GetAbsOrigin();
+			vApproach.z = 0.f;
+			vApproach.Normalize();
+			return F::NavEngine.NavTo(pBuilding->GetAbsOrigin() + vApproach * kWrenchReach, PriorityListEnum::Engineer);
+		}
 	}
 
 	return true;
@@ -401,7 +406,7 @@ int CNavBotEngineer::GetHelpNeed(CBaseObject* pBuilding)
 
 bool CNavBotEngineer::NeedsMetal(int iNeed) const
 {
-	return iNeed & (HelpNeed_Construct | HelpNeed_Repair | HelpNeed_Upgrade | HelpNeed_Ammo);
+	return iNeed & (HelpNeed_Repair | HelpNeed_Upgrade | HelpNeed_Ammo);
 }
 
 void CNavBotEngineer::InitializeHelpSnapshot(CBaseObject* pBuilding)
@@ -592,7 +597,7 @@ void CNavBotEngineer::RefreshHelpTarget(CTFPlayer* pLocal, ClosestEnemy_t& tClos
 	m_flDistToHelpTarget = pBest->GetAbsOrigin().DistTo(vLocalOrigin);
 	m_flHelpAcquireTime = m_flHelpProgressTime = flCurTime;
 	m_bHelpReached = false;
-	m_bHelpResupplying = NeedsMetal(iBestNeed) && !pLocal->m_iMetalCount();
+	m_bHelpResupplying = NeedsMetal(iBestNeed) && !(iBestNeed & (HelpNeed_Construct | HelpNeed_Sapper)) && !pLocal->m_iMetalCount();
 	m_flHelpSupplyRetryTime = flCurTime + kHelpSupplyRetryTime;
 	InitializeHelpSnapshot(pBest);
 }
@@ -632,16 +637,20 @@ bool CNavBotEngineer::HelpFriendlyBuilding(CUserCmd* pCmd, CTFPlayer* pLocal)
 		return false;
 	}
 
-	const bool bCanBuild = iNeed & (HelpNeed_Construct | HelpNeed_Repair | HelpNeed_Ammo);
-	const bool bCanUpgrade = (iNeed & HelpNeed_Upgrade) && pLocal->m_iMetalCount() >= std::max(1, pBuilding->m_iUpgradeMetalRequired());
-	if (NeedsMetal(iNeed) && !(iNeed & HelpNeed_Sapper) && !bCanBuild && !bCanUpgrade)
-		m_bHelpResupplying = true;
+	const bool bNeedsSupply = NeedsMetal(iNeed) && !(iNeed & (HelpNeed_Construct | HelpNeed_Sapper)) && !pLocal->m_iMetalCount();
+	if (m_bHelpResupplying && !bNeedsSupply)
+	{
+		F::NavEngine.CancelPathIf(PriorityListEnum::GetAmmo);
+		m_bHelpReached = false;
+		m_flHelpAcquireTime = m_flHelpProgressTime = flCurTime;
+	}
+	m_bHelpResupplying = bNeedsSupply;
 
 	if (m_bHelpReached && UpdateHelpProgress(pBuilding))
 		m_flHelpProgressTime = flCurTime;
 	else if (m_bHelpReached && flCurTime - m_flHelpProgressTime > kHelpProgressTimeout)
 	{
-		if (pLocal->m_iMetalCount())
+		if (!bNeedsSupply)
 		{
 			MarkHelpTargetFailed(m_iHelpTarget, kHelpStallMemory);
 			ReleaseHelp();
@@ -654,10 +663,10 @@ bool CNavBotEngineer::HelpFriendlyBuilding(CUserCmd* pCmd, CTFPlayer* pLocal)
 
 	if (m_bHelpResupplying)
 	{
+		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
 		m_flHelpSupplyRetryTime = flCurTime + kHelpSupplyRetryTime;
-		const bool bSupplyJob = F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
-		if (bSupplyJob || NeedsMetal(iNeed))
-			return true;
+		F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
+		return true;
 	}
 
 	if (!m_bHelpReached && flCurTime - m_flHelpAcquireTime > kHelpReachTimeout)
@@ -974,6 +983,19 @@ bool CNavBotEngineer::Run(CUserCmd* pCmd, CTFPlayer* pLocal, ClosestEnemy_t& tCl
 	{
 		m_eTaskStage = EngineerTaskStageEnum::None;
 		return false;
+	}
+
+	if (auto pGround = pLocal->m_hGroundEntity().Get(); pGround && pGround->IsBuilding())
+	{
+		Vector vAway = pLocal->GetAbsOrigin() - pGround->GetAbsOrigin();
+		vAway.z = 0.f;
+		if (vAway.Normalize() < 0.01f)
+			vAway = { 1.f, 0.f, 0.f };
+		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
+		F::NavEngine.CancelPathIf(PriorityListEnum::GetAmmo);
+		pCmd->buttons &= ~IN_JUMP;
+		SDK::WalkTo(pCmd, pLocal, pLocal->GetAbsOrigin() + vAway * 100.f);
+		return true;
 	}
 
 	const bool bHasGunslinger = G::SavedDefIndexes[SLOT_MELEE] == Engi_t_TheGunslinger;

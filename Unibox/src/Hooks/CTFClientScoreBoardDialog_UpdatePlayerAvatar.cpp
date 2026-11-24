@@ -23,6 +23,9 @@ static int s_iPlayerIndex;
 
 static inline void SetScoreboardColor(int iIndex, Color_t& tColor)
 {
+	if (iIndex <= 0 || iIndex > MAX_PLAYERS || iIndex > I::EngineClient->GetMaxClients())
+		return;
+
 	if (iIndex == I::EngineClient->GetLocalPlayer())
 		tColor = Vars::Colors::Local.Value;
 	else if (H::Entities.IsFriend(iIndex))
