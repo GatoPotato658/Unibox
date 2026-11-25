@@ -683,7 +683,7 @@ NAMESPACE_BEGIN(Vars)
 
 		NAMESPACE_BEGIN(Removals)
 			CVar(Interpolation, VA_LIST("Interpolation", "Remove interpolation"), false);
-			CVar(Lerp, VA_LIST("Lerp", "Remove lerp"), true);
+			CVar(Lerp, VA_LIST("Lerp", "Remove lerp"), false);
 			CVar(Disguises, VA_LIST("Disguises", "Remove disguises"), false, VISUAL);
 			CVar(Taunts, VA_LIST("Taunts", "Remove taunts"), false, VISUAL);
 			CVar(Scope, VA_LIST("Scope", "Remove scope"), false, VISUAL);

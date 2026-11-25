@@ -25,6 +25,13 @@ namespace
 	constexpr int PaletteRegister = 8;
 	constexpr int EffectCount = 39;
 	constexpr std::uint64_t InvalidGeneration = ~std::uint64_t(0);
+	constexpr D3DRENDERSTATETYPE MaterialStates[] =
+	{
+		D3DRS_ZENABLE, D3DRS_ZFUNC, D3DRS_ZWRITEENABLE, D3DRS_ALPHATESTENABLE, D3DRS_ALPHABLENDENABLE,
+		D3DRS_SEPARATEALPHABLENDENABLE, D3DRS_BLENDOP, D3DRS_SRCBLEND, D3DRS_DESTBLEND, D3DRS_FILLMODE,
+		D3DRS_FOGENABLE, D3DRS_LIGHTING, D3DRS_SRGBWRITEENABLE, D3DRS_COLORWRITEENABLE, D3DRS_DEPTHBIAS,
+		D3DRS_SLOPESCALEDEPTHBIAS
+	};
 
 	struct LegacyVertexBuffer
 	{
@@ -339,6 +346,30 @@ namespace
 		return !packet.groups.empty();
 	}
 
+	bool CreateMaterialStateBlock(IDirect3DDevice9* device, IDirect3DStateBlock9** state)
+	{
+		if (FAILED(device->BeginStateBlock()))
+			return false;
+
+		const float constants[PaletteRegister + HardwareBones * 3][4] = {};
+		bool success = true;
+		for (auto type : MaterialStates)
+		{
+			DWORD value = 0;
+			success = SUCCEEDED(device->GetRenderState(type, &value)) && success;
+			success = SUCCEEDED(device->SetRenderState(type, value)) && success;
+		}
+		success = SUCCEEDED(device->SetVertexShader(nullptr)) && success;
+		success = SUCCEEDED(device->SetPixelShader(nullptr)) && success;
+		success = SUCCEEDED(device->SetVertexDeclaration(nullptr)) && success;
+		success = SUCCEEDED(device->SetStreamSource(0, nullptr, 0, 0)) && success;
+		success = SUCCEEDED(device->SetStreamSourceFreq(0, 1)) && success;
+		success = SUCCEEDED(device->SetIndices(nullptr)) && success;
+		success = SUCCEEDED(device->SetVertexShaderConstantF(0, constants[0], PaletteRegister + HardwareBones * 3)) && success;
+		success = SUCCEEDED(device->SetPixelShaderConstantF(0, constants[0], 4)) && success;
+		return SUCCEEDED(device->EndStateBlock(state)) && success;
+	}
+
 	bool EnsureResources(IDirect3DDevice9* device)
 	{
 		if (s_Resources.device.Get() == device && s_Resources.state)
@@ -351,8 +382,10 @@ namespace
 		Resources resources;
 		resources.device = device;
 		if (FAILED(device->CreateVertexShader(reinterpret_cast<const DWORD*>(D3DMaterialShaders::Rigid), resources.rigid.GetAddressOf())) ||
-			FAILED(device->CreateVertexShader(reinterpret_cast<const DWORD*>(D3DMaterialShaders::Skinned), resources.skinned.GetAddressOf())) ||
-			FAILED(device->CreateStateBlock(D3DSBT_ALL, resources.state.GetAddressOf())))
+			FAILED(device->CreateVertexShader(reinterpret_cast<const DWORD*>(D3DMaterialShaders::Skinned), resources.skinned.GetAddressOf())))
+			return false;
+		if (!CreateMaterialStateBlock(device, resources.state.GetAddressOf()) &&
+			FAILED(device->CreateStateBlock(D3DSBT_ALL, resources.state.ReleaseAndGetAddressOf())))
 			return false;
 		for (int index = 0; index < 8; ++index)
 		{
@@ -430,7 +463,7 @@ namespace
 		}
 		D3DVIEWPORT9 viewport = {};
 		if (!device || device.Get() != s_Resources.device.Get() || FAILED(device->TestCooperativeLevel()) ||
-			FAILED(device->GetViewport(&viewport)) || FAILED(s_Resources.state->Capture()))
+			(packet.occluded && FAILED(device->GetViewport(&viewport))) || FAILED(s_Resources.state->Capture()))
 			return false;
 		struct RestoreState
 		{
@@ -494,27 +527,34 @@ namespace
 		{
 			const auto vertices = group.mesh->vertices;
 			matrix3x4 palette[HardwareBones];
-			for (auto& matrix : palette)
-				Identity(matrix);
-			if (!group.skinned)
-				std::memcpy(palette[0], packet.poses[0], sizeof(matrix3x4));
+			if (group.skinned)
+				for (auto& matrix : palette)
+					Identity(matrix);
 			const bool compressed = (group.format & VERTEX_FORMAT_COMPRESSED) != 0;
 			const float decode[4] = { 0.f, compressed ? 1.f / 32768.f : 1.f, compressed ? 1.f / 32768.f : 0.f, compressed ? 1.f : 0.f };
 			if (FAILED(device->SetVertexDeclaration(s_Resources.declarations[group.declaration].Get())) ||
 				FAILED(device->SetVertexShader(group.skinned ? s_Resources.skinned.Get() : s_Resources.rigid.Get())) ||
 				FAILED(device->SetVertexShaderConstantF(4, decode, 1)) ||
-				FAILED(device->SetVertexShaderConstantF(PaletteRegister, palette[0][0], HardwareBones * 3)) ||
 				FAILED(device->SetStreamSourceFreq(0, 1)) ||
 				FAILED(device->SetStreamSource(0, vertices->buffer, 0, vertices->stride)) ||
 				FAILED(device->SetIndices(group.mesh->indices->buffer)))
 				return false;
+			if (!group.skinned && FAILED(device->SetVertexShaderConstantF(PaletteRegister, packet.poses[0][0], 3)))
+				return false;
+			bool firstStrip = true;
 			for (const auto& strip : group.strips)
 			{
+				int first = firstStrip && group.skinned ? 0 : HardwareBones;
+				int last = firstStrip && group.skinned ? HardwareBones - 1 : -1;
 				for (const auto& change : strip.changes)
 				{
-					if (FAILED(device->SetVertexShaderConstantF(PaletteRegister + change.hardwareID * 3, packet.poses[change.newBoneID][0], 3)))
-						return false;
+					std::memcpy(palette[change.hardwareID], packet.poses[change.newBoneID], sizeof(matrix3x4));
+					first = std::min(first, change.hardwareID);
+					last = std::max(last, change.hardwareID);
 				}
+				if (first <= last && FAILED(device->SetVertexShaderConstantF(PaletteRegister + first * 3, palette[first][0], (last - first + 1) * 3)))
+					return false;
+				firstStrip = false;
 				if (FAILED(device->DrawIndexedPrimitive(strip.triangleStrip ? D3DPT_TRIANGLESTRIP : D3DPT_TRIANGLELIST,
 					0, 0, vertices->count, strip.start, strip.triangleStrip ? strip.count - 2 : strip.count / 3)))
 					return false;

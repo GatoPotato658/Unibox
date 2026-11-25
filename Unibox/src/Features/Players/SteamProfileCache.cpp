@@ -147,6 +147,8 @@ public:
 
 	void Run(void* pParameter) override
 	{
+		TRACK_HOOK;
+
 		if (pParameter)
 			(F::SteamProfileCache.*m_pHandler)(*static_cast<T*>(pParameter));
 	}

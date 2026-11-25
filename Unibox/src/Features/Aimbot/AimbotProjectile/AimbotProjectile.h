@@ -81,6 +81,7 @@ struct Point_t
 	uint8_t m_iFlightState = FlightCacheStateEnum::Untested;
 	int m_iCachedSimTime = -1;
 	int m_iHitTick = -1;
+	int m_iImpactTick = -1;
 	int m_iPopCount = 0;
 	Vec3 m_vImpactPos = {};
 	Vec3 m_vImpactNormal = {};

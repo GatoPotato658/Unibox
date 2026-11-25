@@ -46,6 +46,7 @@ static DWORD WINAPI FontDialogThread(LPVOID pOwner)
 		s_bFontDialogReady = true;
 	}
 	s_bFontDialogOpen = false;
+	HookActivity::Exit();
 	return 0;
 }
 
@@ -64,10 +65,14 @@ static void FontPicker()
 	if (FButton((sLabel + "##CustomFont").c_str(), bSet ? FButtonEnum::Left : FButtonEnum::None) && !bOpen)
 	{
 		s_bFontDialogOpen = true;
+		HookActivity::Enter();
 		if (const HANDLE hThread = CreateThread(nullptr, 0, FontDialogThread, GetMainViewport()->PlatformHandleRaw, 0, nullptr))
 			CloseHandle(hThread);
 		else
+		{
 			s_bFontDialogOpen = false;
+			HookActivity::Exit();
+		}
 	}
 	PopTransparent();
 	if (bSet && FButton("Reset font", FButtonEnum::Right))

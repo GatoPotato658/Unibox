@@ -7,6 +7,7 @@ MAKE_HOOK(CClientState_GetClientInterpAmount, S::CClientState_GetClientInterpAmo
 {
 	DEBUG_RETURN(CClientState_GetClientInterpAmount, rcx);
 
-	G::Lerp = CALL_ORIGINAL(rcx);
-	return 0.f;
+	const float flLerp = CALL_ORIGINAL(rcx);
+	G::Lerp = flLerp;
+	return flLerp;
 }

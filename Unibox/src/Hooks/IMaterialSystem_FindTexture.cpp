@@ -1,14 +1,20 @@
 #ifndef TEXTMODE
 #include "../SDK/SDK.h"
 
+static ITexture* CallFindTextureOriginal(void* pOriginal, void* rcx, char const* pTextureName, const char* pTextureGroupName, bool complain, int nAdditionalCreationFlags)
+{
+	ITexture* pReturn;
+	__try { pReturn = reinterpret_cast<ITexture*(__fastcall*)(void*, char const*, const char*, bool, int)>(pOriginal)(rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags); }
+	__except (EXCEPTION_EXECUTE_HANDLER) { pReturn = nullptr; }
+	return pReturn;
+}
+
 MAKE_HOOK(IMaterialSystem_FindTexture, U::Memory.GetVirtual(I::MaterialSystem, 79), ITexture*,
 	void* rcx, char const* pTextureName, const char* pTextureGroupName, bool complain, int nAdditionalCreationFlags)
 {
 	DEBUG_RETURN(IMaterialSystem_FindTexture, rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags);
 
-	ITexture* pReturn;
-	__try { pReturn = CALL_ORIGINAL(rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags); }
-	__except (EXCEPTION_EXECUTE_HANDLER) { pReturn = nullptr; }
+	ITexture* pReturn = CallFindTextureOriginal(Hook.m_pOriginal, rcx, pTextureName, pTextureGroupName, complain, nAdditionalCreationFlags);
 
 	auto uHash = FNV1A::Hash32(Vars::Visuals::World::WorldTexture.Value.c_str());
 	if (uHash == FNV1A::Hash32Const("Flat"))

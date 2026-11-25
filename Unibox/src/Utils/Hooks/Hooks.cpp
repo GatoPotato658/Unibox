@@ -73,7 +73,8 @@ bool CHooks::Initialize()
 		if (WndProc::hwWindow && WndProc::Original && GetWindowLongPtr(WndProc::hwWindow, GWLP_WNDPROC) == reinterpret_cast<LONG_PTR>(WndProc::Func))
 			WndProc::Unload();
 #endif
-		Sleep(250);
+		Sleep(50);
+		HookActivity::Wait();
 		MH_Uninitialize();
 		U::Core.AppendFailText("Hook initialization failed!");
 		return false;
@@ -97,7 +98,8 @@ bool CHooks::Unload()
 		m_bFailed = m_bFailed || GetWindowLongPtr(hWindow, GWLP_WNDPROC) == reinterpret_cast<LONG_PTR>(WndProc::Func);
 	}
 #endif
-	Sleep(250);
+	Sleep(50);
+	HookActivity::Wait();
 	m_bFailed = MH_Uninitialize() != MH_OK || m_bFailed;
 	m_bInitialized = false;
 	if (m_bFailed)

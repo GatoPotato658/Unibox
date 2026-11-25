@@ -3,6 +3,8 @@
 MAKE_HOOK(CEngineClient_GetScreenAspectRatio, U::Memory.GetVirtual(I::EngineClient, 95), float,
 	void* rcx)
 {
+	TRACK_HOOK;
+
 	if (Vars::Visuals::UI::AspectRatio.Value && !SDK::CleanScreenshot())
 		return Vars::Visuals::UI::AspectRatio.Value;
 

@@ -8,7 +8,7 @@ MAKE_HOOK(GetClientInterpAmount, S::GetClientInterpAmount(), float)
 {
 	DEBUG_RETURN(GetClientInterpAmount);
 
-	if (!Vars::Visuals::Removals::Lerp.Value && !Vars::Visuals::Removals::Interpolation.Value)
+	if (G::Unload || !Vars::Visuals::Removals::Lerp.Value && !Vars::Visuals::Removals::Interpolation.Value)
 		return CALL_ORIGINAL();
 
 	const auto dwRetAddr = uintptr_t(_ReturnAddress());

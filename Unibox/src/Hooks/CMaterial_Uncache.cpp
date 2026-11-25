@@ -4,6 +4,12 @@
 
 MAKE_SIGNATURE(CMaterial_Uncache, "materialsystem.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 81 EC ? ? ? ? 48 8B F9", 0x0);
 
+static void CallUncacheOriginal(void* pOriginal, IMaterial* rcx, bool bPreserveVars)
+{
+	__try { reinterpret_cast<void(__fastcall*)(IMaterial*, bool)>(pOriginal)(rcx, bPreserveVars); }
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
 MAKE_HOOK(CMaterial_Uncache, S::CMaterial_Uncache(), void,
 	IMaterial* rcx, bool bPreserveVars)
 {
@@ -12,6 +18,5 @@ MAKE_HOOK(CMaterial_Uncache, S::CMaterial_Uncache(), void,
 	if (F::Materials.IsCustomMaterial(rcx))
 		return;
 
-	__try { CALL_ORIGINAL(rcx, bPreserveVars); }
-	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	CallUncacheOriginal(Hook.m_pOriginal, rcx, bPreserveVars);
 }

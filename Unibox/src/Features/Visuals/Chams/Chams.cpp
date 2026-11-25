@@ -52,7 +52,7 @@ void CChams::End()
 	I::ModelRender->ForcedMaterialOverride(m_pOriginalMaterial, m_iOriginalOverride);
 }
 
-void CChams::DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderContext* pRenderContext, int iModel, bool bTwoModel)
+void CChams::DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderContext* pRenderContext, int iModel, bool bSame, int iStencilReference)
 {
 	if (!pEntity || !pEntity->GetModel())
 		return;
@@ -60,14 +60,10 @@ void CChams::DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderCo
 	if (!m_iFlags && iModel == ModelEnum::Visible)
 		m_mEntities[pEntity->entindex()];
 
-	bool bOccluded = !tChams.Occluded.empty();
-	bool bSame = tChams.Visible == tChams.Occluded
-		&& std::ranges::none_of(tChams.Visible, [](const auto& tLayer) { return tLayer.second.iEffect != 0; });
-	bTwoModel &= bOccluded && !bSame;
-
-	if (iModel == ModelEnum::Visible && !bTwoModel && bSame)
+	const bool bTwoModel = iStencilReference != 0;
+	if (iModel == ModelEnum::Visible && bSame)
 		return;
-	if (iModel == ModelEnum::Occluded && !bTwoModel && !bOccluded)
+	if (iModel == ModelEnum::Occluded && tChams.Occluded.empty())
 		return;
 
 	Begin();
@@ -82,9 +78,24 @@ void CChams::DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderCo
 			pRenderContext->SetStencilPassOperation(STENCILOPERATION_REPLACE);
 			pRenderContext->SetStencilFailOperation(STENCILOPERATION_KEEP);
 			pRenderContext->SetStencilZFailOperation(STENCILOPERATION_KEEP);
-			pRenderContext->SetStencilReferenceValue(1);
+			pRenderContext->SetStencilReferenceValue(iStencilReference);
 			pRenderContext->SetStencilWriteMask(0xFF);
 			pRenderContext->SetStencilTestMask(0x0);
+
+			if (auto pMask = F::Materials.GetMaterial(FNV1A::Hash32Const("None")); pMask && pMask->m_pMaterial)
+			{
+				pRenderContext->OverrideColorWriteEnable(true, false);
+				pRenderContext->OverrideAlphaWriteEnable(true, false);
+				I::RenderView->SetBlend(1.f);
+				I::ModelRender->ForcedMaterialOverride(pMask->m_pMaterial);
+				m_tCurrentMaterial = {};
+				m_bOccludedMaterial = false;
+				m_bRendering = true;
+				pEntity->DrawModel(STUDIO_RENDER);
+				m_bRendering = false;
+				pRenderContext->OverrideColorWriteEnable(false, false);
+				pRenderContext->OverrideAlphaWriteEnable(false, false);
+			}
 		}
 
 		auto& vMaterials = tChams.GetVisible();
@@ -131,11 +142,11 @@ void CChams::DrawModel(CBaseEntity* pEntity, const Chams_t& tChams, IMatRenderCo
 		if (bTwoModel)
 		{
 			pRenderContext->SetStencilEnable(true);
-			pRenderContext->SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_EQUAL);
+			pRenderContext->SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_NOTEQUAL);
 			pRenderContext->SetStencilPassOperation(STENCILOPERATION_KEEP);
 			pRenderContext->SetStencilFailOperation(STENCILOPERATION_KEEP);
 			pRenderContext->SetStencilZFailOperation(STENCILOPERATION_KEEP);
-			pRenderContext->SetStencilReferenceValue(0);
+			pRenderContext->SetStencilReferenceValue(iStencilReference);
 			pRenderContext->SetStencilWriteMask(0x0);
 			pRenderContext->SetStencilTestMask(0xFF);
 		}
@@ -235,16 +246,31 @@ void CChams::RenderMain()
 	if (m_vEntities.empty())
 		return;
 
-	pRenderContext->ClearBuffers(false, false, true);
-
+	int iLastStencilReference = 0;
+	const int iStencilMax = (1 << std::clamp(I::MaterialSystem->StencilBufferBits(), 1, 8)) - 1;
 	for (auto& tInfo : m_vEntities)
 	{
 		m_flCurrentDistance = tInfo.m_flDistance;
-		if (!tInfo.m_iFlags)
+		const auto& tChams = *tInfo.m_pChams;
+		const bool bSame = tChams.Visible == tChams.Occluded
+			&& std::ranges::none_of(tChams.Visible, [](const auto& tLayer) { return tLayer.second.iEffect != 0; });
+		int iStencilReference = 0;
+		if (!tChams.Occluded.empty() && !bSame)
 		{
-			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Visible, true);
-			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Occluded, true);
+			if (!iLastStencilReference || iLastStencilReference == iStencilMax)
+			{
+				pRenderContext->ClearBuffers(false, false, true);
+				iLastStencilReference = 0;
+			}
+			iStencilReference = ++iLastStencilReference;
 		}
+		const auto draw = [&]
+		{
+			DrawModel(tInfo.m_pEntity, tChams, pRenderContext, ModelEnum::Visible, bSame, iStencilReference);
+			DrawModel(tInfo.m_pEntity, tChams, pRenderContext, ModelEnum::Occluded, bSame, iStencilReference);
+		};
+		if (!tInfo.m_iFlags)
+			draw();
 		else
 		{
 			m_iFlags = tInfo.m_iFlags;
@@ -252,13 +278,11 @@ void CChams::RenderMain()
 			auto pPlayer = tInfo.m_pEntity->As<CTFPlayer>();
 			const float flOldInvisibility = pPlayer->m_flInvisibility();
 			pPlayer->m_flInvisibility() = 0.f;
-			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Visible, true);
-			DrawModel(tInfo.m_pEntity, *tInfo.m_pChams, pRenderContext, ModelEnum::Occluded, true);
+			draw();
 			pPlayer->m_flInvisibility() = flOldInvisibility;
 
 			m_iFlags = false;
 		}
-		pRenderContext->ClearBuffers(false, false, true);
 	}
 
 	pRenderContext->ClearBuffers(false, false, true);

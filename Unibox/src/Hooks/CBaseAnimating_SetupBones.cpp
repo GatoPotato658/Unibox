@@ -9,14 +9,10 @@ MAKE_HOOK(CBaseAnimating_SetupBones, S::CBaseAnimating_SetupBones(), bool,
 {
 	DEBUG_RETURN(CBaseAnimating_SetupBones, rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
+	if (G::Unload || !Vars::Misc::Game::SetupBonesOptimization.Value || F::Backtrack.IsSettingUpBones() || !rcx)
+		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
+
 	const auto pAnimating = reinterpret_cast<CBaseEntity*>(uintptr_t(rcx) - 8);
-
-	if (!G::Unload && !Vars::Misc::Game::SetupBonesOptimization.Value || F::Backtrack.IsSettingUpBones())
-		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
-
-	if (!pAnimating)
-		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
-
 	auto pOwner = pAnimating->GetRootMoveParent();
 	auto pEntity = pOwner ? pOwner : pAnimating;
 	if (!pEntity->IsPlayer() || pEntity->entindex() == I::EngineClient->GetLocalPlayer())

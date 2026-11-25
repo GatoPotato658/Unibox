@@ -44,6 +44,7 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 	F::CaptureOverlay.ReleaseDeviceObjects();
 	InvalidateESPIconTextures();
 	F::SteamProfileCache.ReleaseTextures();
+	F::Render.InvalidateDeviceObjects();
 	ImGui_ImplDX9_InvalidateDeviceObjects();
 	const HRESULT Original = CALL_ORIGINAL(pDevice, pPresentationParameters);
 	if (SUCCEEDED(Original))
@@ -53,6 +54,8 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 
 LONG __stdcall WndProc::Func(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	TRACK_HOOK;
+
 	if (G::Unload)
 		return CallWindowProc(Original, hWnd, uMsg, wParam, lParam);
 

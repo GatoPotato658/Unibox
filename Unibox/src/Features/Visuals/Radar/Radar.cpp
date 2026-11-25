@@ -85,7 +85,8 @@ void CRadar::Store(CTFPlayer* pLocal)
 		return;
 	}
 
-	LoadFloor();
+	if (Vars::Radar::DrawMap.Value)
+		LoadFloor();
 
 	auto pCenter = pLocal;
 	const int iObserverMode = pLocal->m_iObserverMode();

@@ -8,6 +8,8 @@ MAKE_HOOK(CAvatarImage_ApplyImage, S::CAvatarImage_ApplyImage(), void,
 	void* pAvatarImage, int iImage, const uint8_t* pRgba, uint32_t uWidth, uint32_t uHeight)
 
 {
+	TRACK_HOOK;
+
 	if (pAvatarImage && pRgba && uWidth && uHeight)
 	{
 		const uint64_t uSteamID = *reinterpret_cast<const uint64_t*>(reinterpret_cast<uintptr_t>(pAvatarImage) + 0x40);

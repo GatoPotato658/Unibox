@@ -51,6 +51,8 @@ void CEventListener::Unload()
 
 void CEventListener::FireGameEvent(IGameEvent* pEvent)
 {
+	TRACK_HOOK;
+
 	if (!pEvent || G::Unload)
 		return;
 

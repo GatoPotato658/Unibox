@@ -36,6 +36,8 @@ private:
 
 public:
 	void Render();
+	std::pair<size_t, size_t> PrecacheAssets();
+	void InvalidateItemIcons(bool bDeviceChanged = false);
 	void AddOutput(const char* sFunction, const char* sLog, Color_t tColor = Vars::Menu::Theme::Accent.Value);
 	void ShowDeferredNotification(const char* sTitle, const char* sMessage);
 	void ProcessDeferredNotifications();

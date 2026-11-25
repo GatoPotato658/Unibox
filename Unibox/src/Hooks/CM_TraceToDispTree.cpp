@@ -37,6 +37,8 @@ MAKE_HOOK(CM_TraceToDispTree_False, S::CM_TraceToDispTree_False(), float,
 MAKE_HOOK(IntersectRayWithTriangle, S::IntersectRayWithTriangle(), float,
 	const Ray_t& ray, const Vector& v1, const Vector& v2, const Vector& v3, bool oneSided)
 {
+	TRACK_HOOK;
+
 	if (s_iMask & CONTENTS_DISPSOLID)
 		oneSided = false;
 

@@ -1,5 +1,7 @@
 #include "../SDK/SDK.h"
 
+#include <algorithm>
+
 class AxisSet
 {
 public:
@@ -103,12 +105,9 @@ MAKE_HOOK(CBaseEntity_SetAbsVelocity, S::CBaseEntity_SetAbsVelocity(), void,
 		if (!flOldPos1) flOldPos1 = -PLAYER_ORIGIN_COMPRESSION, flOldPos2 = PLAYER_ORIGIN_COMPRESSION;
 		if (!flNewPos1) flNewPos1 = -PLAYER_ORIGIN_COMPRESSION, flNewPos2 = PLAYER_ORIGIN_COMPRESSION;
 
-		FloatRange_t flVelocityRange;
-		{
-			std::deque<float> vDeltas = { flNewPos1 - flOldPos1, flNewPos2 - flOldPos1, flNewPos1 - flOldPos2, flNewPos2 - flOldPos2 };
-			std::sort(vDeltas.begin(), vDeltas.end(), std::less<float>());
-			flVelocityRange = { vDeltas.front() / flDeltaTime, vDeltas.back() / flDeltaTime };
-		}
+		const auto [flMinDelta, flMaxDelta] = std::minmax({
+			flNewPos1 - flOldPos1, flNewPos2 - flOldPos1, flNewPos1 - flOldPos2, flNewPos2 - flOldPos2 });
+		const FloatRange_t flVelocityRange = { flMinDelta / flDeltaTime, flMaxDelta / flDeltaTime };
 
 		for (auto& tRecord : *pRecords)
 		{

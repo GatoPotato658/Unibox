@@ -26,7 +26,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstring>
+#include <map>
+#include <tuple>
 #include <unordered_set>
 #include <wrl/client.h>
 
@@ -1702,21 +1705,14 @@ namespace
 		Microsoft::WRL::ComPtr<IDirect3DTexture9> pTexture;
 		int iWidth = 0;
 		int iHeight = 0;
-		int iAttemptFrame = -1;
-		int iLastUsedFrame = -1;
-		bool bFailed = false;
-		bool bPending = false;
 	};
 
 	std::unordered_map<uint16_t, ItemIcon_t> s_mItemIcons = {};
-
-	bool ConsumeItemIconBudget()
-	{
-		static int iFrame = -1, iUploads = 0;
-		if (ImGui::GetFrameCount() != iFrame)
-			iFrame = ImGui::GetFrameCount(), iUploads = 0;
-		return iUploads++ < 1;
-	}
+	using ItemIconKey_t = std::tuple<std::string, std::string, std::string, int, int, float, float, float>;
+	std::map<ItemIconKey_t, uint16_t> s_mSharedItemIcons;
+	uint64_t s_uIconRevision = 0;
+	size_t s_uIconCursor = 0;
+	bool s_bIconsComplete = false;
 
 	void GetAlphaBounds(const uint8_t* pData, int iWidth, int iHeight, int& iLeft, int& iTop, int& iRight, int& iBottom)
 	{
@@ -1777,7 +1773,7 @@ namespace
 		return vPixels;
 	}
 
-	Microsoft::WRL::ComPtr<IDirect3DTexture9> CreateItemTexture(const uint8_t* pData, uint32_t uWidth, uint32_t uHeight, bool bRGBA = false)
+	Microsoft::WRL::ComPtr<IDirect3DTexture9> CreateItemTexture(const uint8_t* pData, uint32_t uWidth, uint32_t uHeight)
 	{
 		auto* pDevice = F::Render.GetDevice();
 		if (!pDevice || !pData || !uWidth || !uHeight)
@@ -1798,21 +1794,10 @@ namespace
 			{
 				const uint8_t* pSrc = pData + y * uWidth * 4;
 				uint8_t* pDst = static_cast<uint8_t*>(tRect.pBits) + y * uint32_t(tRect.Pitch);
-				if (!bRGBA)
-				{
-					std::memcpy(pDst, pSrc, uWidth * 4);
-					continue;
-				}
-
-				for (uint32_t x = 0; x < uWidth; x++)
-				{
-					pDst[x * 4 + 0] = pSrc[x * 4 + 2];
-					pDst[x * 4 + 1] = pSrc[x * 4 + 1];
-					pDst[x * 4 + 2] = pSrc[x * 4 + 0];
-					pDst[x * 4 + 3] = pSrc[x * 4 + 3];
-				}
+				std::memcpy(pDst, pSrc, uWidth * 4);
 			}
-			pTexture->UnlockRect(0);
+			if (FAILED(pTexture->UnlockRect(0)))
+				return {};
 			return pTexture;
 		};
 
@@ -1881,67 +1866,20 @@ namespace
 		int w = 0, h = 0;
 		ImageFormat eFormat = IMAGE_FORMAT_UNKNOWN;
 		bool bAlpha = false;
-		if (!pMaterial || pMaterial->GetPreviewImageProperties(&w, &h, &eFormat, &bAlpha) != MATERIAL_PREVIEW_IMAGE_OK || w <= 0 || h <= 0 || w > 512 || h > 512)
+		if (IsErrorMaterial(pMaterial) || pMaterial->GetPreviewImageProperties(&w, &h, &eFormat, &bAlpha) != MATERIAL_PREVIEW_IMAGE_OK || w <= 0 || h <= 0 || w > 512 || h > 512)
 			return;
 		std::vector<uint8_t> vOverlay(size_t(w) * h * 4);
 		if (pMaterial->GetPreviewImage(vOverlay.data(), w, h, IMAGE_FORMAT_BGRA8888) == MATERIAL_PREVIEW_IMAGE_OK)
 			CompositeItemOverlay(vPixels, iWidth, iHeight, vOverlay.data(), w, h, flX, flY, flScale);
 	}
 
-	ImTextureID GetItemIcon(const ItemInfo_t& tItem, bool& bPending, ImVec2* pSize = nullptr)
+	ItemIcon_t LoadItemIcon(const ItemInfo_t& tItem)
 	{
-		bPending = false;
-		const int iFrame = ImGui::GetFrameCount();
-		{
-			static int iLastPruneFrame = -1;
-			if (iLastPruneFrame != iFrame)
-			{
-				iLastPruneFrame = iFrame;
-				if (s_mItemIcons.size() > 256)
-				{
-					for (auto it = s_mItemIcons.begin(); it != s_mItemIcons.end();)
-					{
-						if (iFrame - it->second.iLastUsedFrame > 120)
-							it = s_mItemIcons.erase(it);
-						else
-							++it;
-					}
-				}
-			}
-		}
-
-		auto& tIcon = s_mItemIcons[tItem.iDef];
-		tIcon.iLastUsedFrame = iFrame;
-		if (tIcon.pTexture)
-		{
-			tIcon.bPending = false;
-			if (pSize)
-				*pSize = { float(tIcon.iWidth), float(tIcon.iHeight) };
-			return reinterpret_cast<ImTextureID>(tIcon.pTexture.Get());
-		}
-		if (tIcon.bFailed && iFrame - tIcon.iAttemptFrame < 120)
-		{
-			bPending = tIcon.bPending;
-			return static_cast<ImTextureID>(0);
-		}
 		if (tItem.sImage.empty() || !I::MaterialSystem)
-		{
-			tIcon.bFailed = true;
-			tIcon.bPending = false;
-			tIcon.iAttemptFrame = iFrame;
-			return static_cast<ImTextureID>(0);
-		}
-		if (!ConsumeItemIconBudget())
-		{
-			bPending = tIcon.bPending = true;
-			return static_cast<ImTextureID>(0);
-		}
+			return {};
 
-		tIcon.iAttemptFrame = iFrame;
-		tIcon.bFailed = true;
-		tIcon.bPending = false;
-
-		auto CreateScaled = [&tIcon](const uint8_t* pData, int iWidth, int iHeight, bool bRGBA) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
+		ItemIcon_t tIcon;
+		auto CreateScaled = [&tIcon](const uint8_t* pData, int iWidth, int iHeight) -> Microsoft::WRL::ComPtr<IDirect3DTexture9>
 		{
 			constexpr int iIconWidth = 128, iIconHeight = 96;
 			if (!pData || iWidth <= 0 || iHeight <= 0)
@@ -1953,15 +1891,12 @@ namespace
 				return {};
 
 			const int iSourceWidth = iRight - iLeft + 1, iSourceHeight = iBottom - iTop + 1;
-			float flAspect = float(iSourceWidth) / float(iSourceHeight);
-			int iTargetWidth = iSourceWidth, iTargetHeight = iSourceHeight;
-			if (flAspect > float(iIconWidth) / float(iIconHeight))
-				iTargetHeight = std::max(1, int(iIconWidth / flAspect));
-			else
-				iTargetWidth = std::max(1, int(iIconHeight * flAspect));
+			const float flScale = std::min({ 1.f, float(iIconWidth) / iSourceWidth, float(iIconHeight) / iSourceHeight });
+			const int iTargetWidth = std::max(1, int(iSourceWidth * flScale));
+			const int iTargetHeight = std::max(1, int(iSourceHeight * flScale));
 
 			const auto vScaled = ResizeItemPixels(pData, iWidth, iHeight, iLeft, iTop, iSourceWidth, iSourceHeight, iTargetWidth, iTargetHeight);
-			auto pTexture = CreateItemTexture(vScaled.data(), uint32_t(iTargetWidth), uint32_t(iTargetHeight), bRGBA);
+			auto pTexture = CreateItemTexture(vScaled.data(), uint32_t(iTargetWidth), uint32_t(iTargetHeight));
 			if (pTexture)
 			{
 				tIcon.iWidth = iTargetWidth;
@@ -1977,13 +1912,10 @@ namespace
 			sPath += ".vmt";
 
 		IMaterial* pMaterial = I::MaterialSystem->FindMaterial(sPath.c_str(), TEXTURE_GROUP_VGUI, false);
-		if (!pMaterial)
+		if (IsErrorMaterial(pMaterial))
 			pMaterial = I::MaterialSystem->FindMaterial(sPath.c_str(), TEXTURE_GROUP_OTHER, false);
-		if (!pMaterial)
-		{
-			tIcon.bPending = true;
-			return static_cast<ImTextureID>(0);
-		}
+		if (IsErrorMaterial(pMaterial))
+			return {};
 
 		{
 			int iWidth = 0, iHeight = 0;
@@ -2006,7 +1938,7 @@ namespace
 						int iOverlayWidth = 0, iOverlayHeight = 0;
 						ImageFormat eOverlayFormat = IMAGE_FORMAT_UNKNOWN;
 						bool bOverlayAlpha = false;
-						if (pOverlay && pOverlay->GetPreviewImageProperties(&iOverlayWidth, &iOverlayHeight, &eOverlayFormat, &bOverlayAlpha) == MATERIAL_PREVIEW_IMAGE_OK
+						if (!IsErrorMaterial(pOverlay) && pOverlay->GetPreviewImageProperties(&iOverlayWidth, &iOverlayHeight, &eOverlayFormat, &bOverlayAlpha) == MATERIAL_PREVIEW_IMAGE_OK
 							&& iOverlayWidth > 0 && iOverlayHeight > 0 && iOverlayWidth <= 512 && iOverlayHeight <= 512)
 						{
 							std::vector<uint8_t> vOverlay(size_t(iOverlayWidth) * iOverlayHeight * 4);
@@ -2017,19 +1949,11 @@ namespace
 					if (tItem.iPaintColor < 0 && !tItem.sImageOverlay.empty())
 						AddItemIconOverlay(vPixels, iWidth, iHeight, tItem.sImageOverlay, 0.f, 0.f, 1.f);
 					AddItemIconOverlay(vPixels, iWidth, iHeight, tItem.sToolTargetImage, tItem.flToolIconX, tItem.flToolIconY, tItem.flToolIconScale);
-					if (auto pCreated = CreateScaled(vPixels.data(), iWidth, iHeight, false))
-					{
-						tIcon.pTexture = pCreated;
-						tIcon.bFailed = false;
-						tIcon.bPending = false;
-						return reinterpret_cast<ImTextureID>(tIcon.pTexture.Get());
-					}
+					tIcon.pTexture = CreateScaled(vPixels.data(), iWidth, iHeight);
 				}
 			}
 		}
-		tIcon.bFailed = true;
-		tIcon.bPending = false;
-		return static_cast<ImTextureID>(0);
+		return tIcon;
 	}
 
 	std::string Lowercase(const std::string& sText)
@@ -2104,19 +2028,19 @@ namespace
 					if (tOwned.contains(pItem->iDef))
 						pDrawList->AddCircleFilled(vPos + ImVec2(H::Draw.Scale(9), H::Draw.Scale(9)), H::Draw.Scale(3), FadeColor(F::Render.Accent), 12);
 
-					ImVec2 vSourceSize = { 1.f, 1.f };
-					bool bIconPending = false;
-					const ImTextureID pIcon = GetItemIcon(*pItem, bIconPending, &vSourceSize);
+					const auto itIcon = s_mItemIcons.find(pItem->iDef);
 					const float flIconWidth = std::max(1.f, flCellW - H::Draw.Scale(14)), flIconHeight = flIconH;
 					const ImVec2 vIconMin = vPos + ImVec2((flCellW - flIconWidth) / 2, H::Draw.Scale(6));
-					if (pIcon)
+					if (itIcon != s_mItemIcons.end() && itIcon->second.pTexture)
 					{
+						const auto& tIcon = itIcon->second;
+						const ImVec2 vSourceSize = { float(tIcon.iWidth), float(tIcon.iHeight) };
 						const float flScale = std::min(flIconWidth / vSourceSize.x, flIconHeight / vSourceSize.y);
 						const ImVec2 vIconSize = vSourceSize * flScale;
 						const ImVec2 vIcon = vIconMin + ImVec2((flIconWidth - vIconSize.x) / 2, (flIconHeight - vIconSize.y) / 2);
-						pDrawList->AddImage(pIcon, vIcon, vIcon + vIconSize, { 0, 0 }, { 1, 1 }, FadeColor(ImVec4(1, 1, 1, 1)));
+						pDrawList->AddImage(reinterpret_cast<ImTextureID>(tIcon.pTexture.Get()), vIcon, vIcon + vIconSize, { 0, 0 }, { 1, 1 }, FadeColor(ImVec4(1, 1, 1, 1)));
 					}
-					else if (bIconPending)
+					else if (itIcon == s_mItemIcons.end() && !pItem->sImage.empty())
 						FSkeletonRect(pDrawList, vIconMin, vIconMin + ImVec2(flIconWidth, flIconHeight), H::Draw.Scale(4));
 					else
 						pDrawList->AddRectFilled(vIconMin, vIconMin + ImVec2(flIconWidth, flIconHeight), FadeColor(F::Render.Background1p5), H::Draw.Scale(4));
@@ -2195,6 +2119,88 @@ namespace
 		return -1;
 	}
 
+	const auto& GetSkinWeapons()
+	{
+		static const auto tWeapons = []
+		{
+			std::pair<std::vector<const char*>, std::vector<int>> tList = { { "Held weapon" }, { -1 } };
+			std::unordered_set<int> tKeys = {};
+			for (const auto& tWeapon : SkinData::kWeaponNames)
+			{
+				const int iKey = CSkinChanger::Key(tWeapon.iDef);
+				if (tKeys.insert(iKey).second)
+				{
+					tList.first.push_back(tWeapon.sName);
+					tList.second.push_back(iKey);
+				}
+			}
+			return tList;
+		}();
+		return tWeapons;
+	}
+}
+
+std::pair<size_t, size_t> CMenu::PrecacheAssets()
+{
+	if (s_bIconsComplete && CSkinChanger::GetCatalogueRevision() == s_uIconRevision)
+		return { s_uIconCursor, s_uIconCursor };
+
+	const auto& vItems = CSkinChanger::GetItems();
+	const uint64_t uRevision = CSkinChanger::GetCatalogueRevision();
+	if (uRevision != s_uIconRevision)
+	{
+		InvalidateItemIcons(true);
+		s_uIconRevision = uRevision;
+		s_mItemIcons.reserve(vItems.size());
+		GetSkinWeapons();
+		GetUnusualEffects();
+	}
+
+	using Clock = std::chrono::steady_clock;
+	const auto tDeadline = Clock::now() + std::chrono::milliseconds(5);
+	while (s_uIconCursor < vItems.size())
+	{
+		const auto& tItem = vItems[s_uIconCursor++];
+		if (!tItem.sImage.empty())
+		{
+			auto [itShared, bNew] = s_mSharedItemIcons.try_emplace(
+				ItemIconKey_t{ tItem.sImage, tItem.sImageOverlay, tItem.sToolTargetImage,
+					tItem.iPaintColor, tItem.iPaintColor2, tItem.flToolIconX, tItem.flToolIconY, tItem.flToolIconScale }, tItem.iDef);
+			if (!s_mItemIcons.contains(tItem.iDef))
+			{
+				ItemIcon_t tIcon = bNew ? LoadItemIcon(tItem) : s_mItemIcons.at(itShared->second);
+				s_mItemIcons.emplace(tItem.iDef, std::move(tIcon));
+			}
+		}
+		if (Clock::now() >= tDeadline)
+			break;
+	}
+	if (!vItems.empty() && s_uIconCursor == vItems.size())
+	{
+		s_bIconsComplete = true;
+		s_mSharedItemIcons.clear();
+	}
+	return { s_uIconCursor, vItems.size() };
+}
+
+void CMenu::InvalidateItemIcons(bool bDeviceChanged)
+{
+	if (bDeviceChanged)
+		s_mItemIcons.clear();
+	else
+	{
+		const auto uRemoved = std::erase_if(s_mItemIcons, [](const auto& tEntry)
+		{
+			D3DSURFACE_DESC tDesc{};
+			const auto& pTexture = tEntry.second.pTexture;
+			return pTexture && (FAILED(pTexture->GetLevelDesc(0, &tDesc)) || tDesc.Pool == D3DPOOL_DEFAULT);
+		});
+		if (!uRemoved)
+			return;
+	}
+	s_bIconsComplete = false;
+	s_uIconCursor = 0;
+	s_mSharedItemIcons.clear();
 }
 
 void CMenu::MenuSkins(int iTab)
@@ -2207,22 +2213,7 @@ void CMenu::MenuSkins(int iTab)
 	static int iBackpackFilter = 0;
 	static uint16_t uBackpackSelected = 0;
 
-	static std::vector<const char*> vWeaponNames = { "Held weapon" };
-	static std::vector<int> vWeaponIds = { -1 };
-	static bool bWeaponListBuilt = false;
-	if (!bWeaponListBuilt)
-	{
-		std::unordered_set<int> tKeys = {};
-		for (const auto& tWeapon : SkinData::kWeaponNames)
-		{
-			const int iKey = CSkinChanger::Key(tWeapon.iDef);
-			if (!tKeys.insert(iKey).second)
-				continue;
-			vWeaponNames.push_back(tWeapon.sName);
-			vWeaponIds.push_back(iKey);
-		}
-		bWeaponListBuilt = true;
-	}
+	const auto& [vWeaponNames, vWeaponIds] = GetSkinWeapons();
 
 	switch (iTab)
 	{

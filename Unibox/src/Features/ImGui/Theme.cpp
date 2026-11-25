@@ -3,6 +3,7 @@
 
 #include "Fonts/Rubik/Rubik.h"
 #include "Fonts/CascadiaMono/CascadiaMono.h"
+#include "Fonts/MaterialDesign/IconDefinitions.h"
 #include "Fonts/MaterialDesign/MaterialIcons.h"
 #include <algorithm>
 #include <windows.h>
@@ -151,6 +152,19 @@ void CMenuTheme::LoadFonts(ImFontAtlas* pAtlas, float flScale, const std::string
 	IconFont = pAtlas->AddFontFromMemoryCompressedTTF(MaterialIcons_compressed_data, MaterialIcons_compressed_size, 16.f * flScale, &tIconConfig);
 
 	pAtlas->Build();
+	for (ImFont* pFont : { FontSmall, FontRegular, FontBold, FontLarge, FontMono })
+	{
+		if (auto* pBaked = pFont ? pFont->GetFontBaked(pFont->LegacySize) : nullptr)
+		{
+			for (ImWchar c = 0x20; c <= 0xFF; ++c)
+				pBaked->FindGlyphNoFallback(c);
+		}
+	}
+	if (auto* pIcons = IconFont ? IconFont->GetFontBaked(IconFont->LegacySize) : nullptr)
+	{
+		for (ImWchar c = ICON_MIN_MD; c <= ICON_MAX_16_MD; ++c)
+			pIcons->FindGlyphNoFallback(c);
+	}
 	ImGui::GetIO().FontDefault = FontRegular;
 }
 

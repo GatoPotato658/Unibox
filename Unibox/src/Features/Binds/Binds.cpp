@@ -185,7 +185,7 @@ void CBinds::SetVars(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, bool bManage)
 	s_mVars.clear();
 	s_bUI = I::EngineVGui->IsGameUIVisible() || I::MatSystemSurface->IsCursorVisible() && !I::EngineClient->IsPlayingDemo();
 #ifndef TEXTMODE
-	s_bMenu = F::Menu.m_bIsOpen && !ImGui::GetIO().WantTextInput && !F::Menu.m_bInKeybind;
+	s_bMenu = F::Menu.m_bIsOpen && F::Menu.m_bInputReady && !ImGui::GetIO().WantTextInput && !F::Menu.m_bInKeybind;
 #else
 	s_bMenu = F::Menu.m_bIsOpen && !F::Menu.m_bInKeybind;
 #endif

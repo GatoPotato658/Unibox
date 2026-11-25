@@ -16,9 +16,6 @@
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
 #endif
 #include "../Features/Visuals/Visuals.h"
-#ifndef TEXTMODE
-#include "../Features/Visuals/ESP/ESP.h"
-#endif
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/NavBot/NavEngine.h"
 #ifndef TEXTMODE
@@ -209,10 +206,6 @@ void CCore::Load()
 
 #ifndef TEXTMODE
 	F::Materials.RequestLoad();
-	{
-		SDK::CInitTimingScope tESPIcons("Core.Load ESP icons");
-		PrecacheESPIcons();
-	}
 #endif
 	H::ConVars.Modify(Vars::Misc::Exploits::UnlockCVars.Value);
 #ifndef TEXTMODE
@@ -228,12 +221,18 @@ void CCore::Load()
 		if (!sVisualConfig.empty())
 			F::Configs.LoadVisual(sVisualConfig, false);
 	}
+#ifndef TEXTMODE
+	F::Render.SetStartupStage(CRender::StartupStage::Features);
+#endif
 	F::TelemetryBlocker.Initialize();
 	F::NeuralPred.Initialize();
 	if (!F::Radio.Startup())
 		SDK::Output("Radio", "Failed to initialize audio output", WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG, ICON_MD_WARNING);
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
 	SDK::Output("unibox", std::format("Loaded (dxlevel {})", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
+#ifndef TEXTMODE
+	F::Render.SetStartupStage(CRender::StartupStage::MenuAssets);
+#endif
 }
 
 void CCore::Loop()
@@ -255,22 +254,17 @@ void CCore::Loop()
 CCore::UnloadResult_t CCore::Unload()
 {
 	G::Unload = true;
-#ifdef TEXTMODE
-	bool bUnloadFailed = !U::Hooks.Unload();
-	F::NamedPipe.Shutdown();
-#else
-	bool bUnloadFailed = false;
-#endif
 	if (m_bFailed)
 	{
 		LogFailText();
 		return UnloadResult_t::Unloaded;
 	}
 
+	H::Events.Unload();
+	bool bUnloadFailed = false;
+
 	SDK::ShutdownSteamScreenshotHook();
 	F::SteamProfileCache.Shutdown();
-	F::Radio.Shutdown();
-	F::AutoTranslate.Shutdown();
 
 #ifndef TEXTMODE
 	bool bMaterialsUnloaded = !U::Hooks.IsInitialized() || !F::Materials.m_bLoaded;
@@ -282,9 +276,13 @@ CCore::UnloadResult_t CCore::Unload()
 		bMaterialsUnloaded = F::Materials.IsUnloadComplete();
 	}
 #endif
-
-#ifndef TEXTMODE
 	bUnloadFailed = !U::Hooks.Unload() || bUnloadFailed;
+#ifdef TEXTMODE
+	F::NamedPipe.Shutdown();
+#endif
+	F::Radio.Shutdown();
+	F::AutoTranslate.Shutdown();
+#ifndef TEXTMODE
 	if (!bMaterialsUnloaded)
 		F::Materials.UnloadMaterials();
 	F::D3DMaterials.Unload();
@@ -299,7 +297,6 @@ CCore::UnloadResult_t CCore::Unload()
 	}
 #endif
 	U::BytePatches.Unload();
-	H::Events.Unload();
 	F::NavEngine.Shutdown();
 	F::NeuralPred.Shutdown();
 	U::ThreadPool.Shutdown();

@@ -1884,6 +1884,8 @@ class CSteamScreenshotRequestedCallback final : public CCallbackBase
 public:
 	void Run(void*) override
 	{
+		TRACK_HOOK;
+
 		SDK::NotifyCleanScreenshot();
 		s_bPendingSteamScreenshot = true;
 	}

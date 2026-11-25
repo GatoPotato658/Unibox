@@ -508,10 +508,9 @@ void CEntities::Clear(bool bShutdown)
 	m_pLocalLaserDot = nullptr;
 	m_pPlayerResource = nullptr;
 	m_pObjectiveResource = nullptr;
-	m_aGroups = {};
-
 	if (bShutdown)
 	{
+		m_aGroups = {};
 		m_aDeltaTimes = {};
 		m_aLagTimes = {};
 		m_aChokes = {};
@@ -533,6 +532,11 @@ void CEntities::Clear(bool bShutdown)
 		m_mIParty.clear();				m_mUParty.clear();
 		m_mIF2P.clear();				m_mUF2P.clear();
 		m_mILevels.clear();				m_mULevels.clear();
+	}
+	else
+	{
+		for (auto& vGroup : m_aGroups)
+			vGroup.clear();
 	}
 }
 

@@ -16,16 +16,13 @@ MAKE_HOOK(CMatchInviteNotification_OnTick, S::CMatchInviteNotification_OnTick(),
 
 	if (Vars::Misc::Queueing::ExtendQueue.Value)
 	{
-		auto dFloatTime = SDK::PlatFloatTime();
 		auto& dAutoJoinTime = *reinterpret_cast<double*>(uintptr_t(rcx) + 616);
 		auto& dLastAutoJoinTime = s_mLastAutoJoinTime[rcx];
-		double dExtend = dAutoJoinTime != dLastAutoJoinTime ? Vars::Misc::Queueing::ExtendQueue.Value == Vars::Misc::Queueing::ExtendQueueEnum::Join ? EXTEND_TIME : FULL_TIME : 0.0;
-		dLastAutoJoinTime = dAutoJoinTime = std::max(dAutoJoinTime + dExtend, dFloatTime + 1.0);
 
-		for (auto& [pMatchInviteNotification, dLastAutoJoinTime] : s_mLastAutoJoinTime)
+		if (dAutoJoinTime != 0.0 && dAutoJoinTime != dLastAutoJoinTime)
 		{
-			if (dFloatTime > dLastAutoJoinTime)
-				s_mLastAutoJoinTime.erase(pMatchInviteNotification);
+			const double dExtend = Vars::Misc::Queueing::ExtendQueue.Value == Vars::Misc::Queueing::ExtendQueueEnum::Join ? EXTEND_TIME : FULL_TIME;
+			dLastAutoJoinTime = dAutoJoinTime += dExtend;
 		}
 	}
 
