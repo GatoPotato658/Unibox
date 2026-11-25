@@ -7,6 +7,7 @@ void InvalidateESPIconTextures();
 const char* GetClassIconTexture(int iClassNum);
 #ifndef TEXTMODE
 IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
+void PrecacheESPIcons();
 #endif
 
 enum class EESPBar
@@ -24,6 +25,11 @@ struct Text_t
 	Color_t m_tOutline = {};
 	byte m_ucBackgroundAlpha = 0;
 	EESPBar m_eAttachBar = EESPBar::None;
+
+	mutable const void* m_pCachedFont = nullptr;
+	mutable float m_flCachedFontSize = 0.f;
+	mutable float m_flCachedWidth = 0.f;
+	mutable float m_flCachedHeight = 0.f;
 };
 
 struct Bar_t
@@ -76,6 +82,7 @@ struct PlayerCache_t : BuildingCache_t
 	int m_iClassIconMode = ALIGN_TOP;
 	CHudTexture* m_pWeaponIcon = nullptr;
 	int m_iWeaponIconMode = ALIGN_BOTTOM;
+	std::vector<Badge_t> m_vBadges = {};
 };
 
 struct ESPDrawEntity_t
@@ -83,15 +90,8 @@ struct ESPDrawEntity_t
 	const void* m_pKey = nullptr;
 
 	float m_flX = 0.f, m_flY = 0.f, m_flW = 0.f, m_flH = 0.f;
-	float m_flAlpha = 1.f;
-	Color_t m_tColor = {};
-	bool m_bBox = false;
-	int m_iBoxStyle = 0;
-	float m_flHealth = 1.f;
 
-	std::vector<Text_t> m_vText = {};
-	std::vector<Bar_t> m_vBars = {};
-	std::vector<Badge_t> m_vBadges = {};
+	std::shared_ptr<const PlayerCache_t> m_pContent = {};
 	std::vector<std::pair<Vec2, Vec2>> m_vBones = {};
 };
 
@@ -130,14 +130,16 @@ private:
 	ESPAnim_t& GetAnim(const void* pKey);
 	void CleanupAnims();
 
-	std::unordered_map<CBaseEntity*, PlayerCache_t> m_mPlayerCache = {};
-	std::unordered_map<CBaseEntity*, BuildingCache_t> m_mBuildingCache = {};
-	std::unordered_map<CBaseEntity*, EntityCache_t> m_mEntityCache = {};
+	std::unordered_map<CBaseEntity*, std::shared_ptr<PlayerCache_t>> m_mPlayerCache = {};
+	std::unordered_map<CBaseEntity*, std::shared_ptr<PlayerCache_t>> m_mBuildingCache = {};
+	std::unordered_map<CBaseEntity*, std::shared_ptr<PlayerCache_t>> m_mEntityCache = {};
 
 	CIndicatorCache<ESPDrawCache_t> m_tDrawCache = {};
 	std::unordered_map<const void*, ESPAnim_t> m_mAnims = {};
 	float m_flAnimTime = 0.f;
 	std::unordered_map<CBaseEntity*, ESPMotion_t> m_mMotion = {};
+	int m_iLastStoreTick = -1;
+	double m_dLastStoreTime = 0.0;
 
 public:
 	void Store(CTFPlayer* pLocal);

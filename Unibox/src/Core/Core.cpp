@@ -16,6 +16,9 @@
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
 #endif
 #include "../Features/Visuals/Visuals.h"
+#ifndef TEXTMODE
+#include "../Features/Visuals/ESP/ESP.h"
+#endif
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/NavBot/NavEngine.h"
 #ifndef TEXTMODE
@@ -206,6 +209,10 @@ void CCore::Load()
 
 #ifndef TEXTMODE
 	F::Materials.RequestLoad();
+	{
+		SDK::CInitTimingScope tESPIcons("Core.Load ESP icons");
+		PrecacheESPIcons();
+	}
 #endif
 	H::ConVars.Modify(Vars::Misc::Exploits::UnlockCVars.Value);
 #ifndef TEXTMODE

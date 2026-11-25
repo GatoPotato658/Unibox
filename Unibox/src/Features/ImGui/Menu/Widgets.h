@@ -144,16 +144,78 @@ namespace ImGui
 
 	inline std::string StripDoubleHash(const char* sText)
 	{
-		std::string sBegin = sText, sEnd = FindRenderedTextEnd(sText);
-		return sBegin.replace(sBegin.end() - sEnd.size(), sBegin.end(), "");
+		const char* sEnd = FindRenderedTextEnd(sText);
+		if (!*sEnd)
+			return sText;
+		return std::string(sText, sEnd);
 	}
+
+	template <typename T>
+	struct FlatAnimMap_t
+	{
+		struct Slot_t
+		{
+			uint64_t m_uKey = 0;
+			T m_tValue = {};
+			bool m_bUsed = false;
+		};
+		std::vector<Slot_t> m_vSlots = std::vector<Slot_t>(1024);
+		size_t m_nUsed = 0;
+
+		T& Get(uint64_t uKey, const T& tInitial, bool& bNew)
+		{
+			if (m_nUsed * 4 >= m_vSlots.size() * 3)
+				Grow();
+
+			const size_t uMask = m_vSlots.size() - 1;
+			size_t uSlot = size_t((uKey * 0x9E3779B97F4A7C15ull) >> 32) & uMask;
+			while (true)
+			{
+				Slot_t& tSlot = m_vSlots[uSlot];
+				if (!tSlot.m_bUsed)
+				{
+					tSlot.m_bUsed = true;
+					tSlot.m_uKey = uKey;
+					tSlot.m_tValue = tInitial;
+					++m_nUsed;
+					bNew = true;
+					return tSlot.m_tValue;
+				}
+				if (tSlot.m_uKey == uKey)
+				{
+					bNew = false;
+					return tSlot.m_tValue;
+				}
+				uSlot = (uSlot + 1) & uMask;
+			}
+		}
+
+		void Grow()
+		{
+			std::vector<Slot_t> vOld = std::move(m_vSlots);
+			m_vSlots.clear();
+			m_vSlots.resize(vOld.size() * 2);
+			m_nUsed = 0;
+			const size_t uMask = m_vSlots.size() - 1;
+			for (auto& tOld : vOld)
+			{
+				if (!tOld.m_bUsed)
+					continue;
+				size_t uSlot = size_t((tOld.m_uKey * 0x9E3779B97F4A7C15ull) >> 32) & uMask;
+				while (m_vSlots[uSlot].m_bUsed)
+					uSlot = (uSlot + 1) & uMask;
+				m_vSlots[uSlot] = tOld;
+				++m_nUsed;
+			}
+		}
+	};
 
 	inline float Anim(ImGuiID uID, int iSalt, float flTarget, float flSpeed = 14.f)
 	{
-		static std::unordered_map<uint64_t, float> mAnim = {};
+		static FlatAnimMap_t<float> mAnim = {};
 
-		auto [it, bNew] = mAnim.try_emplace((uint64_t(uID) << 8) | uint64_t(iSalt & 0xFF), flTarget);
-		float& flValue = it->second;
+		bool bNew = false;
+		float& flValue = mAnim.Get((uint64_t(uID) << 8) | uint64_t(iSalt & 0xFF), flTarget, bNew);
 		if (!bNew)
 		{
 			flValue = ImLerp(flValue, flTarget, std::clamp(GetIO().DeltaTime * flSpeed, 0.f, 1.f));
@@ -165,10 +227,10 @@ namespace ImGui
 
 	inline float Reveal(ImGuiID uID, int iSalt, bool bVisible, float flSpeed = 14.f)
 	{
-		static std::unordered_map<uint64_t, std::pair<bool, float>> mReveal = {};
+		static FlatAnimMap_t<std::pair<bool, float>> mReveal = {};
 
-		auto [it, bNew] = mReveal.try_emplace((uint64_t(uID) << 8) | uint64_t(iSalt & 0xFF), std::pair{ false, 0.f });
-		auto& [bWasVisible, flValue] = it->second;
+		bool bNew = false;
+		auto& [bWasVisible, flValue] = mReveal.Get((uint64_t(uID) << 8) | uint64_t(iSalt & 0xFF), std::pair{ false, 0.f }, bNew);
 		if (bVisible && !bWasVisible)
 			flValue = 0.f;
 		bWasVisible = bVisible;
@@ -553,7 +615,7 @@ namespace ImGui
 		PushStyleColor(ImGuiCol_Text, F::Render.FieldText.Value);
 		PushItemWidth(flWidth);
 
-		bool bReturn = InputText(std::format("##{}", sLabel).c_str(), &sText, iFlags | ImGuiInputTextFlags_NoKeyboardNavigate, fCallback);
+		bool bReturn = InputText((std::string("##") + sLabel).c_str(), &sText, iFlags | ImGuiInputTextFlags_NoKeyboardNavigate, fCallback);
 		const bool bHovered = IsItemHovered();
 		if (sText.empty() && !IsItemActive())
 			GetWindowDrawList()->AddText(GetItemRectMin() + GetStyle().FramePadding, FadeColor(F::Render.FieldText, 0.55f), sDisplay.c_str());
@@ -842,7 +904,7 @@ namespace ImGui
 		PushStyleColor(ImGuiCol_Header, ImVec4());
 		PushStyleColor(ImGuiCol_HeaderHovered, ImVec4());
 		PushStyleColor(ImGuiCol_HeaderActive, ImVec4());
-		bool bReturn = Selectable(std::format("##{}", sLabel).c_str(), false, ImGuiSelectableFlags_SpanAvailWidth, { flIdeal, flHeight });
+		bool bReturn = Selectable((std::string("##") + sLabel).c_str(), false, ImGuiSelectableFlags_SpanAvailWidth, { flIdeal, flHeight });
 		PopStyleColor(3);
 
 		const bool bHovered = IsItemHovered() && !Disabled;
@@ -2038,7 +2100,7 @@ namespace ImGui
 					const char* group_label = std::get<1>(group_header);
 					int group_mask = std::get<2>(group_header);
 					bool group_active = (*pVar & group_mask) == group_mask;
-					auto tOption = FOptionRow(std::format("##{}{}", group_label, i).c_str(), group_active, ImGuiSelectableFlags_DontClosePopups);
+					auto tOption = FOptionRow((std::string("##") + group_label + std::to_string(i)).c_str(), group_active, ImGuiSelectableFlags_DontClosePopups);
 					if (tOption.m_bClicked)
 					{
 						if (group_active)
@@ -2057,7 +2119,7 @@ namespace ImGui
 				if (iFlags & FDropdownEnum::Multi)
 				{
 					bool bFlagActive = *pVar & vValues[i];
-					if (FOption(std::format("##{}{}", sEntry, i).c_str(), sStripped.c_str(), bFlagActive, true, ImGuiSelectableFlags_DontClosePopups))
+					if (FOption((std::string("##") + sEntry + std::to_string(i)).c_str(), sStripped.c_str(), bFlagActive, true, ImGuiSelectableFlags_DontClosePopups))
 					{
 						if (bFlagActive)
 							*pVar &= ~vValues[i];
@@ -2079,7 +2141,7 @@ namespace ImGui
 					}
 
 					const bool bSelected = *pVar == vValues[i];
-					auto tOption = FOptionRow(std::format("##{}{}", sEntry, i).c_str(), bSelected);
+					auto tOption = FOptionRow((std::string("##") + sEntry + std::to_string(i)).c_str(), bSelected);
 					if (tOption.m_bClicked)
 						*pVar = vValues[i], bReturn = true;
 					FOptionText(tOption, sStripped.c_str(), H::Draw.Scale(bModifiable ? 36 : 12), OptionColor(tOption, bSelected, true));
@@ -2225,7 +2287,7 @@ namespace ImGui
 						CloseCurrentPopup(); break;
 					}
 
-					if (FOption(std::format("##{}{}", sEntry, i).c_str(), sEntry.c_str(), tBinding.m_sCurrent == sEntry, false))
+					if (FOption((std::string("##") + sEntry + std::to_string(i)).c_str(), sEntry.c_str(), tBinding.m_sCurrent == sEntry, false))
 						tBinding.m_fCommit(sEntry), bReturn = true;
 				}
 

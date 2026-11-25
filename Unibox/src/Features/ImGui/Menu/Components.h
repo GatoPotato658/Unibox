@@ -373,7 +373,7 @@ namespace ImGui
 				}
 
 				bool bHovered = bFlagActive && IsItemHovered();
-				auto tOption = FOptionRow(std::format("##{}{}", sEntry, i).c_str(), bFlagActive, ImGuiSelectableFlags_DontClosePopups);
+				auto tOption = FOptionRow((std::string("##") + sEntry + std::to_string(i)).c_str(), bFlagActive, ImGuiSelectableFlags_DontClosePopups);
 				if (tOption.m_bClicked && !Disabled && (bFlagActive || pVar->size() < 32))
 					sModified = sEntry;
 				FTooltip("A maximum of 32 material layers can be selected.", !bFlagActive && pVar->size() >= 32 && tOption.m_bHovered);
