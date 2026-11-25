@@ -37,10 +37,23 @@ bool CNoSpreadHitscan::ShouldRun(CTFWeaponBase* pWeapon)
 	return true;
 }
 
+bool CNoSpreadHitscan::UsesClientSeed()
+{
+	switch (Vars::Aimbot::General::NoSpreadMode.Value)
+	{
+	case Vars::Aimbot::General::NoSpreadModeEnum::ClientSeed:
+		return true;
+	case Vars::Aimbot::General::NoSpreadModeEnum::ServerSeed:
+		return false;
+	}
+
+	auto sv_usercmd_custom_random_seed = SDK::IsLoopback() ? I::CVar->FindVar("sv_usercmd_custom_random_seed") : nullptr;
+	return sv_usercmd_custom_random_seed && !sv_usercmd_custom_random_seed->GetBool();
+}
+
 int CNoSpreadHitscan::GetSeed(CUserCmd* pCmd)
 {
-	static auto sv_usercmd_custom_random_seed = H::ConVars.FindVar("sv_usercmd_custom_random_seed");
-	if (sv_usercmd_custom_random_seed && !sv_usercmd_custom_random_seed->GetBool())
+	if (UsesClientSeed())
 		return pCmd->random_seed & 255;
 
 	double dFloatTime = SDK::PlatFloatTime() + m_dTimeDelta;
@@ -71,7 +84,7 @@ bool CNoSpreadHitscan::IsFixedSpread(CTFWeaponBase* pWeapon)
 
 bool CNoSpreadHitscan::Corrects(CTFWeaponBase* pWeapon)
 {
-	return ShouldRun(pWeapon) && (IsFixedSpread(pWeapon) || m_bSynced);
+	return ShouldRun(pWeapon) && (IsFixedSpread(pWeapon) || UsesClientSeed() || m_bSynced);
 }
 
 std::string CNoSpreadHitscan::GetFormat(int iServerTime)
@@ -94,6 +107,18 @@ void CNoSpreadHitscan::AskForPlayerPerf()
 	if (!ShouldRun())
 		return Reset();
 
+	if (UsesClientSeed())
+	{
+		if (m_bWaitingForPlayerPerf && SDK::PlatFloatTime() - m_dRequestTime >= Vars::Aimbot::General::NoSpreadBackupInterval.Value)
+			m_bWaitingForPlayerPerf = false;
+		m_flServerTime = 0.f;
+		m_vTimeDeltas.clear();
+		m_dTimeDelta = 0.0;
+		m_flMantissaStep = 0.f;
+		m_bSynced = false;
+		return;
+	}
+
 	if (G::Choking || F::CheatDetection.IsWaitingForPlayerPerf())
 		return;
 
@@ -108,7 +133,7 @@ void CNoSpreadHitscan::AskForPlayerPerf()
 
 bool CNoSpreadHitscan::ParsePlayerPerf(const std::string& sMsg)
 {
-	if (!ShouldRun())
+	if (!ShouldRun() || UsesClientSeed() && !m_bWaitingForPlayerPerf)
 		return false;
 
 	std::smatch tMatch; std::regex_match(sMsg, tMatch, std::regex(R"((\d+.\d+)\s\d+\s\d+\s\d+.\d+\s\d+.\d+\svel\s\d+.\d+)"));
@@ -116,6 +141,8 @@ bool CNoSpreadHitscan::ParsePlayerPerf(const std::string& sMsg)
 	if (tMatch.size() == 2)
 	{
 		m_bWaitingForPlayerPerf = false;
+		if (UsesClientSeed())
+			return true;
 
 		float flNewServerTime = std::stof(tMatch[1].str());
 		if (flNewServerTime < m_flServerTime)
@@ -167,7 +194,7 @@ void CNoSpreadHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* 
 		return;
 
 	const bool bFixed = IsFixedSpread(pWeapon);
-	if (!bFixed && !m_bSynced)
+	if (!bFixed && !UsesClientSeed() && !m_bSynced)
 		return;
 
 	SpreadMath::Shot_t tShot = { m_iSeed, pWeapon->GetWeaponSpread(), iBullets, bFixed };
@@ -199,7 +226,7 @@ void CNoSpreadHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* 
 void CNoSpreadHitscan::CacheDrawInfo(CTFPlayer* pLocal)
 {
 	if (!(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::SeedPrediction)
-		|| !pLocal || !ShouldRun() || !pLocal->IsAlive())
+		|| !pLocal || !ShouldRun() || UsesClientSeed() || !pLocal->IsAlive())
 	{
 		m_tDrawCache.Set({});
 		return;

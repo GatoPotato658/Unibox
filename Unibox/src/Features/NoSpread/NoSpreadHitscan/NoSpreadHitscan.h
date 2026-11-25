@@ -32,6 +32,7 @@ private:
 public:
 	void Reset();
 
+	bool UsesClientSeed();
 	bool IsFixedSpread(CTFWeaponBase* pWeapon);
 	bool Corrects(CTFWeaponBase* pWeapon);
 

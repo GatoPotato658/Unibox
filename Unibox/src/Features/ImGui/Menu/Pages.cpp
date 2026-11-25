@@ -119,6 +119,8 @@ static void AimbotGeneral()
 		PushDisabled(F::AntiCheatCompatibility.Active());
 		{
 			FToggle(Vars::Aimbot::General::NoSpread);
+			FDropdown(Vars::Aimbot::General::NoSpreadMode);
+			FTooltip("For remote servers, select Client command (0) when sv_usercmd_custom_random_seed is 0.");
 		}
 		PopDisabled();
 		if (Vars::Aimbot::General::AimType.Value == Vars::Aimbot::General::AimTypeEnum::LegitForBots)

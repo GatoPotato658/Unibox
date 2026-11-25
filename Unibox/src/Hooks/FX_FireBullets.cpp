@@ -21,7 +21,7 @@ MAKE_HOOK(FX_FireBullets, S::FX_FireBullets(), void,
 		F::Backtrack.ReportShot(iPlayer);
 		F::CheatDetection.OnFireBullets(iPlayer);
 	}
-	else if (Vars::Aimbot::General::NoSpread.Value && dwRetAddr == dwDesired)
+	else if (Vars::Aimbot::General::NoSpread.Value && !F::NoSpreadHitscan.UsesClientSeed() && dwRetAddr == dwDesired)
 		iSeed = F::NoSpreadHitscan.m_iSeed;
 
 	return CALL_ORIGINAL(pWpn, iPlayer, vecOrigin, vecAngles, iWeapon, iMode, iSeed, flSpread, flDamage, bCritical);

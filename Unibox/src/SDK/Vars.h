@@ -324,6 +324,9 @@ NAMESPACE_BEGIN(Vars)
 			CVar(FOVCircle, "FOV Circle", true, VISUAL);
 			CVar(LeadAndRestrict, "Lead and restrict", false, VISUAL);
 			CVar(NoSpread, "No spread", false);
+			CVarEnum(NoSpreadMode, "No spread seed", 0, NONE, nullptr,
+				VA_LIST("Auto", "Server time (1)", "Client command (0)"),
+				Auto, ServerSeed, ClientSeed);
 
 			NAMESPACE_BEGIN(LegitForBots, Aimbot)
 				CVar(ShowOptions, "Show legitbot options", false);
