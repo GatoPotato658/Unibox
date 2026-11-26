@@ -1113,46 +1113,90 @@ bool CNavEngine::EnsureMapLoaded(bool bForced)
 
 	m_sNavLevel = sLevelName;
 
-	std::filesystem::path tLevelPath(sLevelName);
+	std::string sNormalizedLevel(sLevelName);
+	std::replace(sNormalizedLevel.begin(), sNormalizedLevel.end(), '\\', '/');
+
+	std::filesystem::path tLevelPath(sNormalizedLevel);
 	std::string sMapName = tLevelPath.filename().replace_extension().string();
 	if (sMapName.empty())
 		return false;
 
+	std::string sBaseMapName = sMapName;
+	if (const size_t uUgcPos = sBaseMapName.find(".ugc"); uUgcPos != std::string::npos && uUgcPos > 0)
+		sBaseMapName.resize(uUgcPos);
+
 	const std::filesystem::path tWorkingDirectory = std::filesystem::current_path();
-	std::filesystem::path tGameDirectory = I::EngineClient->GetGameDirectory() ? I::EngineClient->GetGameDirectory() : "";
+	std::filesystem::path tGameDirectory = I::EngineClient->GetGameDirectory() ? I::EngineClient->GetGameDirectory() : "tf";
+	if (tGameDirectory.empty())
+		tGameDirectory = "tf";
 	if (tGameDirectory.is_relative())
 		tGameDirectory = tWorkingDirectory / tGameDirectory;
+	tGameDirectory = tGameDirectory.lexically_normal();
 
 	const std::filesystem::path tInstallPath = (tGameDirectory / "maps" / (sMapName + ".nav")).lexically_normal();
 	m_sNavInstallPath = tInstallPath.string();
 
-	std::vector<std::filesystem::path> vCandidates = {
-		tInstallPath,
-		tWorkingDirectory / "tf" / "maps" / (sMapName + ".nav"),
-		tWorkingDirectory / "maps" / (sMapName + ".nav"),
-		tWorkingDirectory / "tf" / sLevelName,
-		tWorkingDirectory / "tf" / (sMapName + ".nav"),
-		tWorkingDirectory / "unibox" / "Nav" / (sMapName + ".nav")
+	std::vector<std::filesystem::path> vCandidates;
+	std::unordered_set<std::string> setSeenCandidates;
+	auto AddCandidate = [&](std::filesystem::path tCandidate)
+	{
+		if (tCandidate.empty())
+			return;
+		tCandidate.replace_extension(".nav");
+		if (!tCandidate.has_extension())
+			return;
+		tCandidate = tCandidate.lexically_normal();
+		if (setSeenCandidates.insert(tCandidate.string()).second)
+			vCandidates.push_back(std::move(tCandidate));
 	};
 
-	std::error_code tError;
-	std::filesystem::path tNavPath = tInstallPath;
-	for (auto& tCandidate : vCandidates)
+	auto AddNameCandidates = [&](const std::string& sName)
 	{
-		tCandidate.replace_extension(".nav");
-		if (!tCandidate.has_extension() || !std::filesystem::exists(tCandidate, tError))
-			continue;
-		tNavPath = tCandidate;
-		break;
-	}
+		const std::string sFile = sName + ".nav";
+		AddCandidate(tGameDirectory / "maps" / sFile);
+		AddCandidate(tGameDirectory / "download" / "maps" / sFile);
+		AddCandidate(tGameDirectory / "maps" / "workshop" / sFile);
+		AddCandidate(tGameDirectory / "download" / "maps" / "workshop" / sFile);
+		AddCandidate(tWorkingDirectory / "tf" / "maps" / sFile);
+		AddCandidate(tWorkingDirectory / "tf" / "download" / "maps" / sFile);
+		AddCandidate(tWorkingDirectory / "tf" / "maps" / "workshop" / sFile);
+		AddCandidate(tWorkingDirectory / "tf" / "download" / "maps" / "workshop" / sFile);
+		AddCandidate(tWorkingDirectory / "maps" / sFile);
+		AddCandidate(tWorkingDirectory / "tf" / sFile);
+		AddCandidate(tWorkingDirectory / "unibox" / "Nav" / sFile);
+		AddCandidate(tWorkingDirectory / "Unibox" / "Nav" / sFile);
+	};
 
-	const std::string sNavPath = tNavPath.lexically_normal().string();
-	if (!bForced && m_pMap && m_pMap->m_sMapName == sNavPath)
+	AddNameCandidates(sMapName);
+	AddCandidate(tGameDirectory / sNormalizedLevel);
+	AddCandidate(tWorkingDirectory / "tf" / sNormalizedLevel);
+	if (sBaseMapName != sMapName)
+		AddNameCandidates(sBaseMapName);
+
+	std::error_code tError;
+	auto AddCustomDirCandidates = [&](const std::filesystem::path& tCustomRoot)
 	{
-		m_sNavLevel = sLevelName;
-		m_bNavLoadAttempted = true;
-		return m_pMap->m_eState == NavStateEnum::Active;
-	}
+		if (!std::filesystem::is_directory(tCustomRoot, tError))
+			return;
+		for (const auto& tEntry : std::filesystem::directory_iterator(tCustomRoot, tError))
+		{
+			if (tError || !tEntry.is_directory(tError))
+				continue;
+			const auto& tPackDir = tEntry.path();
+			AddCandidate(tPackDir / "maps" / (sMapName + ".nav"));
+			AddCandidate(tPackDir / "maps" / "workshop" / (sMapName + ".nav"));
+			if (sBaseMapName != sMapName)
+			{
+				AddCandidate(tPackDir / "maps" / (sBaseMapName + ".nav"));
+				AddCandidate(tPackDir / "maps" / "workshop" / (sBaseMapName + ".nav"));
+			}
+		}
+	};
+
+	AddCustomDirCandidates(tGameDirectory / "custom");
+	const std::filesystem::path tWorkCustom = (tWorkingDirectory / "tf" / "custom").lexically_normal();
+	if (tWorkCustom != (tGameDirectory / "custom").lexically_normal())
+		AddCustomDirCandidates(tWorkCustom);
 
 	if (m_pPathWorker) m_pPathWorker->Stop();
 	if (m_pMap && m_pMap->m_eState == NavStateEnum::Active)
@@ -1160,16 +1204,108 @@ bool CNavEngine::EnsureMapLoaded(bool bForced)
 		F::NavBotDanger.ResetSpawn();
 		F::Hazards.Reset();
 	}
-	if (Vars::Debug::Logging.Value)
-		SDK::Output("NavEngine", std::format("Nav File location: {}", sNavPath).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
-	m_pMap = std::make_unique<CMap>(sNavPath.c_str());
+
+	m_pMap.reset();
 	m_vRespawnRoomExitAreas.clear();
 	m_bUpdatedRespawnRooms = false;
-	if (m_pMap->m_eState == NavStateEnum::Active
-		&& (!m_pPathWorker || !m_pPathWorker->Start(m_pMap.get())))
+	bool bTriedAnyFile = false;
+
+	for (const auto& tCandidate : vCandidates)
 	{
-		m_sLastFailureReason = "Path worker failed to start";
-		m_pMap.reset();
+		if (!std::filesystem::is_regular_file(tCandidate, tError))
+			continue;
+
+		bTriedAnyFile = true;
+		const std::string sCandidate = tCandidate.string();
+		auto pCandidateMap = std::make_unique<CMap>(sCandidate.c_str());
+		if (pCandidateMap->m_eState == NavStateEnum::Active)
+		{
+			m_pMap = std::move(pCandidateMap);
+			if (Vars::Debug::Logging.Value)
+				SDK::Output("NavEngine", std::format("Nav File location: {}", sCandidate).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
+			break;
+		}
+	}
+
+	if (!m_pMap && I::FileSystem)
+	{
+		std::vector<std::string> vFsCandidates;
+		std::unordered_set<std::string> setSeenFs;
+		auto AddFsCandidate = [&](std::string sRel)
+		{
+			if (sRel.empty())
+				return;
+			std::replace(sRel.begin(), sRel.end(), '\\', '/');
+			if (setSeenFs.insert(sRel).second)
+				vFsCandidates.push_back(std::move(sRel));
+		};
+
+		if (sNormalizedLevel.find('/') != std::string::npos)
+		{
+			std::filesystem::path tRelPath(sNormalizedLevel);
+			tRelPath.replace_extension(".nav");
+			AddFsCandidate(tRelPath.generic_string());
+		}
+		AddFsCandidate("maps/" + sMapName + ".nav");
+		AddFsCandidate("maps/workshop/" + sMapName + ".nav");
+		if (sBaseMapName != sMapName)
+		{
+			AddFsCandidate("maps/" + sBaseMapName + ".nav");
+			AddFsCandidate("maps/workshop/" + sBaseMapName + ".nav");
+		}
+
+		constexpr const char* aPathIds[] = { "GAME", "BSP", nullptr };
+		for (const auto& sRelPath : vFsCandidates)
+		{
+			for (const char* szPathId : aPathIds)
+			{
+				const FileHandle_t hFile = I::FileSystem->Open(sRelPath.c_str(), "rb", szPathId);
+				if (!hFile)
+					continue;
+
+				const unsigned uSize = I::FileSystem->Size(hFile);
+				if (uSize >= 16 && uSize <= 512u * 1024u * 1024u)
+				{
+					std::vector<uint8_t> vData(uSize);
+					const int iRead = I::FileSystem->Read(vData.data(), static_cast<int>(uSize), hFile);
+					I::FileSystem->Close(hFile);
+					if (iRead == static_cast<int>(uSize))
+					{
+						bTriedAnyFile = true;
+						const std::string sVirtualPath = std::format("[FS:{}] {}", szPathId ? szPathId : "DEFAULT", sRelPath);
+						auto pCandidateMap = std::make_unique<CMap>(sVirtualPath.c_str(), vData.data(), vData.size());
+						if (pCandidateMap->m_eState == NavStateEnum::Active)
+						{
+							m_pMap = std::move(pCandidateMap);
+							if (Vars::Debug::Logging.Value)
+								SDK::Output("NavEngine", std::format("Nav File location: {}", sVirtualPath).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
+							break;
+						}
+					}
+				}
+				else
+				{
+					I::FileSystem->Close(hFile);
+				}
+			}
+			if (m_pMap)
+				break;
+		}
+	}
+
+	if (m_pMap && m_pMap->m_eState == NavStateEnum::Active)
+	{
+		if (!m_pPathWorker || !m_pPathWorker->Start(m_pMap.get()))
+		{
+			m_sLastFailureReason = "Path worker failed to start";
+			m_pMap.reset();
+		}
+		else
+			m_sLastFailureReason.clear();
+	}
+	else
+	{
+		m_sLastFailureReason = bTriedAnyFile ? "Invalid or unsupported navmesh file" : "Navmesh file not found";
 	}
 
 	m_sNavLevel = sLevelName;

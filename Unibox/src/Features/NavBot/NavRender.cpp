@@ -553,8 +553,9 @@ void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 		return;
 	}
 
+	const char* szWalkBlockReason = Vars::Misc::Movement::NavBot::Enabled.Value ? F::NavBotCore.GetWalkBlockReason(pLocal) : nullptr;
 	const bool bIsReady = F::NavEngine.IsReady();
-	if (!Vars::Debug::Info.Value && !bIsReady)
+	if (!Vars::Debug::Info.Value && !bIsReady && !szWalkBlockReason)
 	{
 		m_tDrawCache.Set({});
 		return;
@@ -574,6 +575,9 @@ void CNavRender::CacheIndicators(CTFPlayer* pLocal)
 	}
 
 	std::vector<NavIndicatorLine_t> vCachedLines = {};
+	if (szWalkBlockReason)
+		vCachedLines.push_back({ std::format("Warning: Navbot won't walk ({})", szWalkBlockReason), WARNING_COLOR });
+
 	vCachedLines.push_back({ std::format("Job: {} {}", SDK::ConvertWideToUTF8(BuildJobLabel()), F::CritHack.m_bForce ? "(Crithack on)" : ""), tColor });
 
 	if (F::NavEngine.IsPathing())

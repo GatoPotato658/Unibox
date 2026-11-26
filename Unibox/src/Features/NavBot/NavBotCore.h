@@ -16,6 +16,7 @@ private:
 public:
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Reset();
+	const char* GetWalkBlockReason(CTFPlayer* pLocal) const;
 
 	float GetIdleLastUpdate() const { return m_tIdleTimer.GetLastUpdate(); }
 
@@ -30,6 +31,7 @@ private:
 	Vec3 m_vStuckAngles = {};
 	bool m_bHoldingRunReload = false;
 	bool m_bWasEnabled = false;
+	const char* m_pszLastWarnedReason = nullptr;
 	CNavBotJobSystem m_tJobSystem = {};
 };
 

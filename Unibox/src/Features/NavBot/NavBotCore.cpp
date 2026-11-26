@@ -9,6 +9,7 @@
 #include "../Misc/Misc.h"
 #include "../PacketManip/FakeLag/FakeLag.h"
 #include "../Ticks/Ticks.h"
+#include "../ImGui/Fonts/MaterialDesign/IconDefinitions.h"
 
 void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy)
 {
@@ -127,7 +128,36 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		m_bWasEnabled = true;
 	}
 	else
+	{
 		m_bWasEnabled = false;
+		m_pszLastWarnedReason = nullptr;
+	}
+
+	if (Vars::Misc::Movement::NavBot::Enabled.Value && I::EngineClient->IsInGame() && pLocal && pLocal->IsAlive())
+	{
+		const char* szBlockReason = GetWalkBlockReason(pLocal);
+		auto IsPersistentStateBlock = [](const char* szReason)
+		{
+			return szReason && (
+				std::strcmp(szReason, "Training mode is active") == 0
+				|| std::strcmp(szReason, "Waiting for players") == 0
+				|| std::strcmp(szReason, "Game hasn't started") == 0
+				|| std::strcmp(szReason, "Off navmesh") == 0);
+		};
+
+		if (IsPersistentStateBlock(szBlockReason))
+		{
+			if (m_pszLastWarnedReason != szBlockReason)
+			{
+				m_pszLastWarnedReason = szBlockReason;
+				SDK::Output("NavBot", std::format("Navbot won't walk: {}", szBlockReason).c_str(), WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST, ICON_MD_WARNING);
+			}
+		}
+		else
+		{
+			m_pszLastWarnedReason = nullptr;
+		}
+	}
 
 	if (!bEnabled ||
 		!pLocal || !pCmd || !pLocal->IsAlive() || F::NavEngine.m_eCurrentPriority == PriorityListEnum::Followbot || F::FollowBot.m_bActive || !F::NavEngine.IsReady())
@@ -308,5 +338,79 @@ void CNavBotCore::Reset()
 	m_tDropCarriedObjectTimer = Timer();
 	m_tDoubletapRecharge = Timer();
 	m_bHoldingRunReload = false;
+	m_pszLastWarnedReason = nullptr;
 	m_flNextIdleTime = SDK::RandomFloat(4.f, 10.f);
+}
+
+const char* CNavBotCore::GetWalkBlockReason(CTFPlayer* pLocal) const
+{
+	if (!Vars::Misc::Movement::NavBot::Enabled.Value)
+		return nullptr;
+
+	if (!Vars::Misc::Movement::NavEngine::Enabled.Value)
+		return "NavEngine is disabled";
+
+	if (!I::EngineClient || !I::EngineClient->IsInGame() || !pLocal || !pLocal->IsAlive())
+		return nullptr;
+
+	if (!F::NavEngine.IsNavMeshLoaded())
+		return "No navmesh loaded";
+
+	if (F::FollowBot.m_bActive || F::NavEngine.m_eCurrentPriority == PriorityListEnum::Followbot)
+		return "FollowBot is active";
+
+	if (auto pGameRules = I::TFGameRules())
+	{
+		if (pGameRules->m_bIsInTraining())
+			return "Training mode is active";
+
+		if (pGameRules->m_bInWaitingForPlayers())
+			return "Waiting for players";
+
+		const int iRoundState = pGameRules->m_iRoundState();
+		if (iRoundState == GR_STATE_INIT || iRoundState == GR_STATE_PREGAME || iRoundState == GR_STATE_STARTGAME)
+			return "Game hasn't started";
+
+		if (iRoundState == GR_STATE_PREROUND && !Vars::Misc::Movement::NavEngine::PathInSetup.Value)
+			return "Pre-round freeze";
+
+		if (iRoundState == GR_STATE_TEAM_WIN || iRoundState == GR_STATE_GAME_OVER || iRoundState == GR_STATE_BONUS || iRoundState == GR_STATE_RESTART)
+			return "Round has ended";
+
+		if (iRoundState == GR_STATE_BETWEEN_RNDS && !pGameRules->m_bPlayingMannVsMachine())
+			return "Between rounds";
+	}
+
+	if ((pLocal->m_fFlags() & FL_FROZEN) || pLocal->InCond(TF_COND_FREEZE_INPUT))
+		return "Player is frozen";
+
+	if (pLocal->InCond(TF_COND_STUNNED) && (pLocal->m_iStunFlags() & TF_STUN_CONTROLS))
+		return "Player is stunned";
+
+	if (pLocal->IsTaunting() && !pLocal->m_bAllowMoveDuringTaunt())
+		return "Player is taunting";
+
+	if (F::ZIController.IsSpawning(pLocal) || F::VSHController.IsMovementHeld())
+		return "Movement is locked";
+
+	if (auto pGameRules = I::TFGameRules(); pGameRules && pGameRules->m_bPlayingMannVsMachine() && F::Misc.IsBuyBotBusy())
+		return "BuyBot is busy";
+
+	if (F::Ticks.m_bWarp || F::Ticks.m_bDoubletap)
+		return "Warp/Doubletap active";
+
+	if (pLocal->m_iClass() == TF_CLASS_ENGINEER && pLocal->m_bCarryingObject() && !F::NavBotEngineer.IsEngieMode(pLocal))
+		return "Carrying building";
+
+	const Vector vOrigin = pLocal->GetAbsOrigin();
+	if (!F::NavEngine.GetLocalNavArea(vOrigin) && !F::NavEngine.GetPathStartArea(pLocal, vOrigin))
+		return "Off navmesh";
+
+	if (G::LastUserCmd && (G::LastUserCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVERIGHT | IN_MOVELEFT)) && !F::Misc.m_bAntiAFK)
+		return "Manual movement input";
+
+	if (F::NavEngine.IsSetupTime() && !F::NavEngine.IsPathing())
+		return "Setup time (waiting for gates)";
+
+	return nullptr;
 }

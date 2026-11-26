@@ -946,41 +946,58 @@ bool CNavFile::Load(const char* szLevelname)
 	if (!szLevelname)
 		return false;
 
-	m_sMapName = szLevelname;
-	std::ifstream file(m_sMapName, std::ios::binary);
-	if (!file.is_open())
-		return false;
-
 	std::error_code tError;
-	const uintmax_t uFileSize = std::filesystem::file_size(m_sMapName, tError);
+	const uintmax_t uFileSize = std::filesystem::file_size(szLevelname, tError);
 	if (tError || uFileSize < 16 || uFileSize > 512ull * 1024ull * 1024ull)
 		return false;
 
-	auto CanRead = [&](uintmax_t uSize)
+	std::ifstream file(szLevelname, std::ios::binary);
+	if (!file.is_open())
+		return false;
+
+	std::vector<uint8_t> vBuffer(static_cast<size_t>(uFileSize));
+	file.read(reinterpret_cast<char*>(vBuffer.data()), static_cast<std::streamsize>(vBuffer.size()));
+	if (!file)
+		return false;
+
+	return LoadFromMemory(vBuffer.data(), vBuffer.size(), szLevelname);
+}
+
+bool CNavFile::LoadFromMemory(const uint8_t* pData, size_t uSize, const char* szName)
+{
+	Clear();
+	if (!pData || uSize < 16 || uSize > 512ull * 1024ull * 1024ull)
+		return false;
+
+	m_sMapName = szName ? szName : "";
+	size_t uOffset = 0;
+
+	auto CanRead = [&](uint64_t uReadSize)
 	{
-		const std::streampos tPosition = file.tellg();
-		return tPosition >= 0 && static_cast<uintmax_t>(tPosition) <= uFileSize && uSize <= uFileSize - static_cast<uintmax_t>(tPosition);
+		return uOffset <= uSize && uReadSize <= static_cast<uint64_t>(uSize - uOffset);
 	};
 	auto Read = [&](auto& tValue)
 	{
 		if (!CanRead(sizeof(tValue)))
 			return false;
-		file.read(reinterpret_cast<char*>(&tValue), sizeof(tValue));
-		return static_cast<bool>(file);
+		std::memcpy(&tValue, pData + uOffset, sizeof(tValue));
+		uOffset += sizeof(tValue);
+		return true;
 	};
-	auto ReadBytes = [&](char* pData, size_t uSize)
+	auto ReadBytes = [&](char* pOut, size_t uReadSize)
 	{
-		if (!CanRead(uSize))
+		if (!CanRead(uReadSize))
 			return false;
-		file.read(pData, static_cast<std::streamsize>(uSize));
-		return static_cast<bool>(file);
+		if (uReadSize > 0)
+			std::memcpy(pOut, pData + uOffset, uReadSize);
+		uOffset += uReadSize;
+		return true;
 	};
 	auto HasItems = [&](uint64_t uCount, uint64_t uMinimumSize)
 	{
-		const std::streampos tPosition = file.tellg();
-		if (tPosition < 0 || static_cast<uintmax_t>(tPosition) > uFileSize || !uMinimumSize)
+		if (uOffset > uSize || !uMinimumSize)
 			return false;
-		return uCount <= (uFileSize - static_cast<uintmax_t>(tPosition)) / uMinimumSize;
+		return uCount <= static_cast<uint64_t>(uSize - uOffset) / uMinimumSize;
 	};
 
 	uint32_t uMagic = 0;
@@ -1150,10 +1167,9 @@ bool CNavFile::Load(const char* szLevelname)
 		vAreas.push_back(std::move(tArea));
 	}
 
-	const std::streampos tTailPosition = file.tellg();
-	if (tTailPosition < 0 || static_cast<uintmax_t>(tTailPosition) >= uFileSize)
+	if (uOffset > uSize)
 		return false;
-	const size_t nTailSize = static_cast<size_t>(uFileSize - static_cast<uintmax_t>(tTailPosition));
+	const size_t nTailSize = uSize - uOffset;
 	m_vTailData.resize(nTailSize);
 	if (!ReadBytes(m_vTailData.data(), nTailSize))
 		return false;

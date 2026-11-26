@@ -38,6 +38,7 @@ public:
 	CNavFile() = default;
 	explicit CNavFile(const char* szLevelname);
 	bool Load(const char* szLevelname);
+	bool LoadFromMemory(const uint8_t* pData, size_t uSize, const char* szName = nullptr);
 	bool Write(const char* szFilename = nullptr);
 	void QueryOverlapping(const Vector& vPos, float flRadius, std::vector<CNavArea*>& vOut);
 
@@ -174,6 +175,13 @@ public:
 	explicit CMap(const char* sMapName)
 		: m_navfile(sMapName), m_sMapName(sMapName)
 	{
+		m_eState = m_navfile.m_bOK ? NavStateEnum::Active : NavStateEnum::Unavailable;
+	}
+
+	CMap(const char* sMapName, const uint8_t* pData, size_t uSize)
+		: m_sMapName(sMapName)
+	{
+		m_navfile.LoadFromMemory(pData, uSize, sMapName);
 		m_eState = m_navfile.m_bOK ? NavStateEnum::Active : NavStateEnum::Unavailable;
 	}
 
