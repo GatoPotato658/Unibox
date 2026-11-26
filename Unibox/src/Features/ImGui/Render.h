@@ -40,10 +40,12 @@ private:
 	IDirect3DDevice9* m_pDevice = nullptr;
 	std::atomic<StartupStage> m_eStartupStage = StartupStage::Config;
 	std::chrono::steady_clock::time_point m_tCatalogueWait = {};
+#ifndef TEXTMODE
 	static constexpr int BLUR_LEVELS = 4;
 	Microsoft::WRL::ComPtr<IDirect3DTexture9> m_aStartupBlur[BLUR_LEVELS];
 	Microsoft::WRL::ComPtr<IDirect3DSurface9> m_pStartupResolve;
 	D3DSURFACE_DESC m_tStartupSource = {};
+#endif
 	bool m_bStartupFrame = false;
 	bool m_bStartupComplete = false;
 };
