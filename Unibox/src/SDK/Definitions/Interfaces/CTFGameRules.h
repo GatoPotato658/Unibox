@@ -1,11 +1,8 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/CBaseHandle.h"
+#include "../Engine/CBaseHandle.h"
 #include "../Misc/IMatchGroupDescription.h"
 
-MAKE_SIGNATURE(TFGameRules, "client.dll", "48 8B 0D ? ? ? ? 4C 8B C3 48 8B D7 48 8B 01 FF 90 ? ? ? ? 84 C0", 0x0);
-MAKE_SIGNATURE(CTFGameRules_GetCurrentMatchGroup, "client.dll", "40 53 48 83 EC ? 48 8B D9 E8 ? ? ? ? 48 8B C8 33 D2 E8 ? ? ? ? 84 C0 74 ? 8B 83 ? ? ? ? 48 83 C4", 0x0);
-MAKE_SIGNATURE(GetMatchGroupDescription, "client.dll", "48 63 01 85 C0 78", 0x0);
 
 class CBaseEntity;
 typedef CHandle<CBaseEntity> EHANDLE;

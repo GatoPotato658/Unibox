@@ -1,6 +1,6 @@
 #pragma once
 #include "../../Utils/Math/Math.h"
-#include "../../SDK/Definitions/Main/ValveRandom.h"
+#include "../../SDK/Definitions/Engine/ValveRandom.h"
 
 namespace SpreadMath
 {

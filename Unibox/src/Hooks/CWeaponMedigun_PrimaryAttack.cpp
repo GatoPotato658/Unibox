@@ -2,7 +2,6 @@
 
 #include "../Features/Backtrack/Backtrack.h"
 
-MAKE_SIGNATURE(CWeaponMedigun_PrimaryAttack, "client.dll", "40 53 48 83 EC ? 8B 91 ? ? ? ? 48 8B D9 85 D2 0F 84 ? ? ? ? 48 89 7C 24 ? B8 ? ? ? ? 83 FA ? 74 ? 0F B7 C2 48 8B 3D ? ? ? ? 8B C8 48 83 C7 ? 48 C1 E1 ? 48 03 F9 0F 84 ? ? ? ? C1 EA ? 39 57 ? 0F 85 ? ? ? ? 48 8B 3F 48 85 FF 74", 0x0);
 
 struct Restore_t
 {

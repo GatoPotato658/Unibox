@@ -9,11 +9,6 @@
 #include "../ImGui/IndicatorPanel.h"
 #include "../Misc/Misc.h"
 
-MAKE_SIGNATURE(Host_ShouldRun, "engine.dll", "48 83 EC ? 48 8B 05 ? ? ? ? 83 78 ? ? 74 ? 48 8B 05", 0x0);
-MAKE_SIGNATURE(net_time, "engine.dll", "F2 0F 10 05 ? ? ? ? 66 0F 2F 05 ? ? ? ? 72", 0x0);
-MAKE_SIGNATURE(host_frametime_unbounded, "engine.dll", "F3 0F 10 05 ? ? ? ? F3 0F 11 45 ? F3 0F 11 4D ? 89 45", 0x0);
-MAKE_SIGNATURE(host_frametime_stddeviation, "engine.dll", "F3 0F 10 0D ? ? ? ? 48 8D 54 24 ? 0F 57 C0 48 89 44 24 ? 8B 05", 0x0);
-MAKE_SIGNATURE(Con_NXPrintf, "engine.dll", "48 89 54 24 ? 4C 89 44 24 ? 4C 89 4C 24 ? 53 57 B8 ? ? ? ? E8 ? ? ? ? 48 2B E0 48 8B D9", 0x0);
 
 void CTicks::Reset()
 {

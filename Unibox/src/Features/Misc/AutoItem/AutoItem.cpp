@@ -4,8 +4,6 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <optional>
 
-MAKE_SIGNATURE(CStorePage_DoPreviewItem, "client.dll", "40 53 48 81 EC ? ? ? ? 0F B7 DA", 0x0);
-MAKE_SIGNATURE(CCraftingPanel_Craft, "client.dll", "48 89 5C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 55 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC ? FF 81", 0x0);
 
 constexpr std::array<item_definition_index_t, 12> kPreferredNoisemakerDefs{
 	280, 281, 282, 283, 284, 286, 288, 362, 364, 365, 493, 542

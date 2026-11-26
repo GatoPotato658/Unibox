@@ -1,11 +1,11 @@
 #pragma once
-#include "../Misc/IMDLCache.h"
-#include "../Misc/IStudioDataCache.h"
-#include "../Misc/CDefaultDataCacheClient.h"
-#include "../Misc/VCollide.h"
-#include "../Misc/Studio.h"
-#include "../Misc/CUtlDict.h"
-#include "../Misc/CUtlLinkedList.h"
+#include "../Render/IMDLCache.h"
+#include "../Render/IStudioDataCache.h"
+#include "../Render/CDefaultDataCacheClient.h"
+#include "../Render/VCollide.h"
+#include "../Render/Studio.h"
+#include "../Utl/CUtlDict.h"
+#include "../Utl/CUtlLinkedList.h"
 
 class IDataCacheSection;
 typedef void* DataCacheHandle_t;
@@ -114,5 +114,3 @@ public:
 	bool m_bConnected : 1;
 	bool m_bInitialized : 1;
 };
-
-MAKE_INTERFACE_VERSION(CMDLCache, MDLCache, "datacache.dll", "MDLCache004");

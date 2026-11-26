@@ -1,6 +1,6 @@
 #pragma once
 #include "Interface.h"
-#include "../Misc/VGUI.h"
+#include "../VGUI/VGUI.h"
 
 enum VGuiPanel_t
 {
@@ -27,5 +27,3 @@ public:
 	virtual VPANEL GetPanel(VGuiPanel_t type) = 0;
 	virtual bool IsGameUIVisible() = 0;
 };
-
-MAKE_INTERFACE_VERSION(IEngineVGui, EngineVGui, "engine.dll", "VEngineVGui002");

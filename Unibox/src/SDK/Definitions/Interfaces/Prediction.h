@@ -1,7 +1,6 @@
 #pragma once
 #include "../Misc/IPrediction.h"
 
-MAKE_SIGNATURE(CPrediction_RestoreEntityToPredictedFrame, "client.dll", "40 55 48 83 EC ? 8B EA", 0x0);
 
 class CBasePlayer;
 class CUserCmd;
@@ -50,6 +49,3 @@ public:
 	int m_nIncomingPacketNumber;
 	float m_flIdealPitch;
 };
-
-
-MAKE_INTERFACE_VERSION(CPrediction, Prediction, "client.dll", "VClientPrediction001");

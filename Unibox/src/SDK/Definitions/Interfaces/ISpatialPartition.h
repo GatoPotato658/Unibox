@@ -102,5 +102,3 @@ public:
 	virtual void ReportStats(const char* pFileName) = 0;
 	virtual void InstallQueryCallback(IPartitionQueryCallback* pCallback) = 0;
 };
-
-MAKE_INTERFACE_VERSION(ISpatialPartition, SpatialPartition, "engine.dll", "SpatialPartition001");

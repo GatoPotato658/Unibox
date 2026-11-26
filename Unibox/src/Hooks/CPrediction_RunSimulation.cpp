@@ -5,7 +5,6 @@
 #include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Ticks/Ticks.h"
 
-MAKE_SIGNATURE(CPrediction_RunSimulation, "client.dll", "48 83 EC 38 4C 8B 44", 0x0);
 
 MAKE_HOOK(CPrediction_RunSimulation, S::CPrediction_RunSimulation(), void,
 	void* rcx, int current_command, float curtime, CUserCmd* cmd, CTFPlayer* localPlayer)

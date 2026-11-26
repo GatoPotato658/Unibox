@@ -1,6 +1,6 @@
 #pragma once
 #include "../Macros/Macros.h"
-#include "../../SDK/Definitions/Misc/dt_recv.h"
+#include "../../SDK/Definitions/DataTable/dt_recv.h"
 #include <cstdint>
 
 class CNetVars

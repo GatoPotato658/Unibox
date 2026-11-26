@@ -2,8 +2,6 @@
 #include "../Features/NavBot/NavEngine.h"
 #include "../Features/NavBot/Jobs/NavBotJobs.h"
 
-MAKE_SIGNATURE(CEntityMapData_ExtractValue, "client.dll", "48 8B 09 E9 ? ? ? ? CC CC CC CC CC CC CC CC 48 89 5C 24 ? 48 89 6C 24", 0x0);
-MAKE_SIGNATURE(C_PhysPropClientside_ParseEntity_ExtractValue_Call, "client.dll", "84 C0 75 ? 48 8D 0D ? ? ? ? FF 15 ? ? ? ? CC 48 8D 15", 0x0);
 
 static Vector ParseVector(const char* szValue)
 {

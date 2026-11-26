@@ -1,9 +1,7 @@
 #pragma once
 #include "Interface.h"
-#include "../Misc/ISurface.h"
+#include "../VGUI/ISurface.h"
 
-MAKE_SIGNATURE(CMatSystemSurface_StartDrawing, "vguimatsurface.dll", "40 53 56 57 48 83 EC ? 48 8B F9 80 3D", 0x0);
-MAKE_SIGNATURE(CMatSystemSurface_FinishDrawing, "vguimatsurface.dll", "40 53 48 83 EC ? 33 C9", 0x0);
 
 class VMatrix;
 class IMaterial;
@@ -46,5 +44,3 @@ public:
 	SIGNATURE(StartDrawing, void, CMatSystemSurface, this);
 	SIGNATURE(FinishDrawing, void, CMatSystemSurface, this);
 };
-
-MAKE_INTERFACE_VERSION(IMatSystemSurface, MatSystemSurface, "vguimatsurface.dll", "VGUI_Surface030");

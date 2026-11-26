@@ -1,11 +1,11 @@
 #pragma once
 #include "Interface.h"
 #include "../Misc/BaseTypes.h"
-#include "../Misc/ClientClass.h"
-#include "../Misc/bitbuf.h"
-#include "../Misc/CUtlVector.h"
-#include "../Misc/ButtonCode.h"
-#include "../Misc/CViewSetup.h"
+#include "../DataTable/ClientClass.h"
+#include "../Utl/bitbuf.h"
+#include "../Utl/CUtlVector.h"
+#include "../VGUI/ButtonCode.h"
+#include "../Render/CViewSetup.h"
 #include <Windows.h>
 
 class CGlobalVarsBase;
@@ -149,5 +149,3 @@ public:
 	virtual bool DisconnectAttempt(void) = 0;
 	virtual bool IsConnectedUserInfoChangeAllowed(IConVar* pCvar) = 0;
 };
-
-MAKE_INTERFACE_VERSION(IBaseClientDLL, Client, "client.dll", "VClient017");

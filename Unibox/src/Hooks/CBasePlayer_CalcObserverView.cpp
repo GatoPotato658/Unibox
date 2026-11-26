@@ -3,7 +3,6 @@
 
 #include "../Features/Spectate/Spectate.h"
 
-MAKE_SIGNATURE(CBasePlayer_CalcObserverView, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B 01 49 8B F9 49 8B F0", 0x0);
 
 MAKE_HOOK(CBasePlayer_CalcObserverView, S::CBasePlayer_CalcObserverView(), void,
 	void* rcx, Vector& eyeOrigin, QAngle& eyeAngles, float& fov)

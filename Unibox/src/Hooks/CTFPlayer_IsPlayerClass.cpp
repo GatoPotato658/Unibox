@@ -1,7 +1,6 @@
 #ifndef TEXTMODE
 #include "../SDK/SDK.h"
 
-MAKE_SIGNATURE(CTFPlayer_IsPlayerClass, "client.dll", "48 81 C1 ? ? ? ? 75 ? 32 C0", 0x0);
 
 MAKE_HOOK(CTFPlayer_IsPlayerClass, S::CTFPlayer_IsPlayerClass(), bool,
 	void* rcx, int iClass)

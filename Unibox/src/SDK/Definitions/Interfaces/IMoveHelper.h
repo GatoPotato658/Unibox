@@ -1,6 +1,6 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/CBaseHandle.h"
+#include "../Engine/CBaseHandle.h"
 #include "../Definitions.h"
 
 #define INVALID_ENTITY_HANDLE INVALID_EHANDLE_INDEX
@@ -29,5 +29,3 @@ public:
 protected:
 	virtual ~IMoveHelper() {}
 };
-
-MAKE_INTERFACE_SIGNATURE(IMoveHelper, MoveHelper, "client.dll", "48 8B 0D ? ? ? ? 48 8B 01 FF 50 ? 0F B7 D7", 0x0, 1);

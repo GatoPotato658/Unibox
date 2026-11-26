@@ -22,5 +22,3 @@ public:
 	int nTimestampNetworkingBase;
 	int nTimestampRandomizeWindow;
 };
-
-MAKE_INTERFACE_SIGNATURE(CGlobalVarsBase, GlobalVars, "engine.dll", "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 8B CA", 0x0, 0);

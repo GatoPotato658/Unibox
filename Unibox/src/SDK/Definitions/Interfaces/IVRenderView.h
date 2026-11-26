@@ -2,7 +2,7 @@
 #include "IMaterialSystem.h"
 #include "../Misc/BaseTypes.h"
 #include "../Misc/IRefCounted.h"
-#include "../Misc/VPlane.h"
+#include "../Render/VPlane.h"
 #include "../Definitions.h"
 
 #define MAX_VIS_LEAVES	32
@@ -205,5 +205,3 @@ public:
 		SetColorModulation(blend);
 	}
 };
-
-MAKE_INTERFACE_VERSION(IVRenderView, RenderView, "engine.dll", "VEngineRenderView014");

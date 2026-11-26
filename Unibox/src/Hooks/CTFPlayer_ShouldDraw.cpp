@@ -2,12 +2,7 @@
 
 #include "../Features/Spectate/Spectate.h"
 
-MAKE_SIGNATURE(CTFPlayer_ShouldDraw, "client.dll", "48 89 74 24 ? 57 48 83 EC ? 48 8D 71", 0x0);
-MAKE_SIGNATURE(CBasePlayer_ShouldDrawThisPlayer, "client.dll", "48 83 EC ? E8 ? ? ? ? 84 C0 74 ? 48 8B 0D ? ? ? ? 48 85 C9", 0x0);
-MAKE_SIGNATURE(CBasePlayer_ShouldDrawLocalPlayer, "client.dll", "48 83 EC ? 48 8B 0D ? ? ? ? 48 85 C9 74 ? 48 8B 01 FF 50 ? 84 C0 74 ? 8B 05", 0x0);
-MAKE_SIGNATURE(CBaseCombatWeapon_ShouldDraw, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 83 B9 ? ? ? ? ? 48 8B D9 74 ? 8B 81", 0x0);
 //MAKE_SIGNATURE(CTFWeaponBase_PostDataUpdate_ShouldDrawThisPlayer_Call, "client.dll", "84 C0 75 ? 8B BE", 0x0);
-MAKE_SIGNATURE(CBasePlayer_BuildFirstPersonMeathookTransformations_ShouldDrawThisPlayer_Call, "client.dll", "84 C0 0F 84 ? ? ? ? 48 8B 94 24 ? ? ? ? 48 8B CE", 0x0);
 //MAKE_SIGNATURE(CBaseCombatWeapon_CalcOverrideModelIndex_ShouldDrawLocalPlayer_Call, "client.dll", "84 C0 75 ? B8 ? ? ? ? 48 8B 5C 24", 0x0);
 
 MAKE_HOOK(CTFPlayer_ShouldDraw, S::CTFPlayer_ShouldDraw(), bool,

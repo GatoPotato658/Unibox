@@ -1,6 +1,6 @@
 #pragma once
 #include "Interface.h"
-#include "../Misc/bitbuf.h"
+#include "../Utl/bitbuf.h"
 
 #define MAX_EVENT_NAME_LENGTH 32
 #define MAX_EVENT_BITS 9
@@ -76,5 +76,3 @@ public:
 	virtual bool SerializeKeyValues(KeyValues* event, bf_write* buf, CGameEvent* eventtype = nullptr) = 0;
 	virtual KeyValues* UnserializeKeyValue(bf_read* msg) = 0;
 };
-
-MAKE_INTERFACE_VERSION(IGameEventManager2, GameEventManager, "engine.dll", "GAMEEVENTSMANAGER002");

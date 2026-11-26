@@ -1,13 +1,13 @@
 #pragma once
 #include "../Misc/IAppSystem.h"
-#include "../Misc/Deformations.h"
-#include "../Misc/IColorCorrectionSystem.h"
-#include "../Misc/ImageFormat.h"
+#include "../Render/Deformations.h"
+#include "../Render/IColorCorrectionSystem.h"
+#include "../Render/ImageFormat.h"
 #include "../Misc/IMaterialSystemHardwareConfig.h"
 #include "../Misc/IRefCounted.h"
-#include "../Misc/LightDesc.h"
-#include "../Misc/TextureGroupNames.h"
-#include "../Misc/VTF.h"
+#include "../Render/LightDesc.h"
+#include "../Render/TextureGroupNames.h"
+#include "../Render/VTF.h"
 #include "../Types.h"
 
 #define OVERBRIGHT 2.0f
@@ -721,5 +721,3 @@ struct ShaderStencilState_t
 		pRenderContext->SetStencilWriteMask(m_nWriteMask);
 	}
 };
-
-MAKE_INTERFACE_VERSION(IMaterialSystem, MaterialSystem, "materialsystem.dll", "VMaterialSystem082");

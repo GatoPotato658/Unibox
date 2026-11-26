@@ -725,6 +725,3 @@ public:
 	virtual IPhysicsCollisionSet* FindCollisionSet(unsigned int id) = 0;
 	virtual void DestroyAllCollisionSets() = 0;
 };
-
-MAKE_INTERFACE_VERSION(IPhysicsCollision, PhysicsCollision, "vphysics.dll", "VPhysicsCollision007");
-MAKE_INTERFACE_VERSION(IPhysics, Physics, "vphysics.dll", "VPhysics031");

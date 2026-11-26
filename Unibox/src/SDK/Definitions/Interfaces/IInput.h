@@ -1,9 +1,9 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/CUserCmd.h"
-#include "../Misc/bitbuf.h"
+#include "../Engine/CUserCmd.h"
+#include "../Utl/bitbuf.h"
 #include "../Misc/IClientMode.h"
-#include "../Misc/ChecksumCRC.h"
+#include "../Utl/ChecksumCRC.h"
 
 struct kbutton_t;
 struct CameraThirdData_t;
@@ -75,5 +75,3 @@ public:
 	CUserCmd* m_pCommands;
 	CVerifiedUserCmd* m_pVerifiedCommands;
 };
-
-MAKE_INTERFACE_SIGNATURE(IInput, Input, "client.dll", "48 8B 0D ? ? ? ? 48 8B 01 FF 90 ? ? ? ? 85 C0 0F 84 ? ? ? ? F3 0F 10 05", 0x0, 1);

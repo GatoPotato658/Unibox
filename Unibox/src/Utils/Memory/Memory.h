@@ -80,6 +80,24 @@ ADD_FEATURE_CUSTOM(CMemory, Memory, U);
 	return reinterpret_cast<type>(uintptr_t(this) + offset); \
 }
 
+#define OFFSET_SIG(name, type, sig, readType, sigOffset) inline type& name() \
+{ \
+	static const int nOffset = S::sig.ReadAt<readType>(sigOffset); \
+	return *reinterpret_cast<type*>(uintptr_t(this) + nOffset); \
+}
+
+#define OFFSET_SIG_ADD(name, type, sig, readType, sigOffset, add) inline type& name() \
+{ \
+	static const int nOffset = S::sig.ReadAt<readType>(sigOffset) + add; \
+	return *reinterpret_cast<type*>(uintptr_t(this) + nOffset); \
+}
+
+#define OFFSET_SIG_EMBED(name, type, sig, readType, sigOffset) inline type name() \
+{ \
+	static const int nOffset = S::sig.ReadAt<readType>(sigOffset); \
+	return reinterpret_cast<type>(uintptr_t(this) + nOffset); \
+}
+
 #define CONDGET(name, conditions, cond) inline bool name() \
 { \
 	return conditions & cond; \

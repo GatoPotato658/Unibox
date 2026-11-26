@@ -20,5 +20,3 @@ public:
 	float m_flLerpTime;
 	float m_flUpLerpTime;
 };
-
-MAKE_INTERFACE_SIGNATURE(CThirdPersonManager, ThirdPersonManager, "client.dll", "48 8D 0D ? ? ? ? 0F 29 BC 24", 0x0, 0);

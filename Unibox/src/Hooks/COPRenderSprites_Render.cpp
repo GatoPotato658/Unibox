@@ -1,10 +1,7 @@
 #include "../SDK/SDK.h"
 
-#include "../SDK/Definitions/Misc/CUtlObjectReference.h"
+#include "../SDK/Definitions/Utl/CUtlObjectReference.h"
 
-MAKE_SIGNATURE(COPRenderSprites_Render, "client.dll", "48 89 54 24 ? 55 53 57 41 55 41 56", 0x0);
-MAKE_SIGNATURE(COPRenderSprites_RenderSpriteCard, "client.dll", "48 8B C4 48 89 58 ? 57 41 54", 0x0);
-MAKE_SIGNATURE(COPRenderSprites_RenderTwoSequenceSpriteCard, "client.dll", "48 8B C4 48 89 58 ? 48 89 68 ? 56 57 41 54 41 56 41 57 48 81 EC ? ? ? ? F3 0F 10 1D", 0x0);
 
 class CSheet;
 typedef __m128 fltx4;

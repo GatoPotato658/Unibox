@@ -26,5 +26,3 @@ public:
 	virtual void ConstructString(wchar_t* unicodeOutput, int unicodeBufferSizeInBytes, const char* tokenName, KeyValues* localizationVariables) = 0;
 	virtual void ConstructString(wchar_t* unicodeOutput, int unicodeBufferSizeInBytes, StringIndex_t unlocalizedTextSymbol, KeyValues* localizationVariables) = 0;
 };
-
-MAKE_INTERFACE_VERSION(ILocalize, Localize, "vgui2.dll", "VGUI_Localize005");

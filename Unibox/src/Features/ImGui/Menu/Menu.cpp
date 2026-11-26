@@ -21,9 +21,9 @@
 #include "../../World/World.h"
 #include "../IndicatorPanel.h"
 
-#include "../../../SDK/Definitions/Main/IMaterial.h"
-#include "../../../SDK/Definitions/Main/IMaterialVar.h"
-#include "../../../SDK/Definitions/Main/ITexture.h"
+#include "../../../SDK/Definitions/Render/IMaterial.h"
+#include "../../../SDK/Definitions/Render/IMaterialVar.h"
+#include "../../../SDK/Definitions/Render/ITexture.h"
 
 #include <algorithm>
 #include <cctype>

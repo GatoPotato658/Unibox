@@ -7,7 +7,6 @@
 #include <regex>
 #include <numeric>
 
-MAKE_SIGNATURE(CTFWeaponBaseGun_GetWeaponSpread, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 4C 63 91", 0x0);
 
 static_assert(offsetof(IMatchGroupDescription, m_bFixedWeaponSpread) == 0x70);
 

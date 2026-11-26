@@ -7,7 +7,6 @@
 #endif
 //#include "../Features/Debug/Debug.h"
 
-MAKE_SIGNATURE(Cbuf_ExecuteCommand, "engine.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B 05 ? ? ? ? 48 8D 3D", 0x0);
 
 enum cmd_source_t
 {

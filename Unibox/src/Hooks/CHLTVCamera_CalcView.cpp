@@ -3,9 +3,6 @@
 
 #include "../Features/Spectate/Spectate.h"
 
-MAKE_SIGNATURE(CHLTVCamera_CalcView, "client.dll", "48 89 5C 24 ? 48 89 74 24 ? 57 41 56 41 57 48 83 EC ? 80 79 ? ? 4D 8B F9", 0x0);
-MAKE_SIGNATURE(CHLTVCamera_GetPrimaryTarget, "client.dll", "40 53 48 83 EC ? 48 8B D9 8B 49 ? 85 C9 7E ? E8 ? ? ? ? 48 85 C0 74 ? 48 8B 10 48 8B C8 48 83 C4 ? 5B 48 FF A2 ? ? ? ? 8B 53", 0x0);
-MAKE_SIGNATURE(CHLTVCamera_GetMode, "client.dll", "40 53 48 83 EC ? 48 8B D9 8B 49 ? 85 C9 7E ? E8 ? ? ? ? 48 85 C0 74 ? 48 8B 10 48 8B C8 48 83 C4 ? 5B 48 FF A2 ? ? ? ? 8B 43", 0x0);
 
 MAKE_HOOK(CHLTVCamera_CalcView, S::CHLTVCamera_CalcView(), void,
 	void* rcx, Vector& origin, QAngle& angles, float& fov)

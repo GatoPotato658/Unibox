@@ -3,8 +3,6 @@
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Ticks/Ticks.h"
 
-MAKE_SIGNATURE(CNetChannel_ProcessPacket, "engine.dll", "44 88 44 24 18 48 89 54 24 10 53", 0x0);
-MAKE_SIGNATURE(CL_EventQueue, "engine.dll", "48 8B 2D ? ? ? ? 48 85 ED 0F 84", 0x0);
 
 MAKE_HOOK(CNetChannel_ProcessPacket, S::CNetChannel_ProcessPacket(), void,
 	CNetChannel* pNetChan, void* packet, bool bHasHeader)

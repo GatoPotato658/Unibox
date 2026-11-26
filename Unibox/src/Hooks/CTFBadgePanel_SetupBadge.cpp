@@ -2,7 +2,6 @@
 
 #include "../Features/Players/PlayerUtils.h"
 
-MAKE_SIGNATURE(CTFBadgePanel_SetupBadge, "client.dll", "48 85 D2 0F 84 ? ? ? ? 48 89 5C 24 ? 48 89 7C 24 ? 4C 89 74 24", 0x0);
 
 MAKE_HOOK(CTFBadgePanel_SetupBadge, S::CTFBadgePanel_SetupBadge(), void,
 	void* rcx, const IMatchGroupDescription* pMatchDesc, /*const*/ LevelInfo_t& levelInfo, const CSteamID& steamID)

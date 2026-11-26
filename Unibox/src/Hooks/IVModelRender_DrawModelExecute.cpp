@@ -5,8 +5,6 @@
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/CameraWindow/CameraWindow.h"
 
-MAKE_SIGNATURE(CBaseAnimating_InternalDrawModel, "client.dll", "48 8B C4 55 56 48 8D 6C 24 ? 48 81 EC ? ? ? ? 44 8B 81", 0x0);
-MAKE_SIGNATURE(CBaseViewModel_DrawModel, "client.dll", "40 53 55 56 48 83 EC ? 80 B9", 0x0);
 
 static bool s_bDrawingViewmodel = false;
 

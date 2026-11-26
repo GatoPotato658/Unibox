@@ -1,6 +1,6 @@
 #include "NetVars.h"
 
-#include "../../SDK/Definitions/Interfaces/CHLClient.h"
+#include "../../SDK/Definitions/Interfaces.h"
 #include "../Hash/FNV1A.h"
 
 #ifdef GetProp

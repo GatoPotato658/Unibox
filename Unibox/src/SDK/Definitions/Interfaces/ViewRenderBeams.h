@@ -173,5 +173,3 @@ public:
 		float life, float width, float m_nEndWidth, float m_nFadeLength, float r, float g, float b,
 		float brightness) = 0;
 };
-
-MAKE_INTERFACE_SIGNATURE(IViewRenderBeams, ViewRenderBeams, "client.dll", "48 8B 0D ? ? ? ? 48 8B D3 48 8B 01 FF 50 ? 0F B7 93", 0x0, 1);

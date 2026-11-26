@@ -2,18 +2,8 @@
 #include "Interface.h"
 #include "../Steam/SteamClientPublic.h"
 
-MAKE_SIGNATURE(CGCClientSharedObjectCache_FindTypeCache, "client.dll", "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 0F B7 59 ? BE", 0x0);
 
-MAKE_SIGNATURE(CTFGCClientSystem_PingThink, "client.dll", "40 55 41 54 41 55 48 8D AC 24", 0x0);
-MAKE_SIGNATURE(CTFGCClientSystem_GetParty, "client.dll", "48 83 EC ? 48 8B 89 ? ? ? ? 48 85 C9 74 ? BA ? ? ? ? E8 ? ? ? ? 48 85 C0 74 ? 8B 48 ? 85 C9 74 ? 48 8B 40 ? FF C9", 0x0);
-MAKE_SIGNATURE(CTFGCClientSystem_PingThink_PendingPingRefreshOffset, "client.dll", "41 80 BD ? ? ? ? 00 75 ? 3B FB 76 ? 41 C6 85 ? ? ? ? 01 0F 57 C9", 0x0);
-MAKE_SIGNATURE(CTFGCClientSystem_OnLobbyUpdated_NonPremiumOffset, "client.dll", "FF 10 0F B6 48 ? 41 88 8F ? ? ? ? EB ? 48 8D 0D", 0x0);
-MAKE_SIGNATURE(CTFGCClientSystem_AbandonCurrentMatch, "client.dll", "48 83 EC ? 48 89 5C 24 ? 48 8B D9 48 8D 0D ? ? ? ? 48 89 74 24", 0x0);
-MAKE_SIGNATURE(CTFGCClientSystem_JoinMMMatch, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B D9 48 81 C1 ? ? ? ? E8 ? ? ? ? 84 C0 0F 84", 0x0);
-MAKE_SIGNATURE(CTFGCClientSystem_RequestAcceptMatchInvite, "client.dll", "41 55 41 56 48 83 EC ? 48 83 B9", 0x0);
 
-MAKE_SIGNATURE(CTFParty_MembersOffset, "client.dll", "48 89 54 24 10 53 48 83 EC 50 48 8B D9 48 8B 49 ? 48 85 C9 0F 84 ? ? ? ? 80 7B ? 00 0F 84 ? ? ? ? 48 81 C1 ? ? ? ? 48 8D 54 24 68 48 8B 01 FF 50 20 83 F8 FF 0F 84 ? ? ? ? BA AF 19 00 00", 0x0);
-MAKE_SIGNATURE(CTFParty_SpewDebug, "client.dll", "4C 8B DC 41 56 48 81 EC ? ? ? ? 8B 05", 0x0);
 
 class CGCClientSharedObjectTypeCache
 {
@@ -158,5 +148,3 @@ public:
 		*reinterpret_cast<bool*>(uintptr_t(this) + iOffset) = bValue;
 	}
 };
-
-MAKE_INTERFACE_SIGNATURE(CTFGCClientSystem, TFGCClientSystem, "client.dll", "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 8B 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 89 5C 24 ? 48 89 74 24 ? 48 89 7C 24", 0x0, 0);

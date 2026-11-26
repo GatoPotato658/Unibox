@@ -495,6 +495,7 @@ void CMaterials::UnloadMaterials()
 	m_mMatNames.clear();
 }
 
+
 bool CMaterials::IsCustomMaterial(IMaterial* pMaterial)
 {
 	if (!pMaterial)
@@ -503,7 +504,8 @@ bool CMaterials::IsCustomMaterial(IMaterial* pMaterial)
 	if (m_mMatList.contains(pMaterial))
 		return true;
 
-	auto pQueue = reinterpret_cast<IMaterial*>(reinterpret_cast<uintptr_t>(pMaterial) + 0xD0);
+	static const int iQueueFriendlyOffset = S::CMaterial_QueueFriendlyOffset.ReadAt<int>(14);
+	auto pQueue = reinterpret_cast<IMaterial*>(reinterpret_cast<uintptr_t>(pMaterial) + iQueueFriendlyOffset);
 	if (m_mMatList.contains(pQueue))
 		return true;
 

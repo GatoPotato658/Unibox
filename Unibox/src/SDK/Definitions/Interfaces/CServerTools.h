@@ -64,5 +64,3 @@ public:
 	virtual CServerBaseEntity* FindEntityClassNearestFacing(const Vector& origin, const Vector& facing, float threshold, char* classname) = 0;
 	virtual CServerBaseEntity* FindEntityProcedural(const char* szName, CServerBaseEntity* pSearchingEntity = NULL, CServerBaseEntity* pActivator = NULL, CServerBaseEntity* pCaller = NULL) = 0;
 };
-
-MAKE_INTERFACE_VERSION(CServerTools, ServerTools, "server.dll", "VSERVERTOOLS003");

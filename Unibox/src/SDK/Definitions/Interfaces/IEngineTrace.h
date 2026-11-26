@@ -1,7 +1,7 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/CModel.h"
-#include "../Misc/CUtlVector.h"
+#include "../Render/CModel.h"
+#include "../Utl/CUtlVector.h"
 #include "../Types.h"
 
 class CGameTrace;
@@ -93,5 +93,3 @@ public:
 	int m_traceStatCounters[NUM_TRACE_STAT_COUNTER];
 	const matrix3x4* m_pRootMoveParent;
 };
-
-MAKE_INTERFACE_VERSION(CEngineTrace, EngineTrace, "engine.dll", "EngineTraceClient003");

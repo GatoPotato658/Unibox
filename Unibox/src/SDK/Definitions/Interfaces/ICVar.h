@@ -109,5 +109,3 @@ inline ConCommandBase* ICvar::Iterator::Get(void)
 {
 	return m_pIter->Get();
 }
-
-MAKE_INTERFACE_VERSION(ICvar, CVar, "vstdlib.dll", "VEngineCvar004");

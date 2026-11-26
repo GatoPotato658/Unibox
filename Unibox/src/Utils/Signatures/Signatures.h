@@ -62,3 +62,5 @@ ADD_FEATURE_CUSTOM(CSignatures, Signatures, U);
 { \
 	return S::sig##_##name.Call<type>(##__VA_ARGS__); \
 }
+
+#include "../../SDK/Signatures.h"

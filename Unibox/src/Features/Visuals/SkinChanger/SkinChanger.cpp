@@ -16,31 +16,7 @@
 
 #ifndef TEXTMODE
 
-MAKE_SIGNATURE(CEconItemSchema_GetAttributeDefinition, "client.dll", "85 D2 78 ? 3B 91 E8 02 00 00 7D ? 48 8B 81 D8 02 00 00 8B D2 48 8B 04 D0 C3 33 C0 C3", 0x0);
-MAKE_SIGNATURE(CAttributeList_SetRuntimeAttributeValue, "client.dll", "48 89 5C 24 10 55 56 57 48 8B EC 48 83 EC 50 44", 0x0);
-MAKE_SIGNATURE(CEconItemView_Constructor, "client.dll", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 20 48 8D 05 ? ? ? ? 66 C7 41 10 FF FF 48 89 01 48 8B F9 48 8D 05", 0x0);
-MAKE_SIGNATURE(CEconItemView_Assign, "client.dll", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 0F B7 42 48 48 8B DA 66 89 41 48 48 8B F9 8B 42 4C 89 41 4C 8B 42 50 89 41 50 8B 6A", 0x0);
-MAKE_SIGNATURE(CEconItemView_GetSOCData, "client.dll", "40 57 48 83 EC 20 48 8B 41 78 48 8B F9 48 85 C0 0F 85 A3 00 00 00 48 8B 0D ? ? ? ? 48 89 5C 24 30 48 8B 01 FF 90 D0", 0x0);
-MAKE_SIGNATURE(CEconItem_Constructor, "client.dll", "48 89 5C 24 08 57 48 83 EC 20 48 8D 05 ? ? ? ? 48 8B F9 48 89 01 48 83 C1 08 E8 ? ? ? ? 48 8B 5C 24 30 48 8D 05 ? ? ? ? 33 C9 48 89 07", 0x0);
-MAKE_SIGNATURE(CTFPlayerInventory_AddEconItem, "client.dll", "40 53 48 83 EC 30 0F B6 5C 24 60 88 5C 24 20 E8 ? ? ? ? 84 C0 74 20 84 DB 74 14", 0x0);
-MAKE_SIGNATURE(CPlayerInventory_RemoveItem, "client.dll", "40 53 56 57 48 83 EC 30 44 8B 41 70 33 DB 48 8B F9 8B F3 45 85 C0 0F 8E", 0x0);
-MAKE_SIGNATURE(CTFPlayerInventory_GetMaxItems, "client.dll", "40 53 48 83 EC ? 48 8B 89 ? ? ? ? BB", 0x0);
-MAKE_SIGNATURE(CCrateLootListWrapper_InitSeriesCall, "client.dll", "E8 ? ? ? ? 84 C0 75 1E 48 8B D7 48 8D 4C 24 68 E8 ? ? ? ? 84 C0 75 0D 48 8B D7 48 8D 4C 24 68 E8", 0x0);
-MAKE_SIGNATURE(CCrateLootListWrapper_InitName, "client.dll", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 8B 05 ? ? ? ? 48 8B FA 48 8B F1 A8 01 75 26", 0x0);
-MAKE_SIGNATURE(CCrateLootListWrapper_InitLineItems, "client.dll", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B FA 48 8B D9 E8 ? ? ? ? 8B 70 08 39 35 ? ? ? ? 74", 0x0);
 
-MAKE_SIGNATURE(CTFWearable_Constructor, "client.dll", "40 53 48 83 EC 20 48 8B D9 E8 ? ? ? ? C6 83 A0 0E 00 00 00 48 8D 05", 0x0);
-MAKE_SIGNATURE(MemAlloc_Zero, "client.dll", "48 89 5C 24 08 57 48 83 EC 20 48 8B 05 ? ? ? ? 48 8B F9 48 8B D7 48 8B 08 48 8B 01 FF 50 08 4C 8B C7 33 D2 48 8B C8 48 8B D8 E8", 0x0);
-MAKE_SIGNATURE(CEconEntity_InitializeAttributes, "client.dll", "48 89 5C 24 08 57 48 83 EC 40 48 8B D9 48 81 C1 38 0C 00 00 48 8B D3 48 8B 01 FF 50 20 83 BB 94 0C 00 00 01 74 1E 48 8D", 0x0);
-MAKE_SIGNATURE(CEconItemView_GetPlayerDisplayModel, "client.dll", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 30 0F B7 59 48 41 8B E8 48 63 F2 4C 8B F1 E8", 0x0);
-MAKE_SIGNATURE(Inventory_CBaseEntity_SetModel, "client.dll", "40 57 48 83 EC 20 48 8B F9 48 85 D2 74 2F 48 8B 0D ? ? ? ? 48 89 5C 24 30 48 8B 01 FF 50 10 8B D0", 0x0);
-MAKE_SIGNATURE(CBaseEntity_SetOwnerEntity, "client.dll", "40 53 48 83 EC 20 48 8B D9 48 85 D2 74 17 48 8B 02 48 8B CA FF 50 10 8B 10 89 93 64 07 00 00 48 83 C4 20 5B C3 C7 81 64 07 00 00 FF FF FF FF", 0x0);
-MAKE_SIGNATURE(CUtlVector_SetCountHandle, "client.dll", "48 89 5C 24 08 57 48 83 EC 20 48 63 DA 48 03 D9 49 63 F8 8B 43 10 3B C7 7D 12 44 8B C7 8B D0 44 2B C0 48 8B CB E8 ? ? ? ? EB 05 7E 03 89 7B 10 39 7B 08 7D 2D 83 7B 0C 00 7C 27 48 8B 03 48 8B CF 48 C1 E1 02", 0x0);
-MAKE_SIGNATURE(ClientScene_Constructor, "client.dll", "40 53 48 83 EC 20 48 8B D9 E8 ? ? ? ? 33 C9 48 8D 05 ? ? ? ? 48 89 03 48 8D 05 ? ? ? ? 48 89 43 08 48 8D 05 ? ? ? ? 48 89 43 10 48 8D 05 ? ? ? ? 48 89 43 18 48 8D 05 ? ? ? ? 48 89 83 C0 07 00 00 48 89 8B E0 07 00 00 48 89 8B E8 07 00 00 48 8B 83 E0 07 00 00 48 89 83 F8 07 00 00 89 8B F0 07 00 00", 0x0);
-MAKE_SIGNATURE(ClientTaunt_EmitSound, "client.dll", "48 89 5C 24 ? 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 ? 48 81 EC ? ? ? ? 48 8B 3D", 0x0);
-MAKE_SIGNATURE(ClientTaunt_StopSound, "client.dll", "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 41 10 48 8B F1 48 83 C1 10 48 8B DA FF 50 48 83 F8 FF", 0x0);
-MAKE_SIGNATURE(ClientTaunt_PlaySoundLoop, "client.dll", "48 85 D2 0F 84 DB 00 00 00 48 8B C4 48 89 70 18 41 56 48 83 EC 70 80 3A 00 48 8B F2 4C 8B F1 0F 84 B1 00 00 00", 0x0);
-MAKE_SIGNATURE(ClientTaunt_StopSoundLoop, "client.dll", "40 53 48 83 EC 20 48 83 B9 A0 1B 00 00 00 48 8B D9 74 21", 0x0);
 
 #endif
 
@@ -293,7 +269,12 @@ namespace
 	constexpr int kAttrKillEaterType = 292;
 	constexpr int kAttrAttachedParticle = 134;
 	constexpr int kAttrTauntParticle = 2041;
-	constexpr size_t kItemViewAttributeList = 0xF0;
+	inline size_t GetItemViewAttributeListOffset()
+	{
+		static const size_t uOffset = static_cast<size_t>(S::CEconItemView_DynamicAttrsOffsets.ReadAt<int>(3) - 48);
+		return uOffset;
+	}
+#define kItemViewAttributeList GetItemViewAttributeListOffset()
 
 	constexpr float kWear[] = { 0.2f, 0.4f, 0.6f, 0.8f, 1.f };
 
@@ -795,39 +776,103 @@ namespace
 		return *reinterpret_cast<T*>(uintptr_t(pBase) + uOffset);
 	}
 
-	constexpr int kInventoryOwner = 0x08;
-	constexpr int kInventoryItemsData = 0x60;
-	constexpr int kInventoryItemsCount = 0x70;
-	constexpr int kInventoryGotItems = 0x94;
-	constexpr int kInventorySOCache = 0x98;
-	constexpr int kInventoryLoadout = 0x828;
-	constexpr int kInventoryLoadoutChanged = 0xEB0;
+	struct SkinOffsets_t
+	{
+		int iInventoryOwner;
+		int iInventoryItemsData;
+		int iInventoryItemsCount;
+		int iInventoryGotItems;
+		int iInventorySOCache;
+		int iInventoryLoadout;
+		int iInventoryLoadoutChanged;
+		size_t uEconItemViewSize;
+		size_t uEconItemSize;
+		int iViewDefIndex;
+		int iViewQuality;
+		int iViewItemIDHi;
+		int iViewItemIDLo;
+		int iViewInventoryPos;
+		int iViewNonSOCItem;
+		int iViewNonSOCItemID;
+		int iViewRenderCache;
+		int iViewTeamNumber;
+		int iViewInitialized;
+		int iViewDescription;
+		int iItemID;
+		int iItemAccountID;
+		int iItemInventoryPos;
+		int iItemDefIndex;
+		int iItemLevel;
+		int iItemQuality;
+		int iItemFlags;
+		int iItemOrigin;
+		int iItemDirtyBits;
+		int iItemEquipClass;
+		int iItemEquipSlot;
+		int iEconEntityAttrManager;
+		int iAttrContainerItem;
+		int iEconEntityClientside;
+		int iEconEntityAttachment;
+		size_t uTFWearableSize;
+		int iListenerData;
+		int iListenerCount;
+		int iCacheOwner;
+		size_t uSceneEntitySize;
+		int iSceneEntityScene;
+	};
+
+	const SkinOffsets_t& SkinOffsets()
+	{
+		static const SkinOffsets_t tOffsets = {
+			S::CPlayerInventory_OwnerOffset.ReadAt<uint8_t>(12),
+			S::CTFPlayerInventory_GetFirstItemOfItemDef_Offsets.ReadAt<uint8_t>(19),
+			S::CTFPlayerInventory_GetFirstItemOfItemDef_Offsets.ReadAt<uint8_t>(4),
+			S::CPlayerInventory_GotItemsOffset.ReadAt<int>(3),
+			S::CPlayerInventory_GotItemsOffset.ReadAt<int>(3) + 4,
+			S::CTFPlayerInventory_LoadoutOffsets.ReadAt<int>(15),
+			S::CTFPlayerInventory_LoadoutOffsets.ReadAt<int>(8),
+			static_cast<size_t>(CTFPlayerInventory::GetItemViewSize()),
+			static_cast<size_t>(S::CEconItem_AllocSize.ReadAt<int>(1)),
+			S::CEconItemView_AssignOffsets.ReadAt<uint8_t>(3),
+			S::CEconItemView_AssignOffsets.ReadAt<uint8_t>(9),
+			S::CEconItemView_AssignOffsets.ReadAt<uint8_t>(21),
+			S::CEconItemView_AssignOffsets.ReadAt<uint8_t>(24),
+			S::CEconItemView_InitOffsets.ReadAt<uint8_t>(2),
+			S::CEconItemView_GetSOCData.ReadAt<uint8_t>(9),
+			S::CEconItemView_GetSOCData.ReadAt<uint8_t>(9) + 8,
+			S::CEconItemView_RenderCacheOffset.ReadAt<int>(8),
+			S::CEconItemView_InitOffsets.ReadAt<int>(13) - 4,
+			S::CEconItemView_InitOffsets.ReadAt<int>(13),
+			S::CEconItemView_DynamicAttrsOffsets.ReadAt<int>(24),
+			S::CEconItem_Deserialize_Header.ReadAt<uint8_t>(11),
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(5),
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(33),
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(13),
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(20),
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(27),
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(27) + 1,
+			S::CEconItem_Deserialize_Fields.ReadAt<uint8_t>(27) + 2,
+			S::CEconItem_Deserialize_Header.ReadAt<uint8_t>(2),
+			S::CEconItem_EquipOffsets.ReadAt<uint8_t>(9),
+			S::CEconItem_EquipOffsets.ReadAt<uint8_t>(9) + 2,
+			S::CEconEntity_InitializeAttributes.ReadAt<int>(16),
+			S::CAttributeContainer_ItemOffset.ReadAt<int>(25),
+			S::CEconEntity_ClientsideOffset.ReadAt<int>(18),
+			S::CEconEntity_AttachmentOffset.ReadAt<int>(16),
+			static_cast<size_t>(S::CTFWearable_LastFieldOffset.ReadAt<int>(18) + 4),
+			S::CGCClientSharedObjectCache_ListenersOffsets.ReadAt<uint8_t>(13),
+			S::CGCClientSharedObjectCache_ListenersOffsets.ReadAt<uint8_t>(2),
+			S::CGCClientSharedObjectCache_ListenersOffsets.ReadAt<uint8_t>(13) - 8,
+			static_cast<size_t>(S::CSceneEntity_AllocSize.ReadAt<int>(1)),
+			S::CSceneEntity_SceneOffset.ReadAt<int>(16)
+		};
+		return tOffsets;
+	}
+
 	constexpr int kLoadoutSlots = 19;
 	constexpr int kLoadoutMaxClass = 9;
-	constexpr size_t kEconItemViewSize = SIZE_OF_ITEMVIEW;
-	constexpr size_t kEconItemSize = 0x80;
 
-	constexpr int kViewDefIndex = 0x48;
-	constexpr int kViewQuality = 0x4C;
-	constexpr int kViewItemIDHi = 0x60;
-	constexpr int kViewItemIDLo = 0x64;
-	constexpr int kViewInventoryPos = 0x6C;
-	constexpr int kViewNonSOCItem = 0x78;
-	constexpr int kViewNonSOCItemID = 0x80;
-	constexpr int kViewTeamNumber = 0xD0;
-	constexpr int kViewInitialized = 0xD4;
 
-	constexpr int kItemID = 0x48;
-	constexpr int kItemAccountID = 0x50;
-	constexpr int kItemInventoryPos = 0x54;
-	constexpr int kItemDefIndex = 0x58;
-	constexpr int kItemLevel = 0x5A;
-	constexpr int kItemQuality = 0x5B;
-	constexpr int kItemFlags = 0x5C;
-	constexpr int kItemOrigin = 0x5D;
-	constexpr int kItemDirtyBits = 0x5F;
-	constexpr int kItemEquipClass = 0x60;
-	constexpr int kItemEquipSlot = 0x62;
 	constexpr uint8_t kItemHasEquipInstance = 0x2;
 
 	constexpr uint64_t kClientItemMagic = 0x554E49ull;
@@ -882,7 +927,7 @@ namespace
 		if (!S::CEconItem_Constructor() || !S::MemAlloc_Zero())
 			return nullptr;
 
-		auto* pMemory = S::MemAlloc_Zero.Call<void*>(kEconItemSize);
+		auto* pMemory = S::MemAlloc_Zero.Call<void*>(SkinOffsets().uEconItemSize);
 		return pMemory ? S::CEconItem_Constructor.Call<CEconItem*>(pMemory) : nullptr;
 	}
 
@@ -916,8 +961,8 @@ namespace
 	uint64_t ViewItemID(const CEconItemView* pView)
 	{
 		const auto* pBytes = reinterpret_cast<const uint8_t*>(pView);
-		const uint32_t uHi = *reinterpret_cast<const uint32_t*>(pBytes + kViewItemIDHi);
-		const uint32_t uLo = *reinterpret_cast<const uint32_t*>(pBytes + kViewItemIDLo);
+		const uint32_t uHi = *reinterpret_cast<const uint32_t*>(pBytes + SkinOffsets().iViewItemIDHi);
+		const uint32_t uLo = *reinterpret_cast<const uint32_t*>(pBytes + SkinOffsets().iViewItemIDLo);
 		return (uint64_t(uHi) << 32) | uLo;
 	}
 
@@ -926,14 +971,14 @@ namespace
 		if (!pInventory)
 			return nullptr;
 
-		auto* pData = Field<uint8_t*>(pInventory, kInventoryItemsData);
-		const int iCount = Field<int>(pInventory, kInventoryItemsCount);
+		auto* pData = Field<uint8_t*>(pInventory, SkinOffsets().iInventoryItemsData);
+		const int iCount = Field<int>(pInventory, SkinOffsets().iInventoryItemsCount);
 		if (!pData)
 			return nullptr;
 
 		for (int i = 0; i < iCount; i++)
 		{
-			auto* pView = reinterpret_cast<CEconItemView*>(pData + size_t(i) * kEconItemViewSize);
+			auto* pView = reinterpret_cast<CEconItemView*>(pData + size_t(i) * SkinOffsets().uEconItemViewSize);
 			if (ViewItemID(pView) == uID)
 				return pView;
 		}
@@ -950,9 +995,9 @@ namespace
 		if (!pItem)
 			return;
 
-		Field<uint8_t>(pItem, kItemDirtyBits) |= kItemHasEquipInstance;
-		Field<uint16_t>(pItem, kItemEquipClass) = uint16_t(iClass);
-		Field<uint16_t>(pItem, kItemEquipSlot) = uint16_t(iSlot);
+		Field<uint8_t>(pItem, SkinOffsets().iItemDirtyBits) |= kItemHasEquipInstance;
+		Field<uint16_t>(pItem, SkinOffsets().iItemEquipClass) = uint16_t(iClass);
+		Field<uint16_t>(pItem, SkinOffsets().iItemEquipSlot) = uint16_t(iSlot);
 	}
 
 	void UnequipItem(void* pItem)
@@ -960,9 +1005,9 @@ namespace
 		if (!pItem)
 			return;
 
-		Field<uint8_t>(pItem, kItemDirtyBits) &= uint8_t(~kItemHasEquipInstance);
-		Field<uint16_t>(pItem, kItemEquipClass) = 0;
-		Field<uint16_t>(pItem, kItemEquipSlot) = 0xFFFF;
+		Field<uint8_t>(pItem, SkinOffsets().iItemDirtyBits) &= uint8_t(~kItemHasEquipInstance);
+		Field<uint16_t>(pItem, SkinOffsets().iItemEquipClass) = 0;
+		Field<uint16_t>(pItem, SkinOffsets().iItemEquipSlot) = 0xFFFF;
 	}
 
 	bool IsWearableDef(uint16_t iDef);
@@ -971,12 +1016,12 @@ namespace
 
 	void ApplyUnusual(CEconItemView* pView, void* pItem, int iUnusual)
 	{
-		const uint16_t iDef = Field<uint16_t>(pView, kViewDefIndex);
+		const uint16_t iDef = Field<uint16_t>(pView, SkinOffsets().iViewDefIndex);
 		iUnusual = IsWearableDef(iDef) ? ValidUnusualEffect(iUnusual) : 0;
 		const int iQuality = iUnusual > 0 ? kQualityUnusual : kQualityUnique;
 		if (pItem)
-			Field<uint8_t>(pItem, kItemQuality) = uint8_t(iQuality);
-		Field<int>(pView, kViewQuality) = iQuality;
+			Field<uint8_t>(pItem, SkinOffsets().iItemQuality) = uint8_t(iQuality);
+		Field<int>(pView, SkinOffsets().iViewQuality) = iQuality;
 
 		auto pList = reinterpret_cast<CAttributeList*>(uintptr_t(pView) + kItemViewAttributeList);
 		if (iUnusual > 0)
@@ -999,8 +1044,8 @@ namespace
 		else
 			pList->RemoveAttribute(kAttrItemTint2);
 
-		Field<uint16_t>(pView, 0xA0) = 0;
-		auto*& pDescription = Field<void*>(pView, 0xD8);
+		Field<uint16_t>(pView, SkinOffsets().iViewRenderCache) = 0;
+		auto*& pDescription = Field<void*>(pView, SkinOffsets().iViewDescription);
 		if (pDescription)
 		{
 			using Delete_t = void(__fastcall*)(void*, unsigned);
@@ -1018,14 +1063,10 @@ CTFPlayerInventory* CSkinChanger::GetLocalInventory() const
 
 namespace
 {
-	constexpr int kEconEntityAttrManager = 0xC38;
-	constexpr int kAttrContainerItem = 144;
-	constexpr int kEconEntityClientside = 0xE21;
 	constexpr int kMaxWearables = 8;
 	constexpr int kRenderGroupOpaqueEntity = 7;
 	constexpr int kRenderGroupViewModelOpaque = 10;
 	constexpr float kClientThinkAlways = -1293.f;
-	constexpr size_t kTFWearableSize = 0xEE0;
 
 	constexpr std::array<int, 3> kCosmeticLoadoutSlots = { 7, 8, 10 };
 
@@ -1121,9 +1162,6 @@ namespace
 	constexpr double kRareChance = 0.01;
 
 	constexpr int kViewEconItemInterface = 0x18;
-	constexpr int kListenerData = 64;
-	constexpr int kListenerCount = 80;
-	constexpr int kCacheOwner = 56;
 	constexpr int kEventSourceCreated = 4;
 
 	bool ReadMessage(void* pMessage, uint32_t& uType, uint32_t& uSize, uint64_t& uKey, uint64_t& uCrate)
@@ -1469,12 +1507,12 @@ namespace
 	{
 		if (!s_bCrateProfilesReady && CSkinChanger::GetCatalogueRevision())
 		{
-			const auto* pInfo = CSkinChanger::FindItem(Field<uint16_t>(pView, kViewDefIndex));
+			const auto* pInfo = CSkinChanger::FindItem(Field<uint16_t>(pView, SkinOffsets().iViewDefIndex));
 			if (!pInfo || pInfo->sClass != "supply_crate")
 				return;
 			EnsureCrateProfiles();
 		}
-		const auto it = s_mCrateProfiles.find(Field<uint16_t>(pView, kViewDefIndex));
+		const auto it = s_mCrateProfiles.find(Field<uint16_t>(pView, SkinOffsets().iViewDefIndex));
 		if (it == s_mCrateProfiles.end())
 			return;
 		const auto& tProfile = it->second;
@@ -1544,12 +1582,12 @@ namespace
 
 	void NotifyCreated(CTFPlayerInventory* pInventory, void* pItem)
 	{
-		auto* pCache = Field<uint8_t*>(pInventory, kInventorySOCache);
+		auto* pCache = Field<uint8_t*>(pInventory, SkinOffsets().iInventorySOCache);
 		if (!pCache)
 			return;
 
-		auto** ppListeners = Field<void**>(pCache, kListenerData);
-		const int iCount = Field<int>(pCache, kListenerCount);
+		auto** ppListeners = Field<void**>(pCache, SkinOffsets().iListenerData);
+		const int iCount = Field<int>(pCache, SkinOffsets().iListenerCount);
 		if (!ppListeners || iCount <= 0)
 			return;
 
@@ -1558,7 +1596,7 @@ namespace
 		for (void* pListener : vListeners)
 		{
 			if (pListener)
-				(*reinterpret_cast<Created_t**>(pListener))[0](pListener, pCache + kCacheOwner, pItem, kEventSourceCreated);
+				(*reinterpret_cast<Created_t**>(pListener))[0](pListener, pCache + SkinOffsets().iCacheOwner, pItem, kEventSourceCreated);
 		}
 	}
 }
@@ -1660,8 +1698,8 @@ bool CSkinChanger::ApplyLocalPaint(CTFPlayerInventory* pInventory, const Pending
 	auto* pItemView = FindItemView(pInventory, tPaint.uCrate);
 	if (!pPaintView || !pItemView)
 		return false;
-	const auto* pPaint = CSkinChanger::FindItem(Field<uint16_t>(pPaintView, kViewDefIndex));
-	const auto* pTarget = CSkinChanger::FindItem(Field<uint16_t>(pItemView, kViewDefIndex));
+	const auto* pPaint = CSkinChanger::FindItem(Field<uint16_t>(pPaintView, SkinOffsets().iViewDefIndex));
+	const auto* pTarget = CSkinChanger::FindItem(Field<uint16_t>(pItemView, SkinOffsets().iViewDefIndex));
 	if (!pPaint || pPaint->iPaintColor < 0 || !pTarget || !pTarget->bPaintable)
 		return false;
 	{
@@ -1692,12 +1730,12 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 	if (tCrate.uKey && tCrate.uKey != ~0ull && !FindItemView(pInventory, tCrate.uKey))
 		return false;
 	std::vector<uint16_t> vCommon;
-	const auto itProfile = s_mCrateProfiles.find(Field<uint16_t>(pCrateView, kViewDefIndex));
+	const auto itProfile = s_mCrateProfiles.find(Field<uint16_t>(pCrateView, SkinOffsets().iViewDefIndex));
 	if (itProfile != s_mCrateProfiles.end())
 	{
 		const auto& tProfile = itProfile->second;
 		auto* pKeyView = tCrate.uKey && tCrate.uKey != ~0ull ? FindItemView(pInventory, tCrate.uKey) : nullptr;
-		const uint16_t iKeyDef = pKeyView ? Field<uint16_t>(pKeyView, kViewDefIndex) : 0;
+		const uint16_t iKeyDef = pKeyView ? Field<uint16_t>(pKeyView, SkinOffsets().iViewDefIndex) : 0;
 		if ((tProfile.iKeyDef && (!iKeyDef || (iKeyDef != tProfile.iKeyDef && iKeyDef != tProfile.iAltKeyDef)))
 			|| (!tProfile.iKeyDef && pKeyView) || tCrate.uKey == tCrate.uCrate)
 			return false;
@@ -1734,7 +1772,7 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 	const bool bRare = IsWearableDef(iDef) && std::uniform_real_distribution<double>(0.0, 1.0)(s_tRandom) < kRareChance;
 	const int iUnusual = bRare && IsWearableDef(iDef) ? RandomUnusualEffect() : 0;
 
-	uint32_t uAccountID = Field<uint32_t>(pInventory, kInventoryOwner);
+	uint32_t uAccountID = Field<uint32_t>(pInventory, SkinOffsets().iInventoryOwner);
 	if (!uAccountID && I::SteamUser)
 		uAccountID = I::SteamUser->GetSteamID().GetAccountID();
 
@@ -1754,14 +1792,14 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 	}
 
 	const uint64_t uID = ClientItemID(uSerial, iDef);
-	Field<uint64_t>(pItem, kItemID) = uID;
-	Field<uint32_t>(pItem, kItemAccountID) = uAccountID;
-	Field<uint32_t>(pItem, kItemInventoryPos) = 0;
-	Field<uint16_t>(pItem, kItemDefIndex) = iDef;
-	Field<uint8_t>(pItem, kItemLevel) = 1;
-	Field<uint8_t>(pItem, kItemQuality) = uint8_t(iUnusual > 0 ? kQualityUnusual : kQualityUnique);
-	Field<uint8_t>(pItem, kItemFlags) = 0;
-	Field<uint8_t>(pItem, kItemOrigin) = uint8_t(kOriginFoundInCrate);
+	Field<uint64_t>(pItem, SkinOffsets().iItemID) = uID;
+	Field<uint32_t>(pItem, SkinOffsets().iItemAccountID) = uAccountID;
+	Field<uint32_t>(pItem, SkinOffsets().iItemInventoryPos) = 0;
+	Field<uint16_t>(pItem, SkinOffsets().iItemDefIndex) = iDef;
+	Field<uint8_t>(pItem, SkinOffsets().iItemLevel) = 1;
+	Field<uint8_t>(pItem, SkinOffsets().iItemQuality) = uint8_t(iUnusual > 0 ? kQualityUnusual : kQualityUnique);
+	Field<uint8_t>(pItem, SkinOffsets().iItemFlags) = 0;
+	Field<uint8_t>(pItem, SkinOffsets().iItemOrigin) = uint8_t(kOriginFoundInCrate);
 
 	{
 		std::lock_guard tLock(m_tMutex);
@@ -1779,8 +1817,8 @@ bool CSkinChanger::OpenCrate(CTFPlayerInventory* pInventory, const PendingCrate_
 		return false;
 	}
 	{
-		Field<void*>(pView, kViewNonSOCItem) = pItem;
-		Field<uint64_t>(pView, kViewNonSOCItemID) = uID;
+		Field<void*>(pView, SkinOffsets().iViewNonSOCItem) = pItem;
+		Field<uint64_t>(pView, SkinOffsets().iViewNonSOCItemID) = uID;
 		ApplyUnusual(pView, pItem, iUnusual);
 		m_mAppliedUnusual[uID] = iUnusual;
 	}
@@ -1815,23 +1853,23 @@ uint64_t CSkinChanger::FindOwnedWeapon(uint64_t uClientItemID)
 	auto* pSelected = FindItemView(pInventory, uClientItemID);
 	if (!pSelected || !IsClientItem(uClientItemID))
 		return 0;
-	const uint16_t iSelectedDef = Field<uint16_t>(pSelected, kViewDefIndex);
+	const uint16_t iSelectedDef = Field<uint16_t>(pSelected, SkinOffsets().iViewDefIndex);
 	const auto* pInfo = CSkinChanger::FindItem(iSelectedDef);
 	if (!pInfo || !pInfo->sClass.starts_with("tf_weapon_"))
 		return 0;
 
 	const int iType = WeaponType(iSelectedDef);
 	const bool bReskin = iSelectedDef != iType;
-	auto* pData = Field<uint8_t*>(pInventory, kInventoryItemsData);
-	const int iCount = Field<int>(pInventory, kInventoryItemsCount);
+	auto* pData = Field<uint8_t*>(pInventory, SkinOffsets().iInventoryItemsData);
+	const int iCount = Field<int>(pInventory, SkinOffsets().iInventoryItemsCount);
 	uint64_t uExact = 0, uEquivalent = 0;
 	for (int i = 0; pData && i < iCount; i++)
 	{
-		auto* pView = reinterpret_cast<CEconItemView*>(pData + size_t(i) * kEconItemViewSize);
+		auto* pView = reinterpret_cast<CEconItemView*>(pData + size_t(i) * SkinOffsets().uEconItemViewSize);
 		const uint64_t uID = ViewItemID(pView);
 		if (!uID || uID == ~0ull || IsClientItem(uID))
 			continue;
-		const uint16_t iDef = Field<uint16_t>(pView, kViewDefIndex);
+		const uint16_t iDef = Field<uint16_t>(pView, SkinOffsets().iViewDefIndex);
 		if (iDef == iSelectedDef && (!uExact || uID < uExact))
 			uExact = uID;
 		if ((iDef == iType || RedirectIndex(iDef) == iType) && (!uEquivalent || uID < uEquivalent))
@@ -1862,10 +1900,10 @@ void CSkinChanger::ApplyLocalLoadout(uint64_t uItemID, int iClass, int iSlot)
 	if (iClass <= 9 && iSlot <= 2)
 		s_aServerWeaponChoices[iIndex] = {};
 	const uint64_t uNew = uItemID == ~0ull ? 0 : uItemID;
-	auto& uSlot = Field<uint64_t>(pInventory, kInventoryLoadout + size_t(iIndex) * sizeof(uint64_t));
+	auto& uSlot = Field<uint64_t>(pInventory, SkinOffsets().iInventoryLoadout + size_t(iIndex) * sizeof(uint64_t));
 	const uint64_t uPrevious = uSlot;
 	uSlot = uNew;
-	Field<bool>(pInventory, kInventoryLoadoutChanged + iClass) = true;
+	Field<bool>(pInventory, SkinOffsets().iInventoryLoadoutChanged + iClass) = true;
 
 	if (uNew)
 	{
@@ -1892,9 +1930,9 @@ void CSkinChanger::ApplyLocalPosition(uint64_t uItemID, uint32_t uPosition)
 		return;
 
 	const uint32_t uToken = PositionToken(uPosition);
-	Field<uint32_t>(pView, kViewInventoryPos) = uToken;
+	Field<uint32_t>(pView, SkinOffsets().iViewInventoryPos) = uToken;
 	if (auto* pItem = GetSOCData(pView))
-		Field<uint32_t>(pItem, kItemInventoryPos) = uToken;
+		Field<uint32_t>(pItem, SkinOffsets().iItemInventoryPos) = uToken;
 }
 
 void CSkinChanger::RemoveClientItem(CTFPlayerInventory* pInventory, uint64_t uItemID)
@@ -1979,12 +2017,12 @@ void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
 		if (iClass < 1 || iClass > kLoadoutMaxClass)
 			continue;
 
-		auto& uSlot = Field<uint64_t>(pInventory, kInventoryLoadout + size_t(iIndex) * sizeof(uint64_t));
+		auto& uSlot = Field<uint64_t>(pInventory, SkinOffsets().iInventoryLoadout + size_t(iIndex) * sizeof(uint64_t));
 		const bool bWeaponSlot = iSlot >= 0 && iSlot <= 2;
 		if (bWeaponSlot && IsClientItem(uItemID))
 		{
 			auto& tChoice = s_aServerWeaponChoices[iIndex];
-			const int iCount = Field<int>(pInventory, kInventoryItemsCount);
+			const int iCount = Field<int>(pInventory, SkinOffsets().iInventoryItemsCount);
 			if (tChoice.uClientID != uItemID || tChoice.iItemCount != iCount)
 			{
 				const uint64_t uPreviousOwned = tChoice.uOwnedID;
@@ -1994,7 +2032,7 @@ void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
 				{
 					const int iStock = StockWeaponForSlot(iClass, iSlot);
 					auto* pSelected = FindItemView(pInventory, uItemID);
-					if (iStock >= 0 && pSelected && WeaponType(iStock) == WeaponType(Field<uint16_t>(pSelected, kViewDefIndex)))
+					if (iStock >= 0 && pSelected && WeaponType(iStock) == WeaponType(Field<uint16_t>(pSelected, SkinOffsets().iViewDefIndex)))
 						tChoice.uOwnedID = ~0ull;
 				}
 				if (tChoice.uOwnedID && (tChoice.uOwnedID != uPreviousOwned || uPreviousClient != uItemID))
@@ -2018,7 +2056,7 @@ void CSkinChanger::ReapplyLoadout(CTFPlayerInventory* pInventory)
 			m_mOriginalLoadout[iIndex] = uSlot;
 		}
 		uSlot = uItemID;
-		Field<bool>(pInventory, kInventoryLoadoutChanged + iClass) = true;
+		Field<bool>(pInventory, SkinOffsets().iInventoryLoadoutChanged + iClass) = true;
 		if (pView)
 			EquipItem(GetSOCData(pView), iClass, iSlot);
 	}
@@ -2032,13 +2070,13 @@ void CSkinChanger::SyncInventory()
 	m_uLastSync = uNow;
 
 	auto* pInventory = GetLocalInventory();
-	if (!pInventory || !Field<bool>(pInventory, kInventoryGotItems) || !Field<void*>(pInventory, kInventorySOCache))
+	if (!pInventory || !Field<bool>(pInventory, SkinOffsets().iInventoryGotItems) || !Field<void*>(pInventory, SkinOffsets().iInventorySOCache))
 		return;
 
 	ProcessCrates(pInventory);
 
-	auto* pData = Field<uint8_t*>(pInventory, kInventoryItemsData);
-	const int iCount = Field<int>(pInventory, kInventoryItemsCount);
+	auto* pData = Field<uint8_t*>(pInventory, SkinOffsets().iInventoryItemsData);
+	const int iCount = Field<int>(pInventory, SkinOffsets().iInventoryItemsCount);
 	const int iMax = std::max(MaxItems(pInventory), 0);
 	if (!pData)
 		return;
@@ -2049,12 +2087,12 @@ void CSkinChanger::SyncInventory()
 	tPresent.reserve(size_t(iCount));
 	for (int i = 0; i < iCount; i++)
 	{
-		auto* pView = reinterpret_cast<CEconItemView*>(pData + size_t(i) * kEconItemViewSize);
+		auto* pView = reinterpret_cast<CEconItemView*>(pData + size_t(i) * SkinOffsets().uEconItemViewSize);
 		tPresent.insert(ViewItemID(pView));
-		if (const uint16_t iDef = Field<uint16_t>(pView, kViewDefIndex))
+		if (const uint16_t iDef = Field<uint16_t>(pView, SkinOffsets().iViewDefIndex))
 			mDefCount[iDef]++;
 
-		const uint32_t uToken = Field<uint32_t>(pView, kViewInventoryPos);
+		const uint32_t uToken = Field<uint32_t>(pView, SkinOffsets().iViewInventoryPos);
 		if (uToken && !(uToken & kPositionUnacknowledged))
 		{
 			if (const size_t uPosition = uToken & 0xFFFF; uPosition <= size_t(iMax))
@@ -2089,7 +2127,7 @@ void CSkinChanger::SyncInventory()
 		RemoveClientItem(pInventory, uID);
 	}
 
-	uint32_t uAccountID = Field<uint32_t>(pInventory, kInventoryOwner);
+	uint32_t uAccountID = Field<uint32_t>(pInventory, SkinOffsets().iInventoryOwner);
 	if (!uAccountID && I::SteamUser)
 		uAccountID = I::SteamUser->GetSteamID().GetAccountID();
 
@@ -2146,15 +2184,15 @@ void CSkinChanger::SyncInventory()
 				continue;
 			}
 
-			Field<uint64_t>(pItem, kItemID) = uID;
-			Field<uint16_t>(pItem, kItemDefIndex) = iDef;
-			Field<uint8_t>(pItem, kItemLevel) = 1;
-			Field<uint8_t>(pItem, kItemFlags) = 0;
-			Field<uint8_t>(pItem, kItemOrigin) = 2;
+			Field<uint64_t>(pItem, SkinOffsets().iItemID) = uID;
+			Field<uint16_t>(pItem, SkinOffsets().iItemDefIndex) = iDef;
+			Field<uint8_t>(pItem, SkinOffsets().iItemLevel) = 1;
+			Field<uint8_t>(pItem, SkinOffsets().iItemFlags) = 0;
+			Field<uint8_t>(pItem, SkinOffsets().iItemOrigin) = 2;
 		}
-		Field<uint32_t>(pItem, kItemAccountID) = uAccountID;
-		Field<uint32_t>(pItem, kItemInventoryPos) = PositionToken(uPosition);
-		Field<uint8_t>(pItem, kItemQuality) = uint8_t(iUnusual > 0 ? kQualityUnusual : kQualityUnique);
+		Field<uint32_t>(pItem, SkinOffsets().iItemAccountID) = uAccountID;
+		Field<uint32_t>(pItem, SkinOffsets().iItemInventoryPos) = PositionToken(uPosition);
+		Field<uint8_t>(pItem, SkinOffsets().iItemQuality) = uint8_t(iUnusual > 0 ? kQualityUnusual : kQualityUnique);
 
 		{
 			std::lock_guard tLock(m_tMutex);
@@ -2172,8 +2210,8 @@ void CSkinChanger::SyncInventory()
 			continue;
 		}
 
-		Field<void*>(pView, kViewNonSOCItem) = pItem;
-		Field<uint64_t>(pView, kViewNonSOCItemID) = uID;
+		Field<void*>(pView, SkinOffsets().iViewNonSOCItem) = pItem;
+		Field<uint64_t>(pView, SkinOffsets().iViewNonSOCItemID) = uID;
 		ApplyUnusual(pView, pItem, iUnusual);
 		ApplyPaintAttributes(pView, tItem.iPaintColor, tItem.iPaintColor2);
 		reinterpret_cast<CAttributeList*>(uintptr_t(pView) + kItemViewAttributeList)->SetAttribute(kAttrStyleOverride, float(tItem.iStyle));
@@ -2198,15 +2236,15 @@ void CSkinChanger::SyncInventory()
 		if (!bDone)
 		{
 			auto* pView = FindItemView(pInventory, uID);
-			const uint32_t uToken = pView ? Field<uint32_t>(pView, kViewInventoryPos) : 0;
+			const uint32_t uToken = pView ? Field<uint32_t>(pView, SkinOffsets().iViewInventoryPos) : 0;
 			bDone = !pView || (uToken && !(uToken & kPositionUnacknowledged));
 			if (!bDone)
 			{
 				if (const uint32_t uPosition = fFreePosition())
 				{
-					Field<uint32_t>(pView, kViewInventoryPos) = PositionToken(uPosition);
+					Field<uint32_t>(pView, SkinOffsets().iViewInventoryPos) = PositionToken(uPosition);
 					if (auto* pItem = GetSOCData(pView))
-						Field<uint32_t>(pItem, kItemInventoryPos) = PositionToken(uPosition);
+						Field<uint32_t>(pItem, SkinOffsets().iItemInventoryPos) = PositionToken(uPosition);
 					vUsed[uPosition] = true;
 					bDone = true;
 				}
@@ -2270,12 +2308,12 @@ namespace
 		static const int iAssociatedOffset = U::NetVars.GetNetVar("CTFWearable", "m_hWeaponAssociatedWith");
 		if (iAssociatedOffset <= 0)
 			return nullptr;
-		auto* pMemory = S::MemAlloc_Zero.Call<void*>(kTFWearableSize);
+		auto* pMemory = S::MemAlloc_Zero.Call<void*>(SkinOffsets().uTFWearableSize);
 		if (!pMemory)
 			return nullptr;
 		auto* pWearable = reinterpret_cast<CEconWearable*(__fastcall*)(void*)>(uConstructor)(pMemory);
-		Field<uint16_t>(pWearable, kEconEntityAttrManager + kAttrContainerItem + kViewDefIndex) = iDef;
-		Field<uint8_t>(pWearable, kEconEntityClientside) = 1;
+		Field<uint16_t>(pWearable, SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem + SkinOffsets().iViewDefIndex) = iDef;
+		Field<uint8_t>(pWearable, SkinOffsets().iEconEntityClientside) = 1;
 		S::CBaseEntity_SetOwnerEntity.Call<void>(pWearable, pLocal);
 		Field<EHANDLE>(pWearable, iAssociatedOffset).Set(pWeapon);
 		I::ModelInfoClient->RegisterDynamicModel(sModel.c_str(), true);
@@ -2319,7 +2357,7 @@ namespace
 
 	void RefreshWeaponVisual(CTFWeaponBase* pWeapon)
 	{
-		auto& hAttachment = Field<CHandle<CBaseAnimating>>(pWeapon, 0xE50);
+		auto& hAttachment = Field<CHandle<CBaseAnimating>>(pWeapon, SkinOffsets().iEconEntityAttachment);
 		if (auto* pAttachment = hAttachment.Get())
 		{
 			U::Memory.CallVirtual<1, void>(uintptr_t(pAttachment) + 0x10);
@@ -2361,7 +2399,7 @@ namespace
 		tVisual.uNextExtraAttempt = 0;
 		if (auto* pWeapon = tVisual.bConstructed ? tVisual.hEntity.Get() : nullptr)
 		{
-			auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + kEconEntityAttrManager + kAttrContainerItem);
+			auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem);
 			if (ViewItemID(pView) == tVisual.uClientID)
 			{
 				AssignItemView(pView, reinterpret_cast<CEconItemView*>(tVisual.aOriginal));
@@ -2428,7 +2466,7 @@ void CSkinChanger::UpdateWeaponVisuals(CTFPlayer* pLocal)
 		const int iSlot = pWeapon ? pWeapon->GetSlot() : -1;
 		const uint64_t uSelected = iSlot >= 0 && iSlot < 3 ? aSelected[iSlot] : 0;
 		auto* pSelected = uSelected ? FindItemView(pInventory, uSelected) : nullptr;
-		auto* pView = pWeapon ? reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + kEconEntityAttrManager + kAttrContainerItem) : nullptr;
+		auto* pView = pWeapon ? reinterpret_cast<CEconItemView*>(uintptr_t(pWeapon) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem) : nullptr;
 		const bool bConstructed = tVisual.bConstructed && tVisual.hEntity.Get() == pWeapon;
 		if (tVisual.bConstructed && !bConstructed)
 		{
@@ -2450,8 +2488,8 @@ void CSkinChanger::UpdateWeaponVisuals(CTFPlayer* pLocal)
 		}
 		if (!pWeapon || !pView || !pSelected)
 			continue;
-		const uint16_t iSelectedDef = Field<uint16_t>(pSelected, kViewDefIndex);
-		const uint16_t iOriginalDef = Field<uint16_t>(pView, kViewDefIndex);
+		const uint16_t iSelectedDef = Field<uint16_t>(pSelected, SkinOffsets().iViewDefIndex);
+		const uint16_t iOriginalDef = Field<uint16_t>(pView, SkinOffsets().iViewDefIndex);
 		if (WeaponType(iSelectedDef) != WeaponType(iOriginalDef))
 			continue;
 		if (tVisual.bConstructed && ViewItemID(pView) == uSelected)
@@ -2484,7 +2522,7 @@ CEconItemView* CSkinChanger::GetWearableView(int iClass, int iSlot, int iTeam, u
 	auto& tView = m_aWearableViews[iSlot];
 	auto* pView = reinterpret_cast<CEconItemView*>(tView.aData);
 	auto* pCachedAttributes = reinterpret_cast<CAttributeList*>(tView.aData + kItemViewAttributeList);
-	if (m_aWearableViewBuilt[iSlot] && m_aWearableViewKey[iSlot] == uKey && Field<uint16_t>(pView, kViewDefIndex) == uint16_t(iDef)
+	if (m_aWearableViewBuilt[iSlot] && m_aWearableViewKey[iSlot] == uKey && Field<uint16_t>(pView, SkinOffsets().iViewDefIndex) == uint16_t(iDef)
 		&& int(pCachedAttributes->GetValue(kAttrItemTint)) == iPaintColor && int(pCachedAttributes->GetValue(kAttrItemTint2)) == iPaintColor2
 		&& int(pCachedAttributes->GetValue(kAttrStyleOverride)) == iStyle)
 		return pView;
@@ -2498,9 +2536,9 @@ CEconItemView* CSkinChanger::GetWearableView(int iClass, int iSlot, int iTeam, u
 		return nullptr;
 	m_aWearableViewBuilt[iSlot] = true;
 
-	Field<uint16_t>(pView, kViewDefIndex) = uint16_t(iDef);
-	Field<int>(pView, kViewTeamNumber) = iTeam;
-	Field<bool>(pView, kViewInitialized) = true;
+	Field<uint16_t>(pView, SkinOffsets().iViewDefIndex) = uint16_t(iDef);
+	Field<int>(pView, SkinOffsets().iViewTeamNumber) = iTeam;
+	Field<bool>(pView, SkinOffsets().iViewInitialized) = true;
 
 	const uint32_t uHigh = uint32_t(uItemID >> 32);
 	const uint32_t uLow = uint32_t(uItemID);
@@ -2528,12 +2566,12 @@ CEconWearable* CSkinChanger::CreateWearable(CTFPlayer* pLocal, CEconItemView* pV
 	if (!sModel || !sModel[0] || !I::ModelInfoClient)
 		return nullptr;
 
-	auto* pWearable = S::CTFWearable_Constructor.Call<CEconWearable*>(S::MemAlloc_Zero.Call<void*>(kTFWearableSize));
+	auto* pWearable = S::CTFWearable_Constructor.Call<CEconWearable*>(S::MemAlloc_Zero.Call<void*>(SkinOffsets().uTFWearableSize));
 	if (!pWearable)
 		return nullptr;
 
-	AssignItemView(reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem), pView);
-	*reinterpret_cast<byte*>(uintptr_t(pWearable) + kEconEntityClientside) = 1;
+	AssignItemView(reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem), pView);
+	*reinterpret_cast<byte*>(uintptr_t(pWearable) + SkinOffsets().iEconEntityClientside) = 1;
 	S::CBaseEntity_SetOwnerEntity.Call<void>(pWearable, pLocal);
 
 	I::ModelInfoClient->RegisterDynamicModel(sModel, true);
@@ -2674,7 +2712,7 @@ void CSkinChanger::HideReplacedWearables(CTFPlayer* pLocal, int iClass)
 		auto* pFake = m_aWearables[iSlot].hEntity.Get();
 		if (!pFake)
 			continue;
-		auto* pFakeView = reinterpret_cast<CEconItemView*>(uintptr_t(pFake) + kEconEntityAttrManager + kAttrContainerItem);
+		auto* pFakeView = reinterpret_cast<CEconItemView*>(uintptr_t(pFake) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem);
 		aFakeRegions[iSlot] = EquipRegionMask(pFakeView);
 	}
 
@@ -2703,7 +2741,7 @@ void CSkinChanger::HideReplacedWearables(CTFPlayer* pLocal, int iClass)
 			continue;
 		}
 
-		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem);
+		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem);
 		if (ShouldHide(pView, ViewItemID(pView)))
 			continue;
 
@@ -2724,7 +2762,7 @@ void CSkinChanger::HideReplacedWearables(CTFPlayer* pLocal, int iClass)
 			continue;
 		}
 
-		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem);
+		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem);
 		if (!ShouldHide(pView, ViewItemID(pView)))
 		{
 			i++;
@@ -2755,7 +2793,7 @@ bool CSkinChanger::IsReplacedWearableItem(uint64_t uItemID)
 		auto* pWearable = tHidden.hEntity.Get();
 		if (!pWearable)
 			continue;
-		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem);
+		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + SkinOffsets().iEconEntityAttrManager + SkinOffsets().iAttrContainerItem);
 		if (ViewItemID(pView) == uItemID)
 			return true;
 	}
@@ -2883,7 +2921,7 @@ bool CSkinChanger::PlayTauntScene(CTFPlayer* pLocal, const char* sScene)
 	if (!pLocal || !sScene || !*sScene || strlen(sScene) >= 260 || !S::ClientScene_Constructor() || !S::MemAlloc_Zero())
 		return false;
 
-	auto* pMemory = S::MemAlloc_Zero.Call<void*>(0x830);
+	auto* pMemory = S::MemAlloc_Zero.Call<void*>(SkinOffsets().uSceneEntitySize);
 	auto* pScene = pMemory ? S::ClientScene_Constructor.Call<CBaseEntity*>(pMemory) : nullptr;
 	if (!pScene)
 		return false;
@@ -2894,7 +2932,7 @@ bool CSkinChanger::PlayTauntScene(CTFPlayer* pLocal, const char* sScene)
 	}
 
 	U::Memory.CallVirtual<163, void>(pScene, sScene, pLocal, true);
-	auto* pChoreo = Field<void*>(pScene, 0x808);
+	auto* pChoreo = Field<void*>(pScene, SkinOffsets().iSceneEntityScene);
 	const float flDuration = pChoreo ? U::Memory.CallVirtual<1, float>(pChoreo) : 0.f;
 	if (!std::isfinite(flDuration) || flDuration <= 0.f)
 	{

@@ -1,8 +1,8 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/CModel.h"
-#include "../Misc/CRangeValidatedArray.h"
-#include "../Misc/CDiscardableArray.h"
+#include "../Render/CModel.h"
+#include "../Utl/CRangeValidatedArray.h"
+#include "../Utl/CDiscardableArray.h"
 
 #define	MAX_QPATH 96
 
@@ -48,5 +48,3 @@ public:
 	int numportalopen;
 	CRangeValidatedArray<bool> portalopen;
 };
-
-MAKE_INTERFACE_SIGNATURE(CCollisionBSPData, BSPData, "engine.dll", "48 8D 15 ? ? ? ? 4C 03 05", 0x0, 0);

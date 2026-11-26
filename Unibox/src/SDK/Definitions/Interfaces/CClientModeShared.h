@@ -5,7 +5,6 @@
 #include "../Misc/BaseTypes.h"
 #include "../Types.h"
 
-MAKE_SIGNATURE(ClientModeTFNormal_BIsFriendOrPartyMember, "client.dll", "48 89 5C 24 ? 57 48 81 EC ? ? ? ? 48 85 D2 0F 84", 0x0);
 
 class CBaseHudChatInputLine;
 class CBaseHudChatLine;
@@ -107,5 +106,3 @@ public:
 
 	SIGNATURE_ARGS(BIsFriendOrPartyMember, bool, ClientModeTFNormal, (CBaseEntity* pEntity), this, pEntity);
 };
-
-MAKE_INTERFACE_SIGNATURE(CClientModeShared, ClientModeShared, "client.dll", "48 8B 0D ? ? ? ? 48 8B 10 48 8B 19 48 8B C8 FF 92", 0x0, 1);

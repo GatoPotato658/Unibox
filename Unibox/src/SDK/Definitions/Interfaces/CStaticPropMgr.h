@@ -1,7 +1,7 @@
 #pragma once
-#include "../Main/CStaticProp.h"
-#include "../Main/CGameTrace.h"
-#include "../Misc/CUtlVector.h"
+#include "../Entities/CStaticProp.h"
+#include "../Engine/CGameTrace.h"
+#include "../Utl/CUtlVector.h"
 
 class IPhysicsEnvironment;
 class IVPhysicsKeyHandler;
@@ -126,5 +126,3 @@ public:
 	Vector m_vecLastViewOrigin;
 	float m_flLastViewFactor;
 };
-
-MAKE_INTERFACE_SIGNATURE(CStaticPropMgr, StaticPropMgr, "engine.dll", "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 89 5C 24 ? 48 89 74 24 ? 57 48 81 EC ? ? ? ? 41 8B C0", 0x0, 0);

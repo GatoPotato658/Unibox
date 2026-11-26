@@ -2,15 +2,8 @@
 #ifndef TEXTMODE
 #include "../Features/Players/PlayerUtils.h"
 
-MAKE_SIGNATURE(CTFPlayerPanel_GetTeam, "client.dll", "8B 91 ? ? ? ? 83 FA ? 74 ? 48 8B 05", 0x0);
 #endif
-MAKE_SIGNATURE(vgui_Panel_SetBgColor, "client.dll", "89 91 ? ? ? ? C3 CC CC CC CC CC CC CC CC CC 48 8B 41", 0x0);
 #ifndef TEXTMODE
-MAKE_SIGNATURE(CTFTeamStatusPlayerPanel_Update_GetTeam_Call, "client.dll", "8B 9F ? ? ? ? 40 32 F6", 0x0);
-MAKE_SIGNATURE(CTFTeamStatusPlayerPanel_Update_SetBgColor_Call, "client.dll", "48 8B 8F ? ? ? ? 4C 8B 6C 24 ? 48 85 C9 0F 84 ? ? ? ? 40 38 B7", 0x0);
-MAKE_SIGNATURE(CTFTeamStatusPlayerPanel_Update_Offsets, "client.dll", "48 8B 8F ? ? ? ? 48 85 C9 0F 84 ? ? ? ? 48 83 BF ? ? ? ? 00 0F 84 ? ? ? ? 8B 44 24 ? 3B 87 ? ? ? ? 0F 84", 0x0);
-MAKE_SIGNATURE(CTFTeamStatus_OnTick, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B 01 48 8B F9 FF 90 ? ? ? ? 48 8B CF 0F B6 D8", 0x0);
-MAKE_SIGNATURE(CVGui_RunFrame, "vgui2.dll", "48 8B C4 53 48 81 EC", 0x0);
 
 static int s_iPlayerIndex;
 static void* s_pTeamStatus;

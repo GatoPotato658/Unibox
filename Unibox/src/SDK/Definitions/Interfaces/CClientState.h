@@ -1,15 +1,12 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/INetChannel.h"
-#include "../Misc/ClientClass.h"
-#include "../Misc/ServerClass.h"
-#include "../Misc/CUtlVector.h"
-#include "../Misc/CUtlString.h"
+#include "../Network/INetChannel.h"
+#include "../DataTable/ClientClass.h"
+#include "../DataTable/ServerClass.h"
+#include "../Utl/CUtlVector.h"
+#include "../Utl/CUtlString.h"
 #include "../Definitions.h"
 
-MAKE_SIGNATURE(CBaseClientState_SendStringCmd, "engine.dll", "48 81 EC ? ? ? ? 48 8B 49", 0x0);
-MAKE_SIGNATURE(CBaseClientState_ForceFullUpdate, "engine.dll", "40 53 48 83 EC ? 83 B9 ? ? ? ? ? 48 8B D9 74 ? E8", 0x0);
-MAKE_SIGNATURE(CClientState_IsPaused, "engine.dll", "48 83 EC ? 80 B9 ? ? ? ? ? 75", 0x0);
 
 #define	MAX_OSPATH 260 // max length of a filesystem pathname
 
@@ -122,5 +119,3 @@ public:
 		return S::CClientState_IsPaused.Call<bool>(this);
 	}
 };
-
-MAKE_INTERFACE_SIGNATURE(CClientState, ClientState, "engine.dll", "48 8D 0D ? ? ? ? E8 ? ? ? ? F3 0F 5E 05", 0x0, 0);

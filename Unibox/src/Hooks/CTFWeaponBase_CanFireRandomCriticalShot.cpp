@@ -2,7 +2,6 @@
 
 #include "../Features/CritHack/CritHack.h"
 
-MAKE_SIGNATURE(CTFWeaponBase_CanFireRandomCriticalShot, "client.dll", "F3 0F 58 0D ? ? ? ? 0F 2F 89", 0x0);
 
 MAKE_HOOK(CTFWeaponBase_CanFireRandomCriticalShot, S::CTFWeaponBase_CanFireRandomCriticalShot(), bool,
 	void* rcx, float flCritChance)

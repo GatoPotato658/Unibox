@@ -18,8 +18,6 @@
 #include "NamedPipe/NamedPipe.h"
 #endif
 
-MAKE_SIGNATURE(Voice_IsRecording, "engine.dll", "80 3D ? ? ? ? ? 74 ? 80 3D ? ? ? ? ? 75", 0x0);
-MAKE_SIGNATURE(ReportPlayerAccount, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B D9 8B FA 48 C1 E9", 0x0);
 
 void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 {

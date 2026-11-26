@@ -1,6 +1,6 @@
 #pragma once
 #include "../Misc/IAppSystem.h"
-#include "../Main/MD5.h"
+#include "../Engine/MD5.h"
 
 class CUtlBuffer;
 class CSysModule;
@@ -282,5 +282,3 @@ public:
 		return GetCaseCorrectFullPath_Ptr(pFullPath, pDest, (int)maxLenInChars);
 	}
 };
-
-MAKE_INTERFACE_VERSION(IFileSystem, FileSystem, "filesystem_stdio.dll", "VFileSystem022");

@@ -5,7 +5,6 @@
 #include "../Features/Misc/Misc.h"
 #include "../Features/AntiCheatCompatibility/AntiCheatCompatibility.h"
 
-MAKE_SIGNATURE(CNetChannel_SendNetMsg, "engine.dll", "48 89 5C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 41 56 48 83 EC ? 48 8B F1 45 0F B6 F1", 0x0);
 
 MAKE_HOOK(CNetChannel_SendNetMsg, S::CNetChannel_SendNetMsg(), bool,
 	CNetChannel* pNetChan, INetMessage& msg, bool bForceReliable, bool bVoice)

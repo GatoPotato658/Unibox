@@ -1,5 +1,5 @@
 #pragma once
-#include "../Main/CBaseHandle.h"
+#include "../Engine/CBaseHandle.h"
 #include "../Types.h"
 
 class CTFPlayer;
@@ -172,5 +172,3 @@ public:
 	CTFPlayer*		m_pTFPlayer;
 	bool			m_isPassingThroughEnemies;
 };
-
-MAKE_INTERFACE_VERSION(CTFGameMovement, GameMovement, "client.dll", "GameMovement001");

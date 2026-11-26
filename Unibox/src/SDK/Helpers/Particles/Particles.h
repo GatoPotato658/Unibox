@@ -1,10 +1,7 @@
 #pragma once
 #include "../../Definitions/Types.h"
-#include "../../Definitions/Main/CBaseEntity.h"
+#include "../../Definitions/Entities/CBaseEntity.h"
 
-MAKE_SIGNATURE(CTE_DispatchEffect, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B D9 48 8B FA 48 8D 4C 24", 0x0);
-MAKE_SIGNATURE(Get_ParticleSystemIndex, "client.dll", "40 53 48 83 EC ? 48 8B D9 48 85 C9 74 ? 48 8B 0D ? ? ? ? 48 8B D3 48 8B 01 FF 50 ? 3D", 0x0);
-MAKE_SIGNATURE(UTIL_ParticleTracer, "client.dll", "48 89 5C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 4C 89 74 24 ? 55 48 8D 6C 24 ? 48 81 EC ? ? ? ? 49 63 F1", 0x0);
 
 enum ParticleAttachment_t
 {

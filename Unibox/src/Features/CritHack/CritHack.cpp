@@ -861,8 +861,6 @@ void CCritHack::StoreHealthHistory(int iIndex, int iHealth, CTFPlayer* pPlayer)
 }
 
 #ifdef SERVER_CRIT_DATA
-MAKE_SIGNATURE(CTFGameStats_FindPlayerStats, "server.dll", "4C 8B C1 48 85 D2 75", 0x0);
-MAKE_SIGNATURE(UTIL_PlayerByIndex, "server.dll", "48 83 EC ? 8B D1 85 C9 7E ? 48 8B 05", 0x0);
 
 static void* s_pCTFGameStats = nullptr;
 MAKE_HOOK(CTFGameStats_FindPlayerStats, S::CTFGameStats_FindPlayerStats(), void*,

@@ -1,8 +1,5 @@
 #include "../SDK/SDK.h"
 
-MAKE_SIGNATURE(CTFInput_CAM_CapYaw, "client.dll", "40 53 48 83 EC ? 0F 29 74 24 ? 0F 28 F1", 0x0);
-MAKE_SIGNATURE(CTFInput_ApplyMouse, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 0F 29 74 24 ? 49 8B E8", 0x0);
-MAKE_SIGNATURE(CTFPlayerShared_CalculateChargeCap, "client.dll", "48 83 EC ? 4C 8B 81 ? ? ? ? 48 8D 15", 0x0);
 
 MAKE_HOOK(CTFInput_ApplyMouse, S::CTFInput_ApplyMouse(), void,
 	void* rcx, QAngle& viewangles, CUserCmd* cmd, float mouse_x, float mouse_y)

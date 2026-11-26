@@ -1,6 +1,6 @@
 #pragma once
-#include "VGUI.h"
-#include "ButtonCode.h"
+#include "../VGUI/VGUI.h"
+#include "../VGUI/ButtonCode.h"
 
 class CViewSetup;
 class CBaseEntity;

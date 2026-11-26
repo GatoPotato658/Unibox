@@ -1,7 +1,5 @@
 #include "../SDK/SDK.h"
 
-MAKE_SIGNATURE(CBasePlayer_ItemPostFrame, "client.dll", "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B 39 48 8B F1 FF 97", 0x0);
-MAKE_SIGNATURE(GetAnimationEvent, "server.dll", "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 0F 29 74 24 ? 0F 28 F3 49 8B F0", 0x0);
 
 struct animevent_t
 {

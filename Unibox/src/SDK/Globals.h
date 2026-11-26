@@ -1,6 +1,6 @@
 #pragma once
 #include "Definitions/Definitions.h"
-#include "Definitions/Main/CUserCmd.h"
+#include "Definitions/Engine/CUserCmd.h"
 #include "../Utils/Signatures/Signatures.h"
 #include "../Utils/Memory/Memory.h"
 #include <array>
@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-MAKE_SIGNATURE(RandomSeed, "client.dll", "0F B6 1D ? ? ? ? 89 9D", 0x0);
 
 struct DrawLine_t
 {

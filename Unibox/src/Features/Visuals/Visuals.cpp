@@ -15,11 +15,6 @@
 #include "../World/World.h"
 #include "../ImGui/IndicatorPanel.h"
 
-MAKE_SIGNATURE(UTIL_PlayerByIndex, "server.dll", "48 83 EC ? 8B D1 85 C9 7E ? 48 8B 05", 0x0);
-MAKE_SIGNATURE(CBaseAnimating_DrawServerHitboxes, "server.dll", "44 88 44 24 ? 53 48 81 EC", 0x0);
-MAKE_SIGNATURE(NDebugOverlay_BoxAngles, "server.dll", "48 83 EC ? 4C 8B D9 48 8B 0D ? ? ? ? 48 85 C9 74 ? 8B 84 24 ? ? ? ? F3 0F 10 84 24 ? ? ? ? 4C 8B 11 F3 0F 11 44 24 ? 89 44 24 ? 8B 84 24 ? ? ? ? 89 44 24 ? 8B 84 24 ? ? ? ? 89 44 24 ? 8B 84 24 ? ? ? ? 89 44 24 ? 4C 89 4C 24", 0x0);
-MAKE_SIGNATURE(CBaseAnimating_DrawServerHitboxes_BoxAngles_Call, "server.dll", "8B 84 24 ? ? ? ? 49 83 C6", 0x0);
-MAKE_SIGNATURE(CTFPlayerShared_UpdateCritBoostEffect, "client.dll", "48 8B C4 48 89 58 ? 48 89 70 ? 48 89 78 ? 41 56 48 81 EC ? ? ? ? 48 89 68", 0x0);
 
 enum ECritBoostUpdateType { kCritBoost_Ignore, kCritBoost_ForceRefresh };
 

@@ -1,7 +1,5 @@
 #include "../SDK/SDK.h"
 
-MAKE_SIGNATURE(CBaseViewModel_CalcViewModelView, "client.dll", "48 89 74 24 ? 55 41 56 41 57 48 8D AC 24", 0x0);
-MAKE_SIGNATURE(CBasePlayer_CalcViewModelView, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 49 8B F0 48 8B EA 48 8B F9 33 DB", 0x0);
 
 MAKE_HOOK(CBaseViewModel_CalcViewModelView, S::CBaseViewModel_CalcViewModelView(), void,
 	void* rcx, CBasePlayer* owner, /*const*/ Vector& eyePosition, /*const*/ QAngle& eyeAngles)

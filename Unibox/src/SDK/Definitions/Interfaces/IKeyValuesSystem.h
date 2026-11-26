@@ -23,5 +23,3 @@ public:
 	virtual bool GetKeyValuesExpressionSymbol(const char* name) = 0;
 	virtual HKeySymbol GetSymbolForStringCaseSensitive(HKeySymbol& hCaseInsensitiveSymbol, const char* name, bool bCreate = true) = 0;
 };
-
-MAKE_INTERFACE_NULL(IKeyValuesSystem, KeyValuesSystem);

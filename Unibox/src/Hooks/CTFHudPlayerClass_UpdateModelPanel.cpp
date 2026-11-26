@@ -4,10 +4,8 @@
 #include "../Features/Visuals/SkinChanger/SkinChanger.h"
 #endif
 
-MAKE_SIGNATURE(CTFHudPlayerClass_UpdateModelPanel, "client.dll", "40 57 48 83 EC ? 80 B9 ? ? ? ? ? 48 8B F9 0F 84 ? ? ? ? 4C 89 74 24", 0x0);
 
 #ifndef TEXTMODE
-MAKE_SIGNATURE(CTFPlayerModelPanel_AddCarriedItem, "client.dll", "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B F1 48 8B FA B9 58 01 00 00", 0x0);
 
 namespace
 {

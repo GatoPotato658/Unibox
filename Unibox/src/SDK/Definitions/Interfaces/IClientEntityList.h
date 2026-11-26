@@ -1,6 +1,6 @@
 #pragma once
 #include "Interface.h"
-#include "../Main/CBaseHandle.h"
+#include "../Engine/CBaseHandle.h"
 
 class IClientEntity;
 class ClientClass;
@@ -20,10 +20,3 @@ public:
 	virtual void SetMaxEntities(int maxents) = 0;
 	virtual int GetMaxEntities() = 0;
 };
-
-MAKE_INTERFACE_VERSION(IClientEntityList, ClientEntityList, "client.dll", "VClientEntityList003");
-
-inline IHandleEntity* CBaseHandle::Get() const
-{
-	return reinterpret_cast<IHandleEntity*>(I::ClientEntityList->GetClientEntityFromHandle(m_Index));
-}

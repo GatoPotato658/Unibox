@@ -1,6 +1,6 @@
 #include "ConVars.h"
 
-#include "../../Definitions/Interfaces/ICVar.h"
+#include "../../Definitions/Interfaces.h"
 #include "../../../Utils/Hash/FNV1A.h"
 
 bool CConVars::UnlockInternal()

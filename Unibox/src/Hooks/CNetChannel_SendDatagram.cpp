@@ -2,7 +2,6 @@
 
 #include "../Features/Backtrack/Backtrack.h"
 
-MAKE_SIGNATURE(CNetChannel_SendDatagram, "engine.dll", "40 55 57 41 56 48 8D AC 24", 0x0);
 
 MAKE_HOOK(CNetChannel_SendDatagram, S::CNetChannel_SendDatagram(), int,
 	CNetChannel* pNetChan, bf_write* datagram)

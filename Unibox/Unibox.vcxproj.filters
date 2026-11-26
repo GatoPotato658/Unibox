@@ -1,5 +1,5 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version='1.0' encoding='utf-8'?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <ClCompile Include="src\Core\Core.cpp" />
     <ClCompile Include="src\Features\Visuals\CameraWindow\CameraWindow.cpp" />
@@ -10,13 +10,6 @@
     <ClCompile Include="src\Features\Players\PlayerUtils.cpp" />
     <ClCompile Include="src\Features\Visuals\Materials\Materials.cpp" />
     <ClCompile Include="src\Features\ImGui\Notifications\Notifications.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\INetMessage.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\KeyValues.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Misc\bitbuf.cpp" />
-    <ClCompile Include="src\SDK\Definitions\NullInterfaces.cpp" />
-    <ClCompile Include="src\SDK\Helpers\Draw\Draw.cpp" />
-    <ClCompile Include="src\SDK\Helpers\Entities\Entities.cpp" />
-    <ClCompile Include="src\SDK\Helpers\Fonts\Fonts.cpp" />
     <ClCompile Include="src\Utils\Hooks\Hooks.cpp" />
     <ClCompile Include="src\Utils\Interfaces\Interfaces.cpp" />
     <ClCompile Include="src\Utils\KeyHandler\KeyHandler.cpp" />
@@ -35,8 +28,6 @@
     <ClCompile Include="include\MinHook\buffer.c" />
     <ClCompile Include="include\MinHook\hook.c" />
     <ClCompile Include="include\MinHook\trampoline.c" />
-    <ClCompile Include="src\SDK\SDK.cpp" />
-    <ClCompile Include="src\SDK\Helpers\ConVars\ConVars.cpp" />
     <ClCompile Include="src\Features\Commands\Commands.cpp" />
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Pages.cpp" />
@@ -87,12 +78,7 @@
     <ClCompile Include="src\Features\Aimbot\AimbotHitscan\SpreadOptimizer.cpp" />
     <ClCompile Include="src\Features\Visuals\SpectatorList\SpectatorList.cpp" />
     <ClCompile Include="src\Features\Visuals\Visuals.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CTFWeaponBase.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\MD5.cpp" />
-    <ClCompile Include="src\SDK\Helpers\TraceFilters\TraceFilters.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Misc\ChecksumCRC.cpp" />
     <ClCompile Include="src\Hooks\Direct3DDevice9.cpp" />
-    <ClCompile Include="src\SDK\Events\Events.cpp" />
     <ClCompile Include="src\Utils\ExceptionHandler\ExceptionHandler.cpp" />
     <ClCompile Include="src\BytePatches\BytePatches.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
@@ -192,15 +178,6 @@
     <ClCompile Include="src\Features\Output\Output.cpp" />
     <ClCompile Include="src\Hooks\Cbuf_ExecuteCommand.cpp" />
     <ClCompile Include="src\Hooks\IMatSystemSurface_OnScreenSizeChanged.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CTFPlayer.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CBaseAnimating.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CBaseCombatCharacter.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CBaseEntity.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CBaseObject.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CBasePlayer.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CBaseProjectile.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\CEntityMapData.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Main\ValveRandom.cpp" />
     <ClCompile Include="src\Features\Visuals\Groups\Groups.cpp" />
     <ClCompile Include="src\Features\AutoJoin\AutoJoin.cpp" />
     <ClCompile Include="src\Features\Killstreak\Killstreak.cpp" />
@@ -258,9 +235,6 @@
     <ClCompile Include="src\Hooks\CTFPlayer_GetMinFOV.cpp" />
     <ClCompile Include="src\Hooks\CWeaponMedigun_PrimaryAttack.cpp" />
     <ClCompile Include="src\Hooks\IMaterialSystem_FindTexture.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Misc\CUtlBuffer.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Misc\CUtlCharConversion.cpp" />
-    <ClCompile Include="src\SDK\Definitions\Misc\CByteSwap.cpp" />
     <ClCompile Include="src\Features\World\World.cpp" />
     <ClCompile Include="src\Hooks\CModelLoader_Map_LoadModel.cpp" />
     <ClCompile Include="src\Hooks\CM_TraceToDispTree.cpp" />
@@ -283,6 +257,93 @@
     <ClCompile Include="src\Features\ImGui\Overlay\CaptureOverlay.cpp" />
     <ClCompile Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.cpp" />
     <ClCompile Include="src\Features\Misc\AutoTranslate\AutoTranslate.cpp" />
+    <ClCompile Include="src\SDK\Core\SDKGameplay.cpp">
+      <Filter>SDK\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Core\SDKMapEntities.cpp">
+      <Filter>SDK\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Core\SDKPlatform.cpp">
+      <Filter>SDK\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Core\SDKWorld.cpp">
+      <Filter>SDK\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Engine\CEntityMapData.cpp">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Engine\KeyValues.cpp">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Engine\MD5.cpp">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Engine\ValveRandom.cpp">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CBaseAnimating.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CBaseCombatCharacter.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CBaseEntity.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CBaseObject.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CBasePlayer.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CBaseProjectile.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Entities\CTFPlayer.cpp">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Network\INetMessage.cpp">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\NullInterfaces.cpp">
+      <Filter>SDK\Definitions</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Utl\CByteSwap.cpp">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Utl\CUtlBuffer.cpp">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Utl\CUtlCharConversion.cpp">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Utl\ChecksumCRC.cpp">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Utl\bitbuf.cpp">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Definitions\Weapons\CTFWeaponBase.cpp">
+      <Filter>SDK\Definitions\Weapons</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Events\Events.cpp">
+      <Filter>SDK\Events</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Helpers\ConVars\ConVars.cpp">
+      <Filter>SDK\Helpers\ConVars</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Helpers\Draw\Draw.cpp">
+      <Filter>SDK\Helpers\Draw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Helpers\Entities\Entities.cpp">
+      <Filter>SDK\Helpers\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Helpers\Fonts\Fonts.cpp">
+      <Filter>SDK\Helpers\Fonts</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SDK\Helpers\TraceFilters\TraceFilters.cpp">
+      <Filter>SDK\Helpers\TraceFilters</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Core\Core.h" />
@@ -299,106 +360,6 @@
     <ClInclude Include="src\Features\Players\PlayerUtils.h" />
     <ClInclude Include="src\Features\Visuals\Materials\Materials.h" />
     <ClInclude Include="src\Features\ImGui\Notifications\Notifications.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CClientModeShared.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CClientState.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CGlobalVarsBase.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IClientEntityList.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\ICVar.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IEngineVGui.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IGameEvents.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IInputSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IMaterialSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IMatSystemSurface.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\Interface.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IVEngineClient.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IViewRender.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IVModelInfo.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IVRenderView.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\VPhysics.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseAnimating.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseCombatCharacter.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseCombatWeapon.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseEntity.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseFlex.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseHandle.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBasePlayer.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseProjectile.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CEconDefinition.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CMultiPlayerAnimState.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CTFPlayer.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CTFPlayerResource.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CTFWeaponBase.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CUserCmd.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IClientEntity.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IClientNetworkable.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IClientRenderable.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IClientThinkable.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IClientUnknown.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IHandleEntity.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IMaterial.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IMaterialVar.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\INetChannel.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\INetChannelInfo.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\INetMessage.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\INetworkMessage.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\INetworkSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\ITexture.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\KeyValues.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\NetChannel.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlVector.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\Activity.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\AnalogCode.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\BaseTypes.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\bitbuf.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ButtonCode.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CGameEventListener.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ChecksumCRC.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ClientClass.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CommonMacros.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ConVar.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CPlayerResource.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\Cursor.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CViewSetup.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\Datamap.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\Deformations.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\dt_common.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\dt_recv.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IAppSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IClientMode.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IColorCorrectionSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IConVar.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IGameResources.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IHTML.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IImage.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ImageFormat.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IMaterialSystemHardwareConfig.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\InputEnums.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IRefCounted.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ISurface.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IVguiMatInfo.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IVguiMatInfoVar.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\KeyCode.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\LightDesc.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\LocalFlexController.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\Modes.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\MouseCode.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\NetAdr.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\String.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\Studio.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\TextureGroupNames.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\VGUI.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\VPlane.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\VTF.h" />
-    <ClInclude Include="src\SDK\Definitions\Classes.h" />
-    <ClInclude Include="src\SDK\Definitions\Definitions.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces.h" />
-    <ClInclude Include="src\SDK\Definitions\Types.h" />
-    <ClInclude Include="src\SDK\Helpers\Draw\Draw.h" />
-    <ClInclude Include="src\SDK\Helpers\Entities\Entities.h" />
-    <ClInclude Include="src\SDK\Helpers\Fonts\Fonts.h" />
-    <ClInclude Include="src\SDK\Globals.h" />
-    <ClInclude Include="src\SDK\SDK.h" />
-    <ClInclude Include="src\SDK\Vars.h" />
     <ClInclude Include="src\Utils\Macros\Macros.h" />
     <ClInclude Include="src\Utils\Hash\FNV1A.h" />
     <ClInclude Include="src\Utils\Files\FileName.h" />
@@ -422,44 +383,7 @@
     <ClInclude Include="include\MinHook\buffer.h" />
     <ClInclude Include="include\MinHook\MinHook.h" />
     <ClInclude Include="include\MinHook\trampoline.h" />
-    <ClInclude Include="src\SDK\Helpers\ConVars\ConVars.h" />
     <ClInclude Include="src\Features\Commands\Commands.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFPartyClient.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamController.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamFriends.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamGameServer.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamGameServerStats.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamHTMLSurface.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamHTTP.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamInput.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamInventory.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamMatchmaking.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamMusic.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamMusicRemote.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworking.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworkingMessages.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworkingSockets.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworkingUtils.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamParentalSettings.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamRemotePlay.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamRemoteStorage.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamScreenshots.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUGC.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUser.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUserStats.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUtils.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamVideo.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\MatchmakingTypes.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\Steam_API.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\Steam_API_Common.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\Steam_API_Internal.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\Steam_Gameserver.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\SteamClientPublic.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\SteamHTTPEnums.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\SteamNetworkingTypes.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\SteamTypes.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\SteamUniverse.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\SteamInterfaces.h" />
     <ClInclude Include="src\Features\ImGui\Render.h" />
     <ClInclude Include="src\Features\ImGui\Theme.h" />
     <ClInclude Include="src\Features\ImGui\IndicatorPanel.h" />
@@ -514,61 +438,16 @@
     <ClInclude Include="src\Features\Aimbot\AimbotHitscan\SpreadOptimizer.h" />
     <ClInclude Include="src\Features\Visuals\SpectatorList\SpectatorList.h" />
     <ClInclude Include="src\Features\Visuals\Visuals.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IGameMovement.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IInput.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IUniformRandomStream.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\Prediction.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseObject.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseTrace.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CCollisionProperty.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CEntitySphereQuery.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CGameTrace.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CModel.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IEngineTrace.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IAchievementMgr.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\MD5.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\BSPFlags.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IMoveHelper.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IPrediction.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\ISpatialPartition.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\VCollide.h" />
-    <ClInclude Include="src\SDK\Helpers\Particles\Particles.h" />
-    <ClInclude Include="src\SDK\Helpers\TraceFilters\TraceFilters.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IVModelRender.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IStudioRender.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamApps.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamClient.h" />
-    <ClInclude Include="src\SDK\Definitions\Steam\ISteamAppList.h" />
     <ClInclude Include="src\Hooks\Direct3DDevice9.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFGameRules.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\ViewRenderBeams.h" />
-    <ClInclude Include="src\SDK\Events\Events.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\dt_send.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\bitvec.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\ServerClass.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CSmartPtr.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CParticleProperty.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CCaptureFlag.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IPanel.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFGCClientSystem.h" />
     <ClInclude Include="src\Utils\ExceptionHandler\ExceptionHandler.h" />
     <ClInclude Include="src\BytePatches\BytePatches.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\CascadiaMono\CascadiaMono.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\Rubik\Rubik.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\IconDefinitions.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\MaterialDesign\MaterialIcons.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CEconEntity.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CEconWearable.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
     <ClInclude Include="src\Features\Spectate\Spectate.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CHLClient.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CSniperDot.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IMatchGroupDescription.h" />
     <ClInclude Include="src\Features\Output\Output.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\PlayerStats.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IKeyValuesSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CInterpolatedVar.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CRangeCheckedVar.h" />
     <ClInclude Include="src\Features\Visuals\Groups\Groups.h" />
     <ClInclude Include="src\Features\AutoJoin\AutoJoin.h" />
     <ClInclude Include="src\Features\Killstreak\Killstreak.h" />
@@ -590,51 +469,7 @@
     <ClInclude Include="src\Features\NavBot\Jobs\NavBotJobs.h" />
     <ClInclude Include="src\Features\Players\SteamProfileCache.h" />
     <ClInclude Include="src\Features\Createmove\Createmove.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IFileSystem.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\ILocalize.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IMemAlloc.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CHLTVCamera.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CThirdPersonManager.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CServerTools.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFInventoryManager.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CModelLoader.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IDemoPlayer.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\IDemoRecorder.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IMDLCache.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CPredictionCopy.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseTeamObjectiveResource.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CFuncPasstimeGoal.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CPasstimeBall.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CTFPasstimeLogic.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CServerBaseEntity.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IServerEntity.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IServerUnknown.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\ValveRandom.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseToggle.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CBaseTrigger.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CFuncRespawnRoom.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CFuncRespawnRoomShim.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CEntityMapData.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CCollisionBSPData.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlCharConversion.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlIntrusiveList.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlMemory.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlObjectReference.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlBuffer.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CRangeValidatedArray.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CByteSwap.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CDiscardableArray.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CStaticPropMgr.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CStaticProp.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\ICollideable.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CMapLoadHelper.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\IDispInfo.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\Ray.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlString.h" />
     <ClInclude Include="src\Features\World\World.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\WorldBrushData.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CDispCollTree.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\TraceInfo.h" />
     <ClInclude Include="src\Utils\Math\BaseMath.h" />
     <ClInclude Include="include\ImGui\imconfig.h" />
     <ClInclude Include="include\ImGui\imgui.h" />
@@ -646,28 +481,823 @@
     <ClInclude Include="include\ImGui\imstb_textedit.h" />
     <ClInclude Include="include\ImGui\imstb_truetype.h" />
     <ClInclude Include="include\ImGui\TextEditor.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\IStudioDataCache.h" />
-    <ClInclude Include="src\SDK\Definitions\Interfaces\CMDLCache.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CDefaultDataCacheClient.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlDict.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlMap.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlRBTree.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlFixedMemory.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlBlockMemory.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlLinkedList.h" />
-    <ClInclude Include="src\SDK\Definitions\Misc\CUtlShared.h" />
     <ClInclude Include="src\Features\AntiCheatCompatibility\AntiCheatCompatibility.h" />
     <ClInclude Include="src\Features\Debug\Debug.h" />
     <ClInclude Include="src\Features\ImGui\Easings\Easings.h" />
     <ClInclude Include="src\Features\Misc\TelemetryBlocker\TelemetryBlocker.h" />
     <ClInclude Include="src\Features\Misc\AutoTranslate\AutoTranslate.h" />
     <ClInclude Include="src\Features\ImGui\Overlay\CaptureOverlay.h" />
-    <ClInclude Include="src\SDK\Definitions\Main\CClient_Precipitation.h" />
+    <ClInclude Include="src\SDK\Definitions\Classes.h">
+      <Filter>SDK\Definitions</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\DataTable\ClientClass.h">
+      <Filter>SDK\Definitions\DataTable</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\DataTable\Datamap.h">
+      <Filter>SDK\Definitions\DataTable</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\DataTable\ServerClass.h">
+      <Filter>SDK\Definitions\DataTable</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\DataTable\dt_common.h">
+      <Filter>SDK\Definitions\DataTable</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\DataTable\dt_recv.h">
+      <Filter>SDK\Definitions\DataTable</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\DataTable\dt_send.h">
+      <Filter>SDK\Definitions\DataTable</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Definitions.h">
+      <Filter>SDK\Definitions</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CBaseHandle.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CBaseTrace.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CCollisionProperty.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CEntityMapData.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CEntitySphereQuery.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CGameTrace.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CMapLoadHelper.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CPredictionCopy.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\CUserCmd.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IAchievementMgr.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IClientEntity.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IClientNetworkable.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IClientRenderable.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IClientThinkable.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IClientUnknown.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\ICollideable.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IDispInfo.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IHandleEntity.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IServerEntity.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\IServerUnknown.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\KeyValues.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\MD5.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\Ray.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Engine\ValveRandom.h">
+      <Filter>SDK\Definitions\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseAnimating.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseCombatCharacter.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseEntity.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseFlex.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseObject.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBasePlayer.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseProjectile.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseTeamObjectiveResource.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseToggle.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CBaseTrigger.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CCaptureFlag.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CClient_Precipitation.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CFuncPasstimeGoal.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CFuncRespawnRoom.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CFuncRespawnRoomShim.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CPasstimeBall.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CPlayerResource.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CServerBaseEntity.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CSniperDot.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CStaticProp.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CTFPasstimeLogic.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CTFPlayer.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\CTFPlayerResource.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Entities\PlayerStats.h">
+      <Filter>SDK\Definitions\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\ClassIDs.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\Conditions.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\Constants.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\GameRules.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\GameTypes.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\Hitboxes.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Enums\Weapons.h">
+      <Filter>SDK\Definitions\Enums</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces.h">
+      <Filter>SDK\Definitions</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CClientModeShared.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CClientState.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CCollisionBSPData.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CDispCollTree.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CGlobalVarsBase.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CHLClient.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CHLTVCamera.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CMDLCache.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CModelLoader.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CServerTools.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CStaticPropMgr.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFGCClientSystem.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFGameRules.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFInventoryManager.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFPartyClient.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CThirdPersonManager.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\ICVar.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IClientEntityList.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IDemoPlayer.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IDemoRecorder.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IEngineTrace.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IEngineVGui.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IFileSystem.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IGameEvents.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IGameMovement.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IInput.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IInputSystem.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IKeyValuesSystem.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\ILocalize.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IMatSystemSurface.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IMaterialSystem.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IMemAlloc.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IMoveHelper.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IPanel.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\ISpatialPartition.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IStudioRender.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IUniformRandomStream.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IVEngineClient.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IVModelInfo.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IVModelRender.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IVRenderView.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\IViewRender.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\Interface.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\Prediction.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\SteamInterfaces.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\VPhysics.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\ViewRenderBeams.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Interfaces\WorldBrushData.h">
+      <Filter>SDK\Definitions\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\BaseTypes.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\CGameEventListener.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\CInterpolatedVar.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\CommonMacros.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\ConVar.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IAppSystem.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IClientMode.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IConVar.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IGameResources.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IMatchGroupDescription.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IMaterialSystemHardwareConfig.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IPrediction.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\IRefCounted.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\NetAdr.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Misc\String.h">
+      <Filter>SDK\Definitions\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Network\INetChannel.h">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Network\INetChannelInfo.h">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Network\INetMessage.h">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Network\INetworkMessage.h">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Network\INetworkSystem.h">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Network\NetChannel.h">
+      <Filter>SDK\Definitions\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\Activity.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\BSPFlags.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\CDefaultDataCacheClient.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\CModel.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\CMultiPlayerAnimState.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\CParticleProperty.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\CViewSetup.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\Deformations.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\IColorCorrectionSystem.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\IMDLCache.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\IMaterial.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\IMaterialVar.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\IStudioDataCache.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\ITexture.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\ImageFormat.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\LightDesc.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\LocalFlexController.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\Modes.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\Studio.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\TextureGroupNames.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\TraceInfo.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\VCollide.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\VPlane.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Render\VTF.h">
+      <Filter>SDK\Definitions\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamAppList.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamApps.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamClient.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamController.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamFriends.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamGameServer.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamGameServerStats.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamHTMLSurface.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamHTTP.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamInput.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamInventory.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamMatchmaking.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamMusic.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamMusicRemote.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworking.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworkingMessages.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworkingSockets.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamNetworkingUtils.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamParentalSettings.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamRemotePlay.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamRemoteStorage.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamScreenshots.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUGC.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUser.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUserStats.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamUtils.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\ISteamVideo.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\MatchmakingTypes.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\SteamClientPublic.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\SteamHTTPEnums.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\SteamNetworkingTypes.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\SteamTypes.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\SteamUniverse.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\Steam_API.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\Steam_API_Common.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\Steam_API_Internal.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Steam\Steam_Gameserver.h">
+      <Filter>SDK\Definitions\Steam</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Types.h">
+      <Filter>SDK\Definitions</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CByteSwap.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CDiscardableArray.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CRangeCheckedVar.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CRangeValidatedArray.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CSmartPtr.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlBlockMemory.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlBuffer.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlCharConversion.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlDict.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlFixedMemory.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlIntrusiveList.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlLinkedList.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlMap.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlMemory.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlObjectReference.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlRBTree.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlShared.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlString.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\CUtlVector.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\ChecksumCRC.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\bitbuf.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Utl\bitvec.h">
+      <Filter>SDK\Definitions\Utl</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\AnalogCode.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\ButtonCode.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\Cursor.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\IHTML.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\IImage.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\ISurface.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\IVguiMatInfo.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\IVguiMatInfoVar.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\InputEnums.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\KeyCode.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\MouseCode.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\VGUI\VGUI.h">
+      <Filter>SDK\Definitions\VGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Weapons\CBaseCombatWeapon.h">
+      <Filter>SDK\Definitions\Weapons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Weapons\CEconDefinition.h">
+      <Filter>SDK\Definitions\Weapons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Weapons\CEconEntity.h">
+      <Filter>SDK\Definitions\Weapons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Weapons\CEconWearable.h">
+      <Filter>SDK\Definitions\Weapons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Definitions\Weapons\CTFWeaponBase.h">
+      <Filter>SDK\Definitions\Weapons</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Events\Events.h">
+      <Filter>SDK\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Globals.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Helpers\ConVars\ConVars.h">
+      <Filter>SDK\Helpers\ConVars</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Helpers\Draw\Draw.h">
+      <Filter>SDK\Helpers\Draw</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Helpers\Entities\Entities.h">
+      <Filter>SDK\Helpers\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Helpers\Fonts\Fonts.h">
+      <Filter>SDK\Helpers\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Helpers\Particles\Particles.h">
+      <Filter>SDK\Helpers\Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Helpers\TraceFilters\TraceFilters.h">
+      <Filter>SDK\Helpers\TraceFilters</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\SDK.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Signatures.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SDK\Vars.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="SDK">
+      <UniqueIdentifier>{9d307814-22eb-427b-bc23-73445faca111}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Core">
+      <UniqueIdentifier>{516bc0a3-9cc8-4ffc-b00c-7150107e9171}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions">
+      <UniqueIdentifier>{247a6fd0-f1e8-4318-93d4-19504a4ad92b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Engine">
+      <UniqueIdentifier>{a3aca8bd-390d-4429-be89-0526d6e0bdcd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Entities">
+      <UniqueIdentifier>{504df4c5-b9e9-45ed-aa31-f848143ba397}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Network">
+      <UniqueIdentifier>{4c49e452-67c2-426c-82ac-26c909e9533d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Utl">
+      <UniqueIdentifier>{3bc1baf8-55f2-4453-8ab8-c03af0c9986a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Weapons">
+      <UniqueIdentifier>{7e25ac4d-6697-4cf7-8fa1-ac2da6906820}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Events">
+      <UniqueIdentifier>{a7715722-72a5-4097-9693-c5a7bfebd97d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers">
+      <UniqueIdentifier>{18ed35c0-9d68-45a2-80bc-285a7bd4208d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers\ConVars">
+      <UniqueIdentifier>{f7042666-c6df-4f09-b078-38b0db121d92}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers\Draw">
+      <UniqueIdentifier>{31a566d5-2036-42b0-9082-9a9e585b248d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers\Entities">
+      <UniqueIdentifier>{56f2ad45-df0e-4a2a-bbaa-153d6fb89cde}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers\Fonts">
+      <UniqueIdentifier>{efffc262-e3a9-4854-bc6d-369fb8d47aa1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers\TraceFilters">
+      <UniqueIdentifier>{d1978bcd-4eec-406f-8d2e-f3f1156130de}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\DataTable">
+      <UniqueIdentifier>{1d200bf7-4793-4aa1-a69a-3d7ed831a512}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Enums">
+      <UniqueIdentifier>{4f8089e7-a71b-4e7d-b658-9d6ee2f42151}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Interfaces">
+      <UniqueIdentifier>{cf81c3d9-6781-4f7c-aa94-075cf01c1dcd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Misc">
+      <UniqueIdentifier>{7e2a6c73-49da-4ff9-b5a0-e84d02934fdc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Render">
+      <UniqueIdentifier>{1dcbeb83-1757-476a-a90e-945d595fbae9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\Steam">
+      <UniqueIdentifier>{0411b6e8-d59e-42c2-bb9f-7de7892adbd9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Definitions\VGUI">
+      <UniqueIdentifier>{84f00b8b-3535-46f7-9d66-1d2ef4d324ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\Helpers\Particles">
+      <UniqueIdentifier>{73c97383-46b7-46f2-84a4-8d9527868b89}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

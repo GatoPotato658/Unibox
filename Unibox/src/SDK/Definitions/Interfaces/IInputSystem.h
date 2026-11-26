@@ -1,8 +1,8 @@
 #pragma once
 #include "../Misc/IAppSystem.h"
-#include "../Misc/AnalogCode.h"
-#include "../Misc/ButtonCode.h"
-#include "../Misc/InputEnums.h"
+#include "../VGUI/AnalogCode.h"
+#include "../VGUI/ButtonCode.h"
+#include "../VGUI/InputEnums.h"
 #include "../Steam/ISteamController.h"
 
 class IInputSystem : public IAppSystem
@@ -59,5 +59,3 @@ public:
 	virtual const wchar_t* GetSteamControllerDescriptionForActionOrigin(EControllerActionOrigin origin) = 0;
 	virtual void SetSkipControllerInitialization(bool bSkip) = 0;
 };
-
-MAKE_INTERFACE_VERSION(IInputSystem, InputSystem, "inputsystem.dll", "InputSystemVersion001");

@@ -3,12 +3,6 @@
 
 #include "../Features/Simulation/ProjectileSimulation/ProjectileSimulation.h"
 
-MAKE_SIGNATURE(CParticleProperty_Create_Name, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 41 56 48 83 EC ? 48 8B 59 ? 49 8B F1", 0x0);
-MAKE_SIGNATURE(CParticleProperty_Create_Point, "client.dll", "44 89 4C 24 ? 44 89 44 24 ? 53", 0x0);
-MAKE_SIGNATURE(CParticleProperty_AddControlPoint_Pointer, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 56 57 41 55 41 56 41 57 48 83 EC ? 4C 8B BC 24", 0x0);
-MAKE_SIGNATURE(CWeaponMedigun_UpdateEffects_CreateName_Call1, "client.dll", "49 8B CC F3 0F 11 74 24 ? 48 8B D8", 0x0);
-MAKE_SIGNATURE(CWeaponMedigun_UpdateEffects_CreateName_Call2, "client.dll", "41 8B 14 24 48 8B D8", 0x0);
-MAKE_SIGNATURE(CWeaponMedigun_ManageChargeEffect_CreateName_Call, "client.dll", "48 89 86 ? ? ? ? 48 89 BE ? ? ? ? 48 83 BE", 0x0);
 
 MAKE_HOOK(CParticleProperty_Create_Name, S::CParticleProperty_Create_Name(), void*,
 	void* rcx, const char* pszParticleName, ParticleAttachment_t iAttachType, const char* pszAttachmentName)

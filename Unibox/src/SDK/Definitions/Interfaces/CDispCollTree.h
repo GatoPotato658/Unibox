@@ -1,5 +1,5 @@
 #pragma once
-#include "../Misc/CUtlVector.h"
+#include "../Utl/CUtlVector.h"
 #include "../Types.h"
 
 typedef __m128 fltx4;
@@ -109,6 +109,3 @@ public:
 	CDispCollHelper m_Helper;
 	unsigned int m_nSize;
 };
-
-MAKE_INTERFACE_SIGNATURE(CDispCollTree*, DispCollTrees, "engine.dll", "48 89 05 ? ? ? ? E8 ? ? ? ? 48 8B D0", 0x0, 0, false);
-MAKE_INTERFACE_SIGNATURE(int, DispCollTreeCount, "engine.dll", "44 89 35 ? ? ? ? E8", 0x0, 0, false);

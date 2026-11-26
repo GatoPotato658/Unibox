@@ -1,7 +1,7 @@
 #pragma once
-#include "../Main/IMaterial.h"
-#include "../Misc/Studio.h"
-#include "../Misc/CUtlVector.h"
+#include "../Render/IMaterial.h"
+#include "../Render/Studio.h"
+#include "../Utl/CUtlVector.h"
 #include "../Types.h"
 
 #define STUDIORENDER_DECAL_INVALID  ( (StudioDecalHandle_t)0 )
@@ -233,5 +233,3 @@ public:
 		SetColorModulation(aColor);
 	}
 };
-
-MAKE_INTERFACE_VERSION(IStudioRender, StudioRender, "studiorender.dll", "VStudioRender025");

@@ -1,7 +1,7 @@
 #pragma once
 #include "IConVar.h"
-#include "CUtlVector.h"
-#include "CUtlString.h"
+#include "../Utl/CUtlVector.h"
+#include "../Utl/CUtlString.h"
 
 #define COMMAND_COMPLETION_MAXITEMS 64
 #define COMMAND_COMPLETION_ITEM_LENGTH 64

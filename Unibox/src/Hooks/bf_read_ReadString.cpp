@@ -3,8 +3,6 @@
 
 #include "../Features/Players/PlayerUtils.h"
 
-MAKE_SIGNATURE(bf_read_ReadString, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 41 56 40 32 FF", 0x0);
-MAKE_SIGNATURE(CHudVote_MsgFunc_VoteStart_ReadString_Call, "client.dll", "8B 4B ? 8B C1 44 8B 5B ? 41 2B C3 83 F8 ? 7D ? 89 4B ? 48 8B CB E8 ? ? ? ? 41 8B C6", 0x0);
 
 MAKE_HOOK(bf_read_ReadString, S::bf_read_ReadString(), bool,
 	void* rcx, char* pStr, int maxLen, bool bLine, int* pOutNumChars)

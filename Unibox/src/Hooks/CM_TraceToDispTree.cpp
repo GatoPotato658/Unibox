@@ -1,12 +1,7 @@
 #include "../SDK/SDK.h"
 
-#include "../SDK/Definitions/Misc/TraceInfo.h"
+#include "../SDK/Definitions/Render/TraceInfo.h"
 
-MAKE_SIGNATURE(CM_TraceToDispTree_True, "engine.dll", "48 8B C4 48 89 58 ? 48 89 70 ? 57 48 81 EC ? ? ? ? F3 0F 10 01", 0x0);
-MAKE_SIGNATURE(CM_TraceToDispTree_False, "engine.dll", "48 8B C4 48 89 58 ? 48 89 70 ? 57 48 83 EC ? F3 0F 10 01", 0x0);
-MAKE_SIGNATURE(IntersectRayWithTriangle, "engine.dll", "48 8B C4 48 81 EC ? ? ? ? 80 BC 24", 0x0);
-MAKE_SIGNATURE(CDispCollTree_SweepAABBTriIntersect, "engine.dll", "48 8B C4 48 89 70 ? 48 89 78 ? 55 41 56 41 57 48 8D 68", 0x0);
-MAKE_SIGNATURE(CDispCollTree_EdgeCrossAxis_0, "engine.dll", "48 83 EC ? B8 ? ? ? ? 66 44 3B C0 75 ? B0 ? 48 83 C4 ? C3 48 8B 89 ? ? ? ? F3 0F 10 05 ? ? ? ? 0F 29 74 24 ? 0F 29 7C 24 ? 44 0F 29 04 24 41 0F B7 C0 66 45 85 C0 79 ? 25 ? ? ? ? 48 8D 04 40 F3 44 0F 10 04 81", 0x0);
 
 #define DISPCOLL_DIST_EPSILON 0.03125f
 

@@ -1,9 +1,9 @@
 #pragma once
 #include "Interface.h"
 #include "../Misc/BaseTypes.h"
-#include "../Misc/ChecksumCRC.h"
-#include "../Misc/ButtonCode.h"
-#include "../Misc/Modes.h"
+#include "../Utl/ChecksumCRC.h"
+#include "../VGUI/ButtonCode.h"
+#include "../Render/Modes.h"
 #include "../Definitions.h"
 
 class CSentence;
@@ -196,5 +196,3 @@ public:
 	virtual void StopDemoRecording(void) = 0;
 	virtual void TakeScreenshot(const char* pszFilename, const char* pszFolder = NULL) = 0;
 };
-
-MAKE_INTERFACE_VERSION(IVEngineClient, EngineClient, "engine.dll", "VEngineClient014");

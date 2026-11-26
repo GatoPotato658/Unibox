@@ -114,5 +114,3 @@ public:
 	virtual void OnDynamicModelsStringTableChange(int nStringIndex, const char* pString, const void* pData) = 0;
 	virtual const model_t* FindOrLoadModel(const char* name) = 0;
 };
-
-MAKE_INTERFACE_VERSION(IVModelInfoClient, ModelInfoClient, "engine.dll", "VModelInfoClient006");

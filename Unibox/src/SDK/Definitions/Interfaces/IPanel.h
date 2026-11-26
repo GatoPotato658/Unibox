@@ -76,5 +76,3 @@ public:
 	virtual void SetTopmostPopup(VPANEL vguiPanel, bool state) = 0;
 	virtual void SetSiblingPin(VPANEL vguiPanel, VPANEL newSibling, byte iMyCornerToPin = 0, byte iSiblingCornerToPinTo = 0) = 0;
 };
-
-MAKE_INTERFACE_VERSION(IPanel, Panel, "vgui2.dll", "VGUI_Panel009");

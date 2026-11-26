@@ -4,7 +4,6 @@
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
 
-MAKE_SIGNATURE(CTFPlayer_FireBullet, "client.dll", "48 89 74 24 ? 55 57 41 55 41 56 41 57 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? F3 41 0F 10 58", 0x0);
 
 static int iBullet{ 0 };
 static int iLastTickCount{ 0 };

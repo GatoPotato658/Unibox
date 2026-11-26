@@ -1,16 +1,13 @@
 #pragma once
 #include "ConVar.h"
-#include "CUtlVector.h"
-#include "CUtlString.h"
+#include "../Utl/CUtlVector.h"
+#include "../Utl/CUtlString.h"
 #include "../Interfaces/IVEngineClient.h"
 #include "../Steam/SteamClientPublic.h"
 #include "../Definitions.h"
 #include "../../../Utils/Signatures/Signatures.h"
 #include "../../../Utils/Memory/Memory.h"
 
-MAKE_SIGNATURE(IProgressionDesc_GetLevelByNumber, "client.dll", "83 EA ? 4C 8B C1", 0x0);
-MAKE_SIGNATURE(CTFRatingData_GetRatingData, "client.dll", "8B 41 ? 89 02 8B 41 ? 89 42 ? 8B 41 ? 89 42 ? 48 8B C2", 0x0);
-MAKE_SIGNATURE(CTFRatingData_YieldingGetPlayerRatingDataBySteamID, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 8B FA 48 8B D9 E8 ? ? ? ? 48 8B C8", 0x0);
 
 enum EMatchMode
 {

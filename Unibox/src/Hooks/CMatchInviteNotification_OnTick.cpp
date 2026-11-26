@@ -1,8 +1,6 @@
 #ifndef TEXTMODE
 #include "../SDK/SDK.h"
 
-MAKE_SIGNATURE(CMatchInviteNotification_OnTick, "client.dll", "40 53 48 83 EC ? 48 8B D9 E8 ? ? ? ? F7 83", 0x0);
-MAKE_SIGNATURE(CMatchInviteNotification_AutoJoinTimeOffset, "client.dll", "0F 57 FF 66 0F 2E BB ? ? ? ? 74 ? FF 15 ? ? ? ? 66 0F 2F 83", 0x0);
 
 #define JOIN_TIME (10.0)
 #define FULL_TIME (180.0)
