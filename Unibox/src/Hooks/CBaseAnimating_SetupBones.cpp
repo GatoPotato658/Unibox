@@ -13,15 +13,13 @@ MAKE_HOOK(CBaseAnimating_SetupBones, S::CBaseAnimating_SetupBones(), bool,
 		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
 	const auto pAnimating = reinterpret_cast<CBaseEntity*>(uintptr_t(rcx) - 8);
-	auto pOwner = pAnimating->GetRootMoveParent();
-	auto pEntity = pOwner ? pOwner : pAnimating;
-	if (!pEntity->IsPlayer() || pEntity->entindex() == I::EngineClient->GetLocalPlayer())
+	if (!pAnimating->IsPlayer() || pAnimating->entindex() == I::EngineClient->GetLocalPlayer())
 		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
 	if (pBoneToWorldOut)
 	{
-		auto pHeader = pEntity->GetStudiomodel();
-		auto& aBones = pEntity->As<CBaseAnimating>()->m_CachedBoneData();
+		auto pHeader = pAnimating->GetStudiomodel();
+		auto& aBones = pAnimating->As<CBaseAnimating>()->m_CachedBoneData();
 		if (!pHeader || aBones.Count() != pHeader->numbones)
 			return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 		if (nMaxBones >= aBones.Count())

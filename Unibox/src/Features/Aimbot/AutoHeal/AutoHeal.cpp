@@ -61,11 +61,9 @@ void CAutoHeal::AutoHeal(CUserCmd* pCmd)
 		}
 	}
 
-	std::vector<TickRecord*> vRecords = {};
-	if (!F::Backtrack.GetRecords(pTarget, vRecords))
-		return;
-	vRecords = F::Backtrack.GetValidRecords(vRecords, m_pLocal, true);
-	if (!vRecords.size())
+	static thread_local std::vector<TickRecord*> vRecords = {};
+	F::Backtrack.GetValidRecords(pTarget, vRecords, m_pLocal, true);
+	if (vRecords.empty())
 		return;
 
 	Vec3 vEyePos = m_pLocal->GetShootPos();

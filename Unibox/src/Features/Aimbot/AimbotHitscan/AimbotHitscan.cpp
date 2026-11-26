@@ -449,41 +449,50 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 	bool bPlayer = tTarget.m_pEntity->IsPlayer();
 	bool bWrangler = pWeapon->GetWeaponID() == TF_WEAPON_LASER_POINTER;
 
-	std::vector<TickRecord*> vRecords = {};
+	static thread_local std::vector<TickRecord*> vRecords = {};
+	vRecords.clear();
 	const TickRecord* pNewestRecord = nullptr;
-	if (F::Backtrack.GetRecords(tTarget.m_pEntity, vRecords) && !bWrangler)
+	if (!bWrangler)
 	{
-		if (bPlayer && !vRecords.empty())
-			pNewestRecord = vRecords.front();
-		vRecords = F::Backtrack.GetValidRecords(vRecords, pLocal);
+		pNewestRecord = bPlayer ? F::Backtrack.GetLatestRecord(tTarget.m_pEntity) : nullptr;
+		F::Backtrack.GetValidRecords(tTarget.m_pEntity, vRecords, pLocal);
 	}
-	else
+	if (vRecords.empty())
 	{
 		auto pEntity = tTarget.m_pEntity;
-		const Vec3 vOldAbsOrigin = pEntity->GetAbsOrigin();
-		const Vec3 vOldAbsAngles = pEntity->GetAbsAngles();
-		pEntity->SetAbsOrigin(pEntity->m_vecOrigin());
-		pEntity->SetAbsAngles(pEntity->m_angRotation());
-		pEntity->InvalidateBoneCache();
-
-		F::Backtrack.m_tRecord = { pEntity->m_flSimulationTime(), pEntity->m_vecOrigin(), pEntity->m_vecMins(), pEntity->m_vecMaxs() };
-		F::Backtrack.m_tRecord.m_vAngles = pEntity->m_angRotation();
-		F::Backtrack.m_tRecord.m_vVelocity = pEntity->As<CTFPlayer>()->m_vecVelocity();
-		F::Backtrack.m_tRecord.m_flCycle = pEntity->As<CBaseAnimating>()->m_flCycle();
-		F::Backtrack.m_tRecord.m_flPlaybackRate = pEntity->As<CBaseAnimating>()->m_flPlaybackRate();
+		F::Backtrack.m_tRecord.m_flSimTime = pEntity->m_flSimulationTime();
+		F::Backtrack.m_tRecord.m_vOrigin = pEntity->m_vecOrigin();
+		F::Backtrack.m_tRecord.m_vMins = pEntity->m_vecMins();
+		F::Backtrack.m_tRecord.m_vMaxs = pEntity->m_vecMaxs();
+		F::Backtrack.m_tRecord.m_bOnShot = false;
+		F::Backtrack.m_tRecord.m_bInvalid = false;
 		F::Backtrack.m_tRecord.m_flModelScale = pEntity->As<CBaseAnimating>()->m_flModelScale();
-		F::Backtrack.SetSettingUpBones(true);
-		bool bSetup = pEntity->As<CBaseAnimating>()->SetupAimBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pEntity->m_flSimulationTime());
-		F::Backtrack.SetSettingUpBones(false);
+		F::Backtrack.m_tRecord.m_pRenderBones.reset();
 
-		pEntity->SetAbsOrigin(vOldAbsOrigin);
-		pEntity->SetAbsAngles(vOldAbsAngles);
-		pEntity->InvalidateBoneCache();
+		if (bPlayer)
+		{
+			const Vec3 vOldAbsOrigin = pEntity->GetAbsOrigin();
+			const Vec3 vOldAbsAngles = pEntity->GetAbsAngles();
+			pEntity->SetAbsOrigin(pEntity->m_vecOrigin());
+			pEntity->SetAbsAngles(pEntity->m_angRotation());
+			pEntity->InvalidateBoneCache();
 
-		if (!bSetup)
-			return false;
+			F::Backtrack.m_tRecord.m_vVelocity = pEntity->As<CTFPlayer>()->m_vecVelocity();
+			F::Backtrack.SetSettingUpBones(true);
+			bool bSetup = pEntity->As<CBaseAnimating>()->SetupAimBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_HITBOX, pEntity->m_flSimulationTime());
+			F::Backtrack.SetSettingUpBones(false);
 
-		vRecords = { &F::Backtrack.m_tRecord };
+			pEntity->SetAbsOrigin(vOldAbsOrigin);
+			pEntity->SetAbsAngles(vOldAbsAngles);
+			pEntity->InvalidateBoneCache();
+
+			if (!bSetup)
+				return false;
+		}
+		else
+			F::Backtrack.m_tRecord.m_vVelocity = {};
+
+		vRecords.push_back(&F::Backtrack.m_tRecord);
 		if (bPlayer && !bWrangler)
 			pNewestRecord = &F::Backtrack.m_tRecord;
 	}
@@ -878,6 +887,7 @@ void CAimbotHitscan::BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWea
 	Math::AngleVectors(pCmd->viewangles, &vForward);
 
 	CrosshairRecord_t tBest = {};
+	static thread_local std::vector<TickRecord*> vRecords;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
 		const auto pPlayer = pEntity->As<CTFPlayer>();
@@ -886,11 +896,10 @@ void CAimbotHitscan::BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWea
 			|| pPlayer->IsInvulnerable())
 			continue;
 
-		std::vector<TickRecord*> vRecords;
-		if (!F::Backtrack.GetRecords(pEntity, vRecords))
+		F::Backtrack.GetValidRecords(pEntity, vRecords);
+		if (vRecords.empty())
 			continue;
 
-		vRecords = F::Backtrack.GetValidRecords(vRecords);
 		const CrosshairRecord_t tRecord = F::AimbotGlobal.GetCrosshairRecord(pLocal, pEntity, vShootPos, vForward, pWeapon->GetRange(), vRecords);
 		if (tRecord.m_flSimTime != -1.f && tRecord.m_flDist < tBest.m_flDist)
 			tBest = tRecord;

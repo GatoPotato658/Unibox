@@ -175,6 +175,28 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 	if (pTarget->IsDormant())
 		return EntityCenterInFOV(pTarget, vLocalPos, vLocalAngles, flFOVTo, vPos, vAngleTo);
 
+	const float flAimFOV = GetAimFOV();
+	if (flAimFOV < 180.f)
+	{
+		const Vec3 vCenter = pTarget->GetCenter();
+		const Vec3 vDelta = vCenter - vLocalPos;
+		const float flDistSqr = vDelta.LengthSqr();
+		const float flBoundRadius = pTarget->GetSize().Length() * 0.5f + 8.f;
+		if (flDistSqr > flBoundRadius * flBoundRadius)
+		{
+			const Vec3 vCenterAng = Math::CalcAngle(vLocalPos, vCenter);
+			const float flCenterFov = Math::CalcFov(vLocalAngles, vCenterAng);
+			const float flSlack = Math::Rad2Deg(asinf(std::clamp(flBoundRadius / sqrtf(flDistSqr), 0.f, 1.f)));
+			if (flCenterFov - flSlack > flAimFOV)
+			{
+				flFOVTo = flCenterFov;
+				vPos = vCenter;
+				vAngleTo = vCenterAng;
+				return false;
+			}
+		}
+	}
+
 	matrix3x4* aBones = !Vars::Visuals::Removals::Interpolation.Value
 		? F::Backtrack.GetBones(pTarget, F::EnginePrediction.m_flOldCurrentTime, Vars::Visuals::Removals::Lerp.Value ? 0.f : G::Lerp)
 		: F::Backtrack.GetBones(pTarget);

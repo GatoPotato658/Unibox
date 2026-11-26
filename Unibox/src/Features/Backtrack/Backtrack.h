@@ -80,10 +80,7 @@ struct TickRecord
 	Vec3 m_vMaxs = {};
 	bool m_bOnShot = false;
 	bool m_bInvalid = false;
-	Vec3 m_vAngles = {};
 	Vec3 m_vVelocity = {};
-	float m_flCycle = 0.f;
-	float m_flPlaybackRate = 1.f;
 	float m_flModelScale = 1.f;
 	matrix3x4 m_aBones[MAXSTUDIOBONES];
 	std::shared_ptr<std::array<matrix3x4, MAXSTUDIOBONES>> m_pRenderBones = {};
@@ -91,9 +88,106 @@ struct TickRecord
 	matrix3x4* GetRenderBones() { return m_pRenderBones ? m_pRenderBones->data() : m_aBones; }
 };
 
+struct PlayerTrack_t
+{
+	CBaseEntity* m_pEntity = nullptr;
+	int m_iEntIndex = -1;
+	std::vector<TickRecord> m_vRing = {};
+	int m_iHead = 0;
+	int m_iCount = 0;
+
+	void Clear()
+	{
+		m_iHead = 0;
+		m_iCount = 0;
+	}
+
+	void Reset()
+	{
+		m_pEntity = nullptr;
+		m_iEntIndex = -1;
+		m_vRing.clear();
+		m_iHead = 0;
+		m_iCount = 0;
+	}
+
+	bool Empty() const { return m_iCount == 0; }
+	int Size() const { return m_iCount; }
+
+	TickRecord& At(int iIndex)
+	{
+		const int iCap = int(m_vRing.size());
+		return m_vRing[(m_iHead + iIndex) % iCap];
+	}
+
+	const TickRecord& At(int iIndex) const
+	{
+		const int iCap = int(m_vRing.size());
+		return m_vRing[(m_iHead + iIndex) % iCap];
+	}
+
+	TickRecord& Front() { return m_vRing[m_iHead]; }
+	const TickRecord& Front() const { return m_vRing[m_iHead]; }
+
+	TickRecord& Back() { return At(m_iCount - 1); }
+	const TickRecord& Back() const { return At(m_iCount - 1); }
+
+	void PopBack()
+	{
+		if (m_iCount > 0)
+			m_iCount--;
+	}
+
+	void PopFront()
+	{
+		if (m_iCount <= 0)
+			return;
+		m_iHead = (m_iHead + 1) % int(m_vRing.size());
+		m_iCount--;
+	}
+
+	void Resize(int iNewCount)
+	{
+		if (iNewCount < m_iCount)
+			m_iCount = std::max(0, iNewCount);
+	}
+
+	TickRecord& PushFrontSlot(int iDesiredCap)
+	{
+		int iCap = int(m_vRing.size());
+		if (iCap == 0)
+		{
+			m_vRing.resize(std::max(iDesiredCap, 4));
+			iCap = int(m_vRing.size());
+			m_iHead = 0;
+			m_iCount = 1;
+			return m_vRing[0];
+		}
+		if (m_iCount == iCap)
+		{
+			const int iNewCap = std::max(iCap * 2, iDesiredCap);
+			std::vector<TickRecord> vNew(iNewCap);
+			for (int i = 0; i < m_iCount; i++)
+				vNew[i + 1] = std::move(At(i));
+			m_vRing = std::move(vNew);
+			m_iHead = 0;
+			m_iCount++;
+			return m_vRing[0];
+		}
+		m_iHead = (m_iHead - 1 + iCap) % iCap;
+		m_iCount++;
+		return m_vRing[m_iHead];
+	}
+};
+
 class CBacktrack
 {
 private:
+	static constexpr int MAX_TRACK_PLAYERS = 102;
+
+	PlayerTrack_t* FindTrack(CBaseEntity* pEntity);
+	PlayerTrack_t& GetOrCreateTrack(CBaseEntity* pEntity);
+
 	void MakeRecords();
 	void CleanRecords();
 
@@ -105,13 +199,16 @@ private:
 	bool PeekPacket(CNetChannel* pNetChan, bf_read& tBuffer, int iFirstStream);
 	bool IsCopy(CNetChannel* pNetChan, SubChannel_t& tState);
 
-	std::unordered_map<CBaseEntity*, std::deque<TickRecord>> m_mRecords = {};
+	std::array<PlayerTrack_t, MAX_TRACK_PLAYERS> m_aTracks = {};
+	std::unordered_map<CBaseEntity*, PlayerTrack_t> m_mExtraTracks = {};
 	std::unordered_map<int, bool> m_mDidShoot = {};
 
 	FakeLatency_t m_tLatency = {};
 	float m_flMaxUnlag = 1.f;
 	float m_flFakeLatency = 0.f;
 	float m_flFakeInterp = 0.015f;
+	float m_flKeepWindow = 1.f;
+	bool m_bAnyConsumer = true;
 
 	bool m_bSettingUpBones = false;
 
@@ -122,6 +219,9 @@ private:
 		bool m_bValid = false;
 	};
 	CIndicatorCache<DrawCache_t> m_tDrawCache = {};
+	std::string m_sLastPingText = {};
+	std::string m_sLastScoreboardText = {};
+	bool m_bLastDrawValid = false;
 public:
 	void Store();
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -131,8 +231,11 @@ public:
 	void Reset();
 
 	bool GetRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn);
+	void GetValidRecords(CBaseEntity* pEntity, std::vector<TickRecord*>& vReturn, CTFPlayer* pLocal = nullptr, bool bDistance = false, float flTimeMod = 0.f);
+	void GetValidRecords(const std::vector<TickRecord*>& vRecords, std::vector<TickRecord*>& vReturn, CTFPlayer* pLocal = nullptr, bool bDistance = false, float flTimeMod = 0.f);
 	std::vector<TickRecord*> GetValidRecords(std::vector<TickRecord*>& vRecords, CTFPlayer* pLocal = nullptr, bool bDistance = false, float flTimeMod = 0.f);
 	TickRecord* GetFirstValidRecord(CBaseEntity* pEntity);
+	TickRecord* GetLatestRecord(CBaseEntity* pEntity);
 	matrix3x4* GetBones(CBaseEntity* pEntity);
 	matrix3x4* GetBones(CBaseEntity* pEntity, float flOldCurrentTime, float flLerp);
 

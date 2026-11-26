@@ -157,6 +157,7 @@ public:
 	void SetupTrace(CTraceFilterCollideable& filter, int& nMask, CBaseEntity* pProjectile);
 
 	bool Initialize(ProjectileInfo& tProjInfo, bool bSimulate = true, bool bWorld = false);
+	Vec3 GetLaunchVelocity(ProjectileInfo& tProjInfo, bool bWorld = false);
 	void RunTick(ProjectileInfo& tProjInfo, bool bPath = true);
 	Vec3 GetOrigin();
 	Vec3 GetVelocity();
@@ -293,7 +294,10 @@ public:
 			flReturn = 0.2f * flGravity;
 			break;
 		case ETFClassID::CTFProjectile_Flare:
-			flReturn = (pWeapon && pWeapon->As<CTFFlareGun>()->GetFlareGunType() == FLAREGUN_GRORDBORT ? 0.45f : 0.3f) * flGravity;
+			if (pWeapon)
+				flReturn = SDK::AttribHookValue(0.3f, "mult_projectile_speed", pWeapon) * flGravity;
+			else
+				flReturn = 0.3f * (pProjectile->As<CTFBaseRocket>()->m_vInitialVelocity().Length() / 2000.f) * flGravity;
 			break;
 		case ETFClassID::CTFProjectile_Arrow:
 			flReturn = pProjectile->As<CTFProjectile_Arrow>()->CanHeadshot()

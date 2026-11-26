@@ -369,8 +369,9 @@ static inline bool AirSplash(CTFWeaponBase* pWeapon, Info_t& tInfo)
 	switch (pWeapon->GetWeaponID())
 	{
 	case TF_WEAPON_PIPEBOMBLAUNCHER:
-	case TF_WEAPON_FLAREGUN:
 		return true;
+	case TF_WEAPON_FLAREGUN:
+		return pWeapon->As<CTFFlareGun>()->GetFlareGunType() == FLAREGUN_DETONATE;
 	}
 
 	return false;
@@ -441,6 +442,10 @@ static TickRecord* GetCurrentRecord(CBaseEntity* pEntity, TickRecord& tRecord)
 		return nullptr;
 
 	auto pPlayer = pEntity->As<CTFPlayer>();
+	const float flSimTime = pPlayer->m_flSimulationTime();
+	if (auto* pLatest = F::Backtrack.GetLatestRecord(pEntity); pLatest && pLatest->m_flSimTime == flSimTime)
+		return pLatest;
+
 	const Vec3 vOldAbsOrigin = pPlayer->GetAbsOrigin();
 	const Vec3 vOldAbsAngles = pPlayer->GetAbsAngles();
 	const bool bOldSettingUpBones = F::Backtrack.IsSettingUpBones();
@@ -449,7 +454,7 @@ static TickRecord* GetCurrentRecord(CBaseEntity* pEntity, TickRecord& tRecord)
 	pPlayer->InvalidateBoneCache();
 
 	F::Backtrack.SetSettingUpBones(true);
-	const bool bSetup = pPlayer->SetupAimBones(tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+	const bool bSetup = pPlayer->SetupAimBones(tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_HITBOX, flSimTime);
 	F::Backtrack.SetSettingUpBones(bOldSettingUpBones);
 
 	pPlayer->SetAbsOrigin(vOldAbsOrigin);
@@ -458,11 +463,10 @@ static TickRecord* GetCurrentRecord(CBaseEntity* pEntity, TickRecord& tRecord)
 	if (!bSetup)
 		return nullptr;
 
-	tRecord.m_flSimTime = pPlayer->m_flSimulationTime();
+	tRecord.m_flSimTime = flSimTime;
 	tRecord.m_vOrigin = pPlayer->m_vecOrigin();
 	tRecord.m_vMins = pPlayer->m_vecMins();
 	tRecord.m_vMaxs = pPlayer->m_vecMaxs();
-	tRecord.m_vAngles = pPlayer->m_angRotation();
 	tRecord.m_flModelScale = pPlayer->m_flModelScale();
 	return &tRecord;
 }
@@ -721,7 +725,8 @@ struct FacePlan_t
 	std::vector<int> m_vSamples = {};
 };
 
-static inline void HandleTrace(const Vec3& vPoint, std::vector<SplashTrace_t>& vPoints, const Vec3& vTargetEye, const Info_t& tInfo, const std::function<bool()>& fCheckPointTrace, const std::function<bool()>& fCheckPointAir, CGameTrace& trace, ITraceFilter& filter)
+template <typename FCheckTrace, typename FCheckAir>
+static inline void HandleTrace(const Vec3& vPoint, std::vector<SplashTrace_t>& vPoints, const Vec3& vTargetEye, const Info_t& tInfo, FCheckTrace&& fCheckPointTrace, FCheckAir&& fCheckPointAir, CGameTrace& trace, ITraceFilter& filter)
 {
 	// out
 	SDK::TraceHull(vTargetEye, vPoint, -tInfo.m_vHull, tInfo.m_vHull, MASK_SOLID, &filter, &trace);
@@ -947,7 +952,7 @@ void CAimbotProjectile::SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& v
 			};
 		CTraceFilterWorldAndPropsOnly filter = {};
 		F::World.SetNormalValidCallback(&fNormalValid);
-		vFaces = F::World.GetFacesInAABB(vMins, vMaxs, MASK_SOLID, &filter, FaceTypeEnum::All, true);
+		F::World.GetFacesInAABB(vMins, vMaxs, MASK_SOLID, &filter, FaceTypeEnum::All, true, vFaces);
 		F::World.SetNormalValidCallback();
 #ifdef SPLASH_DEBUG5
 		SDK::Output("Faces", std::format("{}", vFaces.size()).c_str(), {}, OUTPUT_CONSOLE);
@@ -1012,13 +1017,13 @@ void CAimbotProjectile::SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& v
 			if (tSolution.m_iCalculated == CalculateResultEnum::Bad)
 				return;
 
-			std::function<bool()> fCheckPointTrace = [&]()
+			auto fCheckPointTrace = [&]()
 				{
 					if (!trace.m_pEnt || trace.fraction == 1.f || trace.surface.flags & SURF_SKY)
 						return false;
 					return fCheckSurface(trace.plane.normal, trace.endpos);
 				};
-			std::function<bool()> fCheckPointAir = [&]()
+			auto fCheckPointAir = [&]()
 				{
 					if (bAirSplash && !trace.DidHit())
 					{
@@ -1033,7 +1038,7 @@ void CAimbotProjectile::SetupSplashPoints(Vec3& vOrigin, std::vector<Setup_t>& v
 			HandleTrace(vPoint, vOutput, vTargetEye, m_tInfo, fCheckPointTrace, fCheckPointAir, trace, filter);
 		};
 
-	if (bParallel)
+	if (bParallel && iJobs >= 32)
 		U::ThreadPool.Run(iJobs, fJob);
 	else for (int i = 0; i < iJobs; i++)
 		fJob(i, 0);
@@ -1639,7 +1644,7 @@ std::vector<Point_t> CAimbotProjectile::SolveSplashPoints(Vec3 vOrigin, std::vec
 			vValid[i] = true;
 		};
 
-	if (PrepareParallel(iFlags))
+	if (iCount >= 128 && PrepareParallel(iFlags))
 		U::ThreadPool.Run(iCount, fSolve);
 	else for (int i = 0; i < iCount; i++)
 		fSolve(i, 0);
@@ -1690,6 +1695,7 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	{
 		const bool bCacheApplies = pCache->m_iCachedSimTime == iSimTime
 			|| (pCache->m_iFlightState == FlightCacheStateEnum::Failed && pCache->m_iHitTick == -1 && iSimTime <= pCache->m_iCachedSimTime)
+			|| (pCache->m_iFlightState == FlightCacheStateEnum::Failed && pCache->m_iHitTick > 0 && iSimTime >= pCache->m_iHitTick)
 			|| (iType != PointTypeEnum::Air && pCache->m_iHitTick > 0 && pCache->m_iHitTick <= iSimTime && (iTraceInterval == 1 || pCache->m_iHitTick % iTraceInterval == 0));
 		if (bCacheApplies)
 		{
@@ -1851,6 +1857,145 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	Vec3 vHull = m_tProjInfo.m_vHull.Max(1);
 	G::BoxStorage.emplace_back(vPoint, -vHull, vHull, Vec3(), I::GlobalVars->curtime + 5.f, Color_t(0, 0, 0), Color_t(0, 0, 0, 0));
 #endif
+
+	if (!m_tProjInfo.m_flGravity && !F::ProjSim.m_bPhysics && !bTargetPath)
+	{
+		const Vec3 vStart = F::ProjSim.GetOrigin();
+		const Vec3 vVel = F::ProjSim.GetVelocity();
+		const Vec3 vEnd = vStart + vVel * TICKS_TO_TIME(iSimTime);
+		SDK::TraceHull(vStart, vEnd, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
+
+		const float flRadiusSqr = iType != PointTypeEnum::Direct ? powf(m_tProjInfo.m_flVelocity * TICK_INTERVAL + m_tProjInfo.m_vHull.z, 2) : std::numeric_limits<float>::max();
+		const int iTimingTolerance = TIME_TO_TICKS(m_tInfo.m_flBoundsTime);
+
+		if (!trace.DidHit())
+		{
+			bool bValid = iType == PointTypeEnum::Air && trace.endpos.DistToSqr(vPoint) < flRadiusSqr;
+			if (bValid)
+			{
+				const int iTargetTick = iSimTime + m_tInfo.m_iLaunchDelay;
+				const Vec3& vTargetOrigin = !m_tInfo.m_iArmTime && !(m_tInfo.m_bIgnoreTiming && iFlags == PointFlagsEnum::Lob)
+					&& iTargetTick >= 0 && iTargetTick < int(m_vTargetPath.size()) ? m_vTargetPath[iTargetTick] : tTarget.m_vPos;
+				bValid = ValidateSplashImpact(m_tInfo, trace.endpos, trace.plane.normal, vTargetOrigin, iType, iSimTime);
+			}
+			if (!bValid)
+			{
+				if (bCanCache && iType != PointTypeEnum::Air)
+				{
+					pCache->m_iFlightState = FlightCacheStateEnum::Failed;
+					pCache->m_iCachedSimTime = iSimTime;
+					pCache->m_iHitTick = -1;
+				}
+				return false;
+			}
+
+			m_tProjInfo.m_vPath.reserve(size_t(iSimTime) + 1);
+			for (int k = 0; k < iSimTime; ++k)
+				m_tProjInfo.m_vPath.push_back(vStart + vVel * TICKS_TO_TIME(k));
+			if (bCanCache)
+			{
+				pCache->m_iFlightState = FlightCacheStateEnum::Verified;
+				pCache->m_iCachedSimTime = iSimTime;
+				pCache->m_iHitTick = iSimTime;
+				pCache->m_iImpactTick = iSimTime;
+				pCache->m_iPopCount = 0;
+				pCache->m_vImpactPos = trace.endpos;
+				pCache->m_vImpactNormal = trace.plane.normal;
+				pCache->m_vLaunchAng = m_tProjInfo.m_vAng;
+				pCache->m_vCachedHull = m_tProjInfo.m_vHull;
+				pCache->m_nCachedMask = nMask;
+				pCache->m_vPath = m_tProjInfo.m_vPath;
+				pCache->m_bPathSet = true;
+			}
+			m_tProjInfo.m_vPath.push_back(trace.endpos);
+			PROJ_COUNT(TestAnglesHit);
+			return true;
+		}
+
+		const int n = std::clamp(int(ceilf(trace.fraction * float(iSimTime))), 1, iSimTime);
+		bool bValid = false;
+		bool bTarget = true;
+		bool bGeometrySurfaceOk = false;
+		switch (iType)
+		{
+		case PointTypeEnum::Direct:
+			bTarget = trace.m_pEnt == tTarget.m_pEntity;
+			bValid = bTarget && (iSimTime - n < iTimingTolerance);
+			break;
+		case PointTypeEnum::Geometry:
+			bGeometrySurfaceOk = ValidSplashSurface(m_tInfo, trace) && trace.endpos.DistToSqr(vPoint) < flRadiusSqr;
+			bValid = bGeometrySurfaceOk;
+			break;
+		case PointTypeEnum::Air:
+			bValid = false;
+			break;
+		}
+
+		if (!bValid)
+		{
+			if (bCanCache)
+			{
+				pCache->m_iFlightState = FlightCacheStateEnum::Failed;
+				pCache->m_iCachedSimTime = iSimTime;
+				pCache->m_iHitTick = n;
+			}
+			return false;
+		}
+
+		if (iType != PointTypeEnum::Direct)
+		{
+			const int iTargetTick = n + m_tInfo.m_iLaunchDelay;
+			const Vec3& vTargetOrigin = !m_tInfo.m_iArmTime && !(m_tInfo.m_bIgnoreTiming && iFlags == PointFlagsEnum::Lob)
+				&& iTargetTick >= 0 && iTargetTick < int(m_vTargetPath.size()) ? m_vTargetPath[iTargetTick] : tTarget.m_vPos;
+			bValid = ValidateSplashImpact(m_tInfo, trace.endpos, trace.plane.normal, vTargetOrigin, iType, n);
+			if (!bValid)
+			{
+				if (bCanCache && bGeometrySurfaceOk)
+				{
+					m_tProjInfo.m_vPath.reserve(size_t(n));
+					for (int k = 0; k < n; ++k)
+						m_tProjInfo.m_vPath.push_back(vStart + vVel * TICKS_TO_TIME(k));
+					pCache->m_iFlightState = FlightCacheStateEnum::ImpactHit;
+					pCache->m_iCachedSimTime = iSimTime;
+					pCache->m_iHitTick = n;
+					pCache->m_iImpactTick = n;
+					pCache->m_iPopCount = 0;
+					pCache->m_vImpactPos = trace.endpos;
+					pCache->m_vImpactNormal = trace.plane.normal;
+					pCache->m_vLaunchAng = m_tProjInfo.m_vAng;
+					pCache->m_vCachedHull = m_tProjInfo.m_vHull;
+					pCache->m_nCachedMask = nMask;
+					pCache->m_vPath = m_tProjInfo.m_vPath;
+					pCache->m_bPathSet = true;
+				}
+				return false;
+			}
+		}
+
+		m_tProjInfo.m_vPath.reserve(size_t(n) + 1);
+		for (int k = 0; k < n; ++k)
+			m_tProjInfo.m_vPath.push_back(vStart + vVel * TICKS_TO_TIME(k));
+		if (bCanCache)
+		{
+			pCache->m_iFlightState = FlightCacheStateEnum::Verified;
+			pCache->m_iCachedSimTime = iSimTime;
+			pCache->m_iHitTick = n;
+			pCache->m_iImpactTick = n;
+			pCache->m_iPopCount = 0;
+			pCache->m_vImpactPos = trace.endpos;
+			pCache->m_vImpactNormal = trace.plane.normal;
+			pCache->m_vLaunchAng = m_tProjInfo.m_vAng;
+			pCache->m_vCachedHull = m_tProjInfo.m_vHull;
+			pCache->m_nCachedMask = nMask;
+			pCache->m_vPath = m_tProjInfo.m_vPath;
+			pCache->m_bPathSet = true;
+		}
+		if (iType == PointTypeEnum::Direct)
+			trace.endpos = vStart + vVel * TICKS_TO_TIME(n);
+		m_tProjInfo.m_vPath.push_back(trace.endpos);
+		PROJ_COUNT(TestAnglesHit);
+		return true;
+	}
 
 	if (!m_tProjInfo.m_flGravity)
 	{
@@ -2431,6 +2576,8 @@ bool CAimbotProjectile::HandleSplash(SplashHistory_t& mSplashHistory)
 			}
 			if (m_tInfo.m_bIgnoreTiming && iType == PointFlagsEnum::Lob)
 				break;
+			if (bReturn && flLowestDistance <= 1.f)
+				break;
 		}
 	}
 
@@ -2457,8 +2604,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 		return false;
 
 	m_tProjInfo.Reset();
-	if (!F::ProjSim.GetInfo(pLocal, pWeapon, {}, m_tProjInfo, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum)
-		|| !F::ProjSim.Initialize(m_tProjInfo, false))
+	if (!F::ProjSim.GetInfo(pLocal, pWeapon, {}, m_tProjInfo, ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum))
 		return false;
 
 	m_tInfo = { pLocal, pWeapon, &tTarget };
@@ -2482,7 +2628,7 @@ int CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBas
 	m_tInfo.m_flLatency = bAccountPing ? GetLatency() : 0.f;
 	tTarget.m_vPos = vTargetOrigin;
 
-	Vec3 vVelocity = F::ProjSim.GetVelocity();
+	Vec3 vVelocity = F::ProjSim.GetLaunchVelocity(m_tProjInfo);
 	m_tInfo.m_flVelocity = vVelocity.Length();
 	m_tInfo.m_vAngFix = Math::VectorAngles(vVelocity);
 

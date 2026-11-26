@@ -15,37 +15,18 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
-namespace
+struct D3DGeometryData
 {
-	using Microsoft::WRL::ComPtr;
-
-	constexpr int HardwareBones = 53;
-	constexpr int PaletteRegister = 8;
-	constexpr int EffectCount = 39;
-	constexpr std::uint64_t InvalidGeneration = ~std::uint64_t(0);
-	constexpr D3DRENDERSTATETYPE MaterialStates[] =
+	struct Strip
 	{
-		D3DRS_ZENABLE, D3DRS_ZFUNC, D3DRS_ZWRITEENABLE, D3DRS_ALPHATESTENABLE, D3DRS_ALPHABLENDENABLE,
-		D3DRS_SEPARATEALPHABLENDENABLE, D3DRS_BLENDOP, D3DRS_SRCBLEND, D3DRS_DESTBLEND, D3DRS_FILLMODE,
-		D3DRS_FOGENABLE, D3DRS_LIGHTING, D3DRS_SRGBWRITEENABLE, D3DRS_COLORWRITEENABLE, D3DRS_DEPTHBIAS,
-		D3DRS_SLOPESCALEDEPTHBIAS
-	};
-
-	struct LegacyVertexBuffer
-	{
-		IDirect3DVertexBuffer9* buffer;
-		std::uint64_t format;
-		int bytes;
-		int position;
-		int count;
-		int stride;
-	};
-
-	struct LegacyIndexBuffer
-	{
-		IDirect3DIndexBuffer9* buffer;
+		int start = 0;
+		int count = 0;
+		bool triangleStrip = false;
+		std::vector<std::pair<int, int>> changes;
 	};
 
 	struct EngineMesh
@@ -53,8 +34,88 @@ namespace
 		std::byte padding[0x18];
 		VertexFormat_t format;
 		std::byte padding20[8];
-		LegacyVertexBuffer* vertices;
-		LegacyIndexBuffer* indices;
+		struct LegacyVertexBuffer
+		{
+			IDirect3DVertexBuffer9* buffer;
+			std::uint64_t format;
+			int bytes;
+			int position;
+			int count;
+			int stride;
+		}* vertices;
+		struct LegacyIndexBuffer
+		{
+			IDirect3DIndexBuffer9* buffer;
+		}* indices;
+	};
+
+	struct Group
+	{
+		EngineMesh* mesh = nullptr;
+		VertexFormat_t format = 0;
+		int meshId = -1;
+		int groupIndex = -1;
+		int vertices = 0;
+		int declaration = 0;
+		int minimumStride = 0;
+		int maxHardwareID = -1;
+		bool skinned = false;
+		std::vector<Strip> strips;
+	};
+
+	struct UsedBone
+	{
+		int boneIndex = 0;
+		matrix3x4 poseToBone = {};
+	};
+
+	const studiohdr_t* header = nullptr;
+	const studiohwdata_t* hardware = nullptr;
+	const void* meshDataPtr = nullptr;
+	int lod = 0;
+	int body = 0;
+	int numBones = 0;
+	int numBodyParts = 0;
+	int numMeshes = 0;
+	bool staticProp = false;
+	bool needsFallback = false;
+	std::vector<Group> groups;
+	std::vector<UsedBone> usedBones;
+};
+
+struct D3DPoseMatrix
+{
+	float m[3][4] = {};
+};
+
+struct D3DPoseData
+{
+	std::vector<D3DPoseMatrix> poses;
+};
+
+namespace
+{
+	using Microsoft::WRL::ComPtr;
+	using EngineMesh = D3DGeometryData::EngineMesh;
+	using LegacyVertexBuffer = EngineMesh::LegacyVertexBuffer;
+	using LegacyIndexBuffer = EngineMesh::LegacyIndexBuffer;
+
+	constexpr int HardwareBones = 53;
+	constexpr int PaletteRegister = 8;
+	constexpr int EffectCount = 39;
+	constexpr std::uint64_t InvalidGeneration = ~std::uint64_t(0);
+	constexpr std::size_t MaxPosePool = 96;
+	constexpr std::size_t MaxBatchPool = 8;
+	constexpr std::size_t MaxGeometryCache = 512;
+
+	constexpr D3DRENDERSTATETYPE MaterialStates[] =
+	{
+		D3DRS_ZENABLE, D3DRS_ZFUNC, D3DRS_ZWRITEENABLE, D3DRS_ALPHATESTENABLE, D3DRS_ALPHABLENDENABLE,
+		D3DRS_SEPARATEALPHABLENDENABLE, D3DRS_BLENDOP, D3DRS_SRCBLEND, D3DRS_DESTBLEND, D3DRS_FILLMODE,
+		D3DRS_FOGENABLE, D3DRS_LIGHTING, D3DRS_SRGBWRITEENABLE, D3DRS_COLORWRITEENABLE, D3DRS_DEPTHBIAS,
+		D3DRS_SLOPESCALEDEPTHBIAS, D3DRS_CULLMODE, D3DRS_STENCILENABLE, D3DRS_STENCILFAIL,
+		D3DRS_STENCILZFAIL, D3DRS_STENCILPASS, D3DRS_STENCILFUNC, D3DRS_STENCILREF,
+		D3DRS_STENCILMASK, D3DRS_STENCILWRITEMASK
 	};
 
 	static_assert(sizeof(void*) == 8);
@@ -90,36 +151,63 @@ namespace
 	static_assert(offsetof(PackedStrip, numBoneStateChanges) == 19);
 	static_assert(sizeof(PackedBoneChange) == 8);
 
-	struct Strip
+	struct CameraData
 	{
-		int start = 0;
-		int count = 0;
-		bool triangleStrip = false;
-		std::vector<PackedBoneChange> changes;
-	};
-
-	struct Group
-	{
-		EngineMesh* mesh = nullptr;
-		VertexFormat_t format = 0;
-		int vertices = 0;
-		int declaration = 0;
-		int minimumStride = 0;
-		bool skinned = false;
-		std::vector<Strip> strips;
-	};
-
-	struct Packet
-	{
-		ChamsMaterial_t params;
-		std::vector<Group> groups;
-		matrix3x4 poses[MAXSTUDIOBONES] = {};
 		float viewProjection[4][4] = {};
 		float eye[4] = {};
-		float time = 0.f;
+	};
+
+	struct DrawItem
+	{
+		CD3DMaterials::GeometryRef geometry;
+		CD3DMaterials::PoseRef poses;
+		ChamsMaterial_t params;
+		D3DStencilState_t stencil;
+		std::uint16_t cameraIndex = 0;
 		bool occluded = false;
-		bool needsFallback = false;
+		bool maskOnly = false;
+		bool useExplicitStencil = false;
+		bool useExplicitCull = false;
+		bool invertCull = false;
+		float time = 0.f;
+	};
+
+	struct Batch
+	{
 		std::uint64_t generation = 0;
+		std::vector<CameraData> cameras;
+		std::vector<DrawItem> items;
+		bool anyOccluded = false;
+
+		void Clear()
+		{
+			generation = 0;
+			cameras.clear();
+			items.clear();
+			anyOccluded = false;
+		}
+	};
+
+	struct GeometryKey
+	{
+		const studiohdr_t* header = nullptr;
+		const studiohwdata_t* hardware = nullptr;
+		int lod = 0;
+		int body = 0;
+
+		bool operator==(const GeometryKey&) const = default;
+	};
+
+	struct GeometryKeyHash
+	{
+		std::size_t operator()(const GeometryKey& key) const noexcept
+		{
+			std::size_t h = reinterpret_cast<std::uintptr_t>(key.header);
+			h ^= reinterpret_cast<std::uintptr_t>(key.hardware) * 0x9e3779b97f4a7c15ull + 0x9e3779b9 + (h << 6) + (h >> 2);
+			h ^= std::size_t(key.lod) * 0x517cc1b727220a95ull + (h << 6) + (h >> 2);
+			h ^= std::size_t(key.body) + 0x9e3779b9 + (h << 6) + (h >> 2);
+			return h;
+		}
 	};
 
 	struct Resources
@@ -134,10 +222,93 @@ namespace
 
 	Resources s_Resources;
 	std::mutex s_Mutex;
+	std::mutex s_CacheMutex;
+	std::mutex s_PoolMutex;
 	std::atomic<std::uint64_t> s_Generation = 0;
 	std::atomic<std::uint64_t> s_ReadyGeneration = InvalidGeneration;
 	std::atomic<std::uint64_t> s_InitializationGeneration = InvalidGeneration;
 	std::atomic<std::uint64_t> s_WarmupGeneration = InvalidGeneration;
+
+	std::unordered_map<GeometryKey, CD3DMaterials::GeometryRef, GeometryKeyHash> s_GeometryCache;
+	std::vector<D3DPoseData*> s_PosePool;
+	std::vector<Batch*> s_BatchPool;
+
+	struct BatchBuilder
+	{
+		int depth = 0;
+		std::shared_ptr<Batch> batch;
+		IMatRenderContext* context = nullptr;
+	} s_ActiveBatch;
+
+	std::shared_ptr<D3DPoseData> AcquirePoseData()
+	{
+		D3DPoseData* raw = nullptr;
+		{
+			std::scoped_lock lock(s_PoolMutex);
+			if (!s_PosePool.empty())
+			{
+				raw = s_PosePool.back();
+				s_PosePool.pop_back();
+			}
+		}
+		if (!raw)
+			raw = new (std::nothrow) D3DPoseData();
+		if (!raw)
+			return {};
+		raw->poses.clear();
+		return std::shared_ptr<D3DPoseData>(raw, [](D3DPoseData* ptr)
+		{
+			if (!ptr)
+				return;
+			ptr->poses.clear();
+			std::scoped_lock lock(s_PoolMutex);
+			if (s_PosePool.size() < MaxPosePool)
+				s_PosePool.push_back(ptr);
+			else
+				delete ptr;
+		});
+	}
+
+	std::shared_ptr<Batch> AcquireBatch(std::uint64_t generation)
+	{
+		Batch* raw = nullptr;
+		{
+			std::scoped_lock lock(s_PoolMutex);
+			if (!s_BatchPool.empty())
+			{
+				raw = s_BatchPool.back();
+				s_BatchPool.pop_back();
+			}
+		}
+		if (!raw)
+			raw = new (std::nothrow) Batch();
+		if (!raw)
+			return {};
+		raw->Clear();
+		raw->generation = generation;
+		return std::shared_ptr<Batch>(raw, [](Batch* ptr)
+		{
+			if (!ptr)
+				return;
+			ptr->Clear();
+			std::scoped_lock lock(s_PoolMutex);
+			if (s_BatchPool.size() < MaxBatchPool)
+				s_BatchPool.push_back(ptr);
+			else
+				delete ptr;
+		});
+	}
+
+	void DrainPools()
+	{
+		std::scoped_lock lock(s_PoolMutex);
+		for (auto* ptr : s_PosePool)
+			delete ptr;
+		s_PosePool.clear();
+		for (auto* ptr : s_BatchPool)
+			delete ptr;
+		s_BatchPool.clear();
+	}
 
 	bool FiniteMatrix(const matrix3x4& matrix)
 	{
@@ -155,24 +326,23 @@ namespace
 	void Identity(matrix3x4& matrix)
 	{
 		std::memset(matrix, 0, sizeof(matrix));
-		for (int i = 0; i < 3; ++i)
-			matrix[i][i] = 1.f;
+		matrix[0][0] = 1.f;
+		matrix[1][1] = 1.f;
+		matrix[2][2] = 1.f;
 	}
 
 	void Concat(const matrix3x4& left, const matrix3x4& right, matrix3x4& output)
 	{
 		for (int row = 0; row < 3; ++row)
 		{
-			for (int column = 0; column < 4; ++column)
-			{
-				output[row][column] = left[row][0] * right[0][column] + left[row][1] * right[1][column] + left[row][2] * right[2][column];
-				if (column == 3)
-					output[row][column] += left[row][3];
-			}
+			output[row][0] = left[row][0] * right[0][0] + left[row][1] * right[1][0] + left[row][2] * right[2][0];
+			output[row][1] = left[row][0] * right[0][1] + left[row][1] * right[1][1] + left[row][2] * right[2][1];
+			output[row][2] = left[row][0] * right[0][2] + left[row][1] * right[1][2] + left[row][2] * right[2][2];
+			output[row][3] = left[row][0] * right[0][3] + left[row][1] * right[1][3] + left[row][2] * right[2][3] + left[row][3];
 		}
 	}
 
-	int MakeDeclaration(int index, D3DVERTEXELEMENT9 (&elements)[5])
+	int MakeDeclaration(int index, D3DVERTEXELEMENT9(&elements)[5])
 	{
 		const bool compressed = (index & 1) != 0;
 		int count = 0;
@@ -193,7 +363,7 @@ namespace
 		return offset + (compressed ? 4 : 12);
 	}
 
-	bool CopyGroup(const studiomeshgroup_t& source, int boneCount, bool (&usedBones)[MAXSTUDIOBONES], Group& group)
+	bool CopyGroup(const studiomeshgroup_t& source, int boneCount, const std::array<signed char, MAXSTUDIOBONES>& boneValid, int (&boneToCompact)[MAXSTUDIOBONES], std::vector<int>& usedOrder, D3DGeometryData::Group& group)
 	{
 		if (!source.m_pMesh || source.m_MeshNeedsRestore ||
 			(source.m_Flags & ~(MESHGROUP_IS_HWSKINNED | MESHGROUP_IS_FLEXED | MESHGROUP_IS_DELTA_FLEXED)) ||
@@ -217,6 +387,12 @@ namespace
 		D3DVERTEXELEMENT9 elements[5];
 		group.minimumStride = MakeDeclaration(group.declaration, elements);
 		group.strips.reserve(source.m_NumStrips);
+		group.maxHardwareID = -1;
+
+		std::array<int, MAXSTUDIOBONES> localBoneMap;
+		localBoneMap.fill(-1);
+		std::vector<int> localNewBones;
+
 		const auto strips = reinterpret_cast<const PackedStrip*>(source.m_pStripData);
 		bool hasPalette = !group.skinned;
 		for (int i = 0; i < source.m_NumStrips; ++i)
@@ -230,7 +406,7 @@ namespace
 				(input.numBoneStateChanges && input.boneStateChangeOffset < int(sizeof(PackedStrip))) ||
 				(input.flags != 1 && input.flags != 2))
 				return false;
-			Strip strip;
+			D3DGeometryData::Strip strip;
 			strip.start = input.indexOffset;
 			strip.count = input.numIndices;
 			strip.triangleStrip = (input.flags & 2) != 0;
@@ -239,6 +415,7 @@ namespace
 			if (group.skinned)
 			{
 				const auto changes = reinterpret_cast<const PackedBoneChange*>(reinterpret_cast<const std::byte*>(&input) + input.boneStateChangeOffset);
+				strip.changes.reserve(input.numBoneStateChanges);
 				for (int change = 0; change < input.numBoneStateChanges; ++change)
 				{
 					const auto& item = changes[change];
@@ -246,8 +423,21 @@ namespace
 						break;
 					if (item.hardwareID < 0 || item.hardwareID >= HardwareBones || item.newBoneID >= boneCount)
 						return false;
-					strip.changes.push_back(item);
-					usedBones[item.newBoneID] = true;
+					if (boneValid[item.newBoneID] <= 0)
+						return false;
+					int compactID = boneToCompact[item.newBoneID];
+					if (compactID < 0)
+					{
+						if (localBoneMap[item.newBoneID] < 0)
+						{
+							localBoneMap[item.newBoneID] = int(usedOrder.size() + localNewBones.size());
+							localNewBones.push_back(item.newBoneID);
+						}
+						compactID = localBoneMap[item.newBoneID];
+					}
+					strip.changes.emplace_back(item.hardwareID, compactID);
+					if (item.hardwareID > group.maxHardwareID)
+						group.maxHardwareID = item.hardwareID;
 					hasPalette = true;
 				}
 				if (!hasPalette || !input.numBones)
@@ -256,94 +446,155 @@ namespace
 			group.strips.push_back(std::move(strip));
 		}
 		if (!group.skinned)
-			usedBones[0] = true;
+		{
+			if (boneValid[0] <= 0)
+				return false;
+			if (boneToCompact[0] < 0)
+			{
+				boneToCompact[0] = int(usedOrder.size());
+				usedOrder.push_back(0);
+			}
+		}
+		else
+		{
+			for (int boneID : localNewBones)
+			{
+				boneToCompact[boneID] = int(usedOrder.size());
+				usedOrder.push_back(boneID);
+			}
+		}
 		return true;
 	}
 
-	bool CopyModel(const DrawModelState_t& state, const ModelRenderInfo_t& info, const matrix3x4* bones, Packet& packet)
+	std::shared_ptr<D3DGeometryData> BuildGeometry(const DrawModelState_t& state, const ModelRenderInfo_t& info, bool& anyRestoreFlag)
 	{
+		anyRestoreFlag = false;
 		const auto header = state.m_pStudioHdr;
 		const auto hardware = state.m_pStudioHWData;
-		if (!header || !hardware || !bones || header->numbones <= 0 || header->numbones > MAXSTUDIOBONES ||
+		if (!header || !hardware || header->numbones <= 0 || header->numbones > MAXSTUDIOBONES ||
 			header->numbodyparts <= 0 || header->numbodyparts > 256 || info.body < 0 ||
 			state.m_lod < 0 || state.m_lod >= hardware->m_NumLODs || state.m_lod >= MAX_NUM_LODS ||
 			!hardware->m_pLODs || hardware->m_NumStudioMeshes <= 0)
-			return false;
+			return nullptr;
 		const auto& lod = hardware->m_pLODs[state.m_lod];
 		if (!lod.m_pMeshData)
-			return false;
+			return nullptr;
 		const bool staticProp = (header->flags & STUDIOHDR_FLAGS_STATIC_PROP) != 0;
 		const auto linear = header->pLinearBones();
 		if ((staticProp && header->numbones != 1) || (linear && linear->numbones != header->numbones))
-			return false;
-		std::array<signed char, MAXSTUDIOBONES> boneStates = {};
-		auto copyBone = [&](int bone)
+			return nullptr;
+
+		auto geom = std::make_shared<D3DGeometryData>();
+		geom->header = header;
+		geom->hardware = hardware;
+		geom->meshDataPtr = lod.m_pMeshData;
+		geom->lod = state.m_lod;
+		geom->body = info.body;
+		geom->numBones = header->numbones;
+		geom->numBodyParts = header->numbodyparts;
+		geom->numMeshes = hardware->m_NumStudioMeshes;
+		geom->staticProp = staticProp;
+
+		std::array<signed char, MAXSTUDIOBONES> boneValid = {};
+		std::array<matrix3x4, MAXSTUDIOBONES> poseToBoneCache = {};
+		for (int bone = 0; bone < header->numbones; ++bone)
 		{
-			if (boneStates[bone])
-				return boneStates[bone] > 0;
-			boneStates[bone] = -1;
 			const int flags = linear ? linear->flags(bone) : header->pBone(bone)->flags;
 			if ((flags & (BONE_SCREEN_ALIGN_SPHERE | BONE_SCREEN_ALIGN_CYLINDER)) ||
-				(!staticProp && !(flags & BONE_USED_BY_VERTEX_AT_LOD(state.m_lod))) || !FiniteMatrix(bones[bone]))
-				return false;
-			if (staticProp)
-				std::memcpy(packet.poses[bone], bones[bone], sizeof(matrix3x4));
-			else
+				(!staticProp && !(flags & BONE_USED_BY_VERTEX_AT_LOD(state.m_lod))))
 			{
-				const auto& poseToBone = linear ? *linear->poseToBone(bone) : header->pBone(bone)->poseToBone;
-				if (!FiniteMatrix(poseToBone))
-					return false;
-				Concat(bones[bone], poseToBone, packet.poses[bone]);
-				if (!FiniteMatrix(packet.poses[bone]))
-					return false;
+				boneValid[bone] = -1;
+				continue;
 			}
-			boneStates[bone] = 1;
-			return true;
-		};
+			if (!staticProp)
+			{
+				const auto& ptb = linear ? *linear->poseToBone(bone) : header->pBone(bone)->poseToBone;
+				if (!FiniteMatrix(ptb))
+				{
+					boneValid[bone] = -1;
+					continue;
+				}
+				std::memcpy(poseToBoneCache[bone], ptb, sizeof(matrix3x4));
+			}
+			boneValid[bone] = 1;
+		}
+
+		int boneToCompact[MAXSTUDIOBONES];
+		std::fill(std::begin(boneToCompact), std::end(boneToCompact), -1);
+		std::vector<int> usedOrder;
+		usedOrder.reserve(size_t(header->numbones));
+
 		for (int part = 0; part < header->numbodyparts; ++part)
 		{
 			const auto body = header->pBodypart(part);
 			if (body->nummodels <= 0 || body->nummodels > 256 || body->base <= 0)
-				return false;
+				return nullptr;
 			const auto model = body->pModel(info.body / body->base % body->nummodels);
 			if (model->nummeshes < 0 || model->nummeshes > hardware->m_NumStudioMeshes)
-				return false;
+				return nullptr;
 			for (int mesh = 0; mesh < model->nummeshes; ++mesh)
 			{
 				const auto studioMesh = model->pMesh(mesh);
 				if (studioMesh->meshid < 0 || studioMesh->meshid >= hardware->m_NumStudioMeshes)
-					return false;
+					return nullptr;
 				const auto& meshData = lod.m_pMeshData[studioMesh->meshid];
 				if (meshData.m_NumGroup < 0 || meshData.m_NumGroup > 65536 || (meshData.m_NumGroup && !meshData.m_pMeshGroup))
-					return false;
+					return nullptr;
 				for (int groupIndex = 0; groupIndex < meshData.m_NumGroup; ++groupIndex)
 				{
-					Group group;
-					bool usedBones[MAXSTUDIOBONES] = {};
-					if (!CopyGroup(meshData.m_pMeshGroup[groupIndex], header->numbones, usedBones, group))
+					const auto& source = meshData.m_pMeshGroup[groupIndex];
+					if (source.m_MeshNeedsRestore)
+						anyRestoreFlag = true;
+					D3DGeometryData::Group group;
+					if (!CopyGroup(source, header->numbones, boneValid, boneToCompact, usedOrder, group))
 					{
-						packet.needsFallback = true;
+						geom->needsFallback = true;
 						continue;
 					}
-					bool supported = true;
-					for (int bone = 0; bone < header->numbones; ++bone)
-					{
-						if (usedBones[bone] && !copyBone(bone))
-						{
-							supported = false;
-							break;
-						}
-					}
-					if (!supported)
-					{
-						packet.needsFallback = true;
-						continue;
-					}
-					packet.groups.push_back(std::move(group));
+					group.meshId = studioMesh->meshid;
+					group.groupIndex = groupIndex;
+					geom->groups.push_back(std::move(group));
 				}
 			}
 		}
-		return !packet.groups.empty();
+
+		if (geom->groups.empty())
+			return nullptr;
+
+		geom->usedBones.resize(usedOrder.size());
+		for (size_t i = 0; i < usedOrder.size(); ++i)
+		{
+			const int boneID = usedOrder[i];
+			geom->usedBones[i].boneIndex = boneID;
+			if (!staticProp)
+				std::memcpy(geom->usedBones[i].poseToBone, poseToBoneCache[boneID], sizeof(matrix3x4));
+		}
+		return geom;
+	}
+
+	bool CaptureCamera(IMatRenderContext* context, CameraData& out)
+	{
+		VMatrix view, projection;
+		context->GetMatrix(MATERIAL_VIEW, &view);
+		context->GetMatrix(MATERIAL_PROJECTION, &projection);
+		for (int row = 0; row < 4; ++row)
+		{
+			for (int column = 0; column < 4; ++column)
+			{
+				out.viewProjection[row][column] = projection[row][0] * view[0][column] + projection[row][1] * view[1][column] +
+					projection[row][2] * view[2][column] + projection[row][3] * view[3][column];
+				if (!std::isfinite(out.viewProjection[row][column]))
+					return false;
+			}
+		}
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			out.eye[axis] = -(view[0][axis] * view[0][3] + view[1][axis] * view[1][3] + view[2][axis] * view[2][3]);
+			if (!std::isfinite(out.eye[axis]))
+				return false;
+		}
+		out.eye[3] = 1.f;
+		return true;
 	}
 
 	bool CreateMaterialStateBlock(IDirect3DDevice9* device, IDirect3DStateBlock9** state)
@@ -430,41 +681,84 @@ namespace
 			s_ReadyGeneration.store(generation, std::memory_order_release);
 	}
 
-	bool Render(const Packet& packet)
+	struct ValidatedMesh
+	{
+		EngineMesh* mesh = nullptr;
+		IDirect3DVertexBuffer9* vb = nullptr;
+		IDirect3DIndexBuffer9* ib = nullptr;
+		UINT stride = 0;
+		UINT vertexCount = 0;
+		bool valid = false;
+	};
+
+	const ValidatedMesh* ValidateMeshCached(EngineMesh* mesh, VertexFormat_t format, int minVertices, int minStride, const std::vector<D3DGeometryData::Strip>& strips, IDirect3DDevice9* expectedDevice, std::vector<ValidatedMesh>& cache)
+	{
+		if (!mesh)
+			return nullptr;
+		for (const auto& entry : cache)
+		{
+			if (entry.mesh == mesh)
+				return entry.valid ? &entry : nullptr;
+		}
+
+		ValidatedMesh entry;
+		entry.mesh = mesh;
+		using HandleLateCreation = void(__fastcall*)(void*);
+		auto table = *reinterpret_cast<void***>(mesh);
+		reinterpret_cast<HandleLateCreation>(table[37])(mesh);
+		const auto vertices = mesh->vertices;
+		const auto indices = mesh->indices;
+		D3DVERTEXBUFFER_DESC vertexDesc = {};
+		D3DINDEXBUFFER_DESC indexDesc = {};
+		if (mesh->format == format && vertices && indices && vertices->buffer && indices->buffer &&
+			vertices->stride >= minStride && vertices->count >= minVertices &&
+			SUCCEEDED(vertices->buffer->GetDesc(&vertexDesc)) && SUCCEEDED(indices->buffer->GetDesc(&indexDesc)) &&
+			indexDesc.Format == D3DFMT_INDEX16 &&
+			std::uint64_t(vertices->count) * std::uint64_t(vertices->stride) <= vertexDesc.Size)
+		{
+			const std::uint64_t maxIndices = indexDesc.Size / sizeof(unsigned short);
+			bool stripsOk = true;
+			for (const auto& strip : strips)
+			{
+				if (std::uint64_t(strip.start) + std::uint64_t(strip.count) > maxIndices)
+				{
+					stripsOk = false;
+					break;
+				}
+			}
+			if (stripsOk)
+			{
+				ComPtr<IDirect3DDevice9> meshDevice;
+				if (SUCCEEDED(vertices->buffer->GetDevice(meshDevice.GetAddressOf())) && meshDevice.Get() == expectedDevice)
+				{
+					entry.vb = vertices->buffer;
+					entry.ib = indices->buffer;
+					entry.stride = UINT(vertices->stride);
+					entry.vertexCount = UINT(vertices->count);
+					entry.valid = true;
+				}
+			}
+		}
+		cache.push_back(entry);
+		return cache.back().valid ? &cache.back() : nullptr;
+	}
+
+	bool RenderBatch(const Batch& batch)
 	{
 		std::scoped_lock lock(s_Mutex);
-		if (packet.generation != s_Generation.load(std::memory_order_acquire) ||
-			s_ReadyGeneration.load(std::memory_order_acquire) != packet.generation)
+		if (batch.items.empty() ||
+			batch.generation != s_Generation.load(std::memory_order_acquire) ||
+			s_ReadyGeneration.load(std::memory_order_acquire) != batch.generation)
 			return false;
-		ComPtr<IDirect3DDevice9> device;
-		for (const auto& group : packet.groups)
-		{
-			using HandleLateCreation = void(__fastcall*)(void*);
-			auto table = *reinterpret_cast<void***>(group.mesh);
-			reinterpret_cast<HandleLateCreation>(table[37])(group.mesh);
-			const auto vertices = group.mesh->vertices;
-			const auto indices = group.mesh->indices;
-			if (group.mesh->format != group.format || !vertices || !indices || !vertices->buffer || !indices->buffer ||
-				vertices->stride < group.minimumStride || vertices->count < group.vertices)
-				return false;
-			D3DVERTEXBUFFER_DESC vertexDesc = {};
-			D3DINDEXBUFFER_DESC indexDesc = {};
-			if (FAILED(vertices->buffer->GetDesc(&vertexDesc)) || FAILED(indices->buffer->GetDesc(&indexDesc)) ||
-				indexDesc.Format != D3DFMT_INDEX16 ||
-				std::uint64_t(vertices->count) * std::uint64_t(vertices->stride) > vertexDesc.Size)
-				return false;
-			for (const auto& strip : group.strips)
-			{
-				if (std::uint64_t(strip.start) + std::uint64_t(strip.count) > indexDesc.Size / sizeof(unsigned short))
-					return false;
-			}
-			if (!device && FAILED(vertices->buffer->GetDevice(device.GetAddressOf())))
-				return false;
-		}
+
+		IDirect3DDevice9* device = s_Resources.device.Get();
+		if (!device || FAILED(device->TestCooperativeLevel()))
+			return false;
+
 		D3DVIEWPORT9 viewport = {};
-		if (!device || device.Get() != s_Resources.device.Get() || FAILED(device->TestCooperativeLevel()) ||
-			(packet.occluded && FAILED(device->GetViewport(&viewport))) || FAILED(s_Resources.state->Capture()))
+		if ((batch.anyOccluded && FAILED(device->GetViewport(&viewport))) || FAILED(s_Resources.state->Capture()))
 			return false;
+
 		struct RestoreState
 		{
 			IDirect3DDevice9* device;
@@ -477,90 +771,267 @@ namespace
 				if (restoreViewport)
 					device->SetViewport(&viewport);
 			}
-		} restore{ device.Get(), s_Resources.state.Get(), viewport, packet.occluded };
-		if (packet.occluded)
+		} restore{ device, s_Resources.state.Get(), viewport, batch.anyOccluded };
+
+		if (batch.anyOccluded)
 		{
 			viewport.MinZ = 0.f;
 			viewport.MaxZ = 1.f;
 			if (FAILED(device->SetViewport(&viewport)))
 				return false;
 		}
-		const auto& params = packet.params;
-		const float constants[4][4] =
+
+		struct StateShadow
 		{
-			{ params.tColor.r / 255.f, params.tColor.g / 255.f, params.tColor.b / 255.f, params.tColor.a / 255.f },
-			{ params.tSecondary.r / 255.f, params.tSecondary.g / 255.f, params.tSecondary.b / 255.f, params.tSecondary.a / 255.f },
-			{ std::clamp(params.flRoughness, 0.02f, 1.f), std::clamp(params.flReflectivity, 0.f, 1.f),
-				std::clamp(params.flIntensity, 0.f, 10.f), std::clamp(params.flRimPower, 0.1f, 16.f) },
-			{ packet.time * std::clamp(params.flSpeed, -10.f, 10.f), std::clamp(params.flScale, 0.01f, 100.f), float(params.iBlend), 0.f }
-		};
-		if (FAILED(device->SetVertexShaderConstantF(0, packet.viewProjection[0], 4)) ||
-			FAILED(device->SetVertexShaderConstantF(5, packet.eye, 1)) ||
-			FAILED(device->SetPixelShader(s_Resources.pixels[params.iEffect - 1].Get())) ||
-			FAILED(device->SetPixelShaderConstantF(0, constants[0], 4)))
-			return false;
-		bool success = true;
-		auto state = [&](D3DRENDERSTATETYPE type, DWORD value)
-		{
-			success = SUCCEEDED(device->SetRenderState(type, value)) && success;
-		};
-		state(D3DRS_ZENABLE, D3DZB_TRUE);
-		state(D3DRS_ZFUNC, packet.occluded ? D3DCMP_GREATER : D3DCMP_LESSEQUAL);
-		state(D3DRS_ZWRITEENABLE, params.bDepthWrite && !packet.occluded);
-		state(D3DRS_ALPHATESTENABLE, FALSE);
-		state(D3DRS_ALPHABLENDENABLE, TRUE);
-		state(D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
-		state(D3DRS_BLENDOP, D3DBLENDOP_ADD);
-		state(D3DRS_SRCBLEND, params.iBlend == 2 ? D3DBLEND_ONE : D3DBLEND_SRCALPHA);
-		state(D3DRS_DESTBLEND, params.iBlend == 1 ? D3DBLEND_ONE : params.iBlend == 2 ? D3DBLEND_INVSRCCOLOR : D3DBLEND_INVSRCALPHA);
-		state(D3DRS_FILLMODE, params.iEffect == 10 ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
-		state(D3DRS_FOGENABLE, FALSE);
-		state(D3DRS_LIGHTING, FALSE);
-		state(D3DRS_SRGBWRITEENABLE, FALSE);
-		state(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
-		const float depthBias = packet.occluded ? 0.f : -1e-5f;
-		state(D3DRS_DEPTHBIAS, std::bit_cast<DWORD>(depthBias));
-		state(D3DRS_SLOPESCALEDEPTHBIAS, 0);
-		if (!success)
-			return false;
-		for (const auto& group : packet.groups)
-		{
-			const auto vertices = group.mesh->vertices;
-			matrix3x4 palette[HardwareBones];
-			if (group.skinned)
-				for (auto& matrix : palette)
-					Identity(matrix);
-			const bool compressed = (group.format & VERTEX_FORMAT_COMPRESSED) != 0;
-			const float decode[4] = { 0.f, compressed ? 1.f / 32768.f : 1.f, compressed ? 1.f / 32768.f : 0.f, compressed ? 1.f : 0.f };
-			if (FAILED(device->SetVertexDeclaration(s_Resources.declarations[group.declaration].Get())) ||
-				FAILED(device->SetVertexShader(group.skinned ? s_Resources.skinned.Get() : s_Resources.rigid.Get())) ||
-				FAILED(device->SetVertexShaderConstantF(4, decode, 1)) ||
-				FAILED(device->SetStreamSourceFreq(0, 1)) ||
-				FAILED(device->SetStreamSource(0, vertices->buffer, 0, vertices->stride)) ||
-				FAILED(device->SetIndices(group.mesh->indices->buffer)))
-				return false;
-			if (!group.skinned && FAILED(device->SetVertexShaderConstantF(PaletteRegister, packet.poses[0][0], 3)))
-				return false;
-			bool firstStrip = true;
-			for (const auto& strip : group.strips)
+			IDirect3DDevice9* device;
+			bool initialized = false;
+			DWORD rs[256] = {};
+			bool rsValid[256] = {};
+			IDirect3DPixelShader9* ps = nullptr;
+			IDirect3DVertexShader9* vs = nullptr;
+			IDirect3DVertexDeclaration9* decl = nullptr;
+			IDirect3DVertexBuffer9* vb = nullptr;
+			UINT vbStride = 0;
+			IDirect3DIndexBuffer9* ib = nullptr;
+			bool streamFreqSet = false;
+			int compressedState = -1;
+			std::uint16_t cameraIndex = 0xFFFF;
+			float psConst[4][4] = {};
+			bool psConstValid = false;
+
+			bool SetRS(D3DRENDERSTATETYPE type, DWORD value)
 			{
-				int first = firstStrip && group.skinned ? 0 : HardwareBones;
-				int last = firstStrip && group.skinned ? HardwareBones - 1 : -1;
-				for (const auto& change : strip.changes)
+				const unsigned idx = unsigned(type);
+				if (idx < 256 && rsValid[idx] && rs[idx] == value)
+					return true;
+				if (FAILED(device->SetRenderState(type, value)))
+					return false;
+				if (idx < 256)
 				{
-					std::memcpy(palette[change.hardwareID], packet.poses[change.newBoneID], sizeof(matrix3x4));
-					first = std::min(first, change.hardwareID);
-					last = std::max(last, change.hardwareID);
+					rs[idx] = value;
+					rsValid[idx] = true;
 				}
-				if (first <= last && FAILED(device->SetVertexShaderConstantF(PaletteRegister + first * 3, palette[first][0], (last - first + 1) * 3)))
-					return false;
-				firstStrip = false;
-				if (FAILED(device->DrawIndexedPrimitive(strip.triangleStrip ? D3DPT_TRIANGLESTRIP : D3DPT_TRIANGLELIST,
-					0, 0, vertices->count, strip.start, strip.triangleStrip ? strip.count - 2 : strip.count / 3)))
-					return false;
+				return true;
+			}
+		} shadow{ device };
+
+		if (!shadow.SetRS(D3DRS_ZENABLE, D3DZB_TRUE) ||
+			!shadow.SetRS(D3DRS_ALPHATESTENABLE, FALSE) ||
+			!shadow.SetRS(D3DRS_SEPARATEALPHABLENDENABLE, FALSE) ||
+			!shadow.SetRS(D3DRS_BLENDOP, D3DBLENDOP_ADD) ||
+			!shadow.SetRS(D3DRS_FOGENABLE, FALSE) ||
+			!shadow.SetRS(D3DRS_LIGHTING, FALSE) ||
+			!shadow.SetRS(D3DRS_SRGBWRITEENABLE, FALSE) ||
+			!shadow.SetRS(D3DRS_SLOPESCALEDEPTHBIAS, 0))
+			return false;
+
+		std::vector<ValidatedMesh> validatedMeshes;
+		validatedMeshes.reserve(32);
+
+		bool anyRendered = false;
+		for (const auto& item : batch.items)
+		{
+			if (!item.geometry || !item.poses || item.cameraIndex >= batch.cameras.size())
+				continue;
+
+			if (shadow.cameraIndex != item.cameraIndex)
+			{
+				const auto& cam = batch.cameras[item.cameraIndex];
+				if (FAILED(device->SetVertexShaderConstantF(0, cam.viewProjection[0], 4)) ||
+					FAILED(device->SetVertexShaderConstantF(5, cam.eye, 1)))
+					return anyRendered;
+				shadow.cameraIndex = item.cameraIndex;
+			}
+
+			const auto& params = item.params;
+			const int effectIndex = item.maskOnly ? 1 : params.iEffect;
+			IDirect3DPixelShader9* wantPS = s_Resources.pixels[effectIndex - 1].Get();
+			if (shadow.ps != wantPS)
+			{
+				if (FAILED(device->SetPixelShader(wantPS)))
+					return anyRendered;
+				shadow.ps = wantPS;
+			}
+
+			const float constants[4][4] =
+			{
+				{ params.tColor.r / 255.f, params.tColor.g / 255.f, params.tColor.b / 255.f, params.tColor.a / 255.f },
+				{ params.tSecondary.r / 255.f, params.tSecondary.g / 255.f, params.tSecondary.b / 255.f, params.tSecondary.a / 255.f },
+				{ std::clamp(params.flRoughness, 0.02f, 1.f), std::clamp(params.flReflectivity, 0.f, 1.f),
+					std::clamp(params.flIntensity, 0.f, 10.f), std::clamp(params.flRimPower, 0.1f, 16.f) },
+				{ item.time * std::clamp(params.flSpeed, -10.f, 10.f), std::clamp(params.flScale, 0.01f, 100.f), float(params.iBlend), 0.f }
+			};
+			if (!shadow.psConstValid || std::memcmp(shadow.psConst, constants, sizeof(constants)) != 0)
+			{
+				if (FAILED(device->SetPixelShaderConstantF(0, constants[0], 4)))
+					return anyRendered;
+				std::memcpy(shadow.psConst, constants, sizeof(constants));
+				shadow.psConstValid = true;
+			}
+
+			bool ok = true;
+			ok &= shadow.SetRS(D3DRS_ZFUNC, item.occluded ? D3DCMP_GREATER : D3DCMP_LESSEQUAL);
+			ok &= shadow.SetRS(D3DRS_ZWRITEENABLE, (!item.maskOnly && params.bDepthWrite && !item.occluded) ? TRUE : FALSE);
+			ok &= shadow.SetRS(D3DRS_ALPHABLENDENABLE, item.maskOnly ? FALSE : TRUE);
+			if (!item.maskOnly)
+			{
+				ok &= shadow.SetRS(D3DRS_SRCBLEND, params.iBlend == 2 ? D3DBLEND_ONE : D3DBLEND_SRCALPHA);
+				ok &= shadow.SetRS(D3DRS_DESTBLEND, params.iBlend == 1 ? D3DBLEND_ONE : params.iBlend == 2 ? D3DBLEND_INVSRCCOLOR : D3DBLEND_INVSRCALPHA);
+			}
+			ok &= shadow.SetRS(D3DRS_FILLMODE, (!item.maskOnly && params.iEffect == 10) ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
+			ok &= shadow.SetRS(D3DRS_COLORWRITEENABLE, item.maskOnly ? 0 : (D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE));
+			const float depthBias = (item.maskOnly || item.occluded) ? 0.f : -1e-5f;
+			ok &= shadow.SetRS(D3DRS_DEPTHBIAS, std::bit_cast<DWORD>(depthBias));
+			if (item.useExplicitCull)
+				ok &= shadow.SetRS(D3DRS_CULLMODE, item.invertCull ? D3DCULL_CW : D3DCULL_CCW);
+			if (item.useExplicitStencil)
+			{
+				ok &= shadow.SetRS(D3DRS_STENCILENABLE, item.stencil.m_bEnable ? TRUE : FALSE);
+				if (item.stencil.m_bEnable)
+				{
+					ok &= shadow.SetRS(D3DRS_STENCILFUNC, item.stencil.m_uCompareFunc);
+					ok &= shadow.SetRS(D3DRS_STENCILPASS, item.stencil.m_uPassOp);
+					ok &= shadow.SetRS(D3DRS_STENCILFAIL, item.stencil.m_uFailOp);
+					ok &= shadow.SetRS(D3DRS_STENCILZFAIL, item.stencil.m_uZFailOp);
+					ok &= shadow.SetRS(D3DRS_STENCILREF, item.stencil.m_uRef);
+					ok &= shadow.SetRS(D3DRS_STENCILWRITEMASK, item.stencil.m_uWriteMask);
+					ok &= shadow.SetRS(D3DRS_STENCILMASK, item.stencil.m_uTestMask);
+				}
+			}
+			if (!ok)
+				return anyRendered;
+
+			if (!shadow.streamFreqSet)
+			{
+				if (FAILED(device->SetStreamSourceFreq(0, 1)))
+					return anyRendered;
+				shadow.streamFreqSet = true;
+			}
+
+			const auto& poses = item.poses->poses;
+			for (const auto& group : item.geometry->groups)
+			{
+				const ValidatedMesh* vMesh = ValidateMeshCached(group.mesh, group.format, group.vertices, group.minimumStride, group.strips, device, validatedMeshes);
+				if (!vMesh)
+					continue;
+
+				matrix3x4 palette[HardwareBones];
+				const int paletteLimit = group.skinned && group.maxHardwareID >= 0 ? (group.maxHardwareID + 1) : 1;
+				if (group.skinned)
+				{
+					for (int i = 0; i < paletteLimit; ++i)
+						Identity(palette[i]);
+				}
+
+				IDirect3DVertexDeclaration9* wantDecl = s_Resources.declarations[group.declaration].Get();
+				if (shadow.decl != wantDecl)
+				{
+					if (FAILED(device->SetVertexDeclaration(wantDecl)))
+						return anyRendered;
+					shadow.decl = wantDecl;
+				}
+				IDirect3DVertexShader9* wantVS = group.skinned ? s_Resources.skinned.Get() : s_Resources.rigid.Get();
+				if (shadow.vs != wantVS)
+				{
+					if (FAILED(device->SetVertexShader(wantVS)))
+						return anyRendered;
+					shadow.vs = wantVS;
+				}
+				const int compressed = (group.format & VERTEX_FORMAT_COMPRESSED) != 0 ? 1 : 0;
+				if (shadow.compressedState != compressed)
+				{
+					const float decode[4] = { 0.f, compressed ? 1.f / 32768.f : 1.f, compressed ? 1.f / 32768.f : 0.f, compressed ? 1.f : 0.f };
+					if (FAILED(device->SetVertexShaderConstantF(4, decode, 1)))
+						return anyRendered;
+					shadow.compressedState = compressed;
+				}
+				if (shadow.vb != vMesh->vb || shadow.vbStride != vMesh->stride)
+				{
+					if (FAILED(device->SetStreamSource(0, vMesh->vb, 0, vMesh->stride)))
+						return anyRendered;
+					shadow.vb = vMesh->vb;
+					shadow.vbStride = vMesh->stride;
+				}
+				if (shadow.ib != vMesh->ib)
+				{
+					if (FAILED(device->SetIndices(vMesh->ib)))
+						return anyRendered;
+					shadow.ib = vMesh->ib;
+				}
+
+				if (!group.skinned)
+				{
+					if (poses.empty() || FAILED(device->SetVertexShaderConstantF(PaletteRegister, poses[0].m[0], 3)))
+						return anyRendered;
+				}
+
+				bool firstStrip = true;
+				for (const auto& strip : group.strips)
+				{
+					int first = firstStrip && group.skinned ? 0 : HardwareBones;
+					int last = firstStrip && group.skinned ? (paletteLimit - 1) : -1;
+					if (group.skinned)
+					{
+						for (const auto& change : strip.changes)
+						{
+							if (size_t(change.second) < poses.size())
+								std::memcpy(palette[change.first], poses[size_t(change.second)].m, sizeof(matrix3x4));
+							first = std::min(first, change.first);
+							last = std::max(last, change.first);
+						}
+						if (first <= last && FAILED(device->SetVertexShaderConstantF(PaletteRegister + first * 3, palette[first][0], (last - first + 1) * 3)))
+							return anyRendered;
+					}
+					firstStrip = false;
+					if (FAILED(device->DrawIndexedPrimitive(strip.triangleStrip ? D3DPT_TRIANGLESTRIP : D3DPT_TRIANGLELIST,
+						0, 0, vMesh->vertexCount, strip.start, strip.triangleStrip ? strip.count - 2 : strip.count / 3)))
+						return anyRendered;
+					anyRendered = true;
+				}
 			}
 		}
-		return true;
+		return anyRendered;
+	}
+
+	bool ReadyOrRequestWarmup(IMatRenderContext* context, std::uint64_t& outGeneration)
+	{
+		outGeneration = s_Generation.load(std::memory_order_acquire);
+		if (s_ReadyGeneration.load(std::memory_order_acquire) == outGeneration)
+			return true;
+
+		if (I::DirectXDevice && s_InitializationGeneration.load(std::memory_order_acquire) != outGeneration)
+		{
+			auto expected = InvalidGeneration;
+			if (s_WarmupGeneration.compare_exchange_strong(expected, outGeneration, std::memory_order_acq_rel))
+			{
+				if (!QueueRenderCall(context, [device = I::DirectXDevice, generation = outGeneration] { InitializeResources(device, generation); }))
+				{
+					expected = outGeneration;
+					s_WarmupGeneration.compare_exchange_strong(expected, InvalidGeneration, std::memory_order_acq_rel);
+				}
+			}
+		}
+		return false;
+	}
+
+	bool EnqueueBatch(IMatRenderContext* context, std::shared_ptr<Batch> batch)
+	{
+		if (!context || !batch || batch->items.empty())
+			return false;
+
+		if (auto queue = context->GetCallQueue())
+		{
+			auto call = [batch = std::move(batch)] { RenderBatch(*batch); };
+			auto functor = new (std::nothrow) RenderQueue::CRenderCall<decltype(call)>(std::move(call));
+			if (!functor)
+				return false;
+			context->Flush(false);
+			queue->QueueFunctor(functor);
+			functor->Release();
+			return true;
+		}
+		context->Flush(false);
+		return RenderBatch(*batch);
 	}
 }
 
@@ -568,6 +1039,213 @@ void CD3DMaterials::Initialize(IDirect3DDevice9* pDevice)
 {
 	if (I::MaterialSystem && I::MaterialSystem->GetRenderBackend() == RENDER_BACKEND_D3D9)
 		InitializeResources(pDevice, s_Generation.load(std::memory_order_acquire));
+}
+
+bool CD3DMaterials::PrepareGeometry(const DrawModelState_t& state, const ModelRenderInfo_t& info, GeometryRef& outGeometry, bool& outNeedsFallback)
+{
+	outGeometry.reset();
+	outNeedsFallback = false;
+
+	const auto header = state.m_pStudioHdr;
+	const auto hardware = state.m_pStudioHWData;
+	if (!header || !hardware || state.m_lod < 0 || state.m_lod >= hardware->m_NumLODs || !hardware->m_pLODs)
+		return false;
+	const auto& lod = hardware->m_pLODs[state.m_lod];
+	const void* meshDataPtr = lod.m_pMeshData;
+	if (!meshDataPtr)
+		return false;
+
+	const GeometryKey key{ header, hardware, state.m_lod, info.body };
+	{
+		std::scoped_lock lock(s_CacheMutex);
+		if (auto it = s_GeometryCache.find(key); it != s_GeometryCache.end())
+		{
+			const auto& cached = it->second;
+			bool valid = cached && cached->numBones == header->numbones && cached->meshDataPtr == meshDataPtr &&
+				cached->numBodyParts == header->numbodyparts && cached->numMeshes == hardware->m_NumStudioMeshes;
+			if (valid)
+			{
+				for (const auto& group : cached->groups)
+				{
+					if (group.meshId < 0 || group.meshId >= hardware->m_NumStudioMeshes)
+					{
+						valid = false;
+						break;
+					}
+					const auto& md = lod.m_pMeshData[group.meshId];
+					if (group.groupIndex < 0 || group.groupIndex >= md.m_NumGroup || !md.m_pMeshGroup)
+					{
+						valid = false;
+						break;
+					}
+					const auto& src = md.m_pMeshGroup[group.groupIndex];
+					if (src.m_MeshNeedsRestore || reinterpret_cast<const void*>(src.m_pMesh) != reinterpret_cast<const void*>(group.mesh))
+					{
+						valid = false;
+						break;
+					}
+				}
+			}
+			if (valid)
+			{
+				outGeometry = cached;
+				outNeedsFallback = cached->needsFallback;
+				return true;
+			}
+			s_GeometryCache.erase(it);
+		}
+	}
+
+	bool anyRestoreFlag = false;
+	auto built = BuildGeometry(state, info, anyRestoreFlag);
+	if (!built)
+		return false;
+
+	outGeometry = built;
+	outNeedsFallback = built->needsFallback;
+	if (!anyRestoreFlag)
+	{
+		std::scoped_lock lock(s_CacheMutex);
+		if (s_GeometryCache.size() >= MaxGeometryCache)
+			s_GeometryCache.clear();
+		s_GeometryCache.emplace(key, std::move(built));
+	}
+	return true;
+}
+
+bool CD3DMaterials::PreparePoses(const GeometryRef& geometry, const matrix3x4* bones, PoseRef& outPoses)
+{
+	outPoses.reset();
+	if (!geometry || !bones || geometry->usedBones.empty())
+		return false;
+
+	auto poseData = AcquirePoseData();
+	if (!poseData)
+		return false;
+
+	poseData->poses.resize(geometry->usedBones.size());
+	if (geometry->staticProp)
+	{
+		for (size_t i = 0; i < geometry->usedBones.size(); ++i)
+		{
+			const int boneIndex = geometry->usedBones[i].boneIndex;
+			if (!FiniteMatrix(bones[boneIndex]))
+				return false;
+			std::memcpy(poseData->poses[i].m, bones[boneIndex], sizeof(matrix3x4));
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < geometry->usedBones.size(); ++i)
+		{
+			const auto& ub = geometry->usedBones[i];
+			if (!FiniteMatrix(bones[ub.boneIndex]))
+				return false;
+			Concat(bones[ub.boneIndex], ub.poseToBone, poseData->poses[i].m);
+			if (!FiniteMatrix(poseData->poses[i].m))
+				return false;
+		}
+	}
+
+	outPoses = std::move(poseData);
+	return true;
+}
+
+void CD3DMaterials::BeginBatch(IMatRenderContext* pContext)
+{
+	++s_ActiveBatch.depth;
+	if (!s_ActiveBatch.context)
+		s_ActiveBatch.context = pContext;
+}
+
+void CD3DMaterials::FlushBatch(IMatRenderContext* pContext)
+{
+	auto batch = std::exchange(s_ActiveBatch.batch, nullptr);
+	IMatRenderContext* ctx = pContext ? pContext : s_ActiveBatch.context;
+	if (batch && !batch->items.empty())
+		EnqueueBatch(ctx, std::move(batch));
+}
+
+void CD3DMaterials::EndBatch(IMatRenderContext* pContext)
+{
+	if (s_ActiveBatch.depth > 0)
+		--s_ActiveBatch.depth;
+	if (s_ActiveBatch.depth == 0)
+	{
+		FlushBatch(pContext);
+		s_ActiveBatch.context = nullptr;
+	}
+}
+
+bool CD3DMaterials::DrawPrepared(IMatRenderContext* pContext, const GeometryRef& geometry, const PoseRef& poses, const ChamsMaterial_t& params, bool bOccluded, int iCullOverride, const D3DStencilState_t* pStencil, bool bMaskOnly)
+{
+	if (!pContext || !geometry || !poses || !I::MaterialSystem)
+		return false;
+	if (!bMaskOnly && (params.iEffect <= 0 || params.iEffect > EffectCount || params.iBlend < 0 || params.iBlend > 2 ||
+		!std::isfinite(params.flRoughness) || !std::isfinite(params.flReflectivity) ||
+		!std::isfinite(params.flScale) || !std::isfinite(params.flSpeed) ||
+		!std::isfinite(params.flIntensity) || !std::isfinite(params.flRimPower)))
+		return false;
+	if (I::MaterialSystem->GetRenderBackend() != RENDER_BACKEND_D3D9)
+		return false;
+
+	std::uint64_t generation = 0;
+	if (!ReadyOrRequestWarmup(pContext, generation))
+		return false;
+
+	const float time = I::GlobalVars ? I::GlobalVars->curtime : 0.f;
+	if (!std::isfinite(time))
+		return false;
+
+	CameraData cam;
+	if (!CaptureCamera(pContext, cam))
+		return false;
+
+	auto batch = s_ActiveBatch.depth > 0 ? s_ActiveBatch.batch : nullptr;
+	if (!batch || batch->generation != generation)
+	{
+		if (s_ActiveBatch.depth > 0)
+			s_ActiveBatch.batch.reset();
+		if (batch && !batch->items.empty())
+			EnqueueBatch(pContext, std::move(batch));
+		batch = AcquireBatch(generation);
+		if (!batch)
+			return false;
+		if (s_ActiveBatch.depth > 0)
+			s_ActiveBatch.batch = batch;
+	}
+
+	std::uint16_t camIdx = 0;
+	if (!batch->cameras.empty() && std::memcmp(&batch->cameras.back(), &cam, sizeof(CameraData)) == 0)
+		camIdx = std::uint16_t(batch->cameras.size() - 1);
+	else
+	{
+		camIdx = std::uint16_t(batch->cameras.size());
+		batch->cameras.push_back(cam);
+	}
+
+	DrawItem item;
+	item.geometry = geometry;
+	item.poses = poses;
+	item.params = params;
+	if (pStencil)
+	{
+		item.stencil = *pStencil;
+		item.useExplicitStencil = true;
+	}
+	item.useExplicitCull = (iCullOverride >= 0);
+	item.invertCull = (iCullOverride == 1);
+	item.cameraIndex = camIdx;
+	item.occluded = bOccluded;
+	item.maskOnly = bMaskOnly;
+	item.time = time;
+	batch->anyOccluded |= bOccluded;
+	batch->items.push_back(std::move(item));
+
+	if (s_ActiveBatch.depth == 0)
+		return EnqueueBatch(pContext, std::move(batch));
+
+	return true;
 }
 
 bool CD3DMaterials::Draw(const DrawModelState_t& state, const ModelRenderInfo_t& info, const matrix3x4* bones, const ChamsMaterial_t& params, bool bOccluded, bool bViewmodel)
@@ -590,83 +1268,30 @@ bool CD3DMaterials::Draw(const DrawModelState_t& state, const ModelRenderInfo_t&
 	bool drewFallback = false;
 	try
 	{
-		const auto generation = s_Generation.load(std::memory_order_acquire);
-		if (s_ReadyGeneration.load(std::memory_order_acquire) != generation)
-		{
-			if (I::DirectXDevice && s_InitializationGeneration.load(std::memory_order_acquire) != generation)
-			{
-				auto expected = InvalidGeneration;
-				if (s_WarmupGeneration.compare_exchange_strong(expected, generation, std::memory_order_acq_rel))
-				{
-					if (!QueueRenderCall(context, [device = I::DirectXDevice, generation] { InitializeResources(device, generation); }))
-					{
-						expected = generation;
-						s_WarmupGeneration.compare_exchange_strong(expected, InvalidGeneration, std::memory_order_acq_rel);
-					}
-				}
-			}
+		std::uint64_t generation = 0;
+		if (!ReadyOrRequestWarmup(context, generation))
 			return false;
-		}
-		Packet packet;
-		packet.generation = generation;
-		packet.params = params;
-		packet.occluded = bOccluded;
-		packet.time = I::GlobalVars ? I::GlobalVars->curtime : 0.f;
-		if (!std::isfinite(packet.time) || !CopyModel(state, info, bones, packet))
+
+		GeometryRef geom;
+		bool needsFallback = false;
+		if (!PrepareGeometry(state, info, geom, needsFallback))
 			return false;
-		VMatrix view, projection;
-		context->GetMatrix(MATERIAL_VIEW, &view);
-		context->GetMatrix(MATERIAL_PROJECTION, &projection);
-		for (int row = 0; row < 4; ++row)
-		{
-			for (int column = 0; column < 4; ++column)
-			{
-				packet.viewProjection[row][column] = projection[row][0] * view[0][column] + projection[row][1] * view[1][column] +
-					projection[row][2] * view[2][column] + projection[row][3] * view[3][column];
-				if (!std::isfinite(packet.viewProjection[row][column]))
-					return false;
-			}
-		}
-		for (int axis = 0; axis < 3; ++axis)
-		{
-			packet.eye[axis] = -(view[0][axis] * view[0][3] + view[1][axis] * view[1][3] + view[2][axis] * view[2][3]);
-			if (!std::isfinite(packet.eye[axis]))
-				return false;
-		}
-		packet.eye[3] = 1.f;
+		PoseRef poses;
+		if (!PreparePoses(geom, bones, poses))
+			return false;
+
 		DrawModelExecuteFn original = nullptr;
-		if (packet.needsFallback)
+		if (needsFallback)
 		{
 			static auto hook = U::Hooks.Get("IVModelRender_DrawModelExecute");
 			original = hook ? hook->As<DrawModelExecuteFn>() : nullptr;
 			if (!original || !I::ModelRender)
 				return false;
-		}
-		if (auto queue = context->GetCallQueue())
-		{
-			const bool needsFallback = packet.needsFallback;
-			auto call = [packet = std::move(packet)] { Render(packet); };
-			auto functor = new (std::nothrow) RenderQueue::CRenderCall<decltype(call)>(std::move(call));
-			if (!functor)
-				return false;
-			const auto releaseFunctor = [](CFunctor* value) { value->Release(); };
-			const std::unique_ptr<CFunctor, decltype(releaseFunctor)> owner(functor, releaseFunctor);
-			if (needsFallback)
-			{
-				original(I::ModelRender, state, info, const_cast<matrix3x4*>(bones));
-				drewFallback = true;
-			}
-			context->Flush(false);
-			queue->QueueFunctor(functor);
-			return true;
-		}
-		if (packet.needsFallback)
-		{
+			FlushBatch(context);
 			original(I::ModelRender, state, info, const_cast<matrix3x4*>(bones));
 			drewFallback = true;
 		}
-		context->Flush(false);
-		const bool rendered = Render(packet);
+		const bool rendered = DrawPrepared(context, geom, poses, params, bOccluded, -1, nullptr, false);
 		return rendered || drewFallback;
 	}
 	catch (const std::bad_alloc&)
@@ -675,14 +1300,27 @@ bool CD3DMaterials::Draw(const DrawModelState_t& state, const ModelRenderInfo_t&
 	}
 }
 
+void CD3DMaterials::ClearCache()
+{
+	std::scoped_lock lock(s_CacheMutex);
+	s_GeometryCache.clear();
+}
+
 void CD3DMaterials::Unload()
 {
-	std::scoped_lock lock(s_Mutex);
-	s_ReadyGeneration.store(InvalidGeneration, std::memory_order_release);
-	s_Generation.fetch_add(1, std::memory_order_acq_rel);
-	s_InitializationGeneration.store(InvalidGeneration, std::memory_order_release);
-	s_WarmupGeneration.store(InvalidGeneration, std::memory_order_release);
-	s_Resources = {};
+	s_ActiveBatch.batch.reset();
+	s_ActiveBatch.depth = 0;
+	s_ActiveBatch.context = nullptr;
+	{
+		std::scoped_lock lock(s_Mutex);
+		s_ReadyGeneration.store(InvalidGeneration, std::memory_order_release);
+		s_Generation.fetch_add(1, std::memory_order_acq_rel);
+		s_InitializationGeneration.store(InvalidGeneration, std::memory_order_release);
+		s_WarmupGeneration.store(InvalidGeneration, std::memory_order_release);
+		s_Resources = {};
+	}
+	ClearCache();
+	DrainPools();
 }
 #else
 void CD3DMaterials::Initialize(IDirect3DDevice9*)
@@ -692,6 +1330,37 @@ void CD3DMaterials::Initialize(IDirect3DDevice9*)
 bool CD3DMaterials::Draw(const DrawModelState_t&, const ModelRenderInfo_t&, const matrix3x4*, const ChamsMaterial_t&, bool, bool)
 {
 	return false;
+}
+
+bool CD3DMaterials::PrepareGeometry(const DrawModelState_t&, const ModelRenderInfo_t&, GeometryRef&, bool&)
+{
+	return false;
+}
+
+bool CD3DMaterials::PreparePoses(const GeometryRef&, const matrix3x4*, PoseRef&)
+{
+	return false;
+}
+
+bool CD3DMaterials::DrawPrepared(IMatRenderContext*, const GeometryRef&, const PoseRef&, const ChamsMaterial_t&, bool, int, const D3DStencilState_t*, bool)
+{
+	return false;
+}
+
+void CD3DMaterials::BeginBatch(IMatRenderContext*)
+{
+}
+
+void CD3DMaterials::FlushBatch(IMatRenderContext*)
+{
+}
+
+void CD3DMaterials::EndBatch(IMatRenderContext*)
+{
+}
+
+void CD3DMaterials::ClearCache()
+{
 }
 
 void CD3DMaterials::Unload()

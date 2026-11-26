@@ -36,6 +36,11 @@ MAKE_SIGNATURE(CEconItemView_GetPlayerDisplayModel, "client.dll", "48 89 5C 24 0
 MAKE_SIGNATURE(Inventory_CBaseEntity_SetModel, "client.dll", "40 57 48 83 EC 20 48 8B F9 48 85 D2 74 2F 48 8B 0D ? ? ? ? 48 89 5C 24 30 48 8B 01 FF 50 10 8B D0", 0x0);
 MAKE_SIGNATURE(CBaseEntity_SetOwnerEntity, "client.dll", "40 53 48 83 EC 20 48 8B D9 48 85 D2 74 17 48 8B 02 48 8B CA FF 50 10 8B 10 89 93 64 07 00 00 48 83 C4 20 5B C3 C7 81 64 07 00 00 FF FF FF FF", 0x0);
 MAKE_SIGNATURE(CUtlVector_SetCountHandle, "client.dll", "48 89 5C 24 08 57 48 83 EC 20 48 63 DA 48 03 D9 49 63 F8 8B 43 10 3B C7 7D 12 44 8B C7 8B D0 44 2B C0 48 8B CB E8 ? ? ? ? EB 05 7E 03 89 7B 10 39 7B 08 7D 2D 83 7B 0C 00 7C 27 48 8B 03 48 8B CF 48 C1 E1 02", 0x0);
+MAKE_SIGNATURE(ClientScene_Constructor, "client.dll", "40 53 48 83 EC 20 48 8B D9 E8 ? ? ? ? 33 C9 48 8D 05 ? ? ? ? 48 89 03 48 8D 05 ? ? ? ? 48 89 43 08 48 8D 05 ? ? ? ? 48 89 43 10 48 8D 05 ? ? ? ? 48 89 43 18 48 8D 05 ? ? ? ? 48 89 83 C0 07 00 00 48 89 8B E0 07 00 00 48 89 8B E8 07 00 00 48 8B 83 E0 07 00 00 48 89 83 F8 07 00 00 89 8B F0 07 00 00", 0x0);
+MAKE_SIGNATURE(ClientTaunt_EmitSound, "client.dll", "48 89 5C 24 ? 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 ? 48 81 EC ? ? ? ? 48 8B 3D", 0x0);
+MAKE_SIGNATURE(ClientTaunt_StopSound, "client.dll", "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 41 10 48 8B F1 48 83 C1 10 48 8B DA FF 50 48 83 F8 FF", 0x0);
+MAKE_SIGNATURE(ClientTaunt_PlaySoundLoop, "client.dll", "48 85 D2 0F 84 DB 00 00 00 48 8B C4 48 89 70 18 41 56 48 83 EC 70 80 3A 00 48 8B F2 4C 8B F1 0F 84 B1 00 00 00", 0x0);
+MAKE_SIGNATURE(ClientTaunt_StopSoundLoop, "client.dll", "40 53 48 83 EC 20 48 83 B9 A0 1B 00 00 00 48 8B D9 74 21", 0x0);
 
 #endif
 
@@ -772,6 +777,7 @@ void CSkinChanger::Service()
 	RunFrame();
 	UpdateWeaponVisuals(bInGame ? H::Entities.GetLocal() : nullptr);
 	UpdateWearables(bInGame ? H::Entities.GetLocal() : nullptr);
+	UpdateFakeTaunt(bInGame ? H::Entities.GetLocal() : nullptr);
 }
 
 void CSkinChanger::RequestFullUpdate()
@@ -1016,14 +1022,12 @@ namespace
 	constexpr int kAttrContainerItem = 144;
 	constexpr int kEconEntityClientside = 0xE21;
 	constexpr int kMaxWearables = 8;
-	constexpr int kRenderGroupOpaqueEntity = 2;
+	constexpr int kRenderGroupOpaqueEntity = 7;
 	constexpr int kRenderGroupViewModelOpaque = 10;
 	constexpr float kClientThinkAlways = -1293.f;
 	constexpr size_t kTFWearableSize = 0xEE0;
 
-	constexpr int kLoadoutHead = 7;
-	constexpr int kLoadoutMisc = 8;
-	constexpr int kLoadoutMisc2 = 11;
+	constexpr std::array<int, 3> kCosmeticLoadoutSlots = { 7, 8, 10 };
 
 	struct ServerWeaponChoice_t
 	{
@@ -1059,6 +1063,30 @@ namespace
 		return pPlayer->m_hMyWearables().Count() == iCount;
 	}
 
+	bool ReinsertWearable(CTFPlayer* pPlayer, CEconWearable* pWearable, int iIndex)
+	{
+		if (!pPlayer || !pWearable)
+			return false;
+
+		auto& vWearables = pPlayer->m_hMyWearables();
+		const int iHandle = pWearable->GetRefEHandle().ToInt();
+		for (int i = 0; i < vWearables.Count(); i++)
+		{
+			if (vWearables[i].ToInt() == iHandle)
+				return true;
+		}
+
+		const int iCount = vWearables.Count();
+		if (iCount >= kMaxWearables || !ResizeWearables(pPlayer, iCount + 1))
+			return false;
+
+		const int iInsert = std::clamp(iIndex, 0, iCount);
+		for (int i = iCount; i > iInsert; i--)
+			vWearables[i] = vWearables[i - 1];
+		vWearables[iInsert].Set(pWearable);
+		return true;
+	}
+
 	bool IsWearableDef(uint16_t iDef)
 	{
 		for (const auto& tItem : CSkinChanger::GetItems())
@@ -1067,6 +1095,14 @@ namespace
 				return tItem.sClass == "tf_wearable" || tItem.sClass.starts_with("tf_wearable_");
 		}
 		return false;
+	}
+
+	uint32_t EquipRegionMask(CEconItemView* pView)
+	{
+		if (!pView)
+			return 0;
+		auto* pDefinition = pView->GetStaticData();
+		return pDefinition ? pDefinition->m_uEquipRegionMask() : 0;
 	}
 
 }
@@ -2242,6 +2278,7 @@ namespace
 		Field<uint8_t>(pWearable, kEconEntityClientside) = 1;
 		S::CBaseEntity_SetOwnerEntity.Call<void>(pWearable, pLocal);
 		Field<EHANDLE>(pWearable, iAssociatedOffset).Set(pWeapon);
+		I::ModelInfoClient->RegisterDynamicModel(sModel.c_str(), true);
 		if (!pWearable->InitializeAsClientEntity(sModel.c_str(), bViewModel ? kRenderGroupViewModelOpaque : kRenderGroupOpaqueEntity))
 		{
 			pWearable->ReleaseClientEntity();
@@ -2249,7 +2286,6 @@ namespace
 		}
 		pWearable->Spawn();
 		pWearable->Equip(pLocal);
-		I::ModelInfoClient->RegisterDynamicModel(sModel.c_str(), true);
 		S::Inventory_CBaseEntity_SetModel.Call<bool>(pWearable, sModel.c_str());
 		pWearable->GetClientNetworkable()->OnDataChanged(DATA_UPDATE_CREATED);
 		pWearable->SetNextClientThink(kClientThinkAlways);
@@ -2438,7 +2474,7 @@ void CSkinChanger::UpdateWeaponVisuals(CTFPlayer* pLocal)
 	}
 }
 
-CEconItemView* CSkinChanger::GetWearableView(int iClass, int iSlot, int iTeam, int iDef, int iUnusual, int iPaintColor, int iPaintColor2, int iStyle)
+CEconItemView* CSkinChanger::GetWearableView(int iClass, int iSlot, int iTeam, uint64_t uItemID, int iDef, int iUnusual, int iPaintColor, int iPaintColor2, int iStyle)
 {
 	if (iSlot < 0 || iSlot >= 19 || iDef <= 0)
 		return nullptr;
@@ -2466,8 +2502,8 @@ CEconItemView* CSkinChanger::GetWearableView(int iClass, int iSlot, int iTeam, i
 	Field<int>(pView, kViewTeamNumber) = iTeam;
 	Field<bool>(pView, kViewInitialized) = true;
 
-	const uint32_t uHigh = 0xFFFF0000u | uint32_t(iClass);
-	const uint32_t uLow = 0x80000000u | (uint32_t(iDef) << 8) | uint32_t(iSlot);
+	const uint32_t uHigh = uint32_t(uItemID >> 32);
+	const uint32_t uLow = uint32_t(uItemID);
 	auto pMirror = reinterpret_cast<uint32_t*>(tView.aData + 88);
 	pMirror[0] = uLow;
 	pMirror[1] = uHigh;
@@ -2500,6 +2536,7 @@ CEconWearable* CSkinChanger::CreateWearable(CTFPlayer* pLocal, CEconItemView* pV
 	*reinterpret_cast<byte*>(uintptr_t(pWearable) + kEconEntityClientside) = 1;
 	S::CBaseEntity_SetOwnerEntity.Call<void>(pWearable, pLocal);
 
+	I::ModelInfoClient->RegisterDynamicModel(sModel, true);
 	if (!pWearable->InitializeAsClientEntity(sModel, kRenderGroupOpaqueEntity))
 	{
 		pWearable->ReleaseClientEntity();
@@ -2575,7 +2612,6 @@ void CSkinChanger::RemoveWearable(CTFPlayer* pLocal, Wearable_t& tWearable)
 
 void CSkinChanger::ResetWearables(CTFPlayer* pLocal)
 {
-	RestoreHiddenWearables();
 	auto* pOwner = pLocal ? pLocal : m_hWearableOwner.Get();
 	bool bAny = false;
 	for (auto& tWearable : m_aWearables)
@@ -2583,6 +2619,7 @@ void CSkinChanger::ResetWearables(CTFPlayer* pLocal)
 		bAny = bAny || tWearable.hEntity.Get() != nullptr;
 		RemoveWearable(pOwner, tWearable);
 	}
+	RestoreHiddenWearables();
 
 	if (bAny && pOwner)
 	{
@@ -2604,21 +2641,24 @@ void CSkinChanger::ClearWearables()
 
 void CSkinChanger::RestoreHiddenWearables()
 {
-	for (auto& hWearable : m_aHiddenWearables)
+	auto* pOwner = m_hWearableOwner.Get();
+	for (auto& tHidden : m_aHiddenWearables)
 	{
-		if (auto* pWearable = hWearable.Get())
-			pWearable->m_fEffects() &= ~EF_NODRAW;
-		hWearable.Term();
+		if (auto* pWearable = tHidden.hEntity.Get())
+		{
+			if (ReinsertWearable(pOwner, pWearable, tHidden.iIndex))
+				pWearable->m_fEffects() &= ~EF_NODRAW;
+		}
+		tHidden = {};
 	}
 }
 
 void CSkinChanger::HideReplacedWearables(CTFPlayer* pLocal, int iClass)
 {
-	RestoreHiddenWearables();
 	std::array<uint64_t, kLoadoutSlots> aOriginalIDs = {};
 	{
 		std::lock_guard tLock(m_tMutex);
-		for (int iSlot = kLoadoutHead; iSlot <= kLoadoutMisc2; iSlot++)
+		for (int iSlot : kCosmeticLoadoutSlots)
 		{
 			if (!m_aWearables[iSlot].hEntity.Get())
 				continue;
@@ -2628,19 +2668,81 @@ void CSkinChanger::HideReplacedWearables(CTFPlayer* pLocal, int iClass)
 		}
 	}
 
-	size_t uHidden = 0;
+	std::array<uint32_t, kLoadoutSlots> aFakeRegions = {};
+	for (int iSlot : kCosmeticLoadoutSlots)
+	{
+		auto* pFake = m_aWearables[iSlot].hEntity.Get();
+		if (!pFake)
+			continue;
+		auto* pFakeView = reinterpret_cast<CEconItemView*>(uintptr_t(pFake) + kEconEntityAttrManager + kAttrContainerItem);
+		aFakeRegions[iSlot] = EquipRegionMask(pFakeView);
+	}
+
+	const auto ShouldHide = [&](CEconItemView* pView, uint64_t uID)
+	{
+		if (!uID || IsClientItem(uID))
+			return false;
+		if (std::find(aOriginalIDs.begin(), aOriginalIDs.end(), uID) != aOriginalIDs.end())
+			return true;
+
+		const uint32_t uRegions = EquipRegionMask(pView);
+		for (int iSlot : kCosmeticLoadoutSlots)
+		{
+			if (uRegions && aFakeRegions[iSlot] && (uRegions & aFakeRegions[iSlot]))
+				return true;
+		}
+		return false;
+	};
+
+	for (auto& tHidden : m_aHiddenWearables)
+	{
+		auto* pWearable = tHidden.hEntity.Get();
+		if (!pWearable)
+		{
+			tHidden = {};
+			continue;
+		}
+
+		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem);
+		if (ShouldHide(pView, ViewItemID(pView)))
+			continue;
+
+		if (ReinsertWearable(pLocal, pWearable, tHidden.iIndex))
+		{
+			pWearable->m_fEffects() &= ~EF_NODRAW;
+			tHidden = {};
+		}
+	}
+
 	auto& vWearables = pLocal->m_hMyWearables();
-	for (int i = 0; i < vWearables.Count() && uHidden < m_aHiddenWearables.size(); i++)
+	for (int i = 0; i < vWearables.Count();)
 	{
 		auto* pWearable = vWearables[i].Get();
-		if (!pWearable || (pWearable->m_fEffects() & EF_NODRAW))
+		if (!pWearable)
+		{
+			i++;
 			continue;
+		}
+
 		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem);
-		const uint64_t uID = ViewItemID(pView);
-		if (!uID || std::find(aOriginalIDs.begin(), aOriginalIDs.end(), uID) == aOriginalIDs.end())
+		if (!ShouldHide(pView, ViewItemID(pView)))
+		{
+			i++;
 			continue;
+		}
+
+		auto itSlot = std::find_if(m_aHiddenWearables.begin(), m_aHiddenWearables.end(), [](const HiddenWearable_t& tHidden) { return !tHidden.hEntity.Get(); });
+		if (itSlot == m_aHiddenWearables.end())
+			break;
+
 		pWearable->m_fEffects() |= EF_NODRAW;
-		m_aHiddenWearables[uHidden++].Set(pWearable);
+		itSlot->hEntity.Set(pWearable);
+		itSlot->iIndex = i;
+
+		for (int j = i; j < vWearables.Count() - 1; j++)
+			vWearables[j] = vWearables[j + 1];
+		if (!ResizeWearables(pLocal, vWearables.Count() - 1))
+			break;
 	}
 }
 
@@ -2648,9 +2750,9 @@ bool CSkinChanger::IsReplacedWearableItem(uint64_t uItemID)
 {
 	if (!uItemID || IsClientItem(uItemID))
 		return false;
-	for (const auto& hWearable : m_aHiddenWearables)
+	for (const auto& tHidden : m_aHiddenWearables)
 	{
-		auto* pWearable = hWearable.Get();
+		auto* pWearable = tHidden.hEntity.Get();
 		if (!pWearable)
 			continue;
 		auto* pView = reinterpret_cast<CEconItemView*>(uintptr_t(pWearable) + kEconEntityAttrManager + kAttrContainerItem);
@@ -2690,11 +2792,14 @@ void CSkinChanger::UpdateWearables(CTFPlayer* pLocal)
 
 	auto* pInventory = GetLocalInventory();
 	if (!pInventory)
+	{
+		ResetWearables(pLocal);
 		return;
+	}
 
 	const bool bFullUpdate = I::ClientState && I::ClientState->m_nDeltaTick == -1;
 	bool bBodygroupsDirty = false;
-	for (int iSlot = kLoadoutHead; iSlot <= kLoadoutMisc2; iSlot++)
+	for (int iSlot : kCosmeticLoadoutSlots)
 	{
 		auto& tWearable = m_aWearables[iSlot];
 		auto* pEntity = tWearable.hEntity.Get();
@@ -2734,7 +2839,7 @@ void CSkinChanger::UpdateWearables(CTFPlayer* pLocal)
 			}
 		}
 
-		auto* pView = GetWearableView(iClass, iSlot, iTeam, iDef, iUnusual, iPaintColor, iPaintColor2, iStyle);
+		auto* pView = GetWearableView(iClass, iSlot, iTeam, pLoadoutView->UUID(), iDef, iUnusual, iPaintColor, iPaintColor2, iStyle);
 		if (!pView)
 			continue;
 
@@ -2766,6 +2871,253 @@ void CSkinChanger::UpdateWearables(CTFPlayer* pLocal)
 		pLocal->SetBodygroupsDirty();
 		RefreshInventoryHudModel();
 	}
+}
+
+bool CSkinChanger::IsFakeTaunting() const
+{
+	return m_hTauntScene.Get() && m_hTauntOwner.Get();
+}
+
+bool CSkinChanger::PlayTauntScene(CTFPlayer* pLocal, const char* sScene)
+{
+	if (!pLocal || !sScene || !*sScene || strlen(sScene) >= 260 || !S::ClientScene_Constructor() || !S::MemAlloc_Zero())
+		return false;
+
+	auto* pMemory = S::MemAlloc_Zero.Call<void*>(0x830);
+	auto* pScene = pMemory ? S::ClientScene_Constructor.Call<CBaseEntity*>(pMemory) : nullptr;
+	if (!pScene)
+		return false;
+	if (!U::Memory.CallVirtual<82, bool>(pScene, "", 13))
+	{
+		U::Memory.CallVirtual<1, void>(uintptr_t(pScene) + 0x10);
+		return false;
+	}
+
+	U::Memory.CallVirtual<163, void>(pScene, sScene, pLocal, true);
+	auto* pChoreo = Field<void*>(pScene, 0x808);
+	const float flDuration = pChoreo ? U::Memory.CallVirtual<1, float>(pChoreo) : 0.f;
+	if (!std::isfinite(flDuration) || flDuration <= 0.f)
+	{
+		U::Memory.CallVirtual<162, void>(pScene);
+		U::Memory.CallVirtual<1, void>(uintptr_t(pScene) + 0x10);
+		return false;
+	}
+
+	m_hTauntScene.Set(pScene);
+	if (m_hTauntScene.Get() != pScene)
+	{
+		U::Memory.CallVirtual<162, void>(pScene);
+		U::Memory.CallVirtual<1, void>(uintptr_t(pScene) + 0x10);
+		m_hTauntScene.Term();
+		return false;
+	}
+	m_hTauntOwner.Set(pLocal);
+	m_flTauntEnd = I::GlobalVars->curtime + flDuration;
+	return true;
+}
+
+void CSkinChanger::StopFakeTaunt(bool bOutro)
+{
+	auto* pOwner = m_hTauntOwner.Get();
+	const std::string sOutro = bOutro ? m_sTauntOutro : std::string();
+	if (pOwner && S::ClientTaunt_StopSound())
+	{
+		if (m_bTauntSoundPlayed && !m_sTauntSound.empty())
+			S::ClientTaunt_StopSound.Call<void>(pOwner, m_sTauntSound.c_str());
+		if (m_bTauntLoopSoundPlayed && !m_sTauntLoopSound.empty() && S::ClientTaunt_StopSoundLoop())
+			S::ClientTaunt_StopSoundLoop.Call<void>(pOwner);
+	}
+	if (auto* pScene = m_hTauntScene.Get())
+	{
+		U::Memory.CallVirtual<162, void>(pScene);
+		U::Memory.CallVirtual<1, void>(uintptr_t(pScene) + 0x10);
+	}
+	m_hTauntScene.Term();
+	m_hTauntOwner.Term();
+	m_sTauntOutro.clear();
+	m_sTauntSound.clear();
+	m_sTauntLoopSound.clear();
+	m_bTauntHold = false;
+	m_bTauntOutro = false;
+	m_bTauntForceForward = false;
+	m_bTauntSoundPlayed = false;
+	m_bTauntLoopSoundPlayed = false;
+	m_flTauntMoveSpeed = 0.f;
+	m_flTauntMoveAcceleration = 0.f;
+	m_flTauntCurrentMoveSpeed = 0.f;
+	if (m_bTauntCamera && pOwner)
+		pOwner->m_nForceTauntCam() = 0;
+	m_bTauntCamera = false;
+	if (pOwner && pOwner->IsAlive() && !sOutro.empty() && PlayTauntScene(pOwner, sOutro.c_str()))
+	{
+		m_bTauntHold = true;
+		m_bTauntOutro = true;
+		if (!pOwner->m_nForceTauntCam())
+		{
+			pOwner->m_nForceTauntCam() = 1;
+			m_bTauntCamera = true;
+		}
+	}
+}
+
+bool CSkinChanger::HandleFakeTauntCommand(int iSlot)
+{
+	if (IsFakeTaunting())
+	{
+		if (iSlot == -1)
+		{
+			if (!m_bTauntHold || m_bTauntOutro)
+				return false;
+			StopFakeTaunt(true);
+			return true;
+		}
+
+		bool bFakeTarget = false;
+		if (auto* pInventory = GetLocalInventory(); pInventory && iSlot >= 1 && iSlot <= 8)
+		{
+			if (auto* pLocal = m_hTauntOwner.Get())
+			{
+				if (auto* pView = pInventory->GetItemInLoadout(pLocal->m_iClass(), 10 + iSlot))
+					bFakeTarget = IsClientItem(pView->UUID());
+			}
+		}
+		StopFakeTaunt(true);
+		return bFakeTarget;
+	}
+	if (iSlot < 1 || iSlot > 8 || !Vars::Visuals::SkinChanger::Enabled.Value || !I::GlobalVars)
+		return false;
+	auto* pLocal = H::Entities.GetLocal();
+	auto* pInventory = GetLocalInventory();
+	if (!pLocal || !pLocal->IsAlive() || pLocal->IsTaunting() || !pLocal->IsOnGround() || pLocal->m_nWaterLevel() > 2 || !pInventory)
+		return false;
+	const int iClass = pLocal->m_iClass();
+	if (iClass < 1 || iClass > 9)
+		return false;
+	auto* pView = pInventory->GetItemInLoadout(iClass, 10 + iSlot);
+	if (!pView || !IsClientItem(pView->UUID()))
+		return false;
+	auto* pDef = pView->GetStaticData();
+	auto* pTaunt = pDef ? pDef->m_pTauntData() : nullptr;
+	if (!pTaunt)
+		return true;
+
+	const auto SceneForClass = [pTaunt, iClass](size_t uOffset) -> const char*
+	{
+		auto* pVector = reinterpret_cast<uint8_t*>(pTaunt) + uOffset + size_t(iClass) * 32;
+		auto** pScenes = Field<const char**>(pVector, 0);
+		const int iCount = Field<int>(pVector, 16);
+		return pScenes && iCount > 0 ? pScenes[SDK::RandomInt(0, iCount - 1)] : nullptr;
+	};
+	const char* sIntro = SceneForClass(0);
+	const char* sOutro = SceneForClass(352);
+	if (!PlayTauntScene(pLocal, sIntro))
+		return true;
+	m_sTauntOutro = sOutro ? sOutro : "";
+	if (!pLocal->m_nForceTauntCam())
+	{
+		pLocal->m_nForceTauntCam() = 1;
+		m_bTauntCamera = true;
+	}
+
+	auto* pRaw = Field<KeyValues*>(pDef, 8);
+	if (pRaw)
+	{
+		const auto ReadFloat = [pRaw](const char* sName, float flDefault)
+		{
+			const std::string sStatic = std::string("static_attrs/") + sName;
+			const std::string sAttribute = std::string("attributes/") + sName + "/value";
+			return pRaw->GetFloat(sAttribute.c_str(), pRaw->GetFloat(sStatic.c_str(), flDefault));
+		};
+		const auto ReadString = [pRaw](const char* sName)
+		{
+			const std::string sStatic = std::string("static_attrs/") + sName;
+			const std::string sAttribute = std::string("attributes/") + sName + "/value";
+			return std::string(pRaw->GetString(sAttribute.c_str(), pRaw->GetString(sStatic.c_str(), "")));
+		};
+		m_bTauntHold = ReadFloat("taunt is press and hold", 0.f) != 0.f;
+		m_bTauntForceForward = ReadFloat("taunt force move forward", 0.f) != 0.f;
+		m_flTauntMoveSpeed = std::clamp(ReadFloat("taunt move speed", 0.f), 0.f, 450.f);
+		m_flTauntMoveAcceleration = std::max(0.f, ReadFloat("taunt move acceleration time", 0.f));
+		m_sTauntSound = ReadString("taunt success sound");
+		m_sTauntLoopSound = ReadString("taunt success sound loop");
+		m_flTauntSoundTime = I::GlobalVars->curtime + std::max(0.f, ReadFloat("taunt success sound offset", 0.f));
+		m_flTauntLoopSoundTime = I::GlobalVars->curtime + std::max(0.f, ReadFloat("taunt success sound loop offset", 0.f));
+	}
+	return true;
+}
+
+void CSkinChanger::UpdateFakeTaunt(CTFPlayer* pLocal)
+{
+	if (!IsFakeTaunting())
+		return;
+	if (!pLocal || pLocal != m_hTauntOwner.Get() || !pLocal->IsAlive() || pLocal->IsTaunting()
+		|| !Vars::Visuals::SkinChanger::Enabled.Value || !I::GlobalVars)
+	{
+		StopFakeTaunt();
+		return;
+	}
+	const float flNow = I::GlobalVars->curtime;
+	if (S::ClientTaunt_EmitSound())
+	{
+		if (!m_bTauntSoundPlayed && !m_sTauntSound.empty() && flNow >= m_flTauntSoundTime)
+		{
+			S::ClientTaunt_EmitSound.Call<void>(pLocal, m_sTauntSound.c_str(), 0.f, nullptr);
+			m_bTauntSoundPlayed = true;
+		}
+		if (!m_bTauntLoopSoundPlayed && !m_sTauntLoopSound.empty() && flNow >= m_flTauntLoopSoundTime && S::ClientTaunt_PlaySoundLoop())
+		{
+			S::ClientTaunt_PlaySoundLoop.Call<void>(pLocal, m_sTauntLoopSound.c_str());
+			m_bTauntLoopSoundPlayed = true;
+		}
+	}
+	if ((!m_bTauntHold || m_bTauntOutro) && flNow >= m_flTauntEnd)
+		StopFakeTaunt();
+}
+
+void CSkinChanger::FakeTauntMove(CTFPlayer* pLocal, CUserCmd* pCmd)
+{
+	if (!pCmd || pLocal != m_hTauntOwner.Get() || !IsFakeTaunting())
+		return;
+	if ((pCmd->buttons & IN_JUMP) && m_bTauntHold && !m_bTauntOutro)
+		StopFakeTaunt(true);
+	if (!IsFakeTaunting())
+		return;
+
+	const float flMaxSpeed = m_bTauntOutro ? 0.f : m_flTauntMoveSpeed;
+	float flMoveDir = 0.f;
+	if (flMaxSpeed > 0.f)
+	{
+		if (m_bTauntForceForward)
+			flMoveDir = 1.f;
+		else
+			flMoveDir = std::clamp(pCmd->forwardmove / 450.f, -1.f, 1.f);
+
+		if (m_flTauntMoveAcceleration > 0.f)
+		{
+			const float flDelta = (flMoveDir != 0.f ? 1.f : -1.f) * I::GlobalVars->interval_per_tick / m_flTauntMoveAcceleration * flMaxSpeed;
+			m_flTauntCurrentMoveSpeed = std::clamp(m_flTauntCurrentMoveSpeed + flDelta, 0.f, flMaxSpeed);
+		}
+		else
+		{
+			m_flTauntCurrentMoveSpeed = flMaxSpeed;
+		}
+	}
+	else
+	{
+		m_flTauntCurrentMoveSpeed = 0.f;
+	}
+
+	float flSmoothSpeed = 0.f;
+	if (flMaxSpeed > 0.f)
+	{
+		const float flFraction = std::clamp(m_flTauntCurrentMoveSpeed / flMaxSpeed, 0.f, 1.f);
+		flSmoothSpeed = flFraction * flFraction * (3.f - 2.f * flFraction) * flMaxSpeed;
+	}
+	pCmd->forwardmove = flMoveDir * flSmoothSpeed;
+	pCmd->sidemove = 0.f;
+	pCmd->upmove = 0.f;
+	pCmd->buttons &= ~(IN_ATTACK | IN_ATTACK2 | IN_ATTACK3 | IN_JUMP | IN_DUCK | IN_RELOAD | IN_USE);
+	pCmd->weaponselect = 0;
 }
 
 void CSkinChanger::CacheMenuInfo(CTFWeaponBase* pWeapon)
@@ -3157,6 +3509,7 @@ int CSkinChanger::GetItemUnusual(uint64_t uItemID)
 
 void CSkinChanger::OnLevelShutdown()
 {
+	StopFakeTaunt();
 	ResetInventoryHudModel();
 	RestoreWeaponVisuals();
 	ResetWearables(m_hWearableOwner.Get());
@@ -3164,6 +3517,7 @@ void CSkinChanger::OnLevelShutdown()
 
 void CSkinChanger::Unload()
 {
+	StopFakeTaunt();
 	RestoreWeaponVisuals();
 	ResetWearables(m_hWearableOwner.Get());
 	ClearClientItems();
@@ -3285,7 +3639,7 @@ void CSkinChanger::RestoreHiddenWearables() {}
 void CSkinChanger::HideReplacedWearables(CTFPlayer*, int) {}
 void CSkinChanger::RemoveWearable(CTFPlayer*, Wearable_t&) {}
 void CSkinChanger::ClearWearables() {}
-CEconItemView* CSkinChanger::GetWearableView(int, int, int, int, int, int, int, int) { return nullptr; }
+CEconItemView* CSkinChanger::GetWearableView(int, int, int, uint64_t, int, int, int, int, int) { return nullptr; }
 CEconWearable* CSkinChanger::CreateWearable(CTFPlayer*, CEconItemView*, int, int) { return nullptr; }
 bool CSkinChanger::AppendWearable(CTFPlayer*, CEconWearable*) { return false; }
 uint64_t CSkinChanger::FindOwnedWeapon(uint64_t) { return 0; }

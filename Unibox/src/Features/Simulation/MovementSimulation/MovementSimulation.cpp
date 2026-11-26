@@ -118,7 +118,7 @@ static inline void GroundAccelerate(Vec3& vVelocity, const Vec3& vWish, float fl
 		return;
 
 	float flAccelerate = tPhysics.m_flAccelerate;
-	const float flFriction = tPhysics.m_flFriction * flSurface;
+	const float flFriction = tPhysics.m_flFriction;
 	if (flWishSpeed < 100.f * flFriction / flAccelerate && !bLostFooting)
 		flAccelerate = std::max(vVelocity.Length(), tPhysics.m_flStopSpeed) * flFriction / flWishSpeed + 1.f;
 
@@ -201,7 +201,7 @@ static bool CheckStuck(MoveStorage& tMoveStorage)
 
 	for (auto& vOffset : aOffsets)
 	{
-		TraceMove(tMoveStorage, vOrigin + vOffset, vOrigin, trace);
+		TraceMove(tMoveStorage, vOrigin + vOffset, vOrigin + vOffset, trace);
 		if (trace.startsolid)
 			continue;
 
@@ -527,7 +527,7 @@ static void AirMove(MoveStorage& tMoveStorage)
 	Vec3 vWish; float flWishSpeed; GetWish(tMoveStorage, false, vWish, flWishSpeed);
 	const float flAirCurrent = tMoveStorage.m_bAirCurrent ? tPhysics.m_flAirCurrentFriction : 1.f;
 	const float flAccelerate = tPhysics.m_flAirAccelerate * (tMoveStorage.m_bAirCurrent ? tPhysics.m_flAirCurrentControl : 1.f);
-	AirAccelerate(vVelocity, vWish, flWishSpeed, tPhysics.m_flAirCap, flAccelerate, AirSurface(vVelocity.z, tMoveStorage.m_flSurfaceFriction, flAirCurrent));
+	AirAccelerate(vVelocity, vWish, flWishSpeed, tPhysics.m_flAirCap, flAccelerate, tMoveStorage.m_flSurfaceFriction * flAirCurrent);
 
 	TryPlayerMove(tMoveStorage, tMoveStorage.m_bAirCurrent ? std::clamp(1.f - tPhysics.m_flAirCurrentFriction, 0.f, 1.f) : 0.f);
 }
@@ -1403,9 +1403,11 @@ void CMovementSimulation::StoreRecord(CTFPlayer* pPlayer, std::deque<MoveData>& 
 
 void CMovementSimulation::Store()
 {
-	m_vCache.clear();
 	if (I::EngineClient->IsPlayingDemo())
+	{
+		m_vCache.clear();
 		return;
+	}
 
 	const int iLocalIdx = I::EngineClient->GetLocalPlayer();
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerAll))
@@ -1421,12 +1423,15 @@ void CMovementSimulation::Store()
 			vRecords.clear();
 			m_mFits.erase(iIndex);
 			F::NeuralPred.ResetPlayer(iIndex);
+			std::erase_if(m_vCache, [iIndex](const MoveCacheEntry_t& tEntry) { return tEntry.m_iEntIndex == iIndex; });
 			continue;
 		}
 
 		const float flSimTime = pPlayer->m_flSimulationTime();
 		if (!vRecords.empty() && TIME_TO_TICKS(flSimTime) <= TIME_TO_TICKS(vRecords.front().m_flSimTime))
 			continue;
+
+		std::erase_if(m_vCache, [iIndex, flSimTime](const MoveCacheEntry_t& tEntry) { return tEntry.m_iEntIndex == iIndex && tEntry.m_flSimTime != flSimTime; });
 
 		MoveData tRecord = {};
 		tRecord.m_flSimTime = flSimTime;
@@ -1796,10 +1801,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 	PROJ_ZONE(MoveInit);
 
 	if (I::GlobalVars->tickcount != m_iCacheTick)
-	{
-		m_vCache.clear();
 		m_iCacheTick = I::GlobalVars->tickcount;
-	}
 
 	tMoveStorage = {};
 	if (!pEntity || !pEntity->IsPlayer() || !pEntity->As<CTFPlayer>()->IsAlive())
@@ -1818,6 +1820,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 	const float flSimTime = pPlayer->m_flSimulationTime();
 	const Vec3 vStartOrigin = pvOrigin ? *pvOrigin : pPlayer->m_vecOrigin();
 	const int iStrafeFlags = Vars::Aimbot::Projectile::StrafePrediction.Value;
+	const int iChoke = bPredict ? H::Entities.GetChoke(iEntIndex) : 0;
 
 	if (!tMoveStorage.m_bLocal)
 	{
@@ -1825,7 +1828,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 		{
 			const auto& tEntry = m_vCache[iSlot];
 			if (tEntry.m_iEntIndex != iEntIndex || tEntry.m_flSimTime != flSimTime || tEntry.m_vStartOrigin != vStartOrigin
-				|| tEntry.m_bStrafe != bStrafe || tEntry.m_bPredict != bPredict || tEntry.m_iStrafeFlags != iStrafeFlags)
+				|| tEntry.m_bStrafe != bStrafe || tEntry.m_bPredict != bPredict || tEntry.m_iStrafeFlags != iStrafeFlags || tEntry.m_iChoke != iChoke)
 				continue;
 
 			if (tEntry.m_bStuckFailed)
@@ -1869,6 +1872,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 			tEntry.m_bStrafe = bStrafe;
 			tEntry.m_bPredict = bPredict;
 			tEntry.m_iStrafeFlags = iStrafeFlags;
+			tEntry.m_iChoke = iChoke;
 			tEntry.m_bStuckFailed = true;
 			tEntry.m_tInitState = tMoveStorage;
 			m_vCache.push_back(std::move(tEntry));
@@ -1915,6 +1919,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 		tEntry.m_bStrafe = bStrafe;
 		tEntry.m_bPredict = bPredict;
 		tEntry.m_iStrafeFlags = iStrafeFlags;
+		tEntry.m_iChoke = iChoke;
 		tEntry.m_bStuckFailed = false;
 		tEntry.m_bFitted = bFitted;
 		tEntry.m_flConfidence = flConfidence;
@@ -1923,8 +1928,10 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tMoveSto
 		tEntry.m_tFrontier.m_iCacheSlot = -1;
 		tEntry.m_tFrontier.m_vPath.clear();
 		tEntry.m_vSteps.reserve(256);
+		if (m_vCache.size() >= 128)
+			m_vCache.erase(m_vCache.begin());
 		m_vCache.push_back(std::move(tEntry));
-		tMoveStorage.m_iCacheSlot = iSlot;
+		tMoveStorage.m_iCacheSlot = int(m_vCache.size()) - 1;
 		tMoveStorage.m_iCacheStep = 0;
 		tMoveStorage.m_bCached = false;
 	}
@@ -2170,20 +2177,24 @@ void CMovementSimulation::RunTick(MoveStorage& tMoveStorage, bool bPath, RunTick
 	if (!pCallback && tMoveStorage.m_iCacheSlot >= 0 && tMoveStorage.m_iCacheSlot < int(m_vCache.size()))
 	{
 		auto& tEntry = m_vCache[tMoveStorage.m_iCacheSlot];
-		if (tMoveStorage.m_iCacheStep < int(tEntry.m_vSteps.size()))
+		if (tEntry.m_iEntIndex == tMoveStorage.m_pPlayer->entindex())
 		{
-			PROJ_COUNT(MoveTicks);
-			PROJ_COUNT(MoveTicksCached);
+			if (tMoveStorage.m_iCacheStep < int(tEntry.m_vSteps.size()))
+			{
+				PROJ_COUNT(MoveTicks);
+				PROJ_COUNT(MoveTicksCached);
 
-			ApplyCacheStep(tMoveStorage, tEntry.m_vSteps[tMoveStorage.m_iCacheStep++], bPath);
+				ApplyCacheStep(tMoveStorage, tEntry.m_vSteps[tMoveStorage.m_iCacheStep++], bPath);
+				return;
+			}
+
+			StepTick(tEntry.m_tFrontier, false, nullptr);
+			tEntry.m_vSteps.push_back(MakeCacheStep(tEntry.m_tFrontier));
+			tMoveStorage.m_iCacheStep++;
+			ApplyCacheStep(tMoveStorage, tEntry.m_vSteps.back(), bPath);
 			return;
 		}
-
-		StepTick(tEntry.m_tFrontier, false, nullptr);
-		tEntry.m_vSteps.push_back(MakeCacheStep(tEntry.m_tFrontier));
-		tMoveStorage.m_iCacheStep++;
-		ApplyCacheStep(tMoveStorage, tEntry.m_vSteps.back(), bPath);
-		return;
+		tMoveStorage.m_iCacheSlot = -1;
 	}
 
 	StepTick(tMoveStorage, bPath, pCallback);

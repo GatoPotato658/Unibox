@@ -30,6 +30,7 @@ MAKE_HOOK(CHLClient_LevelShutdown, U::Memory.GetVirtual(I::Client, 7), void,
 	F::AutoTranslate.OnLevelShutdown();
 	F::NetworkFix.Reset();
 	F::Chams.Reset();
+	F::D3DMaterials.ClearCache();
 	F::Hitmarker.Clear();
 	H::Entities.RemovePrecipitation(false);
 	H::Entities.Clear(true);

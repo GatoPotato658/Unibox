@@ -26,17 +26,15 @@ MAKE_HOOK(CWeaponMedigun_PrimaryAttack, S::CWeaponMedigun_PrimaryAttack(), void,
 
 	auto pCmd = pOwner->m_pCurrentCommand();
 	float flTargetTime = TICKS_TO_TIME(pCmd->tick_count - TIME_TO_TICKS(F::Backtrack.GetFakeInterp()));
+	static thread_local std::vector<TickRecord*> vRecords = {};
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerTeam))
 	{
 		auto pPlayer = pEntity->As<CTFPlayer>();
 		if (pPlayer == pOwner || pPlayer->IsDormant() || !pPlayer->IsAlive() || pPlayer->IsAGhost())
 			continue;
 
-		std::vector<TickRecord*> vRecords = {};
-		if (!F::Backtrack.GetRecords(pEntity, vRecords))
-			continue;
-		vRecords = F::Backtrack.GetValidRecords(vRecords);
-		if (!vRecords.size())
+		F::Backtrack.GetValidRecords(pEntity, vRecords);
+		if (vRecords.empty())
 			continue;
 
 		for (auto pRecord : vRecords)

@@ -6,7 +6,8 @@ MAKE_SIGNATURE(TFInventoryManager, "client.dll", "48 8D 05 ? ? ? ? C3 CC CC CC C
 MAKE_SIGNATURE(CTFPlayerInventory_GetFirstItemOfItemDef, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B FA 0F B7 E9", 0x0);
 MAKE_SIGNATURE(CEconItemView_GetStaticData, "client.dll", "40 53 48 83 EC ? 0F B7 59 48 E8 ? ? ? ? 48 8B C8 8B D3 E8 ? ? ? ? 4C 8D 0D ? ? ? ? C7 44 24 ? ? ? ? ? 4C 8D 05 ? ? ? ? 33 D2 48 8B C8 E8 ? ? ? ? 48 83 C4 ? 5B C3 CC 48 83 C1", 0x0);
 MAKE_SIGNATURE(TFItemSystem_GetItemSchema, "client.dll", "48 83 EC 28 E8 ?? ?? ?? ?? 48 83 C0 08 48 83 C4 28 C3", 0x0);
-MAKE_SIGNATURE(CEconItemSchema_GetItemDefinition, "client.dll", "89 54 24 ? 53 48 83 EC 20 48 8B D9 48 8D 54 24 ? 48 81 C1 00 01 00 00", 0x0);
+MAKE_SIGNATURE(CEconItemSchema_GetItemDefinition, "client.dll", "89 54 24 ? 53 48 83 EC 20 48 8B D9 48 8D 54 24 ? 48 81 C1 ? ? ? ? E8 ? ? ? ? 85 C0 78 ? 3B 83 ? ? ? ? 7D ? 8B D0 48 8B 83 ? ? ? ? 48 8D 0C 52 83 7C C8 ? FF 7C ? 48 8D 0C 52 48 8B 44 C8 ?", 0x0);
+MAKE_SIGNATURE(CTFPlayerInventory_GetFirstItemOfItemDef_Offsets, "client.dll", "33 DB 39 5F ? 7E ? 8B C3 48 69 F0 ? ? ? ? 48 03 77 ? 48 8B 46 ? 48 8D 4E ? FF 90 ? ? ? ? 66 3B C5", 0x0);
 MAKE_SIGNATURE(GetMvmTourBadgeMask, "client.dll", "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 81 EC 80 00 00 00 45 33 FF 8B D9 44 89 3A 4D 8B E0 45 89 38", 0x0);
 
 class CTFItemDefinition;
@@ -23,12 +24,14 @@ public:
 
 	inline int GetItemDefCount()
 	{
-		return *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + 336);
+		static const int iOffset = S::CEconItemSchema_GetItemDefinition.ReadAt<int>(35);
+		return *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + iOffset);
 	}
 
 	inline void* GetItemDefEntry(int iIndex)
 	{
-		uintptr_t uData = *reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(this) + 312);
+		static const int iOffset = S::CEconItemSchema_GetItemDefinition.ReadAt<int>(46);
+		uintptr_t uData = *reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(this) + iOffset);
 		return reinterpret_cast<void*>(uData + iIndex * 24);
 	}
 
@@ -110,12 +113,14 @@ public:
 
 	inline int GetItemCount() 
 	{
-		return *reinterpret_cast<int*>(this + 112);
+		static const int iOffset = S::CTFPlayerInventory_GetFirstItemOfItemDef_Offsets.ReadAt<uint8_t>(4);
+		return *reinterpret_cast<int*>(uintptr_t(this) + iOffset);
 	}
 
 	inline CEconItemView* GetItem(int idx)
 	{
-		uintptr_t uStart = *(uintptr_t*)(this + 96);
+		static const int iOffset = S::CTFPlayerInventory_GetFirstItemOfItemDef_Offsets.ReadAt<uint8_t>(19);
+		uintptr_t uStart = *reinterpret_cast<uintptr_t*>(uintptr_t(this) + iOffset);
 		uintptr_t nOffset = idx * SIZE_OF_ITEMVIEW;
 		return reinterpret_cast<CEconItemView*>(uStart + nOffset);
 	}

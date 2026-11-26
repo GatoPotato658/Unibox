@@ -452,26 +452,45 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 	Vec3 vSwingMaxs = { flHull, flHull, flHull };
 	auto& vSimRecords = m_mRecordMap[tTarget.m_pEntity->entindex()];
 
-	std::vector<TickRecord*> vRecords = {};
-	if (F::Backtrack.GetRecords(tTarget.m_pEntity, vRecords))
+	static thread_local std::vector<TickRecord*> vRawRecords = {};
+	static thread_local std::vector<TickRecord*> vRecords = {};
+	vRawRecords.clear();
+	vRecords.clear();
+	if (F::Backtrack.GetRecords(tTarget.m_pEntity, vRawRecords))
 	{
 		const auto vTimeMods = GetTimeMods();
 
 		for (auto& tRecord : vSimRecords)
-			vRecords.push_back(&tRecord);
+			vRawRecords.push_back(&tRecord);
 		for (auto iTimeMod : vTimeMods)
-			vRecords = F::Backtrack.GetValidRecords(vRecords, pLocal, true, -TICKS_TO_TIME(iTimeMod));
+		{
+			F::Backtrack.GetValidRecords(vRawRecords, vRecords, pLocal, true, -TICKS_TO_TIME(iTimeMod));
+			vRawRecords.swap(vRecords);
+		}
+		vRecords.swap(vRawRecords);
 		if (vRecords.empty())
 			return false;
 	}
 	else
 	{
-		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
+		F::Backtrack.m_tRecord.m_flSimTime = tTarget.m_pEntity->m_flSimulationTime();
+		F::Backtrack.m_tRecord.m_vOrigin = tTarget.m_pEntity->m_vecOrigin();
+		F::Backtrack.m_tRecord.m_vMins = tTarget.m_pEntity->m_vecMins();
+		F::Backtrack.m_tRecord.m_vMaxs = tTarget.m_pEntity->m_vecMaxs();
+		F::Backtrack.m_tRecord.m_bOnShot = false;
+		F::Backtrack.m_tRecord.m_bInvalid = false;
 		F::Backtrack.m_tRecord.m_flModelScale = tTarget.m_pEntity->As<CBaseAnimating>()->m_flModelScale();
-		if (!tTarget.m_pEntity->As<CBaseAnimating>()->SetupAimBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
-			return false;
+		F::Backtrack.m_tRecord.m_pRenderBones.reset();
+		if (tTarget.m_pEntity->IsPlayer())
+		{
+			F::Backtrack.SetSettingUpBones(true);
+			const bool bSetup = tTarget.m_pEntity->As<CBaseAnimating>()->SetupAimBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_HITBOX, tTarget.m_pEntity->m_flSimulationTime());
+			F::Backtrack.SetSettingUpBones(false);
+			if (!bSetup)
+				return false;
+		}
 
-		vRecords = { &F::Backtrack.m_tRecord };
+		vRecords.push_back(&F::Backtrack.m_tRecord);
 	}
 
 	CGameTrace trace = {};
@@ -705,6 +724,7 @@ void CAimbotMelee::BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapo
 		flRange *= pLocal->m_flModelScale();
 
 	CrosshairRecord_t tBest = {};
+	static thread_local std::vector<TickRecord*> vRecords;
 	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerEnemy))
 	{
 		const auto pPlayer = pEntity->As<CTFPlayer>();
@@ -713,11 +733,10 @@ void CAimbotMelee::BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapo
 			|| pPlayer->IsInvulnerable())
 			continue;
 
-		std::vector<TickRecord*> vRecords;
-		if (!F::Backtrack.GetRecords(pEntity, vRecords))
+		F::Backtrack.GetValidRecords(pEntity, vRecords);
+		if (vRecords.empty())
 			continue;
 
-		vRecords = F::Backtrack.GetValidRecords(vRecords);
 		const CrosshairRecord_t tRecord = F::AimbotGlobal.GetCrosshairRecord(pLocal, pEntity, vShootPos, vForward, flRange, vRecords);
 		if (tRecord.m_flSimTime != -1.f && tRecord.m_flDist < tBest.m_flDist)
 			tBest = tRecord;

@@ -107,6 +107,7 @@ public:
 	void Uncache();
 
 	std::vector<Face_t> GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask = MASK_SOLID, ITraceFilter* pFilter = nullptr, int iFlags = FaceTypeEnum::All, bool bCacheQuery = false);
+	void GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCacheQuery, std::vector<Face_t>& vOut);
 	void ProbePlayerGeometry(const Vec3& vOrigin, float flEyeYawDeg, bool bDucked, ITraceFilter* pFilter, float& flGroundDist, Vec3& vGroundNormal, float& flCeilingDist, float aWallDists[8], float aLedgeDepths[8], bool& bWallContact);
 
 	void SetNormalValidCallback(NormalValidCallback* pCallback = nullptr);

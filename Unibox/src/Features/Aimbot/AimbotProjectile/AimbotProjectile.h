@@ -101,7 +101,48 @@ struct Offset_t
 	uint8_t m_iFlags;
 	bool m_bHead = false;
 };
-using Directs_t = std::unordered_map<uint8_t, Offset_t>;
+
+template <typename K, typename V, size_t N>
+struct FlatSmallMap_t
+{
+	std::array<std::pair<K, V>, N> m_aItems = {};
+	uint8_t m_uSize = 0;
+
+	using iterator = typename std::array<std::pair<K, V>, N>::iterator;
+	using const_iterator = typename std::array<std::pair<K, V>, N>::const_iterator;
+
+	iterator begin() { return m_aItems.begin(); }
+	iterator end() { return m_aItems.begin() + m_uSize; }
+	const_iterator begin() const { return m_aItems.begin(); }
+	const_iterator end() const { return m_aItems.begin() + m_uSize; }
+	bool empty() const { return m_uSize == 0; }
+	size_t size() const { return m_uSize; }
+
+	V& operator[](const K& key)
+	{
+		for (uint8_t i = 0; i < m_uSize; ++i)
+		{
+			if (m_aItems[i].first == key)
+				return m_aItems[i].second;
+		}
+		auto& item = m_aItems[m_uSize++];
+		item.first = key;
+		item.second = V{};
+		return item.second;
+	}
+
+	iterator erase(iterator it)
+	{
+		const size_t idx = size_t(it - m_aItems.begin());
+		for (size_t i = idx + 1; i < m_uSize; ++i)
+			m_aItems[i - 1] = std::move(m_aItems[i]);
+		if (m_uSize > 0)
+			--m_uSize;
+		return m_aItems.begin() + idx;
+	}
+};
+
+using Directs_t = FlatSmallMap_t<uint8_t, Offset_t, 3>;
 using Splashes_t = std::vector<uint8_t>;
 
 struct History_t
@@ -122,8 +163,8 @@ struct Splash_t : History_t
 {
 	float m_flTimeTo;
 };
-using DirectHistory_t = std::unordered_map<uint8_t, std::vector<Direct_t>>;
-using SplashHistory_t = std::unordered_map<uint8_t, std::vector<Splash_t>>;
+using DirectHistory_t = FlatSmallMap_t<uint8_t, std::vector<Direct_t>, 2>;
+using SplashHistory_t = FlatSmallMap_t<uint8_t, std::vector<Splash_t>, 2>;
 
 struct PasstimePlan_t
 {

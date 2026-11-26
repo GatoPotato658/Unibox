@@ -2,6 +2,9 @@
 
 #include "../Features/Commands/Commands.h"
 #include "../Features/AntiCheatCompatibility/AntiCheatCompatibility.h"
+#ifndef TEXTMODE
+#include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#endif
 //#include "../Features/Debug/Debug.h"
 
 MAKE_SIGNATURE(Cbuf_ExecuteCommand, "engine.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B 05 ? ? ? ? 48 8D 3D", 0x0);
@@ -21,6 +24,18 @@ MAKE_HOOK(Cbuf_ExecuteCommand, S::Cbuf_ExecuteCommand(), void,
 
 	if (args.ArgC())
 	{
+#ifndef TEXTMODE
+		if (source == src_command && !_stricmp(args[0], "taunt") && args.ArgC() == 2 && F::SkinChanger.HandleFakeTauntCommand(atoi(args[1])))
+			return;
+		if (source == src_command && F::SkinChanger.IsFakeTaunting()
+			&& (!_stricmp(args[0], "stop_taunt") || !_stricmp(args[0], "+taunt") || !_stricmp(args[0], "-taunt")
+				|| (args.ArgC() == 1 && (!_stricmp(args[0], "taunt") || !_stricmp(args[0], "weapon_taunt")))))
+		{
+			F::SkinChanger.HandleFakeTauntCommand(-1);
+			return;
+		}
+#endif
+
 		if (F::AntiCheatCompatibility.Active())
 		{
 			if (std::string_view(args.GetCommandString()).find("playerperf") != std::string_view::npos)

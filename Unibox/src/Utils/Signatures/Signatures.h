@@ -27,7 +27,13 @@ public:
 		return reinterpret_cast<T>(m_dwVal);
 	}
 
-	template <typename T, typename... Args> 
+	template <typename T>
+	inline T ReadAt(size_t uAt) const
+	{
+		return *reinterpret_cast<const T*>(m_dwVal + uAt);
+	}
+
+	template <typename T, typename... Args>
 	inline T Call(Args... args) const
 	{
 		return reinterpret_cast<T(__fastcall*)(Args...)>(m_dwVal)(args...);

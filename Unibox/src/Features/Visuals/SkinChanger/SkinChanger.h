@@ -159,12 +159,34 @@ class CSkinChanger
 	{
 		alignas(16) uint8_t aData[SIZE_OF_ITEMVIEW] = {};
 	};
+	struct HiddenWearable_t
+	{
+		CHandle<CEconWearable> hEntity = {};
+		int iIndex = -1;
+	};
 	std::array<Wearable_t, 19> m_aWearables = {};
-	std::array<CHandle<CEconWearable>, 8> m_aHiddenWearables = {};
+	std::array<HiddenWearable_t, 8> m_aHiddenWearables = {};
 	std::array<LoadoutView_t, 19> m_aWearableViews = {};
 	uint64_t m_aWearableViewKey[19] = {};
 	bool m_aWearableViewBuilt[19] = {};
 	CHandle<CTFPlayer> m_hWearableOwner = {};
+	CHandle<CBaseEntity> m_hTauntScene = {};
+	CHandle<CTFPlayer> m_hTauntOwner = {};
+	std::string m_sTauntOutro;
+	std::string m_sTauntSound;
+	std::string m_sTauntLoopSound;
+	float m_flTauntEnd = 0.f;
+	float m_flTauntSoundTime = 0.f;
+	float m_flTauntLoopSoundTime = 0.f;
+	float m_flTauntMoveSpeed = 0.f;
+	float m_flTauntMoveAcceleration = 0.f;
+	float m_flTauntCurrentMoveSpeed = 0.f;
+	bool m_bTauntHold = false;
+	bool m_bTauntOutro = false;
+	bool m_bTauntForceForward = false;
+	bool m_bTauntSoundPlayed = false;
+	bool m_bTauntLoopSoundPlayed = false;
+	bool m_bTauntCamera = false;
 
 	std::unordered_map<int, Tracked_t> m_mTracked;
 	bool m_bWasEnabled = false;
@@ -193,9 +215,12 @@ class CSkinChanger
 	void RestoreHiddenWearables();
 	void HideReplacedWearables(CTFPlayer* pLocal, int iClass);
 	void RemoveWearable(CTFPlayer* pLocal, Wearable_t& tWearable);
-	CEconItemView* GetWearableView(int iClass, int iSlot, int iTeam, int iDef, int iUnusual, int iPaintColor, int iPaintColor2, int iStyle);
+	CEconItemView* GetWearableView(int iClass, int iSlot, int iTeam, uint64_t uItemID, int iDef, int iUnusual, int iPaintColor, int iPaintColor2, int iStyle);
 	CEconWearable* CreateWearable(CTFPlayer* pLocal, CEconItemView* pView, int iClass, int iTeam);
 	bool AppendWearable(CTFPlayer* pLocal, CEconWearable* pWearable);
+	bool PlayTauntScene(CTFPlayer* pLocal, const char* sScene);
+	void StopFakeTaunt(bool bOutro = false);
+	void UpdateFakeTaunt(CTFPlayer* pLocal);
 
 public:
 	void Apply();
@@ -204,6 +229,9 @@ public:
 	void OnLevelShutdown();
 	void Unload();
 	void ClearWearables();
+	bool HandleFakeTauntCommand(int iSlot);
+	bool IsFakeTaunting() const;
+	void FakeTauntMove(CTFPlayer* pLocal, CUserCmd* pCmd);
 
 	bool ClientInventoryActive();
 	bool IsClientItem(uint64_t uItemID);

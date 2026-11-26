@@ -6,10 +6,13 @@ MAKE_SIGNATURE(CGCClientSharedObjectCache_FindTypeCache, "client.dll", "48 89 5C
 
 MAKE_SIGNATURE(CTFGCClientSystem_PingThink, "client.dll", "40 55 41 54 41 55 48 8D AC 24", 0x0);
 MAKE_SIGNATURE(CTFGCClientSystem_GetParty, "client.dll", "48 83 EC ? 48 8B 89 ? ? ? ? 48 85 C9 74 ? BA ? ? ? ? E8 ? ? ? ? 48 85 C0 74 ? 8B 48 ? 85 C9 74 ? 48 8B 40 ? FF C9", 0x0);
+MAKE_SIGNATURE(CTFGCClientSystem_PingThink_PendingPingRefreshOffset, "client.dll", "41 80 BD ? ? ? ? 00 75 ? 3B FB 76 ? 41 C6 85 ? ? ? ? 01 0F 57 C9", 0x0);
+MAKE_SIGNATURE(CTFGCClientSystem_OnLobbyUpdated_NonPremiumOffset, "client.dll", "FF 10 0F B6 48 ? 41 88 8F ? ? ? ? EB ? 48 8D 0D", 0x0);
 MAKE_SIGNATURE(CTFGCClientSystem_AbandonCurrentMatch, "client.dll", "48 83 EC ? 48 89 5C 24 ? 48 8B D9 48 8D 0D ? ? ? ? 48 89 74 24", 0x0);
 MAKE_SIGNATURE(CTFGCClientSystem_JoinMMMatch, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B D9 48 81 C1 ? ? ? ? E8 ? ? ? ? 84 C0 0F 84", 0x0);
 MAKE_SIGNATURE(CTFGCClientSystem_RequestAcceptMatchInvite, "client.dll", "41 55 41 56 48 83 EC ? 48 83 B9", 0x0);
 
+MAKE_SIGNATURE(CTFParty_MembersOffset, "client.dll", "48 89 54 24 10 53 48 83 EC 50 48 8B D9 48 8B 49 ? 48 85 C9 0F 84 ? ? ? ? 80 7B ? 00 0F 84 ? ? ? ? 48 81 C1 ? ? ? ? 48 8D 54 24 68 48 8B 01 FF 50 20 83 F8 FF 0F 84 ? ? ? ? BA AF 19 00 00", 0x0);
 MAKE_SIGNATURE(CTFParty_SpewDebug, "client.dll", "4C 8B DC 41 56 48 81 EC ? ? ? ? 8B 05", 0x0);
 
 class CGCClientSharedObjectTypeCache
@@ -17,7 +20,8 @@ class CGCClientSharedObjectTypeCache
 public:
 	inline int GetCacheCount()
 	{
-		return *reinterpret_cast<int*>(uintptr_t(this) + 40);
+		static const int iOffset = S::CTFGCClientSystem_GetParty.ReadAt<uint8_t>(33);
+		return *reinterpret_cast<int*>(uintptr_t(this) + iOffset);
 	}
 };
 
@@ -93,8 +97,14 @@ public:
 class CTFParty
 {
 public:
-	VIRTUAL(GetNumMembers, int64, 2, uintptr_t(this) + 184);
-	VIRTUAL_ARGS(GetMember, CSteamID*, 3, (CSteamID* pSteamID, int i), uintptr_t(this) + 184, pSteamID, i);
+	inline uintptr_t Members()
+	{
+		static const int iOffset = S::CTFParty_MembersOffset.ReadAt<int>(39);
+		return uintptr_t(this) + iOffset;
+	}
+
+	VIRTUAL(GetNumMembers, int64, 2, Members());
+	VIRTUAL_ARGS(GetMember, CSteamID*, 3, (CSteamID* pSteamID, int i), Members(), pSteamID, i);
 
 	SIGNATURE(SpewDebug, void, CTFParty, this);
 };
@@ -110,7 +120,8 @@ public:
 
 	inline CGCClientSharedObjectCache* m_pSOCache()
 	{
-		return *reinterpret_cast<CGCClientSharedObjectCache**>(uintptr_t(this) + 1072);
+		static const int iOffset = S::CTFGCClientSystem_GetParty.ReadAt<int>(7);
+		return *reinterpret_cast<CGCClientSharedObjectCache**>(uintptr_t(this) + iOffset);
 	}
 
 	inline CTFLobbyShared* GetLobby()
@@ -127,7 +138,8 @@ public:
 		if (!iCacheCount)
 			return nullptr;
 
-		auto pLobby = *reinterpret_cast<CTFLobbyShared**>(*reinterpret_cast<uintptr_t*>(uintptr_t(pTypeCache) + 8) + 8 * uintptr_t(iCacheCount - 1));
+		static const int iArrayOffset = S::CTFGCClientSystem_GetParty.ReadAt<uint8_t>(41);
+		auto pLobby = *reinterpret_cast<CTFLobbyShared**>(*reinterpret_cast<uintptr_t*>(uintptr_t(pTypeCache) + iArrayOffset) + 8 * uintptr_t(iCacheCount - 1));
 		if (!pLobby)
 			return nullptr;
 
@@ -136,12 +148,14 @@ public:
 
 	inline void SetPendingPingRefresh(bool bValue)
 	{
-		*reinterpret_cast<bool*>(uintptr_t(this) + 1116) = bValue;
+		static const int iOffset = S::CTFGCClientSystem_PingThink_PendingPingRefreshOffset.ReadAt<int>(3);
+		*reinterpret_cast<bool*>(uintptr_t(this) + iOffset) = bValue;
 	}
 
 	inline void SetNonPremiumAccount(bool bValue)
 	{
-		*reinterpret_cast<bool*>(uintptr_t(this) + 1888) = bValue;
+		static const int iOffset = S::CTFGCClientSystem_OnLobbyUpdated_NonPremiumOffset.ReadAt<int>(9);
+		*reinterpret_cast<bool*>(uintptr_t(this) + iOffset) = bValue;
 	}
 };
 

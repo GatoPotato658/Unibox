@@ -12,6 +12,9 @@
 #include "../Resolver/Resolver.h"
 #include "../Ticks/Ticks.h"
 #include "../Visuals/Visuals.h"
+#ifndef TEXTMODE
+#include "../Visuals/SkinChanger/SkinChanger.h"
+#endif
 #include "../Visuals/FakeAngle/FakeAngle.h"
 #include "../Spectate/Spectate.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
@@ -102,6 +105,9 @@ void CCreateMove::Run(int nSequenceNum, float flInputSampleFrametime)
 		F::Ticks.CreateMove(pLocal, pWeapon, pCmd);
 		F::AntiAim.Run(pLocal, pWeapon, pCmd);
 		F::AntiCheatCompatibility.CreateMove(pCmd);
+#ifndef TEXTMODE
+		F::SkinChanger.FakeTauntMove(pLocal, pCmd);
+#endif
 		
 #ifndef TEXTMODE
 		F::Visuals.CreateMove(pLocal, pWeapon, pCmd);

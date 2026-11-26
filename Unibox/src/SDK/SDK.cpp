@@ -1466,7 +1466,15 @@ void SDK::GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vO
 	{
 		bool bFlipped = pPlayer->m_bFlipViewModels();
 		if (auto pWeapon = pPlayer->m_hActiveWeapon()->As<CBaseCombatWeapon>())
+		{
 			bFlipped = pWeapon->m_bFlipViewModel() != bFlipped;
+			if (auto pTFWeapon = pWeapon->As<CTFWeaponBase>())
+			{
+				const int iID = pTFWeapon->GetWeaponID();
+				if (iID == TF_WEAPON_CROSSBOW || iID == TF_WEAPON_SHOTGUN_BUILDING_RESCUE)
+					bFlipped = !bFlipped;
+			}
+		}
 		if (bFlipped)
 			vOffset.y *= -1.f;
 	}

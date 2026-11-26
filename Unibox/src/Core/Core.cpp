@@ -10,6 +10,7 @@
 #include "../Features/Configs/Configs.h"
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
+#include "../Features/World/World.h"
 #include "../Features/Simulation/NeuralPrediction/NeuralPrediction.h"
 #include "../Features/Visuals/Materials/Materials.h"
 #ifndef TEXTMODE
@@ -229,6 +230,8 @@ void CCore::Load()
 			return;
 	}
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
+	if (I::EngineClient->IsInGame() && I::BSPData && I::BSPData->numbrushes > 0 && I::MDLCache && I::MDLCache->m_bConnected)
+		F::World.Cache();
 	SDK::Output("unibox", std::format("Loaded (dxlevel {})", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 #ifndef TEXTMODE
 	F::Render.SetStartupStage(CRender::StartupStage::MenuAssets);

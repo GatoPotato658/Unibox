@@ -163,6 +163,7 @@ private:
 		bool m_bStrafe = true;
 		bool m_bPredict = true;
 		int m_iStrafeFlags = 0;
+		int m_iChoke = 0;
 		bool m_bStuckFailed = false;
 		bool m_bFitted = false;
 		float m_flConfidence = 0.f;

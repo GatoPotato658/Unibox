@@ -463,7 +463,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AccountPing, "Account for ping", true, DEBUGVAR);
 			CVar(AutodetAccountPing, "Auto detonate account for ping", true, DEBUGVAR);
 
-			CVar(LagProfile, "Lag profiler", true, NOSAVE | DEBUGVAR);
+			CVar(LagProfile, "Lag profiler", false, NOSAVE | DEBUGVAR);
 			CVar(LagProfileFPS, "Lag profiler FPS", 30, NOSAVE | DEBUGVAR | SLIDER_MIN, 5, 144);
 		NAMESPACE_END(Projectile)
 

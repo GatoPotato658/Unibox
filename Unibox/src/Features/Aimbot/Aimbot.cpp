@@ -149,7 +149,7 @@ void CAimbot::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	RunMain(pLocal, pWeapon, pCmd);
 
 #ifndef TEXTMODE
-	if (G::PrimaryWeaponType == EWeaponType::PROJECTILE || G::SecondaryWeaponType == EWeaponType::PROJECTILE)
+	if (!F::AutoRocketJump.IsRunning() && (G::PrimaryWeaponType == EWeaponType::PROJECTILE || G::SecondaryWeaponType == EWeaponType::PROJECTILE))
 		F::AimbotProjectile.RunPreview(pLocal, pWeapon);
 #endif
 

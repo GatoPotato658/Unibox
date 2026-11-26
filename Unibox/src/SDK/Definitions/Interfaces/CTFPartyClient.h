@@ -4,11 +4,11 @@
 class CTFParty;
 
 MAKE_SIGNATURE(CTFPartyClient_SendPartyChat, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 57 48 83 EC ? 48 C7 C3", 0x0);
-MAKE_SIGNATURE(CTFPartyClient_LoadSavedCasualCriteria, "client.dll", "48 83 79 ? ? C6 81 ? ? ? ? ? 74 ? 80 79 ? ? 74 ? C6 81 ? ? ? ? ? 48 8B 15", 0x0);
+MAKE_SIGNATURE(CTFPartyClient_LoadSavedCasualCriteria, "client.dll", "48 83 79 ? ? C6 81 ? ? ? ? ? 74 ? 80 79 ? ? 74 ? C6 81 ? ? ? ? ? 48 8B 15 ? ? ? ? 48 81 C1 ? ? ? ?", 0x0);
 MAKE_SIGNATURE(CTFPartyClient_BInQueueForMatchGroup, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 48 8B F9 8B DA 8B CA E8 ? ? ? ? 84 C0", 0x0);
 MAKE_SIGNATURE(CTFPartyClient_RequestQueueForMatch, "client.dll", "40 55 56 48 81 EC ? ? ? ? 48 63 F2", 0x0);
 MAKE_SIGNATURE(CTFPartyClient_CancelMatchQueueRequest, "client.dll", "40 55 56 48 83 EC ? 48 63 F2", 0x0);
-MAKE_SIGNATURE(CTFPartyClient_PromoteToLeader, "client.dll", "48 89 54 24 10 53 48 83 EC 50 48 8B D9 48 8B 49 30 48 85 C9 0F 84 ?? ?? ?? ?? 80 7B 40 00 0F 84 ?? ?? ?? ?? 48 81 C1 B8 00 00 00 48 8D 54 24 68 48 8B 01 FF 50 20 83 F8 FF 0F 84 ?? ?? ?? ?? BA AF 19 00 00 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B 4C 24 40 48 8B 43 38", 0x0);
+MAKE_SIGNATURE(CTFPartyClient_PromoteToLeader, "client.dll", "48 89 54 24 10 53 48 83 EC 50 48 8B D9 48 8B 49 ? 48 85 C9 0F 84 ?? ?? ?? ?? 80 7B ? 00 0F 84 ?? ?? ?? ?? 48 81 C1 ? ? ? ? 48 8D 54 24 68 48 8B 01 FF 50 20 83 F8 FF 0F 84 ?? ?? ?? ?? BA AF 19 00 00 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B 4C 24 40 48 8B 43 38", 0x0);
 MAKE_SIGNATURE(CCasualCriteriaHelper_CCasualCriteriaHelper, "client.dll", "48 89 5C 24 ? 56 57 41 57 48 83 EC ? 0F 57 C0", 0x0);
 MAKE_SIGNATURE(CTFGroupMatchCriteriaProto_DefaultInstance, "client.dll", "48 8B 05 ? ? ? ? 48 8B 50 ? 48 8D 4C 24 ? E8 ? ? ? ? 44 8B 44 24", 0x0);
 MAKE_SIGNATURE(Protobuf_RepeatedStrings_Reserve, "client.dll", "89 54 24 10 53 48 83 EC 20 8B 41 10 48 8B D9 3B C2 7D ?? 03 C0", 0x0);
@@ -168,16 +168,22 @@ public:
 	SIGNATURE_ARGS(CancelMatchQueueRequest, void, CTFPartyClient, (int eMatchGroup), this, eMatchGroup);
 	SIGNATURE_ARGS(PromoteToLeader, bool, CTFPartyClient, (uint64 uNewLeaderSteamID), this, uNewLeaderSteamID);
 
-	OFFSET_EMBED(m_localGroupCriteria, CTFGroupMatchCriteria*, 432);
+	CTFGroupMatchCriteria* m_localGroupCriteria()
+	{
+		static const int iOffset = S::CTFPartyClient_LoadSavedCasualCriteria.ReadAt<int>(37);
+		return reinterpret_cast<CTFGroupMatchCriteria*>(uintptr_t(this) + iOffset);
+	}
 
 	CTFParty* GetParty()
 	{
-		return *reinterpret_cast<CTFParty**>(uintptr_t(this) + 48);
+		static const int iOffset = S::CTFPartyClient_LoadSavedCasualCriteria.ReadAt<uint8_t>(3);
+		return *reinterpret_cast<CTFParty**>(uintptr_t(this) + iOffset);
 	}
 
 	bool BIsLocalPlayerLeader()
 	{
-		return *reinterpret_cast<bool*>(uintptr_t(this) + 64);
+		static const int iOffset = S::CTFPartyClient_LoadSavedCasualCriteria.ReadAt<uint8_t>(16);
+		return *reinterpret_cast<bool*>(uintptr_t(this) + iOffset);
 	}
 
 	bool AnySelected()

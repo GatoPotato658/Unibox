@@ -2,9 +2,12 @@
 #include "../../SDK/SDK.h"
 #include "../ImGui/IndicatorCache.h"
 
+#include "Chams/Chams.h"
+
 struct ImDrawList;
 
 void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags);
+void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags, const std::vector<CChams::ActiveLayer_t>& vVisible, const std::vector<CChams::ActiveLayer_t>& vOccluded, IMatRenderContext* pRenderContext, int iStencilRef, bool bSame);
 
 struct Projectile_t
 {

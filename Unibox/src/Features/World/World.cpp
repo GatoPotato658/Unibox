@@ -502,15 +502,15 @@ void CWorld::CollectFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask,
 	}
 }
 
-std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCacheQuery)
+void CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCacheQuery, std::vector<Face_t>& vFaces)
 {
 	Cache();
 
-	std::vector<Face_t> vFaces;
+	vFaces.clear();
 	if (!bCacheQuery)
 	{
 		CollectFacesInAABB(vMins, vMaxs, iMask, pFilter, iFlags, true, vFaces);
-		return vFaces;
+		return;
 	}
 
 	const int iTick = I::GlobalVars ? I::GlobalVars->tickcount : -1;
@@ -566,7 +566,12 @@ std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs,
 			}
 		}
 	}
+}
 
+std::vector<Face_t> CWorld::GetFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask, ITraceFilter* pFilter, int iFlags, bool bCacheQuery)
+{
+	std::vector<Face_t> vFaces;
+	GetFacesInAABB(vMins, vMaxs, iMask, pFilter, iFlags, bCacheQuery, vFaces);
 	return vFaces;
 }
 
@@ -613,7 +618,8 @@ void CWorld::ProbePlayerGeometry(const Vec3& vOrigin, float flEyeYawDeg, bool bD
 
 	const Vec3 vBoxMins = { vOrigin.x - 260.f, vOrigin.y - 260.f, vOrigin.z - 520.f };
 	const Vec3 vBoxMaxs = { vOrigin.x + 260.f, vOrigin.y + 260.f, vOrigin.z + 520.f };
-	const std::vector<Face_t> vFaces = GetFacesInAABB(vBoxMins, vBoxMaxs, MASK_PLAYERSOLID, pUseFilter, FaceTypeEnum::All);
+	static thread_local std::vector<Face_t> vFaces;
+	GetFacesInAABB(vBoxMins, vBoxMaxs, MASK_PLAYERSOLID, pUseFilter, FaceTypeEnum::All, true, vFaces);
 
 	auto fTraceFacesRay = [&](const Vec3& vStart, const Vec3& vEnd, bool& bStartSolid) -> float
 	{
