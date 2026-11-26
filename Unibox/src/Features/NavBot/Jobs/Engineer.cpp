@@ -303,6 +303,7 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 	m_iBuildAttempts = 0;
 	if (!bHelp && !pLocal->m_iMetalCount())
 	{
+		m_eTaskStage = EngineerTaskStageEnum::None;
 		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
 		return F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);
 	}
@@ -311,10 +312,16 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 		: pBuilding->GetClassID() == ETFClassID::CObjectDispenser ? EngineerTaskStageEnum::SmackDispenser : EngineerTaskStageEnum::SmackSentry;
 
 	const bool bInRange = CanWrenchBuilding(pLocal, pBuilding);
-	if (bInRange && F::BotUtils.m_iCurrentSlot == SLOT_MELEE)
+	if (bInRange)
 	{
 		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
 		F::NavEngine.m_eCurrentPriority = PriorityListEnum::Engineer;
+
+		if (F::BotUtils.m_iCurrentSlot != SLOT_MELEE)
+		{
+			F::BotUtils.SetSlot(pLocal, SLOT_MELEE);
+			return true;
+		}
 
 		if (bHelp && !m_bHelpReached)
 		{
@@ -330,12 +337,15 @@ bool CNavBotEngineer::SmackBuilding(CUserCmd* pCmd, CTFPlayer* pLocal, CBaseObje
 		else
 			pCmd->buttons |= IN_ATTACK;
 	}
-	else if (!bInRange)
+	else
 	{
 		if (F::NavEngine.IsPathingFor(PriorityListEnum::Engineer))
 			return true;
 		if (pBuilding->GetAbsOrigin().DistTo(pLocal->GetAbsOrigin()) <= kSmackApproachDist)
+		{
+			F::NavEngine.m_eCurrentPriority = PriorityListEnum::Engineer;
 			SDK::WalkTo(pCmd, pLocal, pBuilding->GetCenter());
+		}
 		else
 		{
 			Vector vApproach = pLocal->GetAbsOrigin() - pBuilding->GetAbsOrigin();
@@ -663,6 +673,7 @@ bool CNavBotEngineer::HelpFriendlyBuilding(CUserCmd* pCmd, CTFPlayer* pLocal)
 
 	if (m_bHelpResupplying)
 	{
+		m_eTaskStage = EngineerTaskStageEnum::None;
 		F::NavEngine.CancelPathIf(PriorityListEnum::Engineer);
 		m_flHelpSupplyRetryTime = flCurTime + kHelpSupplyRetryTime;
 		F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Ammo | GetSupplyEnum::Forced);

@@ -4,6 +4,7 @@
 #include "../../Misc/AutoItem/AutoItem.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cstring>
 #include <cmath>
@@ -40,7 +41,8 @@ MAKE_SIGNATURE(CUtlVector_SetCountHandle, "client.dll", "48 89 5C 24 08 57 48 83
 
 namespace
 {
-	uint64_t s_uItemCatalogueRevision = 0;
+	std::mutex s_tCatalogueMutex;
+	std::atomic<uint64_t> s_uItemCatalogueRevision = 0;
 	template <class T, size_t N>
 	bool Contains(const T(&aList)[N], int iValue)
 	{
@@ -1416,7 +1418,8 @@ namespace
 
 	bool EnsureCrateProfiles()
 	{
-		CSkinChanger::GetItems();
+		CSkinChanger::GetCatalogueSnapshot();
+		std::lock_guard tLock(s_tCatalogueMutex);
 		if (s_mCatalogueDefinitions.empty())
 			return false;
 		if (s_bCrateProfilesReady)
@@ -2877,9 +2880,10 @@ namespace
 
 }
 
-const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
+std::shared_ptr<const ItemCatalogueSnapshot_t> CSkinChanger::GetCatalogueSnapshot()
 {
-	static std::vector<ItemInfo_t> s_vItems = {};
+	std::lock_guard tLock(s_tCatalogueMutex);
+	static std::shared_ptr<const ItemCatalogueSnapshot_t> s_pCatalogueSnapshot = std::make_shared<const ItemCatalogueSnapshot_t>();
 	static CEconItemSchema* s_pSchema = nullptr;
 	static int s_iSchemaCount = -1;
 	static bool s_bLocalizeReady = false;
@@ -2888,10 +2892,10 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	const int iCount = pSchema && IsReadableMemory(pSchema, 344) ? pSchema->GetItemDefCount() : 0;
 	const bool bLocalizeReady = I::Localize != nullptr;
 	if (iCount <= 0)
-		return s_vItems;
+		return s_pCatalogueSnapshot;
 
 	if (iCount == s_iSchemaCount && pSchema == s_pSchema && bLocalizeReady == s_bLocalizeReady)
-		return s_vItems;
+		return s_pCatalogueSnapshot;
 
 	s_pSchema = pSchema;
 	s_iSchemaCount = iCount;
@@ -2899,8 +2903,9 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 	s_bCrateProfilesReady = false;
 	s_mCatalogueItemNames.clear();
 	s_mCatalogueDefinitions.clear();
-	s_vItems.clear();
-	s_vItems.reserve(iCount);
+
+	auto pSnapshot = std::make_shared<ItemCatalogueSnapshot_t>();
+	pSnapshot->vItems.reserve(iCount);
 
 	std::unordered_map<uint16_t, bool> mSeen = {};
 	std::unordered_map<std::string, uint16_t> mWeaponNames = { { "TF_WEAPON_BAT", 190 } };
@@ -2978,17 +2983,17 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 			continue;
 
 		mSeen[iDef] = true;
-		s_vItems.push_back(std::move(tItem));
+		pSnapshot->vItems.push_back(std::move(tItem));
 	}
 
 	BuildWeaponTypes(mWeaponNames, vWeaponBases);
-	for (auto& tItem : s_vItems)
+	for (auto& tItem : pSnapshot->vItems)
 	{
 		const auto it = mToolTargets.find(tItem.iDef);
 		if (it == mToolTargets.end())
 			continue;
-		const auto pTarget = std::find_if(s_vItems.begin(), s_vItems.end(), [&](const ItemInfo_t& tTarget) { return tTarget.iDef == it->second; });
-		if (pTarget != s_vItems.end())
+		const auto pTarget = std::find_if(pSnapshot->vItems.begin(), pSnapshot->vItems.end(), [&](const ItemInfo_t& tTarget) { return tTarget.iDef == it->second; });
+		if (pTarget != pSnapshot->vItems.end())
 		{
 			tItem.sToolTargetImage = pTarget->sImage;
 			if (tItem.sName.find(pTarget->sName) == std::string::npos)
@@ -2996,44 +3001,39 @@ const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
 		}
 	}
 
-	std::sort(s_vItems.begin(), s_vItems.end(), [](const ItemInfo_t& a, const ItemInfo_t& b)
+	std::sort(pSnapshot->vItems.begin(), pSnapshot->vItems.end(), [](const ItemInfo_t& a, const ItemInfo_t& b)
 	{
 		return a.sName < b.sName;
 	});
+	pSnapshot->mIndexByDef.reserve(pSnapshot->vItems.size());
+	for (size_t i = 0; i < pSnapshot->vItems.size(); ++i)
+		pSnapshot->mIndexByDef[pSnapshot->vItems[i].iDef] = i;
+
 	s_mCatalogueItemNames = std::move(mItemNames);
 	s_mCatalogueDefinitions = std::move(mDefinitions);
-	s_uItemCatalogueRevision++;
-	return s_vItems;
+	const uint64_t uRevision = s_uItemCatalogueRevision.fetch_add(1) + 1;
+	pSnapshot->uRevision = uRevision;
+	s_pCatalogueSnapshot = pSnapshot;
+	return s_pCatalogueSnapshot;
+}
+
+const std::vector<ItemInfo_t>& CSkinChanger::GetItems()
+{
+	static thread_local std::shared_ptr<const ItemCatalogueSnapshot_t> s_pLastSnapshot = {};
+	s_pLastSnapshot = GetCatalogueSnapshot();
+	return s_pLastSnapshot->vItems;
 }
 
 uint64_t CSkinChanger::GetCatalogueRevision()
 {
-	return s_uItemCatalogueRevision;
+	return s_uItemCatalogueRevision.load();
 }
 
 const ItemInfo_t* CSkinChanger::FindItem(uint16_t iDef)
 {
-	static std::mutex s_tLookupMutex;
-	static std::unordered_map<uint16_t, const ItemInfo_t*> s_mLookup = {};
-	static uint64_t s_uLookupRevision = 0;
-	static size_t s_uSize = 0;
-	static const ItemInfo_t* s_pData = nullptr;
-
-	const auto& vItems = GetItems();
-	const uint64_t uRevision = GetCatalogueRevision();
-	std::lock_guard tLock(s_tLookupMutex);
-	if (s_uLookupRevision != uRevision || s_uSize != vItems.size() || s_pData != vItems.data())
-	{
-		s_mLookup.clear();
-		for (const auto& tItem : vItems)
-			s_mLookup[tItem.iDef] = &tItem;
-		s_uSize = vItems.size();
-		s_pData = vItems.data();
-		s_uLookupRevision = uRevision;
-	}
-
-	auto it = s_mLookup.find(iDef);
-	return it != s_mLookup.end() ? it->second : nullptr;
+	static thread_local std::shared_ptr<const ItemCatalogueSnapshot_t> s_pLastSnapshot = {};
+	s_pLastSnapshot = GetCatalogueSnapshot();
+	return s_pLastSnapshot->Find(iDef);
 }
 
 bool CSkinChanger::IsCatalogueLoading()
@@ -3183,10 +3183,10 @@ void CSkinChanger::Unload()
 
 std::shared_ptr<const InventorySnapshot_t> CSkinChanger::GetInventorySnapshot()
 {
-	GetItems();
+	const auto pCatalogue = GetCatalogueSnapshot();
 	std::unordered_map<uint16_t, int> mCounts = {};
 	uint64_t uInventoryRevision = 0;
-	const uint64_t uCatalogueRevision = GetCatalogueRevision();
+	const uint64_t uCatalogueRevision = pCatalogue->uRevision;
 	{
 		std::lock_guard tLock(m_tMutex);
 		if (m_pInventorySnapshot && m_pInventorySnapshot->uInventoryRevision == m_uInventoryRevision && m_pInventorySnapshot->uCatalogueRevision == uCatalogueRevision)
@@ -3198,10 +3198,11 @@ std::shared_ptr<const InventorySnapshot_t> CSkinChanger::GetInventorySnapshot()
 	auto pSnapshot = std::make_shared<InventorySnapshot_t>();
 	pSnapshot->uInventoryRevision = uInventoryRevision;
 	pSnapshot->uCatalogueRevision = uCatalogueRevision;
+	pSnapshot->pCatalogue = pCatalogue;
 	pSnapshot->vItems.reserve(mCounts.size());
 	for (const auto& tEntry : mCounts)
 	{
-		if (const ItemInfo_t* pInfo = FindItem(tEntry.first))
+		if (const ItemInfo_t* pInfo = pCatalogue->Find(tEntry.first))
 			pSnapshot->vItems.push_back(pInfo);
 	}
 	pSnapshot->mCounts = std::move(mCounts);
@@ -3240,6 +3241,7 @@ void CSkinChanger::Service() {}
 void CSkinChanger::CacheMenuInfo(CTFWeaponBase*) {}
 void CSkinChanger::OnLevelShutdown() {}
 void CSkinChanger::Unload() {}
+std::shared_ptr<const ItemCatalogueSnapshot_t> CSkinChanger::GetCatalogueSnapshot() { static const auto s_pSnapshot = std::make_shared<ItemCatalogueSnapshot_t>(); return s_pSnapshot; }
 const std::vector<ItemInfo_t>& CSkinChanger::GetItems() { static std::vector<ItemInfo_t> vItems; return vItems; }
 uint64_t CSkinChanger::GetCatalogueRevision() { return 0; }
 const ItemInfo_t* CSkinChanger::FindItem(uint16_t) { return nullptr; }

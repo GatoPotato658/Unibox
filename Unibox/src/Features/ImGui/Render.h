@@ -17,7 +17,10 @@ public:
 	void Unload();
 	void Reload();
 	void SetStartupStage(StartupStage eStage) { m_eStartupStage.store(eStage); }
+	bool IsConfigStage() const { return m_eStartupStage.load() == StartupStage::Config; }
 	void InvalidateDeviceObjects(bool bDeviceChanged = false);
+	void OnDeviceLost();
+	void OnDeviceReset();
 
 	void LoadColors();
 	void LoadFonts();

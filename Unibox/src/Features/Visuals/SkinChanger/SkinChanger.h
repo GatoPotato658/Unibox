@@ -29,6 +29,19 @@ struct ItemInfo_t
 	bool bHat = false;
 };
 
+struct ItemCatalogueSnapshot_t
+{
+	uint64_t uRevision = 0;
+	std::vector<ItemInfo_t> vItems = {};
+	std::unordered_map<uint16_t, size_t> mIndexByDef = {};
+
+	const ItemInfo_t* Find(uint16_t iDef) const
+	{
+		const auto it = mIndexByDef.find(iDef);
+		return it != mIndexByDef.end() ? &vItems[it->second] : nullptr;
+	}
+};
+
 struct BackpackItem_t
 {
 	uint32_t uSerial = 0;
@@ -43,6 +56,7 @@ struct InventorySnapshot_t
 {
 	uint64_t uInventoryRevision = 0;
 	uint64_t uCatalogueRevision = 0;
+	std::shared_ptr<const ItemCatalogueSnapshot_t> pCatalogue = {};
 	std::vector<const ItemInfo_t*> vItems = {};
 	std::unordered_map<uint16_t, int> mCounts = {};
 };
@@ -225,6 +239,7 @@ public:
 	bool IsInventoryLoading();
 	int GetInventoryCount(uint16_t iDef);
 
+	static std::shared_ptr<const ItemCatalogueSnapshot_t> GetCatalogueSnapshot();
 	static const std::vector<ItemInfo_t>& GetItems();
 	static uint64_t GetCatalogueRevision();
 	static const ItemInfo_t* FindItem(uint16_t iDef);

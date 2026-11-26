@@ -50,7 +50,7 @@ void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEn
 
 		if (bSmack)
 		{
-			if (F::BotUtils.m_iCurrentSlot < SLOT_MELEE)
+			if (F::BotUtils.m_iCurrentSlot != SLOT_MELEE)
 				F::BotUtils.SetSlot(pLocal, SLOT_MELEE);
 			return;
 		}

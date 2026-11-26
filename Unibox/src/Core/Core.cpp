@@ -186,13 +186,8 @@ void CCore::Load()
 
 	SDK::Output("init", std::format("mat_dxlevel {}", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 
-	bool bHooksInitialized = false;
 	bool bBytePatchesInitialized = false;
 	bool bEventsInitialized = false;
-	{
-		SDK::CInitTimingScope tHooks("Core.Load hooks");
-		bHooksInitialized = U::Hooks.Initialize();
-	}
 	{
 		SDK::CInitTimingScope tPatches("Core.Load bytepatches");
 		bBytePatchesInitialized = U::BytePatches.Initialize();
@@ -201,7 +196,7 @@ void CCore::Load()
 		SDK::CInitTimingScope tEvents("Core.Load events");
 		bEventsInitialized = H::Events.Initialize();
 	}
-	if (m_bUnload = m_bFailed2 = !bHooksInitialized || !bBytePatchesInitialized || !bEventsInitialized)
+	if (m_bUnload = m_bFailed2 = !bBytePatchesInitialized || !bEventsInitialized)
 		return;
 
 #ifndef TEXTMODE
@@ -228,6 +223,11 @@ void CCore::Load()
 	F::NeuralPred.Initialize();
 	if (!F::Radio.Startup())
 		SDK::Output("Radio", "Failed to initialize audio output", WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG, ICON_MD_WARNING);
+	{
+		SDK::CInitTimingScope tHooks("Core.Load hooks");
+		if (m_bUnload = m_bFailed2 = !U::Hooks.Initialize())
+			return;
+	}
 	I::EngineClient->ClientCmd_Unrestricted("exec catexec");
 	SDK::Output("unibox", std::format("Loaded (dxlevel {})", SDK::GetActiveDXLevel()).c_str(), INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 #ifndef TEXTMODE

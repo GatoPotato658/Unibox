@@ -317,6 +317,21 @@ void CRender::InvalidateDeviceObjects(bool bDeviceChanged)
 	F::Menu.InvalidateItemIcons(bDeviceChanged);
 }
 
+void CRender::OnDeviceLost()
+{
+	std::lock_guard tLock(m_tFrameMutex);
+	InvalidateDeviceObjects();
+	if (m_bLoaded)
+		ImGui_ImplDX9_InvalidateDeviceObjects();
+}
+
+void CRender::OnDeviceReset()
+{
+	std::lock_guard tLock(m_tFrameMutex);
+	if (m_bLoaded)
+		ImGui_ImplDX9_CreateDeviceObjects();
+}
+
 void CRender::Unload()
 {
 	std::lock_guard tLock(m_tFrameMutex);

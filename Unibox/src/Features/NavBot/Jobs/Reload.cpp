@@ -80,19 +80,27 @@ int CNavBotReload::GetReloadWeaponSlot(CTFPlayer* pLocal, const ClosestEnemy_t& 
 	if (!NavJobUtils::HasPreference(Vars::Misc::Movement::NavBot::PreferencesEnum::ReloadWeapons) || F::VSHController.IsBossLocal())
 		return -1;
 
-	if (G::Reloading && F::BotUtils.m_iCurrentSlot >= SLOT_PRIMARY && F::BotUtils.m_iCurrentSlot <= SLOT_SECONDARY)
-		return F::BotUtils.m_iCurrentSlot;
-
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::Capture)
 		return -1;
 
-	if ((F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear && tClosestEnemy.m_flDist <= 500.f) || tClosestEnemy.m_flDist <= 250.f)
+	if ((F::NavEngine.m_eCurrentPriority == PriorityListEnum::StayNear && tClosestEnemy.m_flDist <= 500.f) || (tClosestEnemy.m_pPlayer && tClosestEnemy.m_flDist <= 250.f))
+		return -1;
+
+	const bool bBestCombatSwitch = Vars::Misc::Movement::BotUtils::WeaponSlot.Value && tClosestEnemy.m_pPlayer
+		&& F::BotUtils.m_iBestSlot != -1 && F::BotUtils.m_iBestSlot != F::BotUtils.m_iCurrentSlot && tClosestEnemy.m_flDist <= 900.f;
+	if (G::Reloading && !bBestCombatSwitch && F::BotUtils.m_iCurrentSlot >= SLOT_PRIMARY && F::BotUtils.m_iCurrentSlot <= SLOT_SECONDARY)
+		return F::BotUtils.m_iCurrentSlot;
+
+	if (bBestCombatSwitch)
 		return -1;
 
 	const float flDivider = F::NavEngine.m_eCurrentPriority < PriorityListEnum::StayNear && tClosestEnemy.m_flDist > 500.f ? 1.f : 3.f;
 
 	const auto SlotNeedsReload = [&](int iSlot, bool bIgnoreReserve) -> bool
 		{
+			if (!G::HasWeaponForSlot[iSlot] || G::SavedDefIndexes[iSlot] == Soldier_m_TheBeggarsBazooka)
+				return false;
+
 			if (SDK::WeaponDoesNotUseAmmo(G::SavedWepIds[iSlot], G::SavedDefIndexes[iSlot], false))
 				return false;
 

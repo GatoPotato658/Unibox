@@ -14,3 +14,14 @@ CTFWeaponBase* CBaseCombatCharacter::GetWeaponFromSlot(int nSlot)
 		return nullptr;
 	return m_hMyWeapons()[nSlot].Get();
 }
+
+CTFWeaponBase* CBaseCombatCharacter::GetWeaponInSlot(int nSlot)
+{
+	auto& hWeapons = m_hMyWeapons();
+	for (int i = 0; i < MAX_WEAPONS; i++)
+	{
+		if (auto pWeapon = hWeapons[i].Get(); pWeapon && pWeapon->GetSlot() == nSlot)
+			return pWeapon;
+	}
+	return nullptr;
+}

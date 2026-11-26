@@ -6,6 +6,8 @@ struct ImDrawList;
 void InvalidateESPIconTextures();
 const char* GetClassIconTexture(int iClassNum);
 #ifndef TEXTMODE
+void PrepareIconTexture(const std::string& sTexture);
+bool DecodeMaterialBgra(const std::string& sMaterialPath, std::vector<byte>& oBgra, int& oW, int& oH);
 IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
 void PrecacheESPIcons();
 #endif

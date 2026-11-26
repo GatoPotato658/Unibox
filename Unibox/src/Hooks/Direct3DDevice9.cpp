@@ -13,13 +13,14 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), HRESULT,
-	IDirect3DDevice9* pDevice, const RECT* pSource, const RECT* pDestination, const RGNDATA* pDirtyRegion)
+	IDirect3DDevice9* pDevice, const RECT* pSource, const RECT* pDestination, HWND hDestWindowOverride, const RGNDATA* pDirtyRegion)
 {
-	DEBUG_RETURN(Direct3DDevice9_Present, pDevice, pSource, pDestination, pDirtyRegion);
+	DEBUG_RETURN(Direct3DDevice9_Present, pDevice, pSource, pDestination, hDestWindowOverride, pDirtyRegion);
 
 	if (!G::Unload)
 	{
-		F::D3DMaterials.Initialize(pDevice);
+		if (!F::Render.IsConfigStage())
+			F::D3DMaterials.Initialize(pDevice);
 		F::Render.Render(pDevice);
 		SDK::TickCleanScreenshot();
 	}
@@ -31,7 +32,7 @@ MAKE_HOOK(Direct3DDevice9_Present, U::Memory.GetVirtual(I::DirectXDevice, 17), H
 		F::SteamProfileCache.ReleaseTextures();
 	}
 
-	return CALL_ORIGINAL(pDevice, pSource, pDestination, pDirtyRegion);
+	return CALL_ORIGINAL(pDevice, pSource, pDestination, hDestWindowOverride, pDirtyRegion);
 }
 
 MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRESULT,
@@ -44,11 +45,10 @@ MAKE_HOOK(Direct3DDevice9_Reset, U::Memory.GetVirtual(I::DirectXDevice, 16), HRE
 	F::CaptureOverlay.ReleaseDeviceObjects();
 	InvalidateESPIconTextures();
 	F::SteamProfileCache.ReleaseTextures();
-	F::Render.InvalidateDeviceObjects();
-	ImGui_ImplDX9_InvalidateDeviceObjects();
+	F::Render.OnDeviceLost();
 	const HRESULT Original = CALL_ORIGINAL(pDevice, pPresentationParameters);
 	if (SUCCEEDED(Original))
-		ImGui_ImplDX9_CreateDeviceObjects();
+		F::Render.OnDeviceReset();
 	return Original;
 }
 

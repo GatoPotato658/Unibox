@@ -13,4 +13,5 @@ public:
 
 	CHandle<CTFWeaponBase>(&m_hMyWeapons())[MAX_WEAPONS];
 	CTFWeaponBase* GetWeaponFromSlot(int nSlot);
+	CTFWeaponBase* GetWeaponInSlot(int nSlot);
 };

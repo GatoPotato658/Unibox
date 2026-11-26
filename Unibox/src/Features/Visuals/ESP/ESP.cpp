@@ -12,6 +12,7 @@
 #ifndef TEXTMODE
 #include <wrl/client.h>
 #include <cstring>
+#include <mutex>
 #endif
 
 static inline std::string ESPFormat(const char* sFmt, ...)
@@ -992,8 +993,6 @@ const char* GetClassIconTexture(int iClassNum)
 }
 
 #ifndef TEXTMODE
-static bool s_bCaptureIcons = false;
-IDirect3DTexture9* GetIconTexture(const std::string& sTexture);
 #endif
 
 void CESP::CacheDrawInfo(CTFPlayer* pLocal)
@@ -1072,10 +1071,8 @@ void CESP::CacheDrawInfo(CTFPlayer* pLocal)
 		tOut.m_pContent = spContent;
 
 #ifndef TEXTMODE
-		s_bCaptureIcons = true;
 		for (const auto& tBadge : spContent->m_vBadges)
-			GetIconTexture(tBadge.m_sTexture);
-		s_bCaptureIcons = false;
+			PrepareIconTexture(tBadge.m_sTexture);
 #endif
 
 		if (spContent->m_bBones)
@@ -1497,11 +1494,13 @@ struct ESPIcon_t
 	Microsoft::WRL::ComPtr<IDirect3DTexture9> m_pTexture = {};
 };
 
+static std::mutex s_tIconMutex;
 static IDirect3DDevice9* s_pIconDevice = nullptr;
 static std::unordered_map<std::string, ESPIcon_t> s_mIcons = {};
 
 void InvalidateESPIconTextures()
 {
+	std::lock_guard tLock(s_tIconMutex);
 	s_mIcons.clear();
 	s_pIconDevice = nullptr;
 }
@@ -1818,6 +1817,9 @@ static bool ReadGameFile(const char* sPath, std::vector<byte>& oData)
 
 static bool DecodeFileIcon(const std::string& sTexture, std::vector<byte>& oRgba, int& oW, int& oH)
 {
+	if (!I::FileSystem)
+		return false;
+
 	std::string sPath = sTexture;
 	std::replace(sPath.begin(), sPath.end(), '\\', '/');
 	if (sPath.starts_with("materials/"))
@@ -1832,6 +1834,124 @@ static bool DecodeFileIcon(const std::string& sTexture, std::vector<byte>& oRgba
 	if (!ReadGameFile(sFile.c_str(), vFile) && !ReadGameFile((sPath + ".vtf").c_str(), vFile))
 		return false;
 	return DecodeVtf(vFile.data(), vFile.size(), oRgba, oW, oH);
+}
+
+static bool NextVmtToken(const char*& pCursor, const char* pEnd, std::string& oToken)
+{
+	oToken.clear();
+	while (pCursor < pEnd)
+	{
+		const char c = *pCursor;
+		if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+		{
+			++pCursor;
+			continue;
+		}
+		if (c == '/' && pCursor + 1 < pEnd && pCursor[1] == '/')
+		{
+			pCursor += 2;
+			while (pCursor < pEnd && *pCursor != '\n')
+				++pCursor;
+			continue;
+		}
+		if (c == '{' || c == '}')
+		{
+			oToken.assign(1, c);
+			++pCursor;
+			return true;
+		}
+		if (c == '"')
+		{
+			++pCursor;
+			const char* pStart = pCursor;
+			while (pCursor < pEnd && *pCursor != '"')
+				++pCursor;
+			oToken.assign(pStart, pCursor);
+			if (pCursor < pEnd && *pCursor == '"')
+				++pCursor;
+			return true;
+		}
+		const char* pStart = pCursor;
+		while (pCursor < pEnd && *pCursor != ' ' && *pCursor != '\t' && *pCursor != '\r' && *pCursor != '\n' && *pCursor != '{' && *pCursor != '}' && *pCursor != '"')
+		{
+			if (*pCursor == '/' && pCursor + 1 < pEnd && pCursor[1] == '/')
+				break;
+			++pCursor;
+		}
+		oToken.assign(pStart, pCursor);
+		return true;
+	}
+	return false;
+}
+
+static bool DecodeMaterialBgraImpl(const std::string& sMaterialPath, std::vector<byte>& oBgra, int& oW, int& oH, int iDepth)
+{
+	if (!I::FileSystem || sMaterialPath.empty() || iDepth > 4)
+		return false;
+
+	std::string sPath = sMaterialPath;
+	std::replace(sPath.begin(), sPath.end(), '\\', '/');
+	if (sPath.starts_with("materials/"))
+		sPath.erase(0, 10);
+	if (sPath.ends_with(".vmt"))
+		sPath.resize(sPath.size() - 4);
+	else if (sPath.ends_with(".vtf"))
+		sPath.resize(sPath.size() - 4);
+	if (sPath.empty())
+		return false;
+
+	auto DecodeAndSwizzle = [&](const std::string& sTex) -> bool
+	{
+		if (!DecodeFileIcon(sTex, oBgra, oW, oH))
+			return false;
+		for (size_t i = 0; i + 3 < oBgra.size(); i += 4)
+			std::swap(oBgra[i], oBgra[i + 2]);
+		return true;
+	};
+
+	std::vector<byte> vVmt;
+	const std::string sVmtPath = "materials/" + sPath + ".vmt";
+	if (ReadGameFile(sVmtPath.c_str(), vVmt) || ReadGameFile((sPath + ".vmt").c_str(), vVmt))
+	{
+		std::string sToolTexture, sBaseTexture, sInclude;
+		const char* pCursor = reinterpret_cast<const char*>(vVmt.data());
+		const char* pEnd = pCursor + vVmt.size();
+		std::string sKey, sValue;
+		bool bHasPrev = NextVmtToken(pCursor, pEnd, sKey);
+		while (bHasPrev)
+		{
+			if (!NextVmtToken(pCursor, pEnd, sValue))
+				break;
+			if (sKey != "{" && sKey != "}" && sValue != "{" && sValue != "}")
+			{
+				if (!_stricmp(sKey.c_str(), "%tooltexture"))
+					sToolTexture = sValue;
+				else if (!_stricmp(sKey.c_str(), "$basetexture") && sBaseTexture.empty())
+					sBaseTexture = sValue;
+				else if (!_stricmp(sKey.c_str(), "include") && sInclude.empty())
+					sInclude = sValue;
+				bHasPrev = NextVmtToken(pCursor, pEnd, sKey);
+			}
+			else
+			{
+				sKey = std::move(sValue);
+			}
+		}
+
+		if (!sToolTexture.empty() && DecodeAndSwizzle(sToolTexture))
+			return true;
+		if (!sBaseTexture.empty() && DecodeAndSwizzle(sBaseTexture))
+			return true;
+		if (!sInclude.empty() && DecodeMaterialBgraImpl(sInclude, oBgra, oW, oH, iDepth + 1))
+			return true;
+	}
+
+	return DecodeAndSwizzle(sPath);
+}
+
+bool DecodeMaterialBgra(const std::string& sMaterialPath, std::vector<byte>& oBgra, int& oW, int& oH)
+{
+	return DecodeMaterialBgraImpl(sMaterialPath, oBgra, oW, oH, 0);
 }
 
 static bool FaceMatches(HDC hDC, const char* sWanted)
@@ -1931,9 +2051,6 @@ static bool PixelsHaveInk(const std::vector<byte>& vRgba)
 
 static bool CaptureGlyph(HFont hFont, unsigned char ucChar, std::vector<byte>& oRgba, int& oW, int& oH)
 {
-	if (!s_bCaptureIcons)
-		return false;
-
 	wchar_t sChar[2] = { wchar_t(ucChar), 0 };
 	I::MatSystemSurface->DrawSetTextFont(hFont);
 	I::MatSystemSurface->PrecacheFontCharacters(hFont, sChar);
@@ -2038,13 +2155,13 @@ static bool ParseFontKey(const std::string& sKey, HFont& hFont, unsigned char& u
 	return true;
 }
 
-static bool DecodeFontIcon(const std::string& sKey, std::vector<byte>& oRgba, int& oW, int& oH)
+static bool DecodeFontIcon(const std::string& sKey, std::vector<byte>& oRgba, int& oW, int& oH, bool bAllowCapture)
 {
 	HFont hFont = 0;
 	unsigned char ucChar = 0;
 	if (!ParseFontKey(sKey, hFont, ucChar))
 		return false;
-	if (CaptureGlyph(hFont, ucChar, oRgba, oW, oH))
+	if (bAllowCapture && CaptureGlyph(hFont, ucChar, oRgba, oW, oH))
 		return true;
 
 	const int iTall = std::clamp(I::MatSystemSurface->GetFontTall(hFont) * 2, 32, 128);
@@ -2092,11 +2209,45 @@ static bool UploadIcon(IDirect3DDevice9* pDevice, ESPIcon_t& tIcon)
 	return true;
 }
 
+static bool DecodeIconPixelsLocked(ESPIcon_t& tIcon, const std::string& sTexture, bool bAllowCapture)
+{
+	if (tIcon.m_bReady)
+		return true;
+	if (tIcon.m_nFails >= 8)
+		return false;
+
+	const bool bFont = sTexture.starts_with("#font:");
+	const bool bOk = bFont
+		? DecodeFontIcon(sTexture, tIcon.m_vRgba, tIcon.m_iW, tIcon.m_iH, bAllowCapture)
+		: DecodeFileIcon(sTexture, tIcon.m_vRgba, tIcon.m_iW, tIcon.m_iH);
+	if (!bOk)
+	{
+		if (!bFont || bAllowCapture)
+			tIcon.m_nFails++;
+		return false;
+	}
+	tIcon.m_bReady = true;
+	return true;
+}
+
+void PrepareIconTexture(const std::string& sTexture)
+{
+	if (sTexture.empty())
+		return;
+
+	std::lock_guard tLock(s_tIconMutex);
+	auto [it, _] = s_mIcons.try_emplace(sTexture);
+	ESPIcon_t& tIcon = it->second;
+	if (!tIcon.m_pTexture)
+		DecodeIconPixelsLocked(tIcon, sTexture, true);
+}
+
 IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
 {
 	if (sTexture.empty())
 		return nullptr;
 
+	std::lock_guard tLock(s_tIconMutex);
 	IDirect3DDevice9* pDevice = F::Render.GetDevice();
 	if (pDevice && pDevice != s_pIconDevice)
 	{
@@ -2108,22 +2259,8 @@ IDirect3DTexture9* GetIconTexture(const std::string& sTexture)
 	ESPIcon_t& tIcon = it->second;
 	if (tIcon.m_pTexture)
 		return tIcon.m_pTexture.Get();
-	if (!tIcon.m_bReady)
-	{
-		if (tIcon.m_nFails >= 8)
-			return nullptr;
-		const bool bFont = sTexture.starts_with("#font:");
-		const bool bOk = bFont
-			? DecodeFontIcon(sTexture, tIcon.m_vRgba, tIcon.m_iW, tIcon.m_iH)
-			: DecodeFileIcon(sTexture, tIcon.m_vRgba, tIcon.m_iW, tIcon.m_iH);
-		if (!bOk)
-		{
-			if (!bFont || s_bCaptureIcons)
-				tIcon.m_nFails++;
-			return nullptr;
-		}
-		tIcon.m_bReady = true;
-	}
+	if (!DecodeIconPixelsLocked(tIcon, sTexture, false))
+		return nullptr;
 	if (!pDevice || !UploadIcon(pDevice, tIcon))
 		return nullptr;
 	return tIcon.m_pTexture.Get();

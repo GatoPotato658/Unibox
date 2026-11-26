@@ -73,7 +73,7 @@ bool CNavBotMelee::Run(CUserCmd* pCmd, CTFPlayer* pLocal, int iSlot, const Close
 
 	if (pLocal->m_iClass() == TF_CLASS_SPY)
 	{
-		auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
+		auto pKnife = pLocal->GetWeaponInSlot(SLOT_MELEE);
 		const bool bReadyToBackstab = NavRuntime::IsBackstabReady(pKnife);
 		const bool bKnifeLethal = pKnife && pPlayer->m_iHealth() <= pKnife->GetDamage(false);
 		const bool bCanSwing = bReadyToBackstab || bKnifeLethal;

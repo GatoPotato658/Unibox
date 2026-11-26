@@ -11,27 +11,58 @@
 #include "../Simulation/ProjectileSimulation/ProjectileSimulation.h"
 #include "../Simulation/MovementSimulation/MovementSimulation.h"
 
+static bool SlotUsesAmmo(int iSlot) { return G::AmmoInSlot[iSlot].m_bUsesAmmo; }
+
+static bool SlotIsCombatWeapon(int iSlot)
+{
+	if (iSlot < SLOT_PRIMARY || iSlot >= SLOT_MELEE || !G::HasWeaponForSlot[iSlot])
+		return false;
+
+	const int iDefIdx = G::SavedDefIndexes[iSlot];
+	const int iWeaponID = G::SavedWepIds[iSlot];
+	if (iDefIdx == Soldier_m_RocketJumper || iDefIdx == Demoman_s_StickyJumper)
+		return false;
+
+	return !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIdx, false) || iWeaponID == TF_WEAPON_FLAREGUN_REVENGE;
+}
+
+static bool SlotHasShot(int iSlot)
+{
+	if (!G::HasWeaponForSlot[iSlot])
+		return false;
+	if (!SlotUsesAmmo(iSlot))
+		return true;
+
+	const auto& tAmmo = G::AmmoInSlot[iSlot];
+	if (tAmmo.m_iMaxClip < 0)
+		return tAmmo.m_iReserve > 0;
+	if (G::SavedDefIndexes[iSlot] == Soldier_m_TheBeggarsBazooka)
+		return tAmmo.m_iClip > 0 || tAmmo.m_iReserve > 0;
+	return tAmmo.m_iClip > 0;
+}
+
+static bool SlotHasAnyAmmo(int iSlot)
+{
+	if (!G::HasWeaponForSlot[iSlot])
+		return false;
+	if (!SlotUsesAmmo(iSlot))
+		return true;
+	return G::AmmoInSlot[iSlot].m_iClip > 0 || G::AmmoInSlot[iSlot].m_iReserve > 0;
+}
+
 static int GetRangedFallbackSlot(CTFPlayer* pLocal)
 {
 	auto HasUsableWeapon = [&](int iSlot)
 		{
-			if (!G::HasWeaponForSlot[iSlot]) return false;
-			if (!G::AmmoInSlot[iSlot].m_bUsesAmmo) return true;
-			return G::AmmoInSlot[iSlot].m_iClip > 0 || G::AmmoInSlot[iSlot].m_iReserve > 0;
+			return SlotIsCombatWeapon(iSlot) && (SlotHasShot(iSlot) || SlotHasAnyAmmo(iSlot));
 		};
 
 	if (HasUsableWeapon(SLOT_PRIMARY))			return SLOT_PRIMARY;
 	if (HasUsableWeapon(SLOT_SECONDARY))		return SLOT_SECONDARY;
-	if (G::HasWeaponForSlot[SLOT_PRIMARY])		return SLOT_PRIMARY;
-	if (G::HasWeaponForSlot[SLOT_SECONDARY])	return SLOT_SECONDARY;
+	if (SlotIsCombatWeapon(SLOT_PRIMARY))		return SLOT_PRIMARY;
+	if (SlotIsCombatWeapon(SLOT_SECONDARY))		return SLOT_SECONDARY;
 	return SLOT_MELEE;
 }
-
-static bool SlotUsesAmmo(int iSlot) { return G::AmmoInSlot[iSlot].m_bUsesAmmo; }
-static bool SlotHasClip(int iSlot) { return G::AmmoInSlot[iSlot].m_iClip > 0; }
-static bool SlotHasReserve(int iSlot) { return G::AmmoInSlot[iSlot].m_iReserve > 0; }
-static bool SlotHasAnyAmmo(int iSlot) { return !SlotUsesAmmo(iSlot) || SlotHasClip(iSlot) || SlotHasReserve(iSlot); }
-static bool SlotCanUseNow(int iSlot) { return !SlotUsesAmmo(iSlot) || SlotHasClip(iSlot); }
 
 static bool IsTargetBehindLocal(CTFPlayer* pLocal, CTFPlayer* pTarget)
 {
@@ -64,82 +95,103 @@ static int SelectBestSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy
 	const float flEnemyDist = tClosestEnemy.m_flDist;
 	const bool bMeleeReachable = bHasEnemy && std::abs(tClosestEnemy.m_flDistZ) <= kMeleeZLimit;
 
+	const bool bPrimaryCombat = SlotIsCombatWeapon(SLOT_PRIMARY);
+	const bool bSecondaryCombat = SlotIsCombatWeapon(SLOT_SECONDARY);
+	const bool bPrimaryShot = bPrimaryCombat && SlotHasShot(SLOT_PRIMARY);
+	const bool bPrimaryAny = bPrimaryCombat && SlotHasAnyAmmo(SLOT_PRIMARY);
+	const bool bSecondaryShot = bSecondaryCombat && SlotHasShot(SLOT_SECONDARY);
+	const bool bSecondaryAny = bSecondaryCombat && SlotHasAnyAmmo(SLOT_SECONDARY);
+
 	switch (pLocal->m_iClass())
 	{
 	case TF_CLASS_SCOUT:
 	{
-		const bool bPrimaryEmpty = !SlotHasClip(SLOT_PRIMARY);
-		const bool bSecondaryLow = !SlotUsesAmmo(SLOT_SECONDARY) || !SlotHasClip(SLOT_SECONDARY) || G::AmmoInSlot[SLOT_SECONDARY].m_iReserve <= G::AmmoInSlot[SLOT_SECONDARY].m_iMaxReserve / 4;
-		if (bMeleeReachable && bPrimaryEmpty && bSecondaryLow && flEnemyDist <= 200.f)
+		if (bMeleeReachable && (flEnemyDist <= 175.f
+			|| (!bPrimaryShot && !bSecondaryShot && flEnemyDist <= 300.f)
+			|| (!bPrimaryShot && flEnemyDist <= 220.f && (!bSecondaryCombat || !bSecondaryShot))))
 			return SLOT_MELEE;
-		if (SlotUsesAmmo(SLOT_SECONDARY) && SlotHasClip(SLOT_SECONDARY) && (bPrimaryEmpty || flEnemyDist > 900.f))
+		if (bSecondaryShot && (!bPrimaryShot || flEnemyDist > 750.f))
 			return SLOT_SECONDARY;
-		if (SlotHasClip(SLOT_PRIMARY))
+		if (bPrimaryShot || bPrimaryAny)
 			return SLOT_PRIMARY;
+		if (bSecondaryAny)
+			return SLOT_SECONDARY;
 		break;
 	}
 	case TF_CLASS_HEAVY:
 	{
 		const bool bHolidayPunch = G::SavedDefIndexes[SLOT_MELEE] == Heavy_t_TheHolidayPunch;
 		const bool bPunchTarget = bHolidayPunch && bHasEnemy && !tClosestEnemy.m_pPlayer->IsTaunting() && tClosestEnemy.m_pPlayer->IsInvulnerable() && flEnemyDist < 400.f;
-		const bool bOutOfAmmo = !SlotHasClip(SLOT_PRIMARY) && !SlotHasClip(SLOT_SECONDARY) && !SlotHasReserve(SLOT_SECONDARY);
-		if (bMeleeReachable && (bOutOfAmmo || bPunchTarget))
+		if (bMeleeReachable && (bPunchTarget
+			|| (!pLocal->InCond(TF_COND_AIMING) && flEnemyDist <= 175.f)
+			|| (!bPrimaryShot && !bSecondaryShot && flEnemyDist <= 300.f)))
 			return SLOT_MELEE;
-		if (SlotHasClip(SLOT_PRIMARY))
+		if (bPrimaryShot)
+			return SLOT_PRIMARY;
+		if (bSecondaryShot || bSecondaryAny)
+			return SLOT_SECONDARY;
+		if (bPrimaryAny)
 			return SLOT_PRIMARY;
 		break;
 	}
 	case TF_CLASS_MEDIC:
 	{
-		auto pSecondaryWeapon = pLocal->GetWeaponFromSlot(SLOT_SECONDARY);
+		auto pSecondaryWeapon = pLocal->GetWeaponInSlot(SLOT_SECONDARY);
 		if (!pSecondaryWeapon)
 			return -1;
 
 		if (pSecondaryWeapon->As<CWeaponMedigun>()->m_hHealingTarget() || bHasMedigunTargets)
 			return SLOT_SECONDARY;
-		if (bMeleeReachable && (!SlotHasClip(SLOT_PRIMARY) || flEnemyDist <= 400.f))
+		if (bMeleeReachable && (flEnemyDist <= 250.f || (!bPrimaryShot && flEnemyDist <= 400.f)))
 			return SLOT_MELEE;
-		return SLOT_PRIMARY;
+		if (bPrimaryCombat)
+			return SLOT_PRIMARY;
+		break;
 	}
 	case TF_CLASS_SPY:
 	{
 		const bool bIsBehind = IsTargetBehindLocal(pLocal, tClosestEnemy.m_pPlayer);
-		auto pKnife = pLocal->GetWeaponFromSlot(SLOT_MELEE);
+		auto pKnife = pLocal->GetWeaponInSlot(SLOT_MELEE);
 		const bool bReadyToBackstab = NavRuntime::IsBackstabReady(pKnife);
 		const bool bKnifeLethal = pKnife && bHasEnemy && tClosestEnemy.m_pPlayer->m_iHealth() <= pKnife->GetDamage(false);
 		if (bMeleeReachable && flEnemyDist <= 250.f && (bReadyToBackstab || bKnifeLethal))
 			return SLOT_MELEE;
 		if (bMeleeReachable && (pLocal->InCond(TF_COND_STEALTHED) || bIsBehind) && flEnemyDist <= 1000.f)
 			return SLOT_MELEE;
-		if (SlotHasClip(SLOT_PRIMARY) || SlotHasReserve(SLOT_PRIMARY))
+		if (bPrimaryShot || bPrimaryAny)
 			return SLOT_PRIMARY;
 		break;
 	}
 	case TF_CLASS_SNIPER:
 	{
 		const int iTargetLowHp = GetSniperTargetHealthTier(tClosestEnemy);
-		const bool bOutOfAmmo = !SlotHasReserve(SLOT_PRIMARY) && !SlotHasClip(SLOT_SECONDARY);
+		const bool bOutOfAmmo = !bPrimaryShot && !bSecondaryShot;
 		if (bMeleeReachable && (bOutOfAmmo || flEnemyDist <= 200.f))
 			return SLOT_MELEE;
-		if (SlotUsesAmmo(SLOT_SECONDARY) && SlotCanUseNow(SLOT_SECONDARY) && bHasEnemy && flEnemyDist <= 240.f && (!SlotCanUseNow(SLOT_PRIMARY) || iTargetLowHp > 1))
+		if (bSecondaryShot && bHasEnemy && flEnemyDist <= 300.f && (!bPrimaryShot || iTargetLowHp > 1))
 			return SLOT_SECONDARY;
-		if (iCurrentSlot >= SLOT_PRIMARY && iCurrentSlot < SLOT_MELEE && SlotUsesAmmo(iCurrentSlot) && SlotHasClip(iCurrentSlot) && bHasEnemy && flEnemyDist <= 800.f && iTargetLowHp > 1)
-			return iCurrentSlot;
-		if (SlotHasClip(SLOT_PRIMARY))
+		if (iCurrentSlot == SLOT_SECONDARY && bSecondaryShot && bHasEnemy && flEnemyDist <= 800.f && iTargetLowHp > 1)
+			return SLOT_SECONDARY;
+		if (bPrimaryShot)
+			return SLOT_PRIMARY;
+		if (bSecondaryShot || bSecondaryAny)
+			return SLOT_SECONDARY;
+		if (bPrimaryAny)
 			return SLOT_PRIMARY;
 		break;
 	}
 	case TF_CLASS_PYRO:
 	{
-		const bool bSecondaryLow = !SlotHasClip(SLOT_SECONDARY) && SlotUsesAmmo(SLOT_SECONDARY) && G::AmmoInSlot[SLOT_SECONDARY].m_iReserve <= G::AmmoInSlot[SLOT_SECONDARY].m_iMaxReserve / 4;
-		if (bMeleeReachable && !SlotHasClip(SLOT_PRIMARY) && bSecondaryLow && flEnemyDist <= 300.f)
+		if (bMeleeReachable && !bPrimaryShot && (!bSecondaryShot || flEnemyDist <= 220.f) && flEnemyDist <= 300.f)
 			return SLOT_MELEE;
-		if (SlotCanUseNow(SLOT_PRIMARY) && (!bHasEnemy || flEnemyDist <= 520.f))
+		if (bPrimaryShot && (!bHasEnemy || flEnemyDist <= 520.f))
 			return SLOT_PRIMARY;
-		if (SlotHasClip(SLOT_SECONDARY) && (!SlotCanUseNow(SLOT_PRIMARY) || (bHasEnemy && flEnemyDist > 650.f)))
+		if (bSecondaryShot && (!bPrimaryShot || (bHasEnemy && flEnemyDist > 520.f)))
 			return SLOT_SECONDARY;
-		if (SlotCanUseNow(SLOT_PRIMARY))
+		if (bPrimaryShot || bPrimaryAny)
 			return SLOT_PRIMARY;
+		if (bSecondaryAny)
+			return SLOT_SECONDARY;
 		break;
 	}
 	case TF_CLASS_SOLDIER:
@@ -147,44 +199,51 @@ static int SelectBestSlot(CTFPlayer* pLocal, const ClosestEnemy_t& tClosestEnemy
 		auto pEnemyWeaponEntity = bHasEnemy ? tClosestEnemy.m_pPlayer->m_hActiveWeapon().Get() : nullptr;
 		auto pEnemyWeapon = pEnemyWeaponEntity ? pEnemyWeaponEntity->As<CTFWeaponBase>() : nullptr;
 		const bool bEnemyCanAirblast = pEnemyWeapon && pEnemyWeapon->GetWeaponID() == TF_WEAPON_FLAMETHROWER && pEnemyWeapon->m_iItemDefinitionIndex() != Pyro_m_ThePhlogistinator;
-		const bool bEnemyClose = bHasEnemy && flEnemyDist <= 250.f;
-		const bool bPrimaryEmpty = SlotUsesAmmo(SLOT_PRIMARY) && !SlotHasClip(SLOT_PRIMARY) && !SlotHasReserve(SLOT_PRIMARY);
-		if (bMeleeReachable && (iCurrentSlot != SLOT_PRIMARY || bPrimaryEmpty) && bEnemyClose &&
-			(tClosestEnemy.m_pPlayer->m_iHealth() < 80 ? !SlotHasClip(SLOT_SECONDARY) : tClosestEnemy.m_pPlayer->m_iHealth() >= 150 || G::AmmoInSlot[SLOT_SECONDARY].m_iClip < 2))
-			return SLOT_MELEE;
-		if (SlotHasClip(SLOT_SECONDARY) && (bPrimaryEmpty || bEnemyCanAirblast || (bHasEnemy && flEnemyDist <= 250.f && tClosestEnemy.m_pPlayer->m_iHealth() <= 90)))
+		if (bMeleeReachable && (flEnemyDist <= 185.f
+			|| (!bPrimaryShot && !bSecondaryShot && flEnemyDist <= 300.f)))
+		{
+			if (!(bSecondaryShot && flEnemyDist > 120.f && tClosestEnemy.m_pPlayer->m_iHealth() <= 90))
+				return SLOT_MELEE;
+		}
+		if (bSecondaryShot && (!bPrimaryShot || bEnemyCanAirblast || (bHasEnemy && flEnemyDist <= 320.f && (tClosestEnemy.m_pPlayer->m_iHealth() <= 90 || flEnemyDist <= 220.f))))
 			return SLOT_SECONDARY;
-		if (SlotCanUseNow(SLOT_PRIMARY))
+		if (bPrimaryShot || bPrimaryAny)
 			return SLOT_PRIMARY;
+		if (bSecondaryAny)
+			return SLOT_SECONDARY;
 		break;
 	}
 	case TF_CLASS_DEMOMAN:
 	{
-		if (SlotCanUseNow(SLOT_PRIMARY))
-			return SLOT_PRIMARY;
-		if (bMeleeReachable && flEnemyDist <= 260.f)
+		if (!bPrimaryCombat && !bSecondaryCombat)
 			return SLOT_MELEE;
-		if (G::HasWeaponForSlot[SLOT_PRIMARY])
+		if (bMeleeReachable && (flEnemyDist <= 185.f || (!bPrimaryShot && !bSecondaryShot && flEnemyDist <= 300.f)))
+			return SLOT_MELEE;
+		if (bSecondaryShot && (!bPrimaryShot || (bHasEnemy && flEnemyDist > 550.f && flEnemyDist <= 1200.f)))
+			return SLOT_SECONDARY;
+		if (bPrimaryShot || bPrimaryAny)
 			return SLOT_PRIMARY;
+		if (bSecondaryAny)
+			return SLOT_SECONDARY;
 		break;
 	}
 	case TF_CLASS_ENGINEER:
 	{
-		if (bMeleeReachable && SlotUsesAmmo(SLOT_PRIMARY) && !SlotHasClip(SLOT_PRIMARY) && !SlotHasClip(SLOT_SECONDARY) && flEnemyDist <= 200.f)
+		if (bMeleeReachable && (flEnemyDist <= 185.f || (!bPrimaryShot && !bSecondaryShot && flEnemyDist <= 300.f)))
 			return SLOT_MELEE;
-		if (SlotCanUseNow(SLOT_PRIMARY) && (!bHasEnemy || flEnemyDist <= 1000.f))
-			return SLOT_PRIMARY;
-		if ((!SlotHasAnyAmmo(SLOT_PRIMARY) || (bHasEnemy && flEnemyDist > 1100.f)) && (SlotHasClip(SLOT_SECONDARY) || SlotHasReserve(SLOT_SECONDARY)))
+		if (bSecondaryShot && (!bPrimaryShot || (bHasEnemy && flEnemyDist > 1000.f && G::SavedWepIds[SLOT_SECONDARY] == TF_WEAPON_PISTOL)))
 			return SLOT_SECONDARY;
-		if (SlotHasAnyAmmo(SLOT_PRIMARY))
+		if (bPrimaryShot || bPrimaryAny)
 			return SLOT_PRIMARY;
+		if (bSecondaryAny)
+			return SLOT_SECONDARY;
 		break;
 	}
 	default:
 		break;
 	}
 
-	return -1;
+	return GetRangedFallbackSlot(pLocal);
 }
 
 bool CBotUtils::HasMedigunTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
@@ -405,7 +464,7 @@ void CBotUtils::UpdateBestSlot(CTFPlayer* pLocal)
 	}
 
 	const bool bHasMedigunTargets = pLocal->m_iClass() == TF_CLASS_MEDIC &&
-		HasMedigunTargets(pLocal, pLocal->GetWeaponFromSlot(SLOT_SECONDARY));
+		HasMedigunTargets(pLocal, pLocal->GetWeaponInSlot(SLOT_SECONDARY));
 	m_iBestSlot = SelectBestSlot(pLocal, m_tClosestEnemy, m_iCurrentSlot, bHasMedigunTargets);
 
 	if (m_iBestSlot == SLOT_MELEE && !G::HasWeaponForSlot[SLOT_MELEE])

@@ -8,6 +8,7 @@
 #include <sstream>
 #include <fstream>
 #include <format>
+#include <mutex>
 #pragma comment(lib, "imagehlp.lib")
 
 #define STATUS_RUNTIME_ERROR             ((DWORD   )0xE06D7363L)
@@ -27,6 +28,8 @@ struct Frame_t
 static PVOID s_pHandle;
 static LPVOID s_lpParam;
 static int s_iExceptions = 0;
+static std::mutex s_tExceptionMutex;
+static thread_local bool s_bHandlingException = false;
 
 static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 {
@@ -103,6 +106,8 @@ static inline std::deque<Frame_t> StackTrace(PCONTEXT pContext)
 
 static void WriteCrashLog(PEXCEPTION_POINTERS ExceptionInfo, const char* sError, bool bSafeToWalk)
 {
+	std::lock_guard tLock(s_tExceptionMutex);
+
 	std::stringstream ssErrorStream;
 	ssErrorStream << std::format("Error: {} (0x{:X}) ({})\n", sError, ExceptionInfo->ExceptionRecord->ExceptionCode, ++s_iExceptions);
 	ssErrorStream << "Built @ " __DATE__ ", " __TIME__ ", " __CONFIGURATION__ "\n";
@@ -191,14 +196,16 @@ static LONG APIENTRY ExceptionFilter(PEXCEPTION_POINTERS ExceptionInfo)
 	case DBG_THREAD_NAMING: return EXCEPTION_CONTINUE_SEARCH;
 	}
 
-	if (!Vars::Debug::CrashLogging.Value)
+	if (!Vars::Debug::CrashLogging.Value || s_bHandlingException)
 		return EXCEPTION_CONTINUE_SEARCH;
 
+	s_bHandlingException = true;
 	__try
 	{
 		WriteCrashLog(ExceptionInfo, sError, ExceptionInfo->ExceptionRecord->ExceptionCode != STATUS_STACK_OVERFLOW);
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	s_bHandlingException = false;
 
 	return EXCEPTION_CONTINUE_SEARCH;
 }

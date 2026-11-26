@@ -767,27 +767,24 @@ template <> void CConfigs::LoadJson(const boost::property_tree::ptree& t, const 
 
 CConfigs::CConfigs()
 {
-	m_sConfigPath = std::filesystem::current_path().string() + "\\unibox\\";
+	std::error_code tError;
+	const auto tCurrent = std::filesystem::current_path(tError);
+	if (!tError && !tCurrent.empty())
+		m_sConfigPath = (tCurrent / "unibox").string() + "\\";
+	else
+		m_sConfigPath = "unibox\\";
+
 	m_sVisualsPath = m_sConfigPath + "Visuals\\";
 	m_sSkinsPath = m_sConfigPath + "Skins\\";
 	m_sCorePath = m_sConfigPath + "Core\\";
 	m_sMaterialsPath = m_sConfigPath + "Materials\\";
 	m_sStatePath = m_sConfigPath + "active.cfg";
 
-	if (!std::filesystem::exists(m_sConfigPath))
-		std::filesystem::create_directory(m_sConfigPath);
-
-	if (!std::filesystem::exists(m_sVisualsPath))
-		std::filesystem::create_directory(m_sVisualsPath);
-
-	if (!std::filesystem::exists(m_sSkinsPath))
-		std::filesystem::create_directory(m_sSkinsPath);
-
-	if (!std::filesystem::exists(m_sCorePath))
-		std::filesystem::create_directory(m_sCorePath);
-
-	if (!std::filesystem::exists(m_sMaterialsPath))
-		std::filesystem::create_directory(m_sMaterialsPath);
+	std::filesystem::create_directories(m_sConfigPath, tError);
+	std::filesystem::create_directories(m_sVisualsPath, tError);
+	std::filesystem::create_directories(m_sSkinsPath, tError);
+	std::filesystem::create_directories(m_sCorePath, tError);
+	std::filesystem::create_directories(m_sMaterialsPath, tError);
 
 	LoadState();
 }

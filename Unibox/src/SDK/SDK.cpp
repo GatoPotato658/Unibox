@@ -2050,48 +2050,48 @@ void SDK::CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* p
 		I::GlobalVars->curtime = flOldCurtime;
 	}
 
-	for (int i = 0; i <= SLOT_PDA2; i++)
+	bool bFoundSlot[SLOT_PDA2 + 1] = {};
+	for (int i = 0; i < MAX_WEAPONS; i++)
 	{
 		auto pWeaponInSlot = pLocal->GetWeaponFromSlot(i);
-		if (pWeaponInSlot)
+		if (!pWeaponInSlot)
+			continue;
+
+		int iDefIndex = pWeaponInSlot->m_iItemDefinitionIndex(), iWeaponID = pWeaponInSlot->GetWeaponID();
+		int iActualWeaponSlot = pWeaponInSlot->GetSlot();
+		if (iActualWeaponSlot < SLOT_PRIMARY || iActualWeaponSlot > SLOT_PDA2)
+			continue;
+
+		bFoundSlot[iActualWeaponSlot] = true;
+		G::SavedWepSlots[iActualWeaponSlot] = iActualWeaponSlot;
+		G::SavedDefIndexes[iActualWeaponSlot] = iDefIndex;
+		G::SavedWepIds[iActualWeaponSlot] = iWeaponID;
+
+		if (iActualWeaponSlot < SLOT_MELEE)
 		{
-			int iDefIndex = pWeaponInSlot->m_iItemDefinitionIndex(), iWeaponID = pWeaponInSlot->GetWeaponID();
-			int iActualWeaponSlot = pWeaponInSlot->GetSlot(); // this whole thing is fucked up
-			if (iActualWeaponSlot < SLOT_PRIMARY || iActualWeaponSlot > SLOT_PDA2)
-				continue;
-
-			const bool bWeaponChanged = G::SavedDefIndexes[iActualWeaponSlot] != iDefIndex
-				|| G::SavedWepIds[iActualWeaponSlot] != iWeaponID;
-
-			G::SavedWepSlots[i] = iActualWeaponSlot;
-			G::SavedDefIndexes[iActualWeaponSlot] = iDefIndex;
-			G::SavedWepIds[iActualWeaponSlot] = iWeaponID;
-
-			if (iActualWeaponSlot < SLOT_MELEE)
-			{
-				G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->IsEnergyWeapon() ? static_cast<int>(pWeaponInSlot->m_flEnergy()) : pWeaponInSlot->m_iClip1();
-				G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
-				G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->GetMaxClip1() : 0;
-				G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = pWeaponInSlot->m_iPrimaryAmmoType() > 0 ? pLocal->GetMaxAmmo(pWeaponInSlot->m_iPrimaryAmmoType()) : 0;
-				if (bWeaponChanged)
-				{
-					G::AmmoInSlot[iActualWeaponSlot].m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIndex);
-				}
-			}
-			else if (i < SLOT_MELEE) // TODO: remember why i added this shit
-				G::AmmoInSlot[i].m_bUsesAmmo = false;
-
-			if (iActualWeaponSlot <= SLOT_MELEE)
-				G::HasWeaponForSlot[iActualWeaponSlot] = true;
+			G::AmmoInSlot[iActualWeaponSlot].m_iClip = pWeaponInSlot->IsEnergyWeapon() ? static_cast<int>(pWeaponInSlot->m_flEnergy()) : pWeaponInSlot->m_iClip1();
+			G::AmmoInSlot[iActualWeaponSlot].m_iReserve = pLocal->GetAmmoCount(pWeaponInSlot->m_iPrimaryAmmoType());
+			G::AmmoInSlot[iActualWeaponSlot].m_iMaxClip = pWeaponInSlot->m_pWeaponInfo() ? pWeaponInSlot->GetMaxClip1() : 0;
+			G::AmmoInSlot[iActualWeaponSlot].m_iMaxReserve = pWeaponInSlot->m_iPrimaryAmmoType() > 0 ? pLocal->GetMaxAmmo(pWeaponInSlot->m_iPrimaryAmmoType()) : 0;
+			G::AmmoInSlot[iActualWeaponSlot].m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(iWeaponID, iDefIndex, false);
 		}
-		else
-		{
-			int iActualWeaponSlot = G::SavedWepSlots[i];
-			if (iActualWeaponSlot < SLOT_PRIMARY || iActualWeaponSlot > SLOT_MELEE)
-				continue;
 
-			G::HasWeaponForSlot[iActualWeaponSlot] = false;
-		}
+		if (iActualWeaponSlot <= SLOT_MELEE)
+			G::HasWeaponForSlot[iActualWeaponSlot] = true;
+	}
+
+	for (int i = 0; i <= SLOT_PDA2; i++)
+	{
+		if (bFoundSlot[i])
+			continue;
+
+		G::SavedDefIndexes[i] = -1;
+		G::SavedWepIds[i] = -1;
+		G::SavedWepSlots[i] = -1;
+		if (i < SLOT_MELEE)
+			G::AmmoInSlot[i] = WeaponAmmoInfo_t();
+		if (i <= SLOT_MELEE)
+			G::HasWeaponForSlot[i] = false;
 	}
 
 	bool bCanAttack = pLocal->CanAttack();
