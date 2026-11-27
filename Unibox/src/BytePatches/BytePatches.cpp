@@ -139,6 +139,7 @@ void BytePatch::Unload()
 bool CBytePatches::Initialize()
 {
 	m_vPatches = {
+		BytePatch("engine.dll", "83 78 58 00 4C 89 74 24 48 0F 84 ? ? ? ? 48 8B 01 FF 90 98 04 00 00 4C 8B F0 48 85 C0 0F 84", 0x9, "90 E9"),
 		BytePatch("engine.dll", "0F 82 ? ? ? ? 4A 63 84 2F", 0x0, "90 90 90 90 90 90"), // skybox fix
 		//BytePatch("server.dll", "75 ? 44 38 A7 ? ? ? ? 75 ? 41 3B DD", 0x0, "EB"), // listen server speedhack
 		BytePatch("vguimatsurface.dll", "66 83 FE ? 0F 84", 0x0, "66 83 FE 00"), // include '&' in text size
