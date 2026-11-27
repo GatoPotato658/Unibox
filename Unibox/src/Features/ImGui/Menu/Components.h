@@ -16,28 +16,28 @@ namespace ImGui
 		static const std::array<MaterialPreset_t, 24> vPresets = {{
 			{ "Arctic chrome", { .tColor = { 195, 225, 245, 255 }, .iEffect = 8, .tSecondary = { 65, 155, 255, 255 }, .flRoughness = 0.12f, .flReflectivity = 0.95f, .flIntensity = 1.1f, .flRimPower = 4.f } },
 			{ "Opal silk", { .tColor = { 235, 220, 250, 255 }, .iEffect = 4, .tSecondary = { 100, 235, 215, 255 }, .flRoughness = 0.28f, .flReflectivity = 0.7f, .flScale = 1.5f, .flSpeed = 0.3f, .flRimPower = 2.5f } },
-			{ "Cyan hologram", { .tColor = { 35, 210, 255, 180 }, .iEffect = 6, .tSecondary = { 155, 100, 255, 255 }, .flRoughness = 0.15f, .flReflectivity = 0.4f, .flScale = 2.5f, .flSpeed = 0.8f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 1 } },
-			{ "Solar plasma", { .tColor = { 255, 85, 25, 255 }, .iEffect = 13, .tSecondary = { 255, 220, 65, 255 }, .flScale = 1.7f, .flSpeed = 1.2f, .flIntensity = 1.6f, .flRimPower = 2.f, .iBlend = 2 } },
-			{ "Nebula", { .tColor = { 70, 35, 160, 255 }, .iEffect = 14, .tSecondary = { 50, 205, 255, 255 }, .flScale = 1.2f, .flSpeed = 0.4f, .flIntensity = 1.4f, .flRimPower = 2.5f, .iBlend = 2 } },
+			{ "Cyan hologram", { .tColor = { 35, 210, 255, 180 }, .iEffect = 6, .tSecondary = { 155, 100, 255, 255 }, .flRoughness = 0.15f, .flReflectivity = 0.4f, .flScale = 2.5f, .flSpeed = 0.8f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 2 } },
+			{ "Solar plasma", { .tColor = { 255, 85, 25, 255 }, .iEffect = 13, .tSecondary = { 255, 220, 65, 255 }, .flScale = 1.7f, .flSpeed = 1.2f, .flIntensity = 1.6f, .flRimPower = 2.f, .iBlend = 3 } },
+			{ "Nebula", { .tColor = { 70, 35, 160, 255 }, .iEffect = 14, .tSecondary = { 50, 205, 255, 255 }, .flScale = 1.2f, .flSpeed = 0.4f, .flIntensity = 1.4f, .flRimPower = 2.5f, .iBlend = 3 } },
 			{ "Carbon weave", { .tColor = { 35, 40, 48, 255 }, .iEffect = 15, .tSecondary = { 110, 125, 145, 255 }, .flRoughness = 0.42f, .flReflectivity = 0.6f, .flScale = 4.f, .flSpeed = 0.f, .flRimPower = 4.f } },
 			{ "Gold brushed", { .tColor = { 225, 170, 65, 255 }, .iEffect = 16, .tSecondary = { 255, 235, 170, 255 }, .flRoughness = 0.3f, .flReflectivity = 0.85f, .flScale = 3.f, .flSpeed = 0.f, .flRimPower = 4.f } },
-			{ "Digital", { .tColor = { 35, 245, 155, 220 }, .iEffect = 18, .tSecondary = { 40, 110, 255, 255 }, .flScale = 2.8f, .flSpeed = 1.1f, .flIntensity = 1.2f, .flRimPower = 2.f, .iBlend = 1 } },
+			{ "Digital", { .tColor = { 35, 245, 155, 220 }, .iEffect = 18, .tSecondary = { 40, 110, 255, 255 }, .flScale = 2.8f, .flSpeed = 1.1f, .flIntensity = 1.2f, .flRimPower = 2.f, .iBlend = 2 } },
 			{ "Molten lava", { .tColor = { 255, 70, 15, 255 }, .iEffect = 19, .tSecondary = { 255, 210, 60, 255 }, .flReflectivity = 0.4f, .flSpeed = 0.8f, .flRimPower = 2.5f } },
 			{ "Candy bubble", { .tColor = { 0, 230, 255, 255 }, .iEffect = 20, .tSecondary = { 255, 230, 0, 255 }, .flReflectivity = 0.3f } },
 			{ "Neon trip", { .tColor = { 120, 40, 200, 255 }, .iEffect = 21, .flSpeed = 1.f, .flIntensity = 1.2f } },
-			{ "Neural net", { .tColor = { 40, 120, 255, 255 }, .iEffect = 22, .tSecondary = { 120, 230, 255, 255 }, .flReflectivity = 0.5f, .flSpeed = 1.f, .flIntensity = 1.2f, .iBlend = 1 } },
+			{ "Neural net", { .tColor = { 40, 120, 255, 255 }, .iEffect = 22, .tSecondary = { 120, 230, 255, 255 }, .flReflectivity = 0.5f, .flSpeed = 1.f, .flIntensity = 1.2f, .iBlend = 2 } },
 			{ "Soap film", { .tColor = { 255, 255, 255, 255 }, .iEffect = 23, .tSecondary = { 255, 255, 255, 255 }, .flSpeed = 1.f } },
 			{ "Aurora borealis", { .tColor = { 90, 255, 140, 255 }, .iEffect = 24, .tSecondary = { 80, 180, 255, 255 }, .flSpeed = 1.f, .flIntensity = 1.2f } },
 			{ "Aquarium", { .tColor = { 15, 100, 255, 255 }, .iEffect = 25, .tSecondary = { 120, 210, 255, 255 }, .flSpeed = 1.f } },
 			{ "Daydream", { .tColor = { 110, 200, 255, 255 }, .iEffect = 26, .tSecondary = { 90, 205, 40, 255 }, .flSpeed = 0.6f } },
 			{ "Galaxy", { .tColor = { 80, 30, 170, 255 }, .iEffect = 28, .tSecondary = { 255, 120, 200, 255 }, .flReflectivity = 0.5f, .flScale = 1.2f, .flSpeed = 0.5f, .flIntensity = 1.3f, .flRimPower = 2.5f } },
 			{ "Matrix", { .tColor = { 0, 40, 10, 255 }, .iEffect = 29, .tSecondary = { 40, 255, 90, 255 }, .flScale = 1.5f, .flSpeed = 1.f, .flIntensity = 1.2f, .flRimPower = 2.f } },
-			{ "Inferno", { .tColor = { 255, 60, 0, 255 }, .iEffect = 30, .tSecondary = { 255, 220, 80, 255 }, .flScale = 1.4f, .flSpeed = 1.2f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 1 } },
-			{ "Frostbite", { .tColor = { 170, 220, 255, 230 }, .iEffect = 31, .tSecondary = { 235, 250, 255, 255 }, .flRoughness = 0.2f, .flReflectivity = 0.8f, .flScale = 1.5f, .flSpeed = 0.5f, .iBlend = 0 } },
+			{ "Inferno", { .tColor = { 255, 60, 0, 255 }, .iEffect = 30, .tSecondary = { 255, 220, 80, 255 }, .flScale = 1.4f, .flSpeed = 1.2f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 2 } },
+			{ "Frostbite", { .tColor = { 170, 220, 255, 230 }, .iEffect = 31, .tSecondary = { 235, 250, 255, 255 }, .flRoughness = 0.2f, .flReflectivity = 0.8f, .flScale = 1.5f, .flSpeed = 0.5f, .iBlend = 1 } },
 			{ "Cel shaded", { .tColor = { 255, 140, 60, 255 }, .iEffect = 32, .tSecondary = { 20, 15, 30, 255 }, .flRoughness = 0.3f, .flReflectivity = 0.8f } },
 			{ "Bio cells", { .tColor = { 40, 200, 120, 255 }, .iEffect = 33, .tSecondary = { 200, 255, 120, 255 }, .flReflectivity = 0.4f, .flScale = 1.5f, .flSpeed = 0.7f, .flRimPower = 2.5f } },
 			{ "Circuit board", { .tColor = { 10, 60, 40, 255 }, .iEffect = 34, .tSecondary = { 60, 255, 200, 255 }, .flReflectivity = 0.5f, .flScale = 1.5f, .flSpeed = 1.f, .flIntensity = 1.2f } },
-			{ "Storm", { .tColor = { 60, 90, 255, 255 }, .iEffect = 35, .tSecondary = { 200, 230, 255, 255 }, .flScale = 1.2f, .flSpeed = 1.f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 1 } }
+			{ "Storm", { .tColor = { 60, 90, 255, 255 }, .iEffect = 35, .tSecondary = { 200, 230, 255, 255 }, .flScale = 1.2f, .flSpeed = 1.f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 2 } }
 		}};
 		return vPresets;
 	}
@@ -213,7 +213,7 @@ namespace ImGui
 				FSlider(fLabel("Intensity").c_str(), &pVar->flIntensity, 0.f, 4.f, 0.05f, "%.2f", FSliderEnum::Clamp);
 				if (bRim)
 					FSlider(fLabel("Rim power").c_str(), &pVar->flRimPower, 0.25f, 8.f, 0.05f, "%.2f", FSliderEnum::Clamp);
-				FDropdown("Blend", &pVar->iBlend, { "Alpha", "Additive", "Screen", "Solid" });
+				FDropdown("Blend", &pVar->iBlend, { "Solid", "Alpha", "Additive", "Screen" });
 				FToggle("Write depth", &pVar->bDepthWrite);
 				FTooltip("Writes this layer into the depth buffer, which can hide later layers.");
 			}

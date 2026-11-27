@@ -848,7 +848,7 @@ namespace
 			}
 
 			const auto& params = item.params;
-			const bool bSolidBlend = (params.iBlend == 3);
+			const bool bSolidBlend = (params.iBlend == 0);
 			const bool bWireframe = (params.iEffect == 10);
 			const bool bDepthFirst = !item.maskOnly && !item.occluded && !bSolidBlend && !bWireframe && params.bDepthWrite;
 			const int passCount = bDepthFirst ? 2 : 1;
@@ -859,7 +859,7 @@ namespace
 				{ params.tSecondary.r / 255.f, params.tSecondary.g / 255.f, params.tSecondary.b / 255.f, params.tSecondary.a / 255.f },
 				{ std::clamp(params.flRoughness, 0.02f, 1.f), std::clamp(params.flReflectivity, 0.f, 1.f),
 					std::clamp(params.flIntensity, 0.f, 10.f), std::clamp(params.flRimPower, 0.1f, 16.f) },
-				{ item.time * std::clamp(params.flSpeed, -10.f, 10.f), std::clamp(params.flScale, 0.01f, 100.f), params.iBlend == 2 ? 2.f : 0.f, 0.f }
+				{ item.time * std::clamp(params.flSpeed, -10.f, 10.f), std::clamp(params.flScale, 0.01f, 100.f), params.iBlend == 3 ? 2.f : 0.f, 0.f }
 			};
 			if (!shadow.psConstValid || std::memcmp(shadow.psConst, constants, sizeof(constants)) != 0)
 			{
@@ -904,8 +904,8 @@ namespace
 				ok &= shadow.SetRS(D3DRS_ALPHABLENDENABLE, alphaBlend);
 				if (alphaBlend)
 				{
-					ok &= shadow.SetRS(D3DRS_SRCBLEND, params.iBlend == 2 ? D3DBLEND_ONE : D3DBLEND_SRCALPHA);
-					ok &= shadow.SetRS(D3DRS_DESTBLEND, params.iBlend == 1 ? D3DBLEND_ONE : params.iBlend == 2 ? D3DBLEND_INVSRCCOLOR : D3DBLEND_INVSRCALPHA);
+					ok &= shadow.SetRS(D3DRS_SRCBLEND, params.iBlend == 3 ? D3DBLEND_ONE : D3DBLEND_SRCALPHA);
+					ok &= shadow.SetRS(D3DRS_DESTBLEND, params.iBlend == 2 ? D3DBLEND_ONE : params.iBlend == 3 ? D3DBLEND_INVSRCCOLOR : D3DBLEND_INVSRCALPHA);
 				}
 				ok &= shadow.SetRS(D3DRS_FILLMODE, (!item.maskOnly && bWireframe) ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
 				ok &= shadow.SetRS(D3DRS_COLORWRITEENABLE, bDepthPass ? 0 : (D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE));

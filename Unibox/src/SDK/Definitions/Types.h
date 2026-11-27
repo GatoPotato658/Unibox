@@ -1117,7 +1117,7 @@ struct ChamsMaterial_t
 	float flSpeed = 1.f;
 	float flIntensity = 1.f;
 	float flRimPower = 3.f;
-	int iBlend = 3;
+	int iBlend = 0;
 	bool bDepthWrite = true;
 
 	inline void Sanitize()
