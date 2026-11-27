@@ -389,15 +389,24 @@ void CResolver::HitscanRan(CTFPlayer* pLocal, CTFPlayer* pTarget, CTFWeaponBase*
 	}
 }
 
-void CResolver::BulletImpact(IGameEvent* pEvent)
+bool CResolver::HasPendingHitscan() const
 {
-	if (!Vars::Resolver::Enabled.Value || !pEvent)
+	if (!Vars::Resolver::Enabled.Value)
+		return false;
+
+	for (const auto& tShot : m_aPendingShots)
+	{
+		if (tShot.m_bActive && !tShot.m_bImpactSeen && tShot.m_vTargetPos.LengthSqr() > 0.f)
+			return true;
+	}
+	return false;
+}
+
+void CResolver::BulletImpact(const Vec3& vImpact)
+{
+	if (!Vars::Resolver::Enabled.Value)
 		return;
 
-	if (I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid")) != I::EngineClient->GetLocalPlayer())
-		return;
-
-	const Vec3 vImpact(pEvent->GetFloat("x"), pEvent->GetFloat("y"), pEvent->GetFloat("z"));
 	const float flCurTime = I::GlobalVars->curtime;
 
 	PendingShot_t* pBestShot = nullptr;

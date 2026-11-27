@@ -3,6 +3,7 @@
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/NoSpread/NoSpreadHitscan/NoSpreadHitscan.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
+#include "../Features/Resolver/Resolver.h"
 
 
 static int iBullet{ 0 };
@@ -18,11 +19,17 @@ MAKE_HOOK(CTFPlayer_FireBullet, S::CTFPlayer_FireBullet(), void,
 
 	auto& sString = nDamageType & DMG_CRITICAL ? Vars::Visuals::Effects::CritTracer.Value : Vars::Visuals::Effects::BulletTracer.Value;
 	auto uHash = FNV1A::Hash32(sString.c_str());
-	if (uHash == FNV1A::Hash32Const("Default"))
-		return CALL_ORIGINAL(rcx, pWeapon, info, bDoEffects, nDamageType, nCustomDamageType);
-	else if (uHash == FNV1A::Hash32Const("None"))
-		return;
-	
+	const bool bDefaultEffects = uHash == FNV1A::Hash32Const("Default");
+	const bool bNoEffects = uHash == FNV1A::Hash32Const("None");
+	const bool bTrackImpact = F::Resolver.HasPendingHitscan();
+	if (!bTrackImpact)
+	{
+		if (bDefaultEffects)
+			return CALL_ORIGINAL(rcx, pWeapon, info, bDoEffects, nDamageType, nCustomDamageType);
+		if (bNoEffects)
+			return;
+	}
+
 	if (I::GlobalVars->tickcount != iLastTickCount)
 	{
 		iLastTickCount = I::GlobalVars->tickcount;
@@ -36,6 +43,14 @@ MAKE_HOOK(CTFPlayer_FireBullet, S::CTFPlayer_FireBullet(), void,
 	CGameTrace trace = {};
 	CTraceFilterHitscan filter(pLocal);
 	SDK::Trace(vStart, vEnd, MASK_SHOT | CONTENTS_GRATE, &filter, &trace);
+
+	if (bTrackImpact && trace.fraction < 1.0f)
+		F::Resolver.BulletImpact(trace.endpos);
+
+	if (bNoEffects)
+		return;
+	if (bDefaultEffects)
+		return CALL_ORIGINAL(rcx, pWeapon, info, bDoEffects, nDamageType, nCustomDamageType);
 
 	int iIndex = I::EngineClient->GetLocalPlayer();
 	int iTeam = pLocal->m_iTeamNum();

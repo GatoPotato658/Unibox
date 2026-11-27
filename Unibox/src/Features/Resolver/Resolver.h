@@ -45,7 +45,8 @@ public:
 	void FrameStageNotify();
 	void CreateMove();
 	void HitscanRan(CTFPlayer* pLocal, CTFPlayer* pTarget, CTFWeaponBase* pWeapon, int nHitbox = HITBOX_MAX, const Vec3& vShootPos = {}, const Vec3& vTargetPos = {});
-	void BulletImpact(IGameEvent* pEvent);
+	bool HasPendingHitscan() const;
+	void BulletImpact(const Vec3& vImpact);
 	void PlayerHurt(IGameEvent* pEvent);
 	void SetYaw(int iUserID, float flValue, bool bAuto = false);
 	void SetPitch(int iUserID, float flValue, bool bInverse = false, bool bAuto = false);

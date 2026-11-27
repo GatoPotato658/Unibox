@@ -24,7 +24,7 @@ bool CEventListener::Initialize()
 {
 	m_bFailed = false;
 	std::vector<const char*> vEvents = {
-		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "stats_resetround", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "bullet_impact", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify", "party_chat"
+		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "stats_resetround", "mvm_wave_complete", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "player_death", "vote_cast", "vote_maps_changed", "item_pickup", "revive_player_notify", "party_chat"
 	};
 
 	for (auto szEvent : vEvents)
@@ -115,11 +115,6 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 		const int iVictim = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
 		if (iVictim > 0 && iVictim < CNeuralPrediction::kMaxPlayers)
 			F::NeuralPred.OnPlayerEvent(iVictim, false);
-		return;
-	}
-	case FNV1A::Hash32Const("bullet_impact"):
-	{
-		F::Resolver.BulletImpact(pEvent);
 		return;
 	}
 	case FNV1A::Hash32Const("player_death"):
