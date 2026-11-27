@@ -6,6 +6,7 @@
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../ImGui/IndicatorPanel.h"
 #include "../Visuals/Groups/Groups.h"
+#include "../Resolver/Resolver.h"
 
 void CBacktrack::Reset()
 {
@@ -683,7 +684,65 @@ void CBacktrack::Store()
 
 void CBacktrack::ResolverUpdate(CBaseEntity* pEntity)
 {
+	if (!pEntity || !pEntity->IsPlayer())
+		return;
 
+	auto pPlayer = pEntity->As<CTFPlayer>();
+	auto* pTrack = FindTrack(pPlayer);
+	if (!pTrack || pTrack->Empty())
+		return;
+
+	TickRecord& tFront = pTrack->Front();
+
+	float flYaw = pPlayer->m_angEyeAnglesY();
+	float flPitch = pPlayer->m_angEyeAnglesX();
+	const bool bResolved = F::Resolver.GetAngles(pPlayer, &flYaw, &flPitch, nullptr, false);
+	const float flOldYaw = pPlayer->m_angEyeAnglesY();
+	const float flOldPitch = pPlayer->m_angEyeAnglesX();
+
+	if (bResolved)
+	{
+		pPlayer->m_angEyeAnglesY() = flYaw;
+		pPlayer->m_angEyeAnglesX() = flPitch;
+		const bool bOldUpdating = G::UpdatingAnims;
+		G::UpdatingAnims = true;
+		pPlayer->UpdateClientSideAnimation();
+		G::UpdatingAnims = bOldUpdating;
+	}
+
+	const Vec3 vOldAbsOrigin = pPlayer->GetAbsOrigin();
+	const Vec3 vOldAbsAngles = pPlayer->GetAbsAngles();
+	pPlayer->SetAbsOrigin(tFront.m_vOrigin);
+	pPlayer->SetAbsAngles(pPlayer->m_angRotation());
+	pPlayer->InvalidateBoneCache();
+
+	const int iBoneMask = BONE_USED_BY_HITBOX | BONE_USED_BY_VERTEX_MASK;
+	m_bSettingUpBones = true;
+	bool bSetup = pPlayer->SetupBones(tFront.m_aBones, MAXSTUDIOBONES, iBoneMask, tFront.m_flSimTime);
+	if (bSetup && pPlayer->UsesAimStudio())
+	{
+		if (!tFront.m_pRenderBones || tFront.m_pRenderBones.use_count() != 1)
+			tFront.m_pRenderBones = std::make_shared<std::array<matrix3x4, MAXSTUDIOBONES>>();
+		memcpy(tFront.m_pRenderBones->data(), tFront.m_aBones, sizeof(tFront.m_aBones));
+		bSetup = pPlayer->SetupAimBones(tFront.m_aBones, MAXSTUDIOBONES, iBoneMask, tFront.m_flSimTime);
+	}
+	m_bSettingUpBones = false;
+
+	pPlayer->SetAbsOrigin(vOldAbsOrigin);
+	pPlayer->SetAbsAngles(vOldAbsAngles);
+	pPlayer->InvalidateBoneCache();
+
+	if (bResolved)
+	{
+		pPlayer->m_angEyeAnglesY() = flOldYaw;
+		pPlayer->m_angEyeAnglesX() = flOldPitch;
+	}
+
+	if (!bSetup)
+		tFront.m_bInvalid = true;
+
+	for (int i = 1; i < pTrack->Size(); i++)
+		pTrack->At(i).m_bInvalid = true;
 }
 
 void CBacktrack::ReportShot(int iIndex)

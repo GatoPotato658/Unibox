@@ -41,7 +41,7 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 {
 	std::vector<Target_t> vTargets;
 
-	Vec3 vLocalPos = F::Ticks.GetShootPos();
+	Vec3 vLocalPos = pLocal->GetShootPos();
 	Vec3 vLocalAngles = I::EngineClient->GetViewAngles();
 
 	{
@@ -882,7 +882,7 @@ static inline void DrawVisuals(CTFPlayer* pLocal, Target_t& tTarget, int nWeapon
 
 void CAimbotHitscan::BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
-	const Vec3 vShootPos = F::Ticks.GetShootPos();
+	const Vec3 vShootPos = pLocal->GetShootPos();
 	Vec3 vForward;
 	Math::AngleVectors(pCmd->viewangles, &vForward);
 
@@ -1032,7 +1032,7 @@ void CAimbotHitscan::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pC
 		{
 			F::Aimbot.m_eRanType = EWeaponType::HITSCAN;
 			if (tTarget.m_pEntity->IsPlayer())
-				F::Resolver.HitscanRan(pLocal, tTarget.m_pEntity->As<CTFPlayer>(), pWeapon, tTarget.m_nAimedHitbox);
+				F::Resolver.HitscanRan(pLocal, tTarget.m_pEntity->As<CTFPlayer>(), pWeapon, tTarget.m_nAimedHitbox, m_vEyePos, tTarget.m_vPos);
 
 			if (tTarget.m_bBacktrack)
 				pCmd->tick_count = TIME_TO_TICKS(tTarget.m_pRecord->m_flSimTime) + TIME_TO_TICKS(F::Backtrack.GetFakeInterp());

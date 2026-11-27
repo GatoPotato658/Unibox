@@ -280,15 +280,18 @@ void CEntities::UpdatePlayerAnimations(int nLocalIndex)
 		if (iDeltaTicks <= 0) continue;
 
 		float flOldFrameTime = I::GlobalVars->frametime;
+		float flOldCurTime = I::GlobalVars->curtime;
+		const float flSimTime = pPlayer->m_flSimulationTime();
 		I::GlobalVars->frametime = I::Prediction->m_bEnginePaused ? 0.f : TICK_INTERVAL;
 
 		G::UpdatingAnims = true;
 		for (int i = 0; i < iDeltaTicks; i++)
 		{
+			I::GlobalVars->curtime = flSimTime - TICKS_TO_TIME(iDeltaTicks - 1 - i);
 			if (bResolved)
 			{
 				float flYaw, flPitch;
-				F::Resolver.GetAngles(pPlayer, &flYaw, &flPitch, nullptr, i + 1 == iDeltaTicks);
+				F::Resolver.GetAngles(pPlayer, &flYaw, &flPitch, nullptr, i + 1 < iDeltaTicks);
 
 				float flOriginalYaw = pPlayer->m_angEyeAnglesY();
 				float flOriginalPitch = pPlayer->m_angEyeAnglesX();
@@ -301,6 +304,7 @@ void CEntities::UpdatePlayerAnimations(int nLocalIndex)
 				pPlayer->UpdateClientSideAnimation();
 		}
 		G::UpdatingAnims = false;
+		I::GlobalVars->curtime = flOldCurTime;
 		I::GlobalVars->frametime = flOldFrameTime;
 	}
 }
