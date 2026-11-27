@@ -496,7 +496,7 @@ void CWorld::CollectFacesInAABB(const Vec3& vMins, const Vec3& vMaxs, int iMask,
 				}
 
 				if (FaceValid(m_vTempVertices, bCheckNormal ? &vNormal : nullptr, &vMins, &vMaxs))
-					vOut.emplace_back(m_vTempVertices, vNormal, tFace.m_iType);
+					vOut.emplace_back(m_vTempVertices, vNormal, tFace.m_iType, pHandleEntity);
 			}
 		}
 	}

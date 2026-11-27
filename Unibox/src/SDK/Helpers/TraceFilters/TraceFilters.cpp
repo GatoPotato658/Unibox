@@ -96,8 +96,12 @@ bool CTraceFilterCollideable::ShouldHitEntity(IHandleEntity* pHandleEntity, int 
 	case ETFClassID::CPhysicsProp:
 	case ETFClassID::CPhysicsPropMultiplayer:
 	case ETFClassID::CFuncConveyor:
-	case ETFClassID::CTFGenericBomb: 
-	case ETFClassID::CTFPumpkinBomb: 
+	case ETFClassID::CTFGenericBomb:
+	case ETFClassID::CTFPumpkinBomb:
+	case ETFClassID::CPhysBox:
+	case ETFClassID::CPhysBoxMultiplayer:
+	case ETFClassID::CBreakableProp:
+	case ETFClassID::CFuncRotating:
 		return nContentsMask & CONTENTS_MOVEABLE;
 	case ETFClassID::CBaseDoor:
 	case ETFClassID::CBasePropDoor:
@@ -162,7 +166,7 @@ TraceType_t CTraceFilterCollideable::GetTraceType() const
 
 bool CTraceFilterWorldAndPropsOnly::ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask)
 {
-	if (!pHandleEntity || pHandleEntity == m_pSkip)
+	if (!pHandleEntity || pHandleEntity == m_pSkip || pHandleEntity == m_pSkipEntity)
 		return false;
 	if (pHandleEntity->GetRefEHandle().GetSerialNumber() == (1 << 15))
 		return nContentsMask & CONTENTS_SOLID;
@@ -181,6 +185,10 @@ bool CTraceFilterWorldAndPropsOnly::ShouldHitEntity(IHandleEntity* pHandleEntity
 	case ETFClassID::CObjectCartDispenser:
 	case ETFClassID::CFuncTrackTrain:
 	case ETFClassID::CFuncConveyor:
+	case ETFClassID::CPhysBox:
+	case ETFClassID::CPhysBoxMultiplayer:
+	case ETFClassID::CBreakableProp:
+	case ETFClassID::CFuncRotating:
 		return nContentsMask & CONTENTS_MOVEABLE;
 	case ETFClassID::CFuncRespawnRoomVisualizer:
 		if (!(nContentsMask & CONTENTS_PLAYERCLIP)) return false;

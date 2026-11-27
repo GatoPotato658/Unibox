@@ -42,6 +42,7 @@ struct Face_t
 	std::vector<Vec3> m_vVertices;
 	Vec3 m_vNormal;
 	int8_t m_iType;
+	IHandleEntity* m_pEntity = nullptr;
 };
 
 static VerticesValidCallback s_fVerticesValid = [](const std::vector<Vec3>& vVertices)

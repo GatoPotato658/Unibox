@@ -1,5 +1,6 @@
 #include "MovementSimulation.h"
 
+#include "../CartSim/CartSim.h"
 #include "../../Aimbot/AimbotProjectile/ProjProfiler.h"
 #include <array>
 #include <numeric>
@@ -1955,6 +1956,10 @@ void CMovementSimulation::StepTick(MoveStorage& tMoveStorage, bool bPath, RunTic
 
 	if (tMoveStorage.m_bFailed || !tMoveStorage.m_pPlayer)
 		return;
+
+	CartPoseGuard_t tCartGuard;
+	if (F::CartSim.HasMovingCarts())
+		F::CartSim.PoseCartsNear(TICKS_TO_TIME(tMoveStorage.m_iSimTicks + 1), tMoveStorage.m_MoveData.m_vecAbsOrigin, 160.f);
 
 	auto& tMoveData = tMoveStorage.m_MoveData;
 	auto& tPhysics = tMoveStorage.m_tPhysics;

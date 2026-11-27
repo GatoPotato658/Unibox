@@ -91,6 +91,7 @@ public:
 	TraceType_t GetTraceType() const override;
 
 	CBaseEntity* m_pSkip = nullptr;
+	IHandleEntity* m_pSkipEntity = nullptr;
 	int m_iTeam = -1;
 };
 

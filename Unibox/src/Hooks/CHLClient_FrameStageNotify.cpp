@@ -11,6 +11,7 @@
 #include "../Features/NetworkFix/NetworkFix.h"
 #include "../Features/Players/PlayerUtils.h"
 #include "../Features/Resolver/Resolver.h"
+#include "../Features/Simulation/CartSim/CartSim.h"
 #include "../Features/Simulation/MovementSimulation/MovementSimulation.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/Visuals/Visuals.h"
@@ -77,6 +78,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 
 		F::Backtrack.Store();
 		F::MoveSim.Store();
+		F::CartSim.Store();
 		F::CritHack.Store();
 		F::AutoDetonate.Store();
 		F::AimbotProjectile.UpdateShotDiagnostics();

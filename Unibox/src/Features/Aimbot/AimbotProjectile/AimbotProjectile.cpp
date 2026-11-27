@@ -3,6 +3,7 @@
 #include "../Aimbot.h"
 #include "../../Ticks/Ticks.h"
 #include "../../EnginePrediction/EnginePrediction.h"
+#include "../../Simulation/CartSim/CartSim.h"
 #include "../../World/World.h"
 #include "../AutoAirblast/AutoAirblast.h"
 #include "../AutoHeal/AutoHeal.h"
@@ -798,7 +799,7 @@ static inline void PlanFace(const Face_t& tFace, FacePlan_t& tPlan, float flDens
 	}
 }
 
-static inline void HandleFace(Face_t& tFace, const FacePlan_t& tPlan, std::vector<SplashTrace_t>& vPoints, float flRadius, const Vec3& vTargetEye, const Vec3& vTargetCenter, const Vec3& vTargetOrigin, const Info_t& tInfo, SplashRandom_t& tRandom, CGameTrace& trace, ITraceFilter& filter)
+static inline void HandleFace(Face_t& tFace, const FacePlan_t& tPlan, std::vector<SplashTrace_t>& vPoints, float flRadius, const Vec3& vTargetEye, const Vec3& vTargetCenter, const Vec3& vTargetOrigin, const Info_t& tInfo, SplashRandom_t& tRandom, CGameTrace& trace, CTraceFilterWorldAndPropsOnly& filter)
 {
 	float flRadiusSqr = powf(flRadius, 2);
 	int nMask = F::ProjSim.m_bPhysics ? MASK_SHOT | CONTENTS_DISPSOLID : MASK_SHOT;
@@ -882,7 +883,13 @@ static inline void HandleFace(Face_t& tFace, const FacePlan_t& tPlan, std::vecto
 
 			int nSubMask = nMask;
 			if (!bInside)
-				vNormal = (vTargetEye - vPoint).Normalized(), nSubMask &= ~CONTENTS_MOVEABLE;
+			{
+				vNormal = (vTargetEye - vPoint).Normalized();
+				if (tFace.m_pEntity)
+					filter.m_pSkipEntity = tFace.m_pEntity;
+				else
+					nSubMask &= ~CONTENTS_MOVEABLE;
+			}
 
 			SDK::Trace(vPoint + vNormal * tInfo.m_flNormalOffset, vTargetEye, nSubMask, &filter, &trace);
 #ifdef SPLASH_DEBUG5
@@ -1853,6 +1860,9 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 	}
 	F::ProjSim.SetupTrace(filter, nMask, pWeapon);
 
+	const bool bMovingCarts = F::CartSim.HasMovingCarts();
+	CartPoseGuard_t tCartGuard;
+
 #ifdef SPLASH_DEBUG4
 	Vec3 vHull = m_tProjInfo.m_vHull.Max(1);
 	G::BoxStorage.emplace_back(vPoint, -vHull, vHull, Vec3(), I::GlobalVars->curtime + 5.f, Color_t(0, 0, 0), Color_t(0, 0, 0, 0));
@@ -1863,7 +1873,18 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 		const Vec3 vStart = F::ProjSim.GetOrigin();
 		const Vec3 vVel = F::ProjSim.GetVelocity();
 		const Vec3 vEnd = vStart + vVel * TICKS_TO_TIME(iSimTime);
-		SDK::TraceHull(vStart, vEnd, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
+		if (bMovingCarts)
+		{
+			F::CartSim.PoseCarts(TICKS_TO_TIME(iSimTime + m_tInfo.m_iLaunchDelay) * 0.5f);
+			SDK::TraceHull(vStart, vEnd, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
+			if (trace.DidHit() && F::CartSim.IsMovingCart(trace.m_pEnt))
+			{
+				F::CartSim.PoseCarts(TICKS_TO_TIME(int(ceilf(trace.fraction * float(iSimTime))) + m_tInfo.m_iLaunchDelay));
+				SDK::TraceHull(vStart, vEnd, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
+			}
+		}
+		else
+			SDK::TraceHull(vStart, vEnd, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
 
 		const float flRadiusSqr = iType != PointTypeEnum::Direct ? powf(m_tProjInfo.m_flVelocity * TICK_INTERVAL + m_tProjInfo.m_vHull.z, 2) : std::numeric_limits<float>::max();
 		const int iTimingTolerance = TIME_TO_TICKS(m_tInfo.m_flBoundsTime);
@@ -2040,6 +2061,8 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 			vTargetPos = m_vTargetPath[n + m_tInfo.m_iLaunchDelay];
 			tTarget.m_pEntity->SetAbsOrigin(vTargetPos);
 		}
+		if (bMovingCarts)
+			F::CartSim.PoseCarts(TICKS_TO_TIME(n + m_tInfo.m_iLaunchDelay));
 
 		Vec3 vOld = vNew; vNew = F::ProjSim.GetOrigin();
 		SDK::TraceHull(vOld, vNew, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace);
@@ -2148,6 +2171,8 @@ bool CAimbotProjectile::TestAngle(const Vec3& vPoint, const Vec3& vAngles, int i
 						if (iIdx >= 0 && iIdx < int(m_vTargetPath.size()))
 							tTarget.m_pEntity->SetAbsOrigin(m_vTargetPath[iIdx]);
 					}
+					if (bMovingCarts)
+						F::CartSim.PoseCarts(TICKS_TO_TIME(i + m_tInfo.m_iLaunchDelay));
 					const int iPrev = std::max(iStart - 1, i - iStep);
 					vOld = m_tProjInfo.m_vPath[iPrev], vNew = m_tProjInfo.m_vPath[i];
 					SDK::TraceHull(vOld, vNew, -m_tProjInfo.m_vHull, m_tProjInfo.m_vHull, nMask, &filter, &trace2);
@@ -3746,7 +3771,9 @@ bool CAimbotProjectile::RunMechArm(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CU
 			|| F::BotUtils.IsLegitAimReady(tTarget.m_pEntity->entindex());
 		if (Vars::Aimbot::General::AutoShoot.Value)
 		{
-			if (bLegitReady)
+			const Vec3 vDelta = tTarget.m_vAngleTo.DeltaAngle(Math::CalcAngle(m_vShootPos, tTarget.m_vPos));
+			const float flTolerance = std::max(Math::Rad2Deg(asinf(std::min(64.f / std::max(m_vShootPos.DistTo(tTarget.m_vPos), 1.f), 1.f))), 2.f);
+			if (bLegitReady && vDelta.Length2D() <= flTolerance)
 				pCmd->buttons |= IN_ATTACK2, pCmd->buttons &= ~IN_ATTACK;
 			else
 				pCmd->buttons &= ~(IN_ATTACK | IN_ATTACK2);
