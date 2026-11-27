@@ -33,7 +33,7 @@ namespace ImGui
 			{ "Galaxy", { .tColor = { 80, 30, 170, 255 }, .iEffect = 28, .tSecondary = { 255, 120, 200, 255 }, .flReflectivity = 0.5f, .flScale = 1.2f, .flSpeed = 0.5f, .flIntensity = 1.3f, .flRimPower = 2.5f } },
 			{ "Matrix", { .tColor = { 0, 40, 10, 255 }, .iEffect = 29, .tSecondary = { 40, 255, 90, 255 }, .flScale = 1.5f, .flSpeed = 1.f, .flIntensity = 1.2f, .flRimPower = 2.f } },
 			{ "Inferno", { .tColor = { 255, 60, 0, 255 }, .iEffect = 30, .tSecondary = { 255, 220, 80, 255 }, .flScale = 1.4f, .flSpeed = 1.2f, .flIntensity = 1.3f, .flRimPower = 2.f, .iBlend = 1 } },
-			{ "Frostbite", { .tColor = { 170, 220, 255, 230 }, .iEffect = 31, .tSecondary = { 235, 250, 255, 255 }, .flRoughness = 0.2f, .flReflectivity = 0.8f, .flScale = 1.5f, .flSpeed = 0.5f } },
+			{ "Frostbite", { .tColor = { 170, 220, 255, 230 }, .iEffect = 31, .tSecondary = { 235, 250, 255, 255 }, .flRoughness = 0.2f, .flReflectivity = 0.8f, .flScale = 1.5f, .flSpeed = 0.5f, .iBlend = 0 } },
 			{ "Cel shaded", { .tColor = { 255, 140, 60, 255 }, .iEffect = 32, .tSecondary = { 20, 15, 30, 255 }, .flRoughness = 0.3f, .flReflectivity = 0.8f } },
 			{ "Bio cells", { .tColor = { 40, 200, 120, 255 }, .iEffect = 33, .tSecondary = { 200, 255, 120, 255 }, .flReflectivity = 0.4f, .flScale = 1.5f, .flSpeed = 0.7f, .flRimPower = 2.5f } },
 			{ "Circuit board", { .tColor = { 10, 60, 40, 255 }, .iEffect = 34, .tSecondary = { 60, 255, 200, 255 }, .flReflectivity = 0.5f, .flScale = 1.5f, .flSpeed = 1.f, .flIntensity = 1.2f } },
@@ -213,7 +213,7 @@ namespace ImGui
 				FSlider(fLabel("Intensity").c_str(), &pVar->flIntensity, 0.f, 4.f, 0.05f, "%.2f", FSliderEnum::Clamp);
 				if (bRim)
 					FSlider(fLabel("Rim power").c_str(), &pVar->flRimPower, 0.25f, 8.f, 0.05f, "%.2f", FSliderEnum::Clamp);
-				FDropdown("Blend", &pVar->iBlend, { "Alpha", "Additive", "Screen" });
+				FDropdown("Blend", &pVar->iBlend, { "Alpha", "Additive", "Screen", "Solid" });
 				FToggle("Write depth", &pVar->bDepthWrite);
 				FTooltip("Writes this layer into the depth buffer, which can hide later layers.");
 			}

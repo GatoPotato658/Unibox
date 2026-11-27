@@ -75,7 +75,7 @@ void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& p
 	I::RenderView->SetBlend(flOriginalBlend);
 }
 
-void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags, const std::vector<CChams::ActiveLayer_t>& vVisible, const std::vector<CChams::ActiveLayer_t>& vOccluded, IMatRenderContext* pRenderContext, int iStencilRef, bool bSame)
+void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags, const std::vector<CChams::ActiveLayer_t>& vVisible, const std::vector<CChams::ActiveLayer_t>& vOccluded, IMatRenderContext* pRenderContext, int iStencilRef, int iPhase, std::vector<CChams::PendingD3DOccluded_t>* pPendingOccluded, bool* pNeedsPhase2Fallback)
 {
 	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
 	if (!pEntityBase)
@@ -125,29 +125,10 @@ void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& p
 		return;
 
 	const bool bTwoModel = iStencilRef != 0;
-	bool bAnyD3D = false;
-	bool bHasSolidD3DVisible = false;
-	if (!bSame)
-	{
-		for (const auto& tLayer : vVisible)
-		{
-			if (tLayer.m_tMaterial.iEffect != 0)
-			{
-				bAnyD3D = true;
-				if (tLayer.m_tMaterial.iEffect != 10)
-					bHasSolidD3DVisible = true;
-			}
-		}
-	}
-	for (const auto& tLayer : vOccluded)
-	{
-		if (tLayer.m_tMaterial.iEffect != 0)
-			bAnyD3D = true;
-	}
 
 	CD3DMaterials::GeometryRef pGeometry;
 	bool bNeedsFallback = false;
-	bool bGeomOk = bAnyD3D && F::D3DMaterials.PrepareGeometry(pState, pInfo, pGeometry, bNeedsFallback);
+	bool bGeomOk = F::D3DMaterials.PrepareGeometry(pState, pInfo, pGeometry, bNeedsFallback);
 	if (bGeomOk)
 	{
 		for (auto& tEntry : vEntries)
@@ -164,60 +145,18 @@ void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& p
 	auto fOriginalDME = IVModelRender_DrawModelExecute ? IVModelRender_DrawModelExecute->As<DrawModelExecuteFn>() : nullptr;
 	const bool bCanUseD3D = bGeomOk && !bNeedsFallback;
 
-	if (bTwoModel && !bSame && !(bCanUseD3D && bHasSolidD3DVisible))
-	{
-		if (bCanUseD3D)
-		{
-			D3DStencilState_t stMask{ true, 8, 3, 1, 1, std::uint32_t(iStencilRef), 0xFF, 0x0 };
-			ChamsMaterial_t tDummy = {};
-			tDummy.iEffect = 1;
-			for (const auto& tEntry : vEntries)
-				F::D3DMaterials.DrawPrepared(pRenderContext, pGeometry, tEntry.m_pPose, tDummy, false, 0, &stMask, true);
-		}
-		else if (fOriginalDME)
-		{
-			F::D3DMaterials.FlushBatch(pRenderContext);
-			pRenderContext->SetStencilEnable(true);
-			pRenderContext->SetStencilCompareFunction(STENCILCOMPARISONFUNCTION_ALWAYS);
-			pRenderContext->SetStencilPassOperation(STENCILOPERATION_REPLACE);
-			pRenderContext->SetStencilFailOperation(STENCILOPERATION_KEEP);
-			pRenderContext->SetStencilZFailOperation(STENCILOPERATION_KEEP);
-			pRenderContext->SetStencilReferenceValue(iStencilRef);
-			pRenderContext->SetStencilWriteMask(0xFF);
-			pRenderContext->SetStencilTestMask(0x0);
-			if (auto pMask = F::Materials.GetMaterial(FNV1A::Hash32Const("None")); pMask && pMask->m_pMaterial)
-			{
-				pRenderContext->OverrideColorWriteEnable(true, false);
-				pRenderContext->OverrideAlphaWriteEnable(true, false);
-				I::RenderView->SetBlend(1.f);
-				I::ModelRender->ForcedMaterialOverride(pMask->m_pMaterial);
-				for (const auto& tEntry : vEntries)
-					fOriginalDME(pModelRender, pState, pInfo, tEntry.m_pBones);
-				pRenderContext->OverrideColorWriteEnable(false, false);
-				pRenderContext->OverrideAlphaWriteEnable(false, false);
-			}
-			pRenderContext->SetStencilEnable(false);
-		}
-	}
-
 	auto fDrawSourceRecordList = [&](const CChams::ActiveLayer_t& tLayer, bool bOccluded)
 		{
 			if (!fOriginalDME)
 				return;
 			F::D3DMaterials.FlushBatch(pRenderContext);
 			if (bTwoModel)
-			{
-				pRenderContext->SetStencilEnable(true);
-				pRenderContext->SetStencilCompareFunction(bOccluded ? STENCILCOMPARISONFUNCTION_NOTEQUAL : STENCILCOMPARISONFUNCTION_ALWAYS);
-				pRenderContext->SetStencilPassOperation(bOccluded ? STENCILOPERATION_KEEP : STENCILOPERATION_REPLACE);
-				pRenderContext->SetStencilFailOperation(STENCILOPERATION_KEEP);
-				pRenderContext->SetStencilZFailOperation((!bOccluded && tLayer.m_bBlockOccluded) ? STENCILOPERATION_REPLACE : STENCILOPERATION_KEEP);
-				pRenderContext->SetStencilReferenceValue(iStencilRef);
-				pRenderContext->SetStencilWriteMask(bOccluded ? 0x0 : 0xFF);
-				pRenderContext->SetStencilTestMask(bOccluded ? 0xFF : 0x0);
-			}
+				CChams::ConfigureSourceStencil(pRenderContext, bOccluded, iStencilRef, tLayer.m_bBlockOccluded);
 			if (bOccluded)
+			{
+				pRenderContext->OverrideDepthEnable(true, false);
 				pRenderContext->DepthRange(0.f, 0.2f);
+			}
 			F::Materials.SetColor(tLayer.m_pMaterial, tLayer.m_tMaterial.tColor);
 			I::ModelRender->ForcedMaterialOverride(tLayer.m_pMaterial ? tLayer.m_pMaterial->m_pMaterial : nullptr);
 			if (tLayer.m_bInvertCull)
@@ -234,18 +173,60 @@ void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& p
 			if (tLayer.m_bInvertCull)
 				pRenderContext->CullMode(MATERIAL_CULLMODE_CCW);
 			if (bOccluded)
+			{
 				pRenderContext->DepthRange(0.f, 1.f);
+				pRenderContext->OverrideDepthEnable(false, false);
+			}
 			if (bTwoModel)
 				pRenderContext->SetStencilEnable(false);
 		};
 
-	if (!bSame)
+	if (iPhase == 1)
 	{
+		bool bHasSolidD3DVisible = false;
+		for (const auto& tLayer : vVisible)
+		{
+			if (tLayer.m_tMaterial.iEffect != 0 && tLayer.m_tMaterial.iEffect != 10)
+			{
+				bHasSolidD3DVisible = true;
+				break;
+			}
+		}
+
+		if (bTwoModel && !(bCanUseD3D && bHasSolidD3DVisible))
+		{
+			if (bCanUseD3D)
+			{
+				D3DStencilState_t stMask = CChams::MakeD3DStencil(true, false, iStencilRef);
+				ChamsMaterial_t tDummy = {};
+				tDummy.iEffect = 1;
+				for (const auto& tEntry : vEntries)
+					F::D3DMaterials.DrawPrepared(pRenderContext, pGeometry, tEntry.m_pPose, tDummy, false, 0, &stMask, true);
+			}
+			else if (fOriginalDME)
+			{
+				F::D3DMaterials.FlushBatch(pRenderContext);
+				CChams::ConfigureSourceStencil(pRenderContext, false, iStencilRef);
+				if (auto pMask = F::Materials.GetMaterial(FNV1A::Hash32Const("None")); pMask && pMask->m_pMaterial)
+				{
+					pRenderContext->OverrideColorWriteEnable(true, false);
+					pRenderContext->OverrideAlphaWriteEnable(true, false);
+					I::RenderView->SetBlend(1.f);
+					I::ModelRender->ForcedMaterialOverride(pMask->m_pMaterial);
+					for (const auto& tEntry : vEntries)
+						fOriginalDME(pModelRender, pState, pInfo, tEntry.m_pBones);
+					pRenderContext->OverrideColorWriteEnable(false, false);
+					pRenderContext->OverrideAlphaWriteEnable(false, false);
+				}
+				pRenderContext->SetStencilEnable(false);
+			}
+		}
+
 		for (const auto& tLayer : vVisible)
 		{
 			if (tLayer.m_tMaterial.iEffect != 0 && bGeomOk)
 			{
-				D3DStencilState_t stVisible{ bTwoModel, 8, 3, 1, tLayer.m_bBlockOccluded ? 3u : 1u, std::uint32_t(iStencilRef), 0xFF, 0x0 };
+				D3DStencilState_t stVisible = CChams::MakeD3DStencil(bTwoModel, false, iStencilRef, tLayer.m_bBlockOccluded);
 				const float flBaseAlpha = tLayer.m_tMaterial.tColor.a / 255.f;
 				for (const auto& tEntry : vEntries)
 				{
@@ -254,22 +235,43 @@ void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& p
 					if (bNeedsFallback && fOriginalDME)
 					{
 						F::D3DMaterials.FlushBatch(pRenderContext);
+						if (bTwoModel)
+							CChams::ConfigureSourceStencil(pRenderContext, false, iStencilRef, tLayer.m_bBlockOccluded);
 						I::ModelRender->ForcedMaterialOverride(nullptr);
 						fOriginalDME(pModelRender, pState, pInfo, tEntry.m_pBones);
+						if (bTwoModel)
+							pRenderContext->SetStencilEnable(false);
 					}
-					F::D3DMaterials.DrawPrepared(pRenderContext, pGeometry, tEntry.m_pPose, tMat, false, tLayer.m_bInvertCull ? 1 : 0, &stVisible, false);
+					F::D3DMaterials.DrawPrepared(pRenderContext, pGeometry, tEntry.m_pPose, tMat, false, tLayer.m_bInvertCull ? 1 : 0, bTwoModel ? &stVisible : nullptr, false);
 				}
 			}
 			else
 				fDrawSourceRecordList(tLayer, false);
 		}
+
+		if (!vOccluded.empty())
+		{
+			if (bCanUseD3D && pPendingOccluded)
+			{
+				CChams::PendingD3DOccluded_t tPending;
+				tPending.m_pGeometry = pGeometry;
+				tPending.m_bScaleAlpha = true;
+				tPending.m_vPoses.reserve(vEntries.size());
+				for (const auto& tEntry : vEntries)
+					tPending.m_vPoses.push_back({ tEntry.m_pPose, tEntry.m_flBlend });
+				pPendingOccluded->push_back(std::move(tPending));
+			}
+			else if (pNeedsPhase2Fallback)
+				*pNeedsPhase2Fallback = true;
+		}
+		return;
 	}
 
 	for (const auto& tLayer : vOccluded)
 	{
 		if (tLayer.m_tMaterial.iEffect != 0 && bGeomOk)
 		{
-			D3DStencilState_t stOccluded{ bTwoModel, 6, 1, 1, 1, std::uint32_t(iStencilRef), 0x0, 0xFF };
+			D3DStencilState_t stOccluded = CChams::MakeD3DStencil(bTwoModel, true, iStencilRef);
 			const float flBaseAlpha = tLayer.m_tMaterial.tColor.a / 255.f;
 			for (const auto& tEntry : vEntries)
 			{
@@ -278,12 +280,18 @@ void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& p
 				if (bNeedsFallback && fOriginalDME)
 				{
 					F::D3DMaterials.FlushBatch(pRenderContext);
+					if (bTwoModel)
+						CChams::ConfigureSourceStencil(pRenderContext, true, iStencilRef);
+					pRenderContext->OverrideDepthEnable(true, false);
 					pRenderContext->DepthRange(0.f, 0.2f);
 					I::ModelRender->ForcedMaterialOverride(nullptr);
 					fOriginalDME(pModelRender, pState, pInfo, tEntry.m_pBones);
 					pRenderContext->DepthRange(0.f, 1.f);
+					pRenderContext->OverrideDepthEnable(false, false);
+					if (bTwoModel)
+						pRenderContext->SetStencilEnable(false);
 				}
-				F::D3DMaterials.DrawPrepared(pRenderContext, pGeometry, tEntry.m_pPose, tMat, true, tLayer.m_bInvertCull ? 1 : 0, &stOccluded, false);
+				F::D3DMaterials.DrawPrepared(pRenderContext, pGeometry, tEntry.m_pPose, tMat, true, tLayer.m_bInvertCull ? 1 : 0, bTwoModel ? &stOccluded : nullptr, false);
 			}
 		}
 		else

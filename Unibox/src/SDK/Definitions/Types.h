@@ -1117,8 +1117,8 @@ struct ChamsMaterial_t
 	float flSpeed = 1.f;
 	float flIntensity = 1.f;
 	float flRimPower = 3.f;
-	int iBlend = 0;
-	bool bDepthWrite = false;
+	int iBlend = 3;
+	bool bDepthWrite = true;
 
 	inline void Sanitize()
 	{
@@ -1135,7 +1135,7 @@ struct ChamsMaterial_t
 		flSpeed = fClamp(flSpeed, 1.f, 0.f, 8.f);
 		flIntensity = fClamp(flIntensity, 1.f, 0.f, 4.f);
 		flRimPower = fClamp(flRimPower, 3.f, 0.25f, 8.f);
-		iBlend = std::clamp(iBlend, 0, 2);
+		iBlend = std::clamp(iBlend, 0, 3);
 	}
 
 	inline bool operator==(const ChamsMaterial_t& t) const = default;

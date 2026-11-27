@@ -115,7 +115,8 @@ namespace
 		D3DRS_FOGENABLE, D3DRS_LIGHTING, D3DRS_SRGBWRITEENABLE, D3DRS_COLORWRITEENABLE, D3DRS_DEPTHBIAS,
 		D3DRS_SLOPESCALEDEPTHBIAS, D3DRS_CULLMODE, D3DRS_STENCILENABLE, D3DRS_STENCILFAIL,
 		D3DRS_STENCILZFAIL, D3DRS_STENCILPASS, D3DRS_STENCILFUNC, D3DRS_STENCILREF,
-		D3DRS_STENCILMASK, D3DRS_STENCILWRITEMASK
+		D3DRS_STENCILMASK, D3DRS_STENCILWRITEMASK, D3DRS_TWOSIDEDSTENCILMODE, D3DRS_SCISSORTESTENABLE,
+		D3DRS_CLIPPLANEENABLE
 	};
 
 	static_assert(sizeof(void*) == 8);
@@ -822,7 +823,10 @@ namespace
 			!shadow.SetRS(D3DRS_FOGENABLE, FALSE) ||
 			!shadow.SetRS(D3DRS_LIGHTING, FALSE) ||
 			!shadow.SetRS(D3DRS_SRGBWRITEENABLE, FALSE) ||
-			!shadow.SetRS(D3DRS_SLOPESCALEDEPTHBIAS, 0))
+			!shadow.SetRS(D3DRS_SLOPESCALEDEPTHBIAS, 0) ||
+			!shadow.SetRS(D3DRS_TWOSIDEDSTENCILMODE, FALSE) ||
+			!shadow.SetRS(D3DRS_SCISSORTESTENABLE, FALSE) ||
+			!shadow.SetRS(D3DRS_CLIPPLANEENABLE, 0))
 			return false;
 
 		std::vector<ValidatedMesh> validatedMeshes;
@@ -844,14 +848,10 @@ namespace
 			}
 
 			const auto& params = item.params;
-			const int effectIndex = item.maskOnly ? 1 : params.iEffect;
-			IDirect3DPixelShader9* wantPS = s_Resources.pixels[effectIndex - 1].Get();
-			if (shadow.ps != wantPS)
-			{
-				if (FAILED(device->SetPixelShader(wantPS)))
-					return anyRendered;
-				shadow.ps = wantPS;
-			}
+			const bool bSolidBlend = (params.iBlend == 3);
+			const bool bWireframe = (params.iEffect == 10);
+			const bool bDepthFirst = !item.maskOnly && !item.occluded && !bSolidBlend && !bWireframe && params.bDepthWrite;
+			const int passCount = bDepthFirst ? 2 : 1;
 
 			const float constants[4][4] =
 			{
@@ -859,7 +859,7 @@ namespace
 				{ params.tSecondary.r / 255.f, params.tSecondary.g / 255.f, params.tSecondary.b / 255.f, params.tSecondary.a / 255.f },
 				{ std::clamp(params.flRoughness, 0.02f, 1.f), std::clamp(params.flReflectivity, 0.f, 1.f),
 					std::clamp(params.flIntensity, 0.f, 10.f), std::clamp(params.flRimPower, 0.1f, 16.f) },
-				{ item.time * std::clamp(params.flSpeed, -10.f, 10.f), std::clamp(params.flScale, 0.01f, 100.f), float(params.iBlend), 0.f }
+				{ item.time * std::clamp(params.flSpeed, -10.f, 10.f), std::clamp(params.flScale, 0.01f, 100.f), params.iBlend == 2 ? 2.f : 0.f, 0.f }
 			};
 			if (!shadow.psConstValid || std::memcmp(shadow.psConst, constants, sizeof(constants)) != 0)
 			{
@@ -869,38 +869,6 @@ namespace
 				shadow.psConstValid = true;
 			}
 
-			bool ok = true;
-			ok &= shadow.SetRS(D3DRS_ZFUNC, item.occluded ? D3DCMP_GREATER : D3DCMP_LESSEQUAL);
-			ok &= shadow.SetRS(D3DRS_ZWRITEENABLE, (!item.maskOnly && params.bDepthWrite && !item.occluded) ? TRUE : FALSE);
-			ok &= shadow.SetRS(D3DRS_ALPHABLENDENABLE, item.maskOnly ? FALSE : TRUE);
-			if (!item.maskOnly)
-			{
-				ok &= shadow.SetRS(D3DRS_SRCBLEND, params.iBlend == 2 ? D3DBLEND_ONE : D3DBLEND_SRCALPHA);
-				ok &= shadow.SetRS(D3DRS_DESTBLEND, params.iBlend == 1 ? D3DBLEND_ONE : params.iBlend == 2 ? D3DBLEND_INVSRCCOLOR : D3DBLEND_INVSRCALPHA);
-			}
-			ok &= shadow.SetRS(D3DRS_FILLMODE, (!item.maskOnly && params.iEffect == 10) ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
-			ok &= shadow.SetRS(D3DRS_COLORWRITEENABLE, item.maskOnly ? 0 : (D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE));
-			const float depthBias = (item.maskOnly || item.occluded) ? 0.f : -1e-5f;
-			ok &= shadow.SetRS(D3DRS_DEPTHBIAS, std::bit_cast<DWORD>(depthBias));
-			if (item.useExplicitCull)
-				ok &= shadow.SetRS(D3DRS_CULLMODE, item.invertCull ? D3DCULL_CW : D3DCULL_CCW);
-			if (item.useExplicitStencil)
-			{
-				ok &= shadow.SetRS(D3DRS_STENCILENABLE, item.stencil.m_bEnable ? TRUE : FALSE);
-				if (item.stencil.m_bEnable)
-				{
-					ok &= shadow.SetRS(D3DRS_STENCILFUNC, item.stencil.m_uCompareFunc);
-					ok &= shadow.SetRS(D3DRS_STENCILPASS, item.stencil.m_uPassOp);
-					ok &= shadow.SetRS(D3DRS_STENCILFAIL, item.stencil.m_uFailOp);
-					ok &= shadow.SetRS(D3DRS_STENCILZFAIL, item.stencil.m_uZFailOp);
-					ok &= shadow.SetRS(D3DRS_STENCILREF, item.stencil.m_uRef);
-					ok &= shadow.SetRS(D3DRS_STENCILWRITEMASK, item.stencil.m_uWriteMask);
-					ok &= shadow.SetRS(D3DRS_STENCILMASK, item.stencil.m_uTestMask);
-				}
-			}
-			if (!ok)
-				return anyRendered;
-
 			if (!shadow.streamFreqSet)
 			{
 				if (FAILED(device->SetStreamSourceFreq(0, 1)))
@@ -909,84 +877,141 @@ namespace
 			}
 
 			const auto& poses = item.poses->poses;
-			for (const auto& group : item.geometry->groups)
+			for (int pass = 0; pass < passCount; ++pass)
 			{
-				const ValidatedMesh* vMesh = ValidateMeshCached(group.mesh, group.format, group.vertices, group.minimumStride, group.strips, device, validatedMeshes);
-				if (!vMesh)
-					continue;
-
-				matrix3x4 palette[HardwareBones];
-				const int paletteLimit = group.skinned && group.maxHardwareID >= 0 ? (group.maxHardwareID + 1) : 1;
-				if (group.skinned)
+				const bool bDepthPass = item.maskOnly || (bDepthFirst && pass == 0);
+				const int effectIndex = bDepthPass ? 1 : params.iEffect;
+				IDirect3DPixelShader9* wantPS = s_Resources.pixels[effectIndex - 1].Get();
+				if (shadow.ps != wantPS)
 				{
-					for (int i = 0; i < paletteLimit; ++i)
-						Identity(palette[i]);
+					if (FAILED(device->SetPixelShader(wantPS)))
+						return anyRendered;
+					shadow.ps = wantPS;
 				}
 
-				IDirect3DVertexDeclaration9* wantDecl = s_Resources.declarations[group.declaration].Get();
-				if (shadow.decl != wantDecl)
-				{
-					if (FAILED(device->SetVertexDeclaration(wantDecl)))
-						return anyRendered;
-					shadow.decl = wantDecl;
-				}
-				IDirect3DVertexShader9* wantVS = group.skinned ? s_Resources.skinned.Get() : s_Resources.rigid.Get();
-				if (shadow.vs != wantVS)
-				{
-					if (FAILED(device->SetVertexShader(wantVS)))
-						return anyRendered;
-					shadow.vs = wantVS;
-				}
-				const int compressed = (group.format & VERTEX_FORMAT_COMPRESSED) != 0 ? 1 : 0;
-				if (shadow.compressedState != compressed)
-				{
-					const float decode[4] = { 0.f, compressed ? 1.f / 32768.f : 1.f, compressed ? 1.f / 32768.f : 0.f, compressed ? 1.f : 0.f };
-					if (FAILED(device->SetVertexShaderConstantF(4, decode, 1)))
-						return anyRendered;
-					shadow.compressedState = compressed;
-				}
-				if (shadow.vb != vMesh->vb || shadow.vbStride != vMesh->stride)
-				{
-					if (FAILED(device->SetStreamSource(0, vMesh->vb, 0, vMesh->stride)))
-						return anyRendered;
-					shadow.vb = vMesh->vb;
-					shadow.vbStride = vMesh->stride;
-				}
-				if (shadow.ib != vMesh->ib)
-				{
-					if (FAILED(device->SetIndices(vMesh->ib)))
-						return anyRendered;
-					shadow.ib = vMesh->ib;
-				}
+				bool ok = true;
+				DWORD zFunc = D3DCMP_LESSEQUAL;
+				if (item.occluded)
+					zFunc = D3DCMP_GREATER;
+				else if (bDepthFirst && pass == 1)
+					zFunc = D3DCMP_EQUAL;
+				ok &= shadow.SetRS(D3DRS_ZFUNC, zFunc);
 
-				if (!group.skinned)
-				{
-					if (poses.empty() || FAILED(device->SetVertexShaderConstantF(PaletteRegister, poses[0].m[0], 3)))
-						return anyRendered;
-				}
+				const BOOL zWrite = (!item.maskOnly && !item.occluded && ((bDepthFirst && pass == 0) || (!bDepthFirst && (bSolidBlend || params.bDepthWrite)))) ? TRUE : FALSE;
+				ok &= shadow.SetRS(D3DRS_ZWRITEENABLE, zWrite);
 
-				bool firstStrip = true;
-				for (const auto& strip : group.strips)
+				const BOOL alphaBlend = (bDepthPass || bSolidBlend) ? FALSE : TRUE;
+				ok &= shadow.SetRS(D3DRS_ALPHABLENDENABLE, alphaBlend);
+				if (alphaBlend)
 				{
-					int first = firstStrip && group.skinned ? 0 : HardwareBones;
-					int last = firstStrip && group.skinned ? (paletteLimit - 1) : -1;
+					ok &= shadow.SetRS(D3DRS_SRCBLEND, params.iBlend == 2 ? D3DBLEND_ONE : D3DBLEND_SRCALPHA);
+					ok &= shadow.SetRS(D3DRS_DESTBLEND, params.iBlend == 1 ? D3DBLEND_ONE : params.iBlend == 2 ? D3DBLEND_INVSRCCOLOR : D3DBLEND_INVSRCALPHA);
+				}
+				ok &= shadow.SetRS(D3DRS_FILLMODE, (!item.maskOnly && bWireframe) ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
+				ok &= shadow.SetRS(D3DRS_COLORWRITEENABLE, bDepthPass ? 0 : (D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE));
+				const float depthBias = (item.maskOnly || item.occluded) ? 0.f : -1e-5f;
+				ok &= shadow.SetRS(D3DRS_DEPTHBIAS, std::bit_cast<DWORD>(depthBias));
+				if (item.useExplicitCull)
+					ok &= shadow.SetRS(D3DRS_CULLMODE, item.invertCull ? D3DCULL_CW : D3DCULL_CCW);
+				if (item.useExplicitStencil)
+				{
+					ok &= shadow.SetRS(D3DRS_STENCILENABLE, item.stencil.m_bEnable ? TRUE : FALSE);
+					if (item.stencil.m_bEnable)
+					{
+						const bool bColorAfterDepth = bDepthFirst && pass == 1;
+						ok &= shadow.SetRS(D3DRS_STENCILFUNC, item.stencil.m_uCompareFunc);
+						ok &= shadow.SetRS(D3DRS_STENCILPASS, bColorAfterDepth ? D3DSTENCILOP_KEEP : item.stencil.m_uPassOp);
+						ok &= shadow.SetRS(D3DRS_STENCILFAIL, bColorAfterDepth ? D3DSTENCILOP_KEEP : item.stencil.m_uFailOp);
+						ok &= shadow.SetRS(D3DRS_STENCILZFAIL, bColorAfterDepth ? D3DSTENCILOP_KEEP : item.stencil.m_uZFailOp);
+						ok &= shadow.SetRS(D3DRS_STENCILREF, item.stencil.m_uRef);
+						ok &= shadow.SetRS(D3DRS_STENCILWRITEMASK, bColorAfterDepth ? 0u : item.stencil.m_uWriteMask);
+						ok &= shadow.SetRS(D3DRS_STENCILMASK, item.stencil.m_uTestMask);
+					}
+				}
+				else
+					ok &= shadow.SetRS(D3DRS_STENCILENABLE, FALSE);
+				if (!ok)
+					return anyRendered;
+
+				for (const auto& group : item.geometry->groups)
+				{
+					const ValidatedMesh* vMesh = ValidateMeshCached(group.mesh, group.format, group.vertices, group.minimumStride, group.strips, device, validatedMeshes);
+					if (!vMesh)
+						continue;
+
+					matrix3x4 palette[HardwareBones];
+					const int paletteLimit = group.skinned && group.maxHardwareID >= 0 ? (group.maxHardwareID + 1) : 1;
 					if (group.skinned)
 					{
-						for (const auto& change : strip.changes)
-						{
-							if (size_t(change.second) < poses.size())
-								std::memcpy(palette[change.first], poses[size_t(change.second)].m, sizeof(matrix3x4));
-							first = std::min(first, change.first);
-							last = std::max(last, change.first);
-						}
-						if (first <= last && FAILED(device->SetVertexShaderConstantF(PaletteRegister + first * 3, palette[first][0], (last - first + 1) * 3)))
+						for (int i = 0; i < paletteLimit; ++i)
+							Identity(palette[i]);
+					}
+
+					IDirect3DVertexDeclaration9* wantDecl = s_Resources.declarations[group.declaration].Get();
+					if (shadow.decl != wantDecl)
+					{
+						if (FAILED(device->SetVertexDeclaration(wantDecl)))
+							return anyRendered;
+						shadow.decl = wantDecl;
+					}
+					IDirect3DVertexShader9* wantVS = group.skinned ? s_Resources.skinned.Get() : s_Resources.rigid.Get();
+					if (shadow.vs != wantVS)
+					{
+						if (FAILED(device->SetVertexShader(wantVS)))
+							return anyRendered;
+						shadow.vs = wantVS;
+					}
+					const int compressed = (group.format & VERTEX_FORMAT_COMPRESSED) != 0 ? 1 : 0;
+					if (shadow.compressedState != compressed)
+					{
+						const float decode[4] = { 0.f, compressed ? 1.f / 32768.f : 1.f, compressed ? 1.f / 32768.f : 0.f, compressed ? 1.f : 0.f };
+						if (FAILED(device->SetVertexShaderConstantF(4, decode, 1)))
+							return anyRendered;
+						shadow.compressedState = compressed;
+					}
+					if (shadow.vb != vMesh->vb || shadow.vbStride != vMesh->stride)
+					{
+						if (FAILED(device->SetStreamSource(0, vMesh->vb, 0, vMesh->stride)))
+							return anyRendered;
+						shadow.vb = vMesh->vb;
+						shadow.vbStride = vMesh->stride;
+					}
+					if (shadow.ib != vMesh->ib)
+					{
+						if (FAILED(device->SetIndices(vMesh->ib)))
+							return anyRendered;
+						shadow.ib = vMesh->ib;
+					}
+
+					if (!group.skinned)
+					{
+						if (poses.empty() || FAILED(device->SetVertexShaderConstantF(PaletteRegister, poses[0].m[0], 3)))
 							return anyRendered;
 					}
-					firstStrip = false;
-					if (FAILED(device->DrawIndexedPrimitive(strip.triangleStrip ? D3DPT_TRIANGLESTRIP : D3DPT_TRIANGLELIST,
-						0, 0, vMesh->vertexCount, strip.start, strip.triangleStrip ? strip.count - 2 : strip.count / 3)))
-						return anyRendered;
-					anyRendered = true;
+
+					bool firstStrip = true;
+					for (const auto& strip : group.strips)
+					{
+						int first = firstStrip && group.skinned ? 0 : HardwareBones;
+						int last = firstStrip && group.skinned ? (paletteLimit - 1) : -1;
+						if (group.skinned)
+						{
+							for (const auto& change : strip.changes)
+							{
+								if (size_t(change.second) < poses.size())
+									std::memcpy(palette[change.first], poses[size_t(change.second)].m, sizeof(matrix3x4));
+								first = std::min(first, change.first);
+								last = std::max(last, change.first);
+							}
+							if (first <= last && FAILED(device->SetVertexShaderConstantF(PaletteRegister + first * 3, palette[first][0], (last - first + 1) * 3)))
+								return anyRendered;
+						}
+						firstStrip = false;
+						if (FAILED(device->DrawIndexedPrimitive(strip.triangleStrip ? D3DPT_TRIANGLESTRIP : D3DPT_TRIANGLELIST,
+							0, 0, vMesh->vertexCount, strip.start, strip.triangleStrip ? strip.count - 2 : strip.count / 3)))
+							return anyRendered;
+						anyRendered = true;
+					}
 				}
 			}
 		}
@@ -1181,7 +1206,7 @@ bool CD3DMaterials::DrawPrepared(IMatRenderContext* pContext, const GeometryRef&
 {
 	if (!pContext || !geometry || !poses || !I::MaterialSystem)
 		return false;
-	if (!bMaskOnly && (params.iEffect <= 0 || params.iEffect > EffectCount || params.iBlend < 0 || params.iBlend > 2 ||
+	if (!bMaskOnly && (params.iEffect <= 0 || params.iEffect > EffectCount || params.iBlend < 0 || params.iBlend > 3 ||
 		!std::isfinite(params.flRoughness) || !std::isfinite(params.flReflectivity) ||
 		!std::isfinite(params.flScale) || !std::isfinite(params.flSpeed) ||
 		!std::isfinite(params.flIntensity) || !std::isfinite(params.flRimPower)))
@@ -1250,7 +1275,7 @@ bool CD3DMaterials::DrawPrepared(IMatRenderContext* pContext, const GeometryRef&
 
 bool CD3DMaterials::Draw(const DrawModelState_t& state, const ModelRenderInfo_t& info, const matrix3x4* bones, const ChamsMaterial_t& params, bool bOccluded, bool bViewmodel)
 {
-	if (params.iEffect <= 0 || params.iEffect > EffectCount || params.iBlend < 0 || params.iBlend > 2 ||
+	if (params.iEffect <= 0 || params.iEffect > EffectCount || params.iBlend < 0 || params.iBlend > 3 ||
 		!std::isfinite(params.flRoughness) || !std::isfinite(params.flReflectivity) ||
 		!std::isfinite(params.flScale) || !std::isfinite(params.flSpeed) ||
 		!std::isfinite(params.flIntensity) || !std::isfinite(params.flRimPower) || !I::MaterialSystem)

@@ -7,7 +7,7 @@
 struct ImDrawList;
 
 void RenderBacktrackModel(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags);
-void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags, const std::vector<CChams::ActiveLayer_t>& vVisible, const std::vector<CChams::ActiveLayer_t>& vOccluded, IMatRenderContext* pRenderContext, int iStencilRef, bool bSame);
+void RenderBacktrackChams(IVModelRender* pModelRender, const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo, int iFlags, const std::vector<CChams::ActiveLayer_t>& vVisible, const std::vector<CChams::ActiveLayer_t>& vOccluded, IMatRenderContext* pRenderContext, int iStencilRef, int iPhase, std::vector<CChams::PendingD3DOccluded_t>* pPendingOccluded, bool* pNeedsPhase2Fallback);
 
 struct Projectile_t
 {
