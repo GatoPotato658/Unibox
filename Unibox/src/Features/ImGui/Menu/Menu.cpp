@@ -208,21 +208,21 @@ void CMenu::MenuESP()
 
 				const ImVec2 vPos = { flPad + (iGroup % iColumns) * (flChipWidth + flGap), flGridY + (iGroup / iColumns) * (flChipHeight + flGap) };
 				const ImVec2 vMin = GetDrawPos() + vPos, vMax = vMin + ImVec2(flChipWidth, flChipHeight);
+				const float flDeleteX = flChipWidth - H::Draw.Scale(28);
 				const bool bSelected = iCurrentGroup == iGroup, bEnabled = Vars::ESP::ActiveGroups.Value & 1 << iGroup;
-				const bool bWithin = IsWindowHovered() && IsMouseWithin(vMin.x, vMin.y, flChipWidth, flChipHeight);
+				const bool bWithin = IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) && IsMouseWithin(vMin.x, vMin.y, flChipWidth, flChipHeight);
 				const float flHover = Anim(GetID(std::format("##Group{}", iGroup).c_str()), 0, bWithin ? 1.f : 0.f);
 
 				DrawColorChip(pDrawList, vMin, vMax, ColorByteToVec(tGroup.m_tColor), tGroup.m_sName, bSelected, bEnabled, flHover, flChipWidth - H::Draw.Scale(bWithin ? 46 : 22));
 
 				PushID(iGroup);
 				SetCursorPos(vPos);
-				SetNextItemAllowOverlap();
-				bool bClicked = InvisibleButton("##Group", { flChipWidth, flChipHeight });
+				const bool bClicked = InvisibleButton("##Group", { flDeleteX, flChipHeight });
 				const bool bChipHovered = IsItemHovered();
 				bool bDelete = false, bDuplicate = false;
 				if (bWithin)
 				{
-					SetCursorPos(vPos + ImVec2(flChipWidth - H::Draw.Scale(28), H::Draw.Scale(4)));
+					SetCursorPos(vPos + ImVec2(flDeleteX, H::Draw.Scale(4)));
 					bDelete = FIconButton(ICON_MD_DELETE, "Delete", H::Draw.Scale(24));
 				}
 				if (bWithin)
@@ -2615,7 +2615,6 @@ void CMenu::MenuSettings(int iTab)
 			}
 
 			std::vector<std::string> vConfigs = {};
-			bool bDefaultFound = false;
 			std::error_code tError;
 			for (std::filesystem::directory_iterator tIterator(sPath, tError), tEnd; !tError && tIterator != tEnd; tIterator.increment(tError))
 			{
@@ -2626,21 +2625,14 @@ void CMenu::MenuSettings(int iTab)
 
 				std::string sName = tEntry.path().filename().string();
 				sName.erase(sName.end() - F::Configs.m_sConfigExtension.size(), sName.end());
-				if (FNV1A::Hash32(sName.c_str()) == FNV1A::Hash32Const("default"))
-					bDefaultFound = true;
-
 				vConfigs.push_back(sName);
 			}
 			if (!bVisual && !bSkins)
 			{
-				if (!bDefaultFound)
-					F::Configs.SaveConfig("default");
-				std::sort(vConfigs.begin(), vConfigs.end(), [&](const auto& a, const auto& b) -> bool
+				std::sort(vConfigs.begin(), vConfigs.end(), [](const auto& a, const auto& b) -> bool
 				{
-					if (FNV1A::Hash32(a.c_str()) == FNV1A::Hash32Const("default"))
-						return true;
-					if (FNV1A::Hash32(b.c_str()) == FNV1A::Hash32Const("default"))
-						return false;
+					if (a == "default" || b == "default")
+						return a == "default" && b != "default";
 
 					return a < b;
 				});
@@ -2651,7 +2643,7 @@ void CMenu::MenuSettings(int iTab)
 			for (auto& sConfigName : vConfigs)
 			{
 				const bool bCurrentConfig = FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32(sConfig.c_str());
-				const bool bDefault = !bVisual && !bSkins && FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32Const("default");
+				const bool bDefault = !bVisual && !bSkins && sConfigName == "default";
 
 				PushID(sConfigName.c_str());
 				auto tRow = FBeginListRow("##Config", bCurrentConfig, 0.f, 2);
@@ -2665,11 +2657,7 @@ void CMenu::MenuSettings(int iTab)
 
 				if (tRow.m_bWithin)
 				{
-					PushDisabled(bDefault);
-					{
-						bDelete = FListRowIcon(tRow, 0, ICON_MD_DELETE, "Delete");
-					}
-					PopDisabled();
+					bDelete = FListRowIcon(tRow, 0, ICON_MD_DELETE, "Delete");
 					bSave = FListRowIcon(tRow, 1, ICON_MD_SAVE, bNoSave ? nullptr : "Save");
 					FTooltip(ICON_MD_ADD ICON_MD_FILE_DOWNLOAD_OFF, bNoSave && IsItemHovered(), 300.f, F::Render.IconFont);
 					if (bSave || bDelete)
@@ -2687,12 +2675,8 @@ void CMenu::MenuSettings(int iTab)
 					FMenuSeparator();
 					if (FMenuItem("Reset", ICON_MD_RESTART_ALT))
 						bReset = true;
-					PushDisabled(bDefault);
-					{
-						if (FMenuItem("Delete", ICON_MD_DELETE, F::Render.Danger, FMenuItemEnum::TintLabel))
-							bDelete = true;
-					}
-					PopDisabled();
+					if (FMenuItem("Delete", ICON_MD_DELETE, F::Render.Danger, FMenuItemEnum::TintLabel))
+						bDelete = true;
 					FEndContextMenu();
 				}
 
@@ -2712,7 +2696,7 @@ void CMenu::MenuSettings(int iTab)
 
 				if (FConfirmModal("##Save", "Overwrite config", std::format("'{}' will be replaced with your current settings.", sConfigName).c_str(), "Overwrite", false))
 					fSave(sConfigName);
-				if (FConfirmModal("##Delete", "Delete config", std::format("'{}' will be deleted for good.", sConfigName).c_str()))
+				if (FConfirmModal("##Delete", "Delete config", bDefault ? "Deleting 'default' restores all settings in the main config to their built-in defaults." : std::format("'{}' will be deleted for good.", sConfigName).c_str()))
 				{
 					if (bSkins)
 						F::Configs.DeleteSkins(sConfigName);

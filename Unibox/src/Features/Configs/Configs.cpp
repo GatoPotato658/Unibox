@@ -1008,11 +1008,8 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 	{
 		if (!std::filesystem::exists(tPath))
 		{
-			if (sConfigName == std::string("default"))
-			{
-				SaveConfig("default", false);
-				H::Fonts.Reload();
-			}
+			if (sConfigName == "default")
+				ResetConfig("default", false);
 			return false;
 		}
 		std::scoped_lock lock(F::Binds.m_mMutex);
@@ -1245,6 +1242,20 @@ static inline void ResetMain(ConfigVar<T>* pVar)
 	pVar->Map = { { DEFAULT_BIND, pVar->Default } };
 }
 
+static void ResetMainConfig(bool bNoSave)
+{
+	F::Binds.m_vBinds.clear();
+	F::Groups.m_vGroups.clear();
+
+	for (auto& pBase : G::Vars())
+	{
+		if (bNoSave && pBase->m_iFlags & NOSAVE)
+			continue;
+
+		VisitVar(pBase, [](auto* pVar) { ResetMain(pVar); });
+	}
+}
+
 void CConfigs::DeleteConfig(const std::string& sConfigName, bool bNotify)
 {
 	const std::filesystem::path tPath = GetConfigFilePath(m_sConfigPath, sConfigName, m_sConfigExtension);
@@ -1253,14 +1264,18 @@ void CConfigs::DeleteConfig(const std::string& sConfigName, bool bNotify)
 
 	try
 	{
-		if (FNV1A::Hash32(sConfigName.c_str()) == FNV1A::Hash32Const("default"))
-		{
-			ResetConfig(sConfigName);
-			return;
-		}
-
+		std::scoped_lock lock(F::Binds.m_mMutex);
 		std::filesystem::remove(tPath);
-		if (FNV1A::Hash32(m_sCurrentConfig.c_str()) == FNV1A::Hash32(sConfigName.c_str()))
+		if (sConfigName == "default")
+		{
+			ResetMainConfig(false);
+			F::Binds.SetVars(nullptr, nullptr, false);
+			H::Fonts.Reload();
+			m_sCurrentConfig = "default";
+			m_sCurrentVisuals.clear();
+			SaveState();
+		}
+		else if (m_sCurrentConfig == sConfigName)
 			LoadConfig("default", false);
 
 		if (bNotify)
@@ -1279,17 +1294,9 @@ void CConfigs::ResetConfig(const std::string& sConfigName, bool bNotify)
 
 	try
 	{
-		F::Binds.m_vBinds.clear();
-		F::Groups.m_vGroups.clear();
-
-		bool bNoSave = !Vars::Config::LoadDebugSettings.Value && !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
-		for (auto& pBase : G::Vars())
-		{
-			if (bNoSave && pBase->m_iFlags & NOSAVE)
-				continue;
-
-			VisitVar(pBase, [](auto* pVar) { ResetMain(pVar); });
-		}
+		std::scoped_lock lock(F::Binds.m_mMutex);
+		const bool bNoSave = sConfigName != "default" && !Vars::Config::LoadDebugSettings.Value && !(GetAsyncKeyState(VK_SHIFT) & 0x8000);
+		ResetMainConfig(bNoSave);
 
 		SaveConfig(sConfigName, false);
 		F::Binds.SetVars(nullptr, nullptr, false);

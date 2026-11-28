@@ -61,7 +61,7 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 		if (std::string(sReason).find("kick") != std::string::npos)
 		{
 			F::AutoVote.OnVoteStart(iTeam, iVoteID, iCaller, iTarget);
-			F::Misc.OnVoteStart(iCaller, iTarget, sTarget);
+			F::Misc.OnVoteStart(iCaller, iTarget, sTarget, sReason);
 		}
 		break;
 	}

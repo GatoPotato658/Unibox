@@ -1,7 +1,6 @@
 #pragma once
 #include "../../SDK/SDK.h"
 #include <filesystem>
-#include <unordered_map>
 
 Enum(EBStage, Normal = 0, NormalInverted, Random, RandomInverted);
 
@@ -34,7 +33,6 @@ private:
 
 	void AutoReport();
 	void AutoRetry(CTFPlayer* pLocal);
-	void AntiGameBan(CTFPlayer* pLocal);
 	void AntiGameBanTrigger(const std::string& sAnnounce, const std::string& sLog);
 	bool IsPlayerTrusted(int iIndex);
 	void CheatsBypass();
@@ -99,22 +97,8 @@ private:
 	Timer m_tCallVoteSpamTimer;
 	bool m_bAutoBalanceTeamChangePending = false;
 
-	struct AimWatch_t
-	{
-		std::string m_sName;
-		float m_flLastMove = 0.f;
-		float m_flLastTurn = 0.f;
-		bool m_bHasForward = false;
-		Vec3 m_vPrevForward = {};
-		bool m_bOnUs = false;
-		float m_flOnUsSince = 0.f;
-		bool m_bOnUsActive = false;
-		float m_flYellowUntil = 0.f;
-		bool m_bCrossMoving = false;
-		bool m_bCrossTurning = false;
-	};
-	std::unordered_map<int, AimWatch_t> m_mAimWatch;
 	Timer m_tAntiGameBanTrigger;
+	Timer m_tAntiGameBanWarning;
 
 	int m_iBuybotStep = 1;
 	int m_iBuybotUpgradeSlotStep = 0;
@@ -172,7 +156,7 @@ public:
 	void OnBuyBotClassChangeBlocked();
 	void MvMFix();
 	bool IsBuyBotBusy() const;
-	void OnVoteStart(int iCaller, int iTarget, const std::string& sTarget);
+	void OnVoteStart(int iCaller, int iTarget, const std::string& sTarget, const std::string& sIssue);
 	void OnChatMessage(int iEntIndex, const std::string& sName, const std::string& sMsg);
 	std::string ReplaceTags(std::string sMsg, std::string sTarget = "", std::string sInitiator = "", std::string sKiller = "", std::string sVictim = "");
 	ProfileDumpResult_t DumpProfiles(bool bAnnounce = true);

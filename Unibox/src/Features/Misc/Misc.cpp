@@ -32,7 +32,6 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 	WeaponSway();
 	AutoReport();
 	AutoRetry(pLocal);
-	AntiGameBan(pLocal);
 
 #ifdef TEXTMODE
 	F::NamedPipe.Store(pLocal, true);
@@ -1911,7 +1910,7 @@ void CMisc::AntiGameBanTrigger(const std::string& sAnnounce, const std::string& 
 	m_tAntiGameBanTrigger.Update();
 
 	if (!sLog.empty())
-		SDK::Output("AntiGameBan", sLog.c_str(), WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		SDK::Output("AntiGameBan", sLog.c_str(), WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU, ICON_MD_WARNING);
 
 	if (!sAnnounce.empty())
 	{
@@ -1931,152 +1930,6 @@ bool CMisc::IsPlayerTrusted(int iIndex)
 		|| F::PlayerUtils.HasTag(iIndex, F::PlayerUtils.TagToIndex(IGNORED_TAG))
 		|| F::PlayerUtils.HasTag(iIndex, F::PlayerUtils.TagToIndex(FRIEND_TAG));
 }
-
-void CMisc::AntiGameBan(CTFPlayer* pLocal)
-{
-	if (!Vars::Misc::Automation::AntiGameBan.Value || I::EngineClient->IsPlayingDemo())
-		return;
-
-	const float flNow = float(SDK::PlatFloatTime());
-
-	if (!pLocal->IsAlive() || !pLocal->IsInValidTeam()
-		|| SDK::GetRoundState() == GR_STATE_PREROUND
-		|| pLocal->m_iSpawnRoomTouchCount() > 0)
-	{
-		m_mAimWatch.clear();
-		return;
-	}
-
-	const int iLocalIdx = pLocal->entindex();
-	const Vec3 vMyOrigin = pLocal->GetAbsOrigin();
-	const Vec3 vMyBody = pLocal->GetEyePosition() - vMyOrigin;
-	const float flBodyLenSqr = std::max(vMyBody.Dot(vMyBody), 1e-4f);
-	std::unordered_map<int, bool> mSeen;
-
-	const auto TryTrigger = [&](const std::string& sName)
-		{
-			AntiGameBanTrigger(std::format("detected possible report by {}", sName),
-				std::format("{} aimed at local player", sName));
-		};
-
-	for (auto pEntity : H::Entities.GetGroup(EntityEnum::PlayerTeam))
-	{
-		auto pTeammate = pEntity->As<CTFPlayer>();
-		const int iIndex = pTeammate->entindex();
-
-		if (iIndex == iLocalIdx || pTeammate->IsDormant() || !pTeammate->IsAlive() || pTeammate->IsAGhost()
-			|| pTeammate->GetAbsOrigin().DistToSqr(vMyOrigin) > 400.f * 400.f
-			|| IsPlayerTrusted(iIndex))
-			continue;
-
-		player_info_t tInfo = {};
-		if (!I::EngineClient->GetPlayerInfo(iIndex, &tInfo) || tInfo.fakeplayer)
-			continue;
-
-		mSeen[iIndex] = true;
-		auto& tState = m_mAimWatch[iIndex];
-		if (tState.m_sName != tInfo.name)
-		{
-			tState = AimWatch_t{};
-			tState.m_sName = tInfo.name;
-			tState.m_flLastMove = flNow - 10.f;
-			tState.m_flLastTurn = flNow - 10.f;
-		}
-
-		const Vec3 vEye = pTeammate->GetEyePosition();
-		Vec3 vForward;
-		Math::AngleVectors(pTeammate->m_angEyeAngles(), &vForward);
-
-		const Vec3 vRel = vEye - vMyOrigin;
-		const float flB = vForward.Dot(vMyBody);
-		const float flC = vForward.Dot(vRel);
-		const float flF = vMyBody.Dot(vRel);
-
-		bool bOnUs = false;
-		if (flC < 0.f)
-		{
-			const float flDenom = flBodyLenSqr - flB * flB;
-			const float flSegT = flDenom > 1e-8f
-				? std::clamp((flF - flB * flC) / flDenom, 0.f, 1.f)
-				: std::clamp(flF / flBodyLenSqr, 0.f, 1.f);
-			const float flRayT = std::max(0.f, flB * flSegT - flC);
-
-			if ((vEye + vForward * flRayT).DistToSqr(vMyOrigin + vMyBody * flSegT) <= 70.f * 70.f)
-			{
-				CGameTrace trace = {};
-				CTraceFilterWorldAndPropsOnly filter(pTeammate);
-				SDK::Trace(vEye, vEye + vForward * 2000.f, MASK_SHOT, &filter, &trace);
-				bOnUs = trace.endpos.DistTo(vEye) >= flRayT;
-			}
-		}
-
-		if (pTeammate->GetAbsVelocity().Length2D() > 25.f)
-			tState.m_flLastMove = flNow;
-
-		if (tState.m_bHasForward && tState.m_vPrevForward.Dot(vForward) < 0.9999996f)
-			tState.m_flLastTurn = flNow;
-		tState.m_vPrevForward = vForward;
-		tState.m_bHasForward = true;
-
-		const bool bMoved = flNow - tState.m_flLastMove < 1.f;
-		const bool bTurned = flNow - tState.m_flLastTurn < 1.f;
-
-		if (bOnUs)
-		{
-			tState.m_flYellowUntil = 0.f;
-			tState.m_bCrossMoving = tState.m_bCrossTurning = false;
-
-			if (!tState.m_bOnUs)
-			{
-				tState.m_bOnUs = true;
-				tState.m_flOnUsSince = flNow;
-				tState.m_bOnUsActive = bMoved || bTurned;
-			}
-			else if (!tState.m_bOnUsActive && (bMoved || bTurned))
-			{
-				tState.m_bOnUsActive = true;
-				tState.m_flOnUsSince = flNow;
-			}
-
-			if (tState.m_bOnUsActive && flNow - tState.m_flOnUsSince >= 1.f)
-				TryTrigger(tState.m_sName);
-		}
-		else
-		{
-			if (tState.m_bOnUs)
-			{
-				tState.m_bOnUs = false;
-				tState.m_bOnUsActive = false;
-				tState.m_bCrossMoving = bMoved;
-				tState.m_bCrossTurning = bTurned;
-				tState.m_flYellowUntil = (tState.m_bCrossMoving || tState.m_bCrossTurning) ? flNow + 5.f : 0.f;
-			}
-
-			if (tState.m_flYellowUntil > 0.f)
-			{
-				if (flNow >= tState.m_flYellowUntil)
-				{
-					tState.m_flYellowUntil = 0.f;
-					tState.m_bCrossMoving = tState.m_bCrossTurning = false;
-				}
-				else if (tState.m_bCrossMoving && flNow - tState.m_flLastMove >= 1.f
-					|| tState.m_bCrossTurning && flNow - tState.m_flLastTurn >= 1.f)
-				{
-					TryTrigger(tState.m_sName);
-				}
-			}
-		}
-	}
-
-	for (auto it = m_mAimWatch.begin(); it != m_mAimWatch.end();)
-	{
-		if (!mSeen.contains(it->first))
-			it = m_mAimWatch.erase(it);
-		else
-			++it;
-	}
-}
-
 
 void CMisc::ChatSpam(CTFPlayer* pLocal)
 {
@@ -3548,8 +3401,22 @@ std::string CMisc::ReplaceTags(std::string sMsg, std::string sTarget, std::strin
 	return sMsg;
 }
 
-void CMisc::OnVoteStart(int iCaller, int iTarget, const std::string& sTarget)
+void CMisc::OnVoteStart(int iCaller, int iTarget, const std::string& sTarget, const std::string& sIssue)
 {
+	if (Vars::Misc::Automation::AntiGameBan.Value && !I::EngineClient->IsPlayingDemo()
+		&& iTarget == I::EngineClient->GetLocalPlayer()
+		&& FNV1A::Hash32(sIssue.c_str()) == FNV1A::Hash32Const("#TF_vote_kick_player_cheating"))
+	{
+		player_info_t tCaller = {};
+		std::string sCallerName = "unknown";
+		if (I::EngineClient->GetPlayerInfo(iCaller, &tCaller))
+			sCallerName = tCaller.name;
+
+		AntiGameBanTrigger(std::format("{} called a cheating vote", sCallerName),
+			std::format("{} called a cheating vote on {}", sCallerName, sTarget));
+		return;
+	}
+
 	if (!Vars::Misc::Automation::ChatSpam::VoteKickReply.Value)
 		return;
 
@@ -3690,21 +3557,22 @@ void CMisc::OnChatMessage(int iEntIndex, const std::string& sName, const std::st
 	{
 		static const std::vector<std::string> vTriggers =
 		{
-			"hack", "hax", "cheat", "aimbot", "aim bot", "aimlock", "aim lock",
-			"aimassist", "aim assist", "autoaim", "auto aim", "aimsnap", "aim snap",
-			"wallhack", "wall hack", "spinbot", "spin bot",
-			"triggerbot", "trigger bot", "silent aim", "silentaim", "psilent",
+			"hack", "hacks", "hacker", "hackers", "hacking", "hax",
+			"cheat", "cheats", "cheater", "cheaters", "cheating",
+			"aimbot", "aim bot", "aimlock", "aim lock", "aimassist", "aim assist",
+			"autoaim", "auto aim", "aimsnap", "aim snap", "wallhack", "wall hack",
+			"spinbot", "spin bot", "triggerbot", "trigger bot", "silent aim", "silentaim", "psilent",
 			"backtrack", "antiaim", "anti-aim", "anti aim", "doubletap", "double tap",
 			"tickbase", "fakelag", "fake lag", "speedhack", "speed hack",
 			"norecoil", "no recoil", "nospread", "no spread", "crithack", "crit hack",
 			"radarhack", "radar hack", "flyhack", "fly hack", "noclip", "godmode", "god mode",
-			"script", "exploit", "inject", "catbot", "cat bot", "bot host", "omnibot",
-			"lmaobox", "aimware", "nullcore", "null core", "onshot", "cathook",
-			"royalhack", "royal hack", "ragehack", "rage hack",
-			"vacban", "vac ban", "report", "votekick", "vote kick",
-			"kick him", "kick the", "blatant", "smurf"
+			"script", "scripts", "scripting", "exploit", "exploits", "exploiting", "inject", "injected", "injecting",
+			"catbot", "cat bot", "bot host", "omnibot", "lmaobox", "aimware", "nullcore", "null core",
+			"onshot", "cathook", "royalhack", "royal hack", "ragehack", "rage hack",
+			"report", "reports", "reported", "reporting", "votekick", "vote kick",
+			"kick", "kicked", "kicking", "ban", "banned", "banning",
+			"vacban", "vac ban", "gameban", "game ban"
 		};
-		static const std::vector<std::string> vWords = { "bot", "bots", "botting", "botter", "botted" };
 
 		std::string sCleanMsg;
 		for (char c : sMsg)
@@ -3714,65 +3582,62 @@ void CMisc::OnChatMessage(int iEntIndex, const std::string& sName, const std::st
 			sCleanMsg += char(std::tolower(static_cast<unsigned char>(c)));
 		}
 
-		auto fContains = [&](const std::string& sTrigger, bool bWhole)
+		auto fContains = [&](const std::string& sTrigger)
 			{
 				for (size_t iPos = sCleanMsg.find(sTrigger); iPos != std::string::npos; iPos = sCleanMsg.find(sTrigger, iPos + 1))
 				{
 					const size_t iEnd = iPos + sTrigger.length();
 					if ((!iPos || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iPos - 1])))
-						&& (!bWhole || iEnd == sCleanMsg.length() || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iEnd]))))
+						&& (iEnd == sCleanMsg.length() || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iEnd]))))
 						return true;
 				}
 				return false;
 			};
 
-		std::string sMatched;
-		bool bTriggered = false;
+		bool bMentionsLocal = false;
+		player_info_t tLocal = {};
+		if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &tLocal))
+		{
+			std::string sLocalName;
+			for (char c : std::string(tLocal.name))
+				sLocalName += char(std::tolower(static_cast<unsigned char>(c)));
 
-		if (!IsPlayerTrusted(iEntIndex))
+			if (sLocalName.length() >= 3)
+			{
+				for (size_t iPos = sCleanMsg.find(sLocalName); iPos != std::string::npos; iPos = sCleanMsg.find(sLocalName, iPos + 1))
+				{
+					const size_t iEnd = iPos + sLocalName.length();
+					if ((!iPos || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iPos - 1])))
+						&& (iEnd == sCleanMsg.length() || !std::isalnum(static_cast<unsigned char>(sCleanMsg[iEnd]))))
+					{
+						bMentionsLocal = true;
+						break;
+					}
+				}
+			}
+		}
+
+		std::string sMatched;
+		if (bMentionsLocal && iEntIndex > 0 && iEntIndex <= I::EngineClient->GetMaxClients() && !IsPlayerTrusted(iEntIndex))
 		{
 			player_info_t tSpeaker = {};
-			if (!I::EngineClient->GetPlayerInfo(iEntIndex, &tSpeaker) || !tSpeaker.fakeplayer)
+			if (I::EngineClient->GetPlayerInfo(iEntIndex, &tSpeaker) && !tSpeaker.fakeplayer)
 			{
 				for (const auto& sTrigger : vTriggers)
 				{
-					if (fContains(sTrigger, false))
+					if (fContains(sTrigger))
 					{
 						sMatched = sTrigger;
 						break;
 					}
 				}
-				if (sMatched.empty())
-				{
-					for (const auto& sTrigger : vWords)
-					{
-						if (fContains(sTrigger, true))
-						{
-							sMatched = sTrigger;
-							break;
-						}
-					}
-				}
-				bTriggered = !sMatched.empty();
-			}
-
-			if (!bTriggered)
-			{
-				player_info_t tInfo = {};
-				if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &tInfo))
-				{
-					std::string sLocalName = tInfo.name;
-					std::transform(sLocalName.begin(), sLocalName.end(), sLocalName.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-					if (sLocalName.length() >= 3 && sCleanMsg.find(sLocalName) != std::string::npos)
-						bTriggered = true;
-				}
 			}
 		}
 
-		if (bTriggered)
+		if (!sMatched.empty())
 		{
-			AntiGameBanTrigger(sMatched.empty() ? "" : std::format("{} said: {}", sName, sMatched),
-				std::format("{}: {}", sName, sMsg));
+			if (m_tAntiGameBanWarning.Run(5.0f))
+				SDK::Output("AntiGameBan", std::format("{} targeted you with '{}': {}", sName, sMatched, sMsg).c_str(), WARNING_COLOR, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU, ICON_MD_WARNING);
 			return;
 		}
 	}
