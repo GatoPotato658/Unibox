@@ -697,6 +697,23 @@ NAMESPACE_BEGIN(Vars)
 			CVar(MOTD, VA_LIST("MOTD", "Remove MOTD"), false, VISUAL);
 		NAMESPACE_END(Removals)
 
+#ifndef TEXTMODE
+		NAMESPACE_BEGIN(UltraToaster)
+			CVar(Enabled, "Enabled", false, VISUAL);
+			CVar(PlayerLODBias, "Player LOD bias", 3, VISUAL | SLIDER_CLAMP, 0, 7);
+			CVar(PlayerShadows, "Skip other players' depth shadows", true, VISUAL);
+			CVar(PlayerWeapons, "Hide other players' held weapons", false, VISUAL);
+			CVar(ModelFlexes, "Skip model flexes", true, VISUAL);
+			CVar(Cosmetics, "Hide cosmetic models", true, VISUAL);
+			CVar(Unusuals, "Skip cosmetic Unusual particles", true, VISUAL);
+			CVar(WeaponUnusuals, "Skip weapon Unusual particles", true, VISUAL);
+			CVar(WeaponSkins, "Use stock weapon textures", true, VISUAL);
+			CVar(PropLOD, "Simplify static props", true, VISUAL);
+			CVar(PropLODBias, "Static prop LOD bias", 2, VISUAL | SLIDER_CLAMP, 1, 7);
+			CVar(PropShadows, "Skip static prop shadows", true, VISUAL);
+		NAMESPACE_END(UltraToaster)
+#endif
+
 		NAMESPACE_BEGIN(Effects)
 			CVarValues(BulletTracer, "Bullet tracer", std::string("Default"), VISUAL | DROPDOWN_CUSTOM, nullptr,
 				"Default", "None", "Big nasty", "Distortion trail", "Machina", "Sniper rail", "Short circuit", "C.A.P.P.E.R", "Merasmus ZAP", "Merasmus ZAP 2", "Black ink", "Line", "Line ignore Z", "Beam");

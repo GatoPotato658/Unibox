@@ -2,31 +2,37 @@
 
 #include "../SDK/Definitions/Render/TraceInfo.h"
 
+#include <cstddef>
+#include <utility>
+
 
 #define DISPCOLL_DIST_EPSILON 0.03125f
 
-static int s_iMask = 0;
-static std::optional<Vec3> s_vOriginal = {};
-static CDispCollTri* s_pTri = nullptr;
+static_assert(offsetof(TraceInfo_t, m_contents) == 296);
+static_assert(sizeof(CDispCollTri) == 24);
+static_assert(offsetof(CDispCollTri, m_vecNormal) == 8);
 
-MAKE_HOOK(CM_TraceToDispTree_True, S::CM_TraceToDispTree_True(), float,
-	TraceInfo_t* pTraceInfo, CDispCollTree* pDispTree, float startFrac, float endFrac)
+static thread_local bool s_bTwoSided = false;
+static thread_local CDispCollTri* s_pFlippedTri = nullptr;
+
+MAKE_HOOK(CM_TraceToDispTree_True, S::CM_TraceToDispTree_True(), void,
+	TraceInfo_t* pTraceInfo, CDispCollTree* pDispTree)
 {
-	DEBUG_RETURN(CM_TraceToDispTree_True, pTraceInfo, pDispTree, startFrac, endFrac);
+	DEBUG_RETURN(CM_TraceToDispTree_True, pTraceInfo, pDispTree);
 
-	s_iMask = pTraceInfo->m_contents;
-
-	return CALL_ORIGINAL(pTraceInfo, pDispTree, startFrac, endFrac);
+	const bool bPrevious = std::exchange(s_bTwoSided, (pTraceInfo->m_contents & CONTENTS_DISPSOLID) != 0);
+	CALL_ORIGINAL(pTraceInfo, pDispTree);
+	s_bTwoSided = bPrevious;
 }
 
-MAKE_HOOK(CM_TraceToDispTree_False, S::CM_TraceToDispTree_False(), float,
-	TraceInfo_t* pTraceInfo, CDispCollTree* pDispTree, float startFrac, float endFrac)
+MAKE_HOOK(CM_TraceToDispTree_False, S::CM_TraceToDispTree_False(), void,
+	TraceInfo_t* pTraceInfo, CDispCollTree* pDispTree)
 {
-	DEBUG_RETURN(CM_TraceToDispTree_False, pTraceInfo, pDispTree, startFrac, endFrac);
+	DEBUG_RETURN(CM_TraceToDispTree_False, pTraceInfo, pDispTree);
 
-	s_iMask = pTraceInfo->m_contents;
-
-	return CALL_ORIGINAL(pTraceInfo, pDispTree, startFrac, endFrac);
+	const bool bPrevious = std::exchange(s_bTwoSided, (pTraceInfo->m_contents & CONTENTS_DISPSOLID) != 0);
+	CALL_ORIGINAL(pTraceInfo, pDispTree);
+	s_bTwoSided = bPrevious;
 }
 
 MAKE_HOOK(IntersectRayWithTriangle, S::IntersectRayWithTriangle(), float,
@@ -34,7 +40,7 @@ MAKE_HOOK(IntersectRayWithTriangle, S::IntersectRayWithTriangle(), float,
 {
 	TRACK_HOOK;
 
-	if (s_iMask & CONTENTS_DISPSOLID)
+	if (s_bTwoSided)
 		oneSided = false;
 
 	return CALL_ORIGINAL(ray, v1, v2, v3, oneSided);
@@ -45,25 +51,23 @@ MAKE_HOOK(CDispCollTree_SweepAABBTriIntersect, S::CDispCollTree_SweepAABBTriInte
 {
 	DEBUG_RETURN(CDispCollTree_SweepAABBTriIntersect, rcx, ray, rayDir, iTri, pTri, pTrace);
 
-	if (s_iMask & CONTENTS_DISPSOLID && pTri->m_vecNormal.Dot(ray.m_Delta) > DISPCOLL_DIST_EPSILON)
-	{
-		s_vOriginal = pTri->m_vecNormal, s_pTri = pTri;
-		pTri->m_vecNormal = -pTri->m_vecNormal;
-	}
+	if (!s_bTwoSided || !(pTri->m_vecNormal.Dot(ray.m_Delta) > DISPCOLL_DIST_EPSILON))
+		return CALL_ORIGINAL(rcx, ray, rayDir, iTri, pTri, pTrace);
 
-	CALL_ORIGINAL(rcx, ray, rayDir, iTri, pTri, pTrace);
-
-	if (s_vOriginal)
-		pTri->m_vecNormal = *s_vOriginal, s_vOriginal = std::nullopt;
+	auto tTri = *pTri;
+	tTri.m_vecNormal = -tTri.m_vecNormal;
+	auto* pPrevious = std::exchange(s_pFlippedTri, &tTri);
+	CALL_ORIGINAL(rcx, ray, rayDir, iTri, &tTri, pTrace);
+	s_pFlippedTri = pPrevious;
 }
 
-MAKE_HOOK(CDispCollTree_EdgeCrossAxis_0, S::CDispCollTree_EdgeCrossAxis_0(), void,
+MAKE_HOOK(CDispCollTree_EdgeCrossAxis_0, S::CDispCollTree_EdgeCrossAxis_0(), bool,
 	void* rcx, const Ray_t& ray, unsigned short iPlane, CDispCollHelper* pHelper)
 {
 	DEBUG_RETURN(CDispCollTree_EdgeCrossAxis_0, rcx, ray, iPlane, pHelper);
 
-	if (s_vOriginal)
-		s_pTri->m_vecNormal = *s_vOriginal, s_vOriginal = std::nullopt;
+	if (auto* pTri = std::exchange(s_pFlippedTri, nullptr))
+		pTri->m_vecNormal = -pTri->m_vecNormal;
 
-	CALL_ORIGINAL(rcx, ray, iPlane, pHelper);
+	return CALL_ORIGINAL(rcx, ray, iPlane, pHelper);
 }

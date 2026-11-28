@@ -272,6 +272,9 @@ public:
 	static uint64_t GetCatalogueRevision();
 	static const ItemInfo_t* FindItem(uint16_t iDef);
 	static bool IsCatalogueLoading();
+#ifndef TEXTMODE
+	static bool IsUnusualParticle(const char* sName, bool bWeapon);
+#endif
 
 	static int Key(int iDefIndex);
 	static const char* WeaponName(int iKey);

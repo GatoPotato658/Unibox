@@ -1,13 +1,69 @@
 #ifndef TEXTMODE
 #include "../SDK/SDK.h"
+#include "../SDK/Definitions/Render/CParticleProperty.h"
+
+#include "../Features/Visuals/SkinChanger/SkinChanger.h"
+#include "../Features/Visuals/UltraToaster/UltraToaster.h"
 
 #include "../Features/Simulation/ProjectileSimulation/ProjectileSimulation.h"
 
+
+namespace
+{
+	bool SkipUnusualParticle(void* pProperty, const char* sName)
+	{
+		const bool bCosmeticsEnabled = Vars::Visuals::UltraToaster::Unusuals.Value;
+		const bool bWeaponsEnabled = Vars::Visuals::UltraToaster::WeaponUnusuals.Value;
+		if (!pProperty || !sName || (!bCosmeticsEnabled && !bWeaponsEnabled) || !UltraToaster::IsActive())
+			return false;
+
+		const bool bCosmetic = bCosmeticsEnabled && CSkinChanger::IsUnusualParticle(sName, false);
+		const bool bWeapon = bWeaponsEnabled && CSkinChanger::IsUnusualParticle(sName, true);
+		if (!bCosmetic && !bWeapon)
+			return false;
+
+		auto* pOuter = static_cast<CParticleProperty*>(pProperty)->m_pOuter;
+		if (!pOuter)
+			return false;
+
+		if (bWeapon)
+		{
+			auto* pLocal = H::Entities.GetLocal();
+			if (pLocal && pOuter == pLocal->m_hViewModel().Get())
+				return true;
+		}
+
+		auto* pOwner = pOuter->GetOwnerEntity();
+		if (!pOwner || !pOwner->IsPlayer())
+			return false;
+
+		const auto iClass = pOuter->GetClassID();
+		if (bCosmetic && iClass == ETFClassID::CTFWearable)
+			return true;
+		if (!bWeapon)
+			return false;
+
+		if (pOuter->IsBaseCombatWeapon())
+			return true;
+		if (iClass != ETFClassID::CTFWearable && iClass != ETFClassID::CTFWearableVM)
+			return false;
+
+		auto* pActive = pOwner->As<CTFPlayer>()->m_hActiveWeapon().Get();
+		if (!pActive || !pActive->IsBaseCombatWeapon())
+			return false;
+
+		auto* pWeapon = pActive->As<CTFWeaponBase>();
+		return pOuter == pWeapon->m_hExtraWearable().Get() || pOuter == pWeapon->m_hExtraWearableViewModel().Get();
+	}
+}
 
 MAKE_HOOK(CParticleProperty_Create_Name, S::CParticleProperty_Create_Name(), void*,
 	void* rcx, const char* pszParticleName, ParticleAttachment_t iAttachType, const char* pszAttachmentName)
 {
     DEBUG_RETURN(CParticleProperty_Create_Name, rcx, pszParticleName, iAttachType, pszAttachmentName);
+
+	if (SkipUnusualParticle(rcx, pszParticleName))
+		return nullptr;
 
     const auto dwRetAddr = uintptr_t(_ReturnAddress());
     const auto dwUpdateEffects1 = S::CWeaponMedigun_UpdateEffects_CreateName_Call1();
@@ -89,6 +145,9 @@ MAKE_HOOK(CParticleProperty_Create_Point, S::CParticleProperty_Create_Point(), v
 	void* rcx, const char* pszParticleName, ParticleAttachment_t iAttachType, int iAttachmentPoint, Vector vecOriginOffset)
 {
     DEBUG_RETURN(CParticleProperty_Create_Point, rcx, pszParticleName, iAttachType, iAttachmentPoint, vecOriginOffset);
+
+	if (SkipUnusualParticle(rcx, pszParticleName))
+		return nullptr;
 
     if (pszParticleName)
     {

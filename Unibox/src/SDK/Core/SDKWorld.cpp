@@ -9,7 +9,7 @@ bool SDK::W2S(const Vec3& vOrigin, Vec3& vScreen, bool bAlways)
 	float flW = worldToScreen[3][0] * vOrigin.x + worldToScreen[3][1] * vOrigin.y + worldToScreen[3][2] * vOrigin.z + worldToScreen[3][3];
 	vScreen.z = 0;
 
-	bool bOnScreen = flW > 0.f;
+	bool bOnScreen = flW > 0.001f;
 	if (bAlways || bOnScreen)
 	{
 		const float fl1DBw = 1 / fabs(flW);
@@ -18,6 +18,29 @@ bool SDK::W2S(const Vec3& vOrigin, Vec3& vScreen, bool bAlways)
 	}
 
 	return bOnScreen;
+}
+
+bool SDK::ClipSegmentToScreen(const Vec3& vStart, const Vec3& vEnd, Vec3& vScreenStart, Vec3& vScreenEnd)
+{
+	constexpr float NEAR_W = 0.01f;
+
+	const auto& worldToScreen = H::Draw.m_mWorldToProjection.As3x4();
+	const auto fnW = [&](const Vec3& vPoint)
+	{
+		return worldToScreen[3][0] * vPoint.x + worldToScreen[3][1] * vPoint.y + worldToScreen[3][2] * vPoint.z + worldToScreen[3][3];
+	};
+
+	const float flStartW = fnW(vStart), flEndW = fnW(vEnd);
+	if (flStartW < NEAR_W && flEndW < NEAR_W)
+		return false;
+
+	Vec3 vVisibleStart = vStart, vVisibleEnd = vEnd;
+	if (flStartW < NEAR_W)
+		vVisibleStart = vStart + (vEnd - vStart) * ((NEAR_W - flStartW) / (flEndW - flStartW));
+	else if (flEndW < NEAR_W)
+		vVisibleEnd = vEnd + (vStart - vEnd) * ((NEAR_W - flEndW) / (flStartW - flEndW));
+
+	return W2S(vVisibleStart, vScreenStart) && W2S(vVisibleEnd, vScreenEnd);
 }
 
 bool SDK::IsOnScreen(CBaseEntity* pEntity, const matrix3x4& mTransform, float* pLeft, float* pRight, float* pTop, float* pBottom, bool bAll)

@@ -428,6 +428,8 @@ MAKE_SIGNATURE(Host_IsSecureServerAllowed, "engine.dll", "48 83 EC ? FF 15 ? ? ?
 MAKE_SIGNATURE(g_bAllowSecureServers, "engine.dll", "40 88 35 ? ? ? ? 40 84 FF", 0x0);
 
 MAKE_SIGNATURE(CStaticPropMgr_DrawStaticProps, "engine.dll", "4C 8B DC 49 89 5B ? 49 89 6B ? 49 89 73 ? 57 41 54 41 55 41 56 41 57 48 83 EC ? 4C 8B 3D", 0x0);
+MAKE_SIGNATURE(CModelRender_SelectLod, "engine.dll", "48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 05 ? ? ? ? 49 8B F0 48 8B EA 8B 78 58 83 FF FF", 0x0);
+MAKE_SIGNATURE(CBaseFlex_SetupWeights, "client.dll", "48 89 5C 24 18 48 89 7C 24 20 41 54 41 56 41 57 48 83 EC 30 48 8D 59 F8 4D 8B F1 80 BB ? ? ? ? 00 45 8B F8 4C 8B E2", 0x0);
 
 MAKE_SIGNATURE(S_StartSound, "engine.dll", "40 57 48 81 EC ? ? ? ? 48 83 79 ? ? 48 8B F9 75 ? 33 C0", 0x0);
 

@@ -2,11 +2,15 @@
 #include "SkinData.h"
 #include "CrateLootData.h"
 #include "../../Misc/AutoItem/AutoItem.h"
+#ifndef TEXTMODE
+#include "../UltraToaster/UltraToaster.h"
+#endif
 
 #include <algorithm>
 #include <atomic>
 #include <bit>
 #include <cstring>
+#include <charconv>
 #include <cmath>
 #include <format>
 #include <random>
@@ -24,6 +28,16 @@ namespace
 {
 	std::mutex s_tCatalogueMutex;
 	std::atomic<uint64_t> s_uItemCatalogueRevision = 0;
+#ifndef TEXTMODE
+	struct UnusualParticles_t
+	{
+		std::vector<std::string> vCosmetics;
+		std::vector<std::string> vWeapons;
+	};
+
+	std::atomic<const UnusualParticles_t*> s_pUnusualParticles = nullptr;
+	void PrepareUnusualParticles();
+#endif
 	template <class T, size_t N>
 	bool Contains(const T(&aList)[N], int iValue)
 	{
@@ -728,8 +742,21 @@ void CSkinChanger::Apply()
 	RunFrame();
 }
 
+bool CSkinChanger::IsUnusualParticle(const char* sName, bool bWeapon)
+{
+	const auto* pParticles = s_pUnusualParticles.load(std::memory_order_acquire);
+	if (!pParticles || !sName)
+		return false;
+
+	const auto& vNames = bWeapon ? pParticles->vWeapons : pParticles->vCosmetics;
+	return std::binary_search(vNames.begin(), vNames.end(), sName);
+}
+
 void CSkinChanger::Service()
 {
+	if ((Vars::Visuals::UltraToaster::Unusuals.Value || Vars::Visuals::UltraToaster::WeaponUnusuals.Value) && UltraToaster::IsActive())
+		PrepareUnusualParticles();
+
 	bool bInGame = false;
 	{
 		std::lock_guard tLock(m_tMutex);
@@ -1229,8 +1256,8 @@ namespace
 	std::unordered_map<uint16_t, KeyValues*> s_mCatalogueDefinitions;
 	bool s_bCrateProfilesReady = false;
 
-	KeyValues* CrateFirstKey(KeyValues* pKey) { return pKey ? Field<KeyValues*>(pKey, 48) : nullptr; }
-	KeyValues* CrateNextKey(KeyValues* pKey) { return pKey ? Field<KeyValues*>(pKey, 40) : nullptr; }
+	KeyValues* FirstSchemaKey(KeyValues* pKey) { return pKey ? Field<KeyValues*>(pKey, 48) : nullptr; }
+	KeyValues* NextSchemaKey(KeyValues* pKey) { return pKey ? Field<KeyValues*>(pKey, 40) : nullptr; }
 
 	int DefinitionInt(KeyValues* pDefinition, const char* sAttribute, int iDefault = 0)
 	{
@@ -1257,7 +1284,7 @@ namespace
 				|| std::find(m_aPath.begin(), m_aPath.begin() + uDepth, pNode) != m_aPath.begin() + uDepth)
 				return;
 			m_aPath[uDepth] = pNode;
-			for (auto* pKey = CrateFirstKey(pNode); pKey && vItems.size() < 8192 && ++m_uVisits <= 65536; pKey = CrateNextKey(pKey))
+			for (auto* pKey = FirstSchemaKey(pNode); pKey && vItems.size() < 8192 && ++m_uVisits <= 65536; pKey = NextSchemaKey(pKey))
 			{
 				const char* sName = pKey->GetName();
 				if (!strcmp(sName, "loot_list_collection"))
@@ -1299,7 +1326,7 @@ namespace
 		}
 	};
 
-	KeyValues* LoadCrateSchema()
+	KeyValues* LoadItemsGame()
 	{
 		if (!I::FileSystem)
 			return nullptr;
@@ -1324,6 +1351,80 @@ namespace
 			return nullptr;
 		}
 		return pRoot;
+	}
+
+	void PrepareUnusualParticles()
+	{
+		if (s_pUnusualParticles.load(std::memory_order_relaxed) || !I::FileSystem)
+			return;
+
+		const auto* pSchema = CEconItemSchema::GetInstance();
+		if (!pSchema)
+			return;
+
+		static const auto tParticles = [pSchema]
+		{
+			UnusualParticles_t tNames;
+			KeyValuesAD tSchema(LoadItemsGame());
+			auto* pEffects = tSchema ? tSchema->FindKey("attribute_controlled_attached_particles") : nullptr;
+			if (!pEffects)
+				return tNames;
+
+			for (auto* pEntry = FirstSchemaKey(pEffects->FindKey("cosmetic_unusual_effects")); pEntry; pEntry = NextSchemaKey(pEntry))
+			{
+				const char* sID = pEntry->GetName();
+				if (!sID)
+					continue;
+
+				int iID = 0;
+				const char* sEnd = sID + std::strlen(sID);
+				const auto [pEnd, eError] = std::from_chars(sID, sEnd, iID);
+				if (eError != std::errc() || pEnd != sEnd || iID <= 0 || !pSchema->IsCosmeticUnusualEffect(iID))
+					continue;
+
+				const char* sName = pEntry->GetString("system");
+				if (sName && *sName)
+					tNames.vCosmetics.emplace_back(sName);
+			}
+
+			std::unordered_set<std::string> tSuffixes;
+			for (const char* sGroup : { "items", "prefabs" })
+			{
+				for (auto* pItem = FirstSchemaKey(tSchema->FindKey(sGroup)); pItem; pItem = NextSchemaKey(pItem))
+				{
+					const char* sSuffix = pItem->GetString("particle_suffix");
+					if (sSuffix && *sSuffix)
+						tSuffixes.emplace(sSuffix);
+				}
+			}
+
+			for (auto* pEntry = FirstSchemaKey(pEffects->FindKey("weapon_unusual_effects")); pEntry; pEntry = NextSchemaKey(pEntry))
+			{
+				const char* sName = pEntry->GetString("system");
+				if (!sName || !*sName)
+					continue;
+
+				const bool bViewModel = pEntry->GetBool("draw_in_viewmodel");
+				const auto AddWeaponEffect = [&](const std::string& sEffect)
+				{
+					tNames.vWeapons.push_back(sEffect);
+					if (bViewModel)
+						tNames.vWeapons.push_back(sEffect + "_vm");
+				};
+
+				AddWeaponEffect(sName);
+				if (pEntry->GetBool("use_suffix_name"))
+				{
+					for (const auto& sSuffix : tSuffixes)
+						AddWeaponEffect(std::string(sName) + '_' + sSuffix);
+				}
+			}
+
+			std::sort(tNames.vCosmetics.begin(), tNames.vCosmetics.end());
+			std::sort(tNames.vWeapons.begin(), tNames.vWeapons.end());
+			return tNames;
+		}();
+		s_pUnusualParticles.store(&tParticles, std::memory_order_release);
 	}
 
 	using CrateSeriesMap_t = std::unordered_map<int, std::vector<uint16_t>>;
@@ -1406,11 +1507,11 @@ namespace
 	{
 		s_mCrateProfiles.clear();
 		s_mCrateSeries = LoadCrateCache(mDefinitions);
-		KeyValuesAD tSchema(LoadCrateSchema());
+		KeyValuesAD tSchema(LoadItemsGame());
 		CrateSchemaReader tReader(tSchema, mNames);
 		if (auto* pRevolving = tSchema ? tSchema->FindKey("revolving_loot_lists") : nullptr)
 		{
-			for (auto* pKey = CrateFirstKey(pRevolving); pKey; pKey = CrateNextKey(pKey))
+			for (auto* pKey = FirstSchemaKey(pRevolving); pKey; pKey = NextSchemaKey(pKey))
 			{
 				const int iSeries = pKey->GetInt(nullptr);
 				if (iSeries > 0)

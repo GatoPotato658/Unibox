@@ -615,6 +615,7 @@
     <ClCompile Include="src\Hooks\CTFWeaponBase_CanFireRandomCriticalShot.cpp" />
     <ClCompile Include="src\Hooks\CTFPlayer_GetMinFOV.cpp" />
     <ClCompile Include="src\Hooks\CWeaponMedigun_PrimaryAttack.cpp" />
+    <ClCompile Include="src\Hooks\CWeaponSkinProxy_OnBind.cpp" />
     <ClCompile Include="src\Hooks\Host_IsSecureServerAllowed.cpp" />
     <ClCompile Include="src\Hooks\CNetChannel_ProcessPacket.cpp" />
     <ClCompile Include="src\Hooks\CNetChannel_ReadSubChannelData.cpp" />
@@ -819,6 +820,7 @@
     <ClInclude Include="src\Features\Visuals\ESP\ESP.h" />
     <ClInclude Include="src\Features\Visuals\FakeAngle\FakeAngle.h" />
     <ClInclude Include="src\Features\Visuals\Glow\Glow.h" />
+    <ClInclude Include="src\Features\Visuals\UltraToaster\UltraToaster.h" />
     <ClInclude Include="src\Features\Visuals\Glow\D3DGlow.h" />
     <ClInclude Include="src\Features\Visuals\Glow\GlowShaders.h" />
     <ClInclude Include="src\Features\Visuals\SkinChanger\SkinChanger.h" />

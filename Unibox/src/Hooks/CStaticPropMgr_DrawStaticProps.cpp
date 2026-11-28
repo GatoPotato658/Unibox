@@ -1,5 +1,6 @@
 #ifndef TEXTMODE
 #include "../SDK/SDK.h"
+#include "../Features/Visuals/UltraToaster/UltraToaster.h"
 
 
 static bool s_bDrawingProps = false;
@@ -8,6 +9,9 @@ MAKE_HOOK(CStaticPropMgr_DrawStaticProps, S::CStaticPropMgr_DrawStaticProps(), v
 	void* rcx, IClientRenderable** pProps, int count, bool bShadowDepth, bool drawVCollideWireframe)
 {
 	DEBUG_RETURN(CStaticPropMgr_DrawStaticProps, rcx, pProps, count, bShadowDepth, drawVCollideWireframe);
+
+	if (bShadowDepth && !drawVCollideWireframe && Vars::Visuals::UltraToaster::PropShadows.Value && UltraToaster::IsActive())
+		return;
 
 	s_bDrawingProps = true;
 	CALL_ORIGINAL(rcx, pProps, count, bShadowDepth, drawVCollideWireframe);

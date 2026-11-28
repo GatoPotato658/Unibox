@@ -1109,20 +1109,19 @@ void CESP::CacheBones(CTFPlayer* pPlayer, const Vec3& vOffset, ESPDrawEntity_t& 
 		{ 9, 2 }, { 10, 9 }, { 11, 10 },
 		{ 12, 2 }, { 13, 12 }, { 14, 13 }
 	};
-	Vec3 aScreen[std::size(aHitboxes)] = {};
-	bool aVisible[std::size(aHitboxes)] = {};
+	Vec3 aWorld[std::size(aHitboxes)] = {};
 	for (size_t i = 0; i < std::size(aHitboxes); i++)
 	{
 		const int iHitbox = pPlayer->GetBaseToHitbox(aHitboxes[i]);
-		aVisible[i] = SDK::W2S(pPlayer->GetHitboxCenter(s_aBones, iHitbox) + vOffset, aScreen[i]);
+		aWorld[i] = pPlayer->GetHitboxCenter(s_aBones, iHitbox) + vOffset;
 	}
 
 	tOut.m_vBones.reserve(std::size(aLinks));
 	for (const auto& aLink : aLinks)
 	{
-		const int iFirst = aLink[0], iSecond = aLink[1];
-		if (aVisible[iFirst] && aVisible[iSecond])
-			tOut.m_vBones.emplace_back(Vec2(aScreen[iFirst].x, aScreen[iFirst].y), Vec2(aScreen[iSecond].x, aScreen[iSecond].y));
+		Vec3 vScreenA, vScreenB;
+		if (SDK::ClipSegmentToScreen(aWorld[aLink[0]], aWorld[aLink[1]], vScreenA, vScreenB))
+			tOut.m_vBones.emplace_back(Vec2(vScreenA.x, vScreenA.y), Vec2(vScreenB.x, vScreenB.y));
 	}
 }
 
@@ -1183,18 +1182,64 @@ bool CESP::GetDrawBounds(CBaseEntity* pEntity, bool bSmooth, double dNow, Vec3& 
 	};
 
 	float flLeft = 0.f, flRight = 0.f, flTop = 0.f, flBottom = 0.f;
+	bool bAllProjected = true;
 	for (int n = 0; n < 6; n++)
 	{
 		Vec3 vPoint; Math::VectorTransform(vPoints[n], s_mTransform, vPoint);
 
 		Vec3 vScreen;
 		if (!SDK::W2S(vPoint, vScreen))
-			return false;
+		{
+			bAllProjected = false;
+			break;
+		}
 
 		flLeft = n ? std::min(flLeft, vScreen.x) : vScreen.x;
 		flRight = n ? std::max(flRight, vScreen.x) : vScreen.x;
 		flTop = n ? std::max(flTop, vScreen.y) : vScreen.y;
 		flBottom = n ? std::min(flBottom, vScreen.y) : vScreen.y;
+	}
+
+	if (!bAllProjected)
+	{
+		Vec3 vCorners[8];
+		for (int n = 0; n < 8; n++)
+		{
+			const Vec3 vLocal(
+				(n & 4) ? vMaxs.x : vMins.x,
+				(n & 2) ? vMaxs.y : vMins.y,
+				(n & 1) ? vMaxs.z : vMins.z
+			);
+			Math::VectorTransform(vLocal, s_mTransform, vCorners[n]);
+		}
+
+		static constexpr int aEdges[][2] = {
+			{ 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 },
+			{ 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
+			{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
+		};
+
+		bool bAny = false;
+		for (const auto& aEdge : aEdges)
+		{
+			Vec3 vScreenA, vScreenB;
+			if (!SDK::ClipSegmentToScreen(vCorners[aEdge[0]], vCorners[aEdge[1]], vScreenA, vScreenB))
+				continue;
+
+			const float flEdgeLeft = std::min(vScreenA.x, vScreenB.x);
+			const float flEdgeRight = std::max(vScreenA.x, vScreenB.x);
+			const float flEdgeTop = std::max(vScreenA.y, vScreenB.y);
+			const float flEdgeBottom = std::min(vScreenA.y, vScreenB.y);
+
+			flLeft = bAny ? std::min(flLeft, flEdgeLeft) : flEdgeLeft;
+			flRight = bAny ? std::max(flRight, flEdgeRight) : flEdgeRight;
+			flTop = bAny ? std::max(flTop, flEdgeTop) : flEdgeTop;
+			flBottom = bAny ? std::min(flBottom, flEdgeBottom) : flEdgeBottom;
+			bAny = true;
+		}
+
+		if (!bAny)
+			return false;
 	}
 
 	x = flLeft;

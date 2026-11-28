@@ -821,6 +821,43 @@ static void VisualsWorld()
 		FToggle(Vars::Visuals::Removals::Gibs);
 		FToggle(Vars::Visuals::Removals::MOTD);
 	} EndSection();
+	if (Section("Ultra Toaster"))
+	{
+		using namespace Vars::Visuals::UltraToaster;
+
+		FToggle(Enabled);
+		FTooltip("Simplifies client-side rendering while playing.");
+		PushTransparent(!Enabled.Value);
+		{
+			FSlider(PlayerLODBias);
+			FTooltip("Selects lower-detail geometry for other players before bone setup. Zero uses the game's usual detail.");
+			FToggle(PlayerShadows);
+			FTooltip("Skips drawing other players into the shadow depth pass.");
+			FToggle(PlayerWeapons);
+			FTooltip("Hides the third-person weapon models held by other players.");
+			FToggle(ModelFlexes);
+			FTooltip("Skips facial animation weight setup and flex deformation when drawing models.");
+			FToggle(Cosmetics);
+			FTooltip("Hides loadout cosmetics in head and misc slots.");
+			FToggle(Unusuals);
+			FTooltip("Skips new Unusual particles from cosmetics. Existing effects can remain until refreshed.");
+			FToggle(WeaponUnusuals);
+			FTooltip("Skips new Unusual particles from weapons. Existing effects can remain until refreshed.");
+			FToggle(WeaponSkins);
+			FTooltip("Uses stock textures for supported weapon skins.");
+			FToggle(PropLOD);
+			FTooltip("Uses less detailed geometry where a static prop has additional model levels.");
+			PushTransparent(Transparent || !PropLOD.Value);
+			{
+				FSlider(PropLODBias);
+				FTooltip("Adds this many levels to the game's distance-based LOD, up to the coarsest geometry.");
+			}
+			PopTransparent();
+			FToggle(PropShadows);
+			FTooltip("Skips drawing static props into the shadow depth pass.");
+		}
+		PopTransparent();
+	} EndSection();
 	if (Section("Triggers"))
 	{
 		FDropdown(ShowTriggers);

@@ -132,6 +132,7 @@ namespace SDK
 	};
 
 	bool W2S(const Vec3& vOrigin, Vec3& vScreen, bool bAlways = false);
+	bool ClipSegmentToScreen(const Vec3& vStart, const Vec3& vEnd, Vec3& vScreenStart, Vec3& vScreenEnd);
 	bool IsOnScreen(CBaseEntity* pEntity, const matrix3x4& mTransform, float* pLeft = nullptr, float* pRight = nullptr, float* pTop = nullptr, float* pBottom = nullptr, bool bAll = false);
 	bool IsOnScreen(CBaseEntity* pEntity, const Vec3& vOrigin, bool bAll = false);
 	bool IsOnScreen(CBaseEntity* pEntity, bool bShouldGetOwner = true);
